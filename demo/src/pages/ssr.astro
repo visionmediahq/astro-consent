@@ -1,0 +1,12 @@
+---
+// Not prerendered on purpose: an embed on an SSR page.
+import ConsentEmbed from '@visionmediahq/astro-consent/components/ConsentEmbed.astro'
+import Base from '../layouts/Base.astro'
+---
+
+<Base title="SSR">
+  <h1 class="text-2xl font-bold">SSR-sida</h1>
+  <div class="mt-4">
+    <ConsentEmbed service="google-maps" src="https://www.google.com/maps/embed?pb=ssr" title="SSR-karta" />
+  </div>
+</Base>

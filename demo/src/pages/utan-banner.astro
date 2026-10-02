@@ -1,0 +1,19 @@
+---
+// A custom layout without <ConsentBanner />: the runtime must still work here.
+import ConsentEmbed from '@visionmediahq/astro-consent/components/ConsentEmbed.astro'
+import '../styles/global.css'
+export const prerender = true
+---
+
+<!doctype html>
+<html lang="sv" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Utan banner</title>
+  </head>
+  <body class="bg-base-100 text-base-content p-6">
+    <h1 class="text-2xl font-bold">Sida utan banner</h1>
+    <ConsentEmbed id="bare" service="google-maps" src="https://www.google.com/maps/embed?pb=bare" title="Karta utan banner" />
+  </body>
+</html>

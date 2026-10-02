@@ -1,0 +1,56 @@
+{
+  "generated_from": "src/services.ts",
+  "categories": [
+    "necessary",
+    "external",
+    "statistics",
+    "marketing"
+  ],
+  "services": {
+    "google-maps": {
+      "name": "Google Maps",
+      "vendor": "Google Ireland Ltd",
+      "category": "external",
+      "match": [
+        "google.com/maps",
+        "maps.google.",
+        "maps.googleapis.com",
+        "maps.gstatic.com",
+        "places.googleapis.com"
+      ],
+      "description_sv": "Kartor från Google."
+    },
+    "google-analytics": {
+      "name": "Google Analytics",
+      "vendor": "Google Ireland Ltd",
+      "category": "statistics",
+      "match": [
+        "googletagmanager.com",
+        "google-analytics.com",
+        "analytics.google.com"
+      ],
+      "description_sv": "Besöksstatistik från Google."
+    },
+    "google-ads": {
+      "name": "Google Ads",
+      "vendor": "Google Ireland Ltd",
+      "category": "marketing",
+      "match": [
+        "googleadservices.com",
+        "doubleclick.net",
+        "googlesyndication.com"
+      ],
+      "description_sv": "Annonsmätning från Google."
+    },
+    "meta-pixel": {
+      "name": "Meta-pixel",
+      "vendor": "Meta Platforms Ireland Ltd",
+      "category": "marketing",
+      "match": [
+        "connect.facebook.net",
+        "facebook.com/tr"
+      ],
+      "description_sv": "Annonsmätning från Meta (Facebook, Instagram)."
+    }
+  }
+}

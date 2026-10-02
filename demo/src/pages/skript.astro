@@ -1,0 +1,21 @@
+---
+// Not prerendered on purpose: exercises the SSR path.
+import Base from '../layouts/Base.astro'
+---
+
+<Base title="Skript">
+  <h1 class="text-2xl font-bold">Skript-API</h1>
+  <p class="mt-2">Den här sidan laddar gtag först när statistik har godkänts.</p>
+</Base>
+
+<script>
+  import { onConsent } from '@visionmediahq/astro-consent/client'
+
+  onConsent('google-analytics', () => {
+    const script = document.createElement('script')
+    script.src = 'https://www.googletagmanager.com/gtag/js?id=G-DEMO'
+    script.async = true
+    document.head.append(script)
+    document.body.dataset.gtagLoaded = '1'
+  })
+</script>

@@ -1,0 +1,115 @@
+---
+// Static markup, hidden until the browser runtime (client.ts) decides to show it.
+// Rendered once per page, next to the footer. Themed entirely by the site's DaisyUI theme.
+import config from 'virtual:astro-consent/config'
+import { SERVICES, type Category, type ServiceSlug } from '../services'
+import sv from '../text/sv.json'
+
+const mode = config.services.length > 0 ? 'consent' : 'notice'
+const servicesIn = (category: Category): ServiceSlug[] =>
+  config.services.filter((slug) => SERVICES[slug].category === category)
+---
+
+<section
+  data-consent-banner
+  data-mode={mode}
+  data-view="main"
+  hidden
+  role="region"
+  aria-label={sv.region}
+  class="card fixed inset-x-4 bottom-4 z-50 mx-auto max-h-[calc(100dvh-2rem)] max-w-2xl overflow-y-auto border border-base-300 bg-base-100 text-base-content shadow-xl"
+>
+  <div class="card-body gap-3 p-4">
+    {
+      mode === 'notice' ? (
+        <>
+          <h2 class="card-title text-base">{sv.notice.title}</h2>
+          <p class="text-sm">
+            {sv.notice.body}
+            {config.policyUrl && (
+              <>
+                {' '}
+                <a class="link" href={config.policyUrl}>{sv.notice.more}</a>
+              </>
+            )}
+          </p>
+          <div class="card-actions justify-end">
+            <button type="button" class="btn btn-primary btn-sm" data-consent-action="notice_ok">
+              {sv.notice.ok}
+            </button>
+          </div>
+        </>
+      ) : (
+        <>
+          <div data-consent-main class="flex flex-col gap-3">
+            <h2 class="card-title text-base">{sv.consent.title}</h2>
+            <p class="text-sm">
+              {sv.consent.body}
+              {config.policyUrl && (
+                <>
+                  {' '}
+                  <a class="link" href={config.policyUrl}>{sv.consent.more}</a>
+                </>
+              )}
+            </p>
+            <div class="card-actions justify-end gap-2">
+              <button type="button" class="btn btn-ghost btn-sm" data-consent-action="settings">
+                {sv.consent.settings}
+              </button>
+              {/* Same classes as "Acceptera alla": declining must be as prominent as accepting. */}
+              <button type="button" class="btn btn-primary btn-sm" data-consent-action="none">
+                {sv.consent.decline}
+              </button>
+              <button type="button" class="btn btn-primary btn-sm" data-consent-action="all">
+                {sv.consent.acceptAll}
+              </button>
+            </div>
+          </div>
+
+          <form data-consent-settings hidden class="flex flex-col gap-3">
+            <h2 class="card-title text-base">{sv.consent.settings}</h2>
+            {config.categories.map((category) => (
+              <div data-consent-category={category} class="flex flex-col gap-1">
+                {/* A plain flex row: DaisyUI 5's .label does not wrap and dims the text. */}
+                <label class="flex cursor-pointer items-start justify-between gap-4">
+                  <span>
+                    <span class="text-sm font-medium">{sv.categories[category].label}</span>
+                    <span class="block whitespace-normal text-xs text-base-content/80">
+                      {sv.categories[category].description}
+                    </span>
+                  </span>
+                  {category === 'necessary' ? (
+                    <span class="flex shrink-0 items-center gap-2">
+                      <span class="badge badge-neutral badge-sm">{sv.consent.alwaysOn}</span>
+                      <input type="checkbox" class="toggle toggle-sm" name="necessary" checked disabled />
+                    </span>
+                  ) : (
+                    <input type="checkbox" class="toggle toggle-primary toggle-sm shrink-0" name={category} />
+                  )}
+                </label>
+                {servicesIn(category).map((slug) => (
+                  <label
+                    data-consent-service={slug}
+                    hidden
+                    class="flex cursor-pointer items-center justify-between gap-4 pl-4"
+                  >
+                    <span class="text-xs">{sv.consent.serviceRow.replace('{name}', SERVICES[slug].name)}</span>
+                    <input type="checkbox" class="toggle toggle-xs shrink-0" name={`service:${slug}`} />
+                  </label>
+                ))}
+              </div>
+            ))}
+            <div class="card-actions justify-end gap-2">
+              <button type="button" class="btn btn-ghost btn-sm" data-consent-action="back">
+                {sv.consent.back}
+              </button>
+              <button type="submit" class="btn btn-primary btn-sm" data-consent-action="custom">
+                {sv.consent.save}
+              </button>
+            </div>
+          </form>
+        </>
+      )
+    }
+  </div>
+</section>

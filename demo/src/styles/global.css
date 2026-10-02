@@ -1,0 +1,4 @@
+@import "tailwindcss";
+@plugin "daisyui";
+@source "../../node_modules/@visionmediahq/astro-consent/src";
+@source "../../../src";

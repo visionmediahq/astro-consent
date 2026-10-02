@@ -1,0 +1,131 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run check
+      - run: npm test
+      - name: services.json is up to date
+        run: |
+          npm run gen
+          git diff --exit-code services.json
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm ci
+        working-directory: demo
+      - run: npm run test:build
+
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm ci
+        working-directory: demo
+      - run: npx playwright install --with-deps chromium
+      - run: npm run demo:build -- consent
+      - run: npm run demo:build -- notice
+      - run: npm run test:e2e
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: playwright-report
+
+  pack-install:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - astro: '6.1.6'
+            adapter: '10.0.4'
+          - astro: '7.3.5'
+            adapter: '11.1.6'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run test:pack -- ${{ matrix.astro }} ${{ matrix.adapter }}
+
+  # Proves the real distribution path: a git dependency resolved WITHOUT git inside astro-starter's
+  # Docker build. Needs the repo variable STARTER_INSTALL=true and the secret STARTER_READ_TOKEN
+  # (read-only on visionmediahq/astro-starter). The `secrets` context is not available in a
+  # job-level `if`, hence the variable. Not on pull_request: github.sha is then a merge commit
+  # that does not exist in the repository.
+  starter-install:
+    if: github.event_name != 'pull_request' && vars.STARTER_INSTALL == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: visionmediahq/astro-starter
+          token: ${{ secrets.STARTER_READ_TOKEN }}
+          path: starter
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx tsx ci/wire-starter.ts ./starter
+      - name: Depend on this commit and write the lockfile only
+        working-directory: starter
+        # No node_modules on the runner: the starter has no .dockerignore, so it would be copied
+        # into the image over the one `npm ci` creates there.
+        run: |
+          npm pkg set "dependencies.@visionmediahq/astro-consent=github:visionmediahq/astro-consent#${{ github.sha }}"
+          npm install --package-lock-only
+      - name: Build the starter's unmodified Dockerfile (npm ci without git)
+        working-directory: starter
+        run: docker build -t starter-test .
+      - name: Run it and check the banner
+        run: |
+          docker run -d --name starter -p 3000:3000 -e HOST=0.0.0.0 -e PORT=3000 -e SITE_URL=https://ci.kund.se starter-test
+          for i in $(seq 1 30); do
+            if curl -fs http://localhost:3000/ -o page.html; then break; fi
+            sleep 1
+          done
+          grep -q 'data-consent-banner' page.html
+          grep -q 'data-privacy-links' page.html
+          docker exec starter sh -c 'cat dist/client/_astro/*.css' > all.css
+          grep -q 'card-actions' all.css
+
+  # A skipped starter-install job reads as green. Flag a release tag that was pushed without it.
+  # This cannot take the tag back: starter-install must be green on main BEFORE tagging.
+  release-guard:
+    if: startsWith(github.ref, 'refs/tags/v') && vars.STARTER_INSTALL != 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Release tags need the starter-install proof
+        run: |
+          echo "::error::A release tag was pushed but the starter-install job is switched off."
+          echo "Set the repository variable STARTER_INSTALL=true and the secret STARTER_READ_TOKEN, then re-run."
+          exit 1

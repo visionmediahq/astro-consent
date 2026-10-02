@@ -1,0 +1,29 @@
+---
+import ConsentBanner from '@visionmediahq/astro-consent/components/ConsentBanner.astro'
+import PrivacyLinks from '@visionmediahq/astro-consent/components/PrivacyLinks.astro'
+import '../styles/global.css'
+
+interface Props {
+  title: string
+}
+const { title } = Astro.props
+---
+
+<!doctype html>
+<html lang="sv" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title}</title>
+  </head>
+  <body class="bg-base-100 text-base-content">
+    <main class="mx-auto max-w-3xl p-6">
+      <slot />
+    </main>
+    <ConsentBanner />
+    <!-- Mirrors astro-starter's dark VisionFooter -->
+    <footer class="bg-neutral py-3">
+      <PrivacyLinks class="text-neutral-content" />
+    </footer>
+  </body>
+</html>

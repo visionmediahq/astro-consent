@@ -1,0 +1,5 @@
+{
+  "services": ["google-maps", "google-analytics"],
+  "policy_url": "https://demo.test/integritet",
+  "log_endpoint": "https://log.demo.test/consent"
+}

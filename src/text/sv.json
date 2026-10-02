@@ -1,0 +1,49 @@
+{
+  "region": "Cookie-inställningar",
+  "notice": {
+    "title": "Så mäter vi besök",
+    "body": "Den här webbplatsen mäter besök anonymt med Umami, utan cookies och utan att spara personuppgifter. Vi sparar ditt val från den här rutan i din webbläsare.",
+    "ok": "OK",
+    "more": "Läs mer"
+  },
+  "consent": {
+    "title": "Ditt val av cookies och externt innehåll",
+    "body": "Vi mäter besök anonymt utan cookies. Webbplatsen innehåller också tjänster från andra företag som laddas först när du godkänner dem. Du kan ändra ditt val när som helst via ”Cookie-inställningar” längst ned på sidan.",
+    "acceptAll": "Acceptera alla",
+    "decline": "Neka",
+    "settings": "Inställningar",
+    "save": "Spara val",
+    "back": "Tillbaka",
+    "more": "Läs mer",
+    "alwaysOn": "Alltid på",
+    "serviceRow": "{name} — visas alltid"
+  },
+  "categories": {
+    "necessary": {
+      "label": "Nödvändiga",
+      "description": "Krävs för att webbplatsen ska fungera, till exempel kontaktformuläret och att komma ihåg ditt val här."
+    },
+    "external": {
+      "label": "Externt innehåll",
+      "description": "Kartor och annat innehåll som hämtas från andra företag. De får din IP-adress och kan sätta cookies när innehållet visas."
+    },
+    "statistics": {
+      "label": "Statistik",
+      "description": "Statistikverktyg från andra företag som sätter cookies för att följa hur webbplatsen används."
+    },
+    "marketing": {
+      "label": "Marknadsföring",
+      "description": "Annons- och marknadsföringsverktyg som sätter cookies för att följa dig mellan webbplatser."
+    }
+  },
+  "embed": {
+    "show": "Visa {title}",
+    "remember": "Visa alltid innehåll från {name}",
+    "info": "{title} hämtas från {name}. När du visar det skickas din IP-adress dit och cookies kan sättas.",
+    "open": "Öppna i {name}"
+  },
+  "links": {
+    "settings": "Cookie-inställningar",
+    "policy": "Integritetspolicy"
+  }
+}

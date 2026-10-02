@@ -1,0 +1,51 @@
+{
+  "name": "@visionmediahq/astro-consent",
+  "version": "1.0.0",
+  "description": "Consent banner, click-to-load embeds and a consent script API for Vision Media's Astro sites.",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/visionmediahq/astro-consent.git"
+  },
+  "homepage": "https://github.com/visionmediahq/astro-consent#readme",
+  "files": [
+    "src",
+    "services.json"
+  ],
+  "exports": {
+    ".": "./src/integration.ts",
+    "./client": "./src/client.ts",
+    "./components/*": "./src/components/*",
+    "./services.json": "./services.json"
+  },
+  "scripts": {
+    "gen": "tsx scripts/gen-services.ts",
+    "check": "tsc --noEmit",
+    "test": "vitest run tests/unit",
+    "test:build": "vitest run tests/build",
+    "test:e2e": "playwright test",
+    "demo:build": "tsx scripts/build-demo.ts",
+    "test:pack": "tsx scripts/pack-install.ts"
+  },
+  "peerDependencies": {
+    "astro": "^6.0.0 || ^7.0.0"
+  },
+  "dependencies": {
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@astrojs/node": "^11.1.6",
+    "@axe-core/playwright": "^4.13.0",
+    "@playwright/test": "^1.63.0",
+    "@tailwindcss/vite": "^4.2.2",
+    "@types/node": "^22",
+    "astro": "^7.3.5",
+    "daisyui": "^5.5.19",
+    "node-html-parser": "^9.0.4",
+    "tailwindcss": "^4.2.2",
+    "tsx": "^4",
+    "typescript": "^5",
+    "vitest": "^4.1.11"
+  }
+}
