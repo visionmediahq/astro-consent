@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Fix: the "Öppna i Google Maps" link for "Embed a map" URLs (`/maps/embed?pb=…`) opened the
+  visitor's own location, because Google ignores `pb=` outside an iframe. It now searches for the
+  place name in `pb` (`!1m2!1s…!2s<name>`), falls back to its coordinates (`!3d`/`!2d`), and to
+  plain Google Maps when it has neither. Found in the live pilot, where most embeds use `pb=`.
+
 ## 1.0.0
 
 First release.

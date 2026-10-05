@@ -1,8 +1,32 @@
 import { expect, test } from 'vitest'
 import { deEmbed } from '../../src/embed-url'
 
-test('turns /maps/embed?pb= into /maps?pb=', () => {
-  expect(deEmbed('https://www.google.com/maps/embed?pb=!1m18!1m12')).toBe('https://www.google.com/maps?pb=!1m18!1m12')
+// "Share → Embed a map" URLs (/maps/embed?pb=…). Google ignores pb= outside an iframe, so /maps?pb=
+// opens the visitor's own location. The link is rebuilt from the place name or the coordinates.
+const PB_PLACE =
+  'https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d2196.5!2d14.6357!3d63.1792!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1' +
+  '!3m3!1m2!1s0x466fcd5d2b1d0a1f%3A0x2b1c4e5b6a7d8e9f!2sStorgatan+1%2C+831+30+%C3%96stersund!5e0!3m2!1ssv!2sse!4v1700000000000!5m2!1ssv!2sse'
+
+test('turns a pb= embed with a place name into a Maps search for that name', () => {
+  expect(deEmbed(PB_PLACE)).toBe('https://www.google.com/maps/search/?api=1&query=Storgatan+1%2C+831+30+%C3%96stersund')
+})
+
+test('never reads the language/region block of a pb= embed as the place name', () => {
+  const noPlace =
+    'https://www.google.com/maps/embed?pb=!1m14!1m12!1m3!1d2196.5!2d14.6357!3d63.1792!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1' +
+    '!5e0!3m2!1ssv!2sse!4v1700000000000'
+  expect(deEmbed(noPlace)).not.toContain('query=se')
+})
+
+test('falls back to the coordinates of a pb= embed without a place name', () => {
+  const coordsOnly =
+    'https://www.google.com/maps/embed?pb=!1m14!1m12!1m3!1d2196.5!2d14.6357!3d63.1792!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1' +
+    '!5e0!3m2!1ssv!2sse!4v1700000000000'
+  expect(deEmbed(coordsOnly)).toBe('https://www.google.com/maps/search/?api=1&query=63.1792%2C14.6357')
+})
+
+test('falls back to plain Google Maps for a pb= embed with neither a name nor coordinates', () => {
+  expect(deEmbed('https://www.google.com/maps/embed?pb=!1m18!1m12')).toBe('https://www.google.com/maps')
 })
 
 test('drops output=embed and keeps other parameters', () => {

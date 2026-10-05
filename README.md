@@ -103,7 +103,7 @@ import ConsentEmbed from '@visionmediahq/astro-consent/components/ConsentEmbed.a
 |---|---|
 | `service` | Registry slug. Must be listed in `privacy.json`, or the build fails — also when the component is imported under another name. |
 | `src` | The embed URL, exactly as the provider gives it. |
-| `href` | Optional link to open the content at the provider. Defaults to a link built from `src`: classic embed URLs are de-embedded, and Maps Embed API URLs (`/maps/embed/v1/…`) are rebuilt from their parameters without the API key. |
+| `href` | Optional link to open the content at the provider. Defaults to a link built from `src`: "Embed a map" URLs (`/maps/embed?pb=…`) become a Maps search for the place name in `pb`, or its coordinates when it has no name; classic `output=embed` URLs are de-embedded; Maps Embed API URLs (`/maps/embed/v1/…`) are rebuilt from their parameters without the API key. |
 | `title` | Used for the iframe title and the "Visa …" button. |
 | `aspect` | CSS aspect-ratio, default `16 / 9`. |
 | `id` | Optional element id. |
