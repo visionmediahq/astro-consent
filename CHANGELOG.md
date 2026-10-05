@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.0.1
 
 - Fix: the "Öppna i Google Maps" link for "Embed a map" URLs (`/maps/embed?pb=…`) opened the
   visitor's own location, because Google ignores `pb=` outside an iframe. It now searches for the
