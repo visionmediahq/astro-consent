@@ -29,6 +29,21 @@ function fromEmbedApi(mode: string, params: URLSearchParams): string {
   return MAPS
 }
 
+/**
+ * "Share → Embed a map" URL (/maps/embed?pb=…). Google ignores pb= outside an iframe, so the link is
+ * rebuilt from the place name (`!1m2!1s<id>!2s<name>`) or, without one, the coordinates
+ * (`!2d<lng>!3d<lat>`). The name block is matched with its `!1m2` prefix so the language/region
+ * block (`!3m2!1ssv!2sse`) is never read as a name.
+ */
+function fromPb(pb: string): string {
+  const name = pb.match(/!1m2!1s[^!]*!2s([^!]+)/)?.[1]
+  if (name) return mapsLink('/search/', { api: '1', query: name })
+  const lng = pb.match(/!2d(-?[\d.]+)/)?.[1]
+  const lat = pb.match(/!3d(-?[\d.]+)/)?.[1]
+  if (lat && lng) return mapsLink('/search/', { api: '1', query: `${lat},${lng}` })
+  return MAPS
+}
+
 /** Turns a Google Maps embed URL into a link a visitor can open in a new tab. Other URLs pass through. */
 export function deEmbed(src: string): string {
   let url: URL
@@ -39,6 +54,8 @@ export function deEmbed(src: string): string {
   }
   const embedApi = url.pathname.match(/^\/maps\/embed\/v1\/([a-z]+)\/?$/)
   if (embedApi) return fromEmbedApi(embedApi[1]!, url.searchParams)
+  const pb = url.searchParams.get('pb')
+  if (/^\/maps\/embed\/?$/.test(url.pathname) && pb) return fromPb(pb)
 
   url.pathname = url.pathname.replace('/maps/embed', '/maps')
   if (url.searchParams.get('output') === 'embed') url.searchParams.delete('output')
