@@ -1,0 +1,174 @@
+[
+  {
+    "name": "pilot:a-tak",
+    "primary": "#ff0000"
+  },
+  {
+    "name": "pilot:vasshallakatthotell",
+    "primary": "#2aa5a5"
+  },
+  {
+    "name": "pilot:domeijstapetserarverkstad",
+    "primary": "#eb5e28"
+  },
+  {
+    "name": "pilot:aspomad",
+    "primary": "#8B4513"
+  },
+  {
+    "name": "pilot:traforadling",
+    "primary": "#005229"
+  },
+  {
+    "name": "pilot:traforadling-levene",
+    "primary": "#0460c7"
+  },
+  {
+    "name": "pilot:munkforstradgardstjanst",
+    "primary": "#ff3824"
+  },
+  {
+    "name": "pilot:nhrk",
+    "primary": "#a05200"
+  },
+  {
+    "name": "daisyui:abyss",
+    "primary": "oklch(92% 0.2653 125)"
+  },
+  {
+    "name": "daisyui:acid",
+    "primary": "oklch(71.9% 0.357 330.759)"
+  },
+  {
+    "name": "daisyui:aqua",
+    "primary": "oklch(85.661% 0.144 198.645)"
+  },
+  {
+    "name": "daisyui:autumn",
+    "primary": "oklch(40.723% 0.161 17.53)"
+  },
+  {
+    "name": "daisyui:black",
+    "primary": "oklch(35% 0 0)"
+  },
+  {
+    "name": "daisyui:bumblebee",
+    "primary": "oklch(85% 0.199 91.936)"
+  },
+  {
+    "name": "daisyui:business",
+    "primary": "oklch(41.703% 0.099 251.473)"
+  },
+  {
+    "name": "daisyui:caramellatte",
+    "primary": "oklch(0% 0 0)"
+  },
+  {
+    "name": "daisyui:cmyk",
+    "primary": "oklch(71.772% 0.133 239.443)"
+  },
+  {
+    "name": "daisyui:coffee",
+    "primary": "oklch(71.996% 0.123 62.756)"
+  },
+  {
+    "name": "daisyui:corporate",
+    "primary": "oklch(58% 0.158 241.966)"
+  },
+  {
+    "name": "daisyui:cupcake",
+    "primary": "oklch(85% 0.138 181.071)"
+  },
+  {
+    "name": "daisyui:cyberpunk",
+    "primary": "oklch(74.22% 0.209 6.35)"
+  },
+  {
+    "name": "daisyui:dark",
+    "primary": "oklch(58% 0.233 277.117)"
+  },
+  {
+    "name": "daisyui:dim",
+    "primary": "oklch(86.133% 0.141 139.549)"
+  },
+  {
+    "name": "daisyui:dracula",
+    "primary": "oklch(75.461% 0.183 346.812)"
+  },
+  {
+    "name": "daisyui:emerald",
+    "primary": "oklch(76.662% 0.135 153.45)"
+  },
+  {
+    "name": "daisyui:fantasy",
+    "primary": "oklch(37.45% 0.189 325.02)"
+  },
+  {
+    "name": "daisyui:forest",
+    "primary": "oklch(68.628% 0.185 148.958)"
+  },
+  {
+    "name": "daisyui:garden",
+    "primary": "oklch(62.45% 0.278 3.836)"
+  },
+  {
+    "name": "daisyui:halloween",
+    "primary": "oklch(77.48% 0.204 60.62)"
+  },
+  {
+    "name": "daisyui:lemonade",
+    "primary": "oklch(58.92% 0.199 134.6)"
+  },
+  {
+    "name": "daisyui:light",
+    "primary": "oklch(45% 0.24 277.023)"
+  },
+  {
+    "name": "daisyui:lofi",
+    "primary": "oklch(15.906% 0 0)"
+  },
+  {
+    "name": "daisyui:luxury",
+    "primary": "oklch(100% 0 0)"
+  },
+  {
+    "name": "daisyui:night",
+    "primary": "oklch(75.351% 0.138 232.661)"
+  },
+  {
+    "name": "daisyui:nord",
+    "primary": "oklch(59.435% 0.077 254.027)"
+  },
+  {
+    "name": "daisyui:pastel",
+    "primary": "oklch(90% 0.063 306.703)"
+  },
+  {
+    "name": "daisyui:retro",
+    "primary": "oklch(80% 0.114 19.571)"
+  },
+  {
+    "name": "daisyui:silk",
+    "primary": "oklch(23.27% 0.0249 284.3)"
+  },
+  {
+    "name": "daisyui:sunset",
+    "primary": "oklch(74.703% 0.158 39.947)"
+  },
+  {
+    "name": "daisyui:synthwave",
+    "primary": "oklch(71% 0.202 349.761)"
+  },
+  {
+    "name": "daisyui:valentine",
+    "primary": "oklch(65% 0.241 354.308)"
+  },
+  {
+    "name": "daisyui:winter",
+    "primary": "oklch(56.86% 0.255 257.57)"
+  },
+  {
+    "name": "daisyui:wireframe",
+    "primary": "oklch(87% 0 0)"
+  }
+]

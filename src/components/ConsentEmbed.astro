@@ -2,6 +2,7 @@
 // Click-to-load embed. The iframe sits inert in a <template> until the visitor clicks "Visa" or
 // has granted the service. Never put a <script> in this component's slots: Astro bundles and runs
 // it regardless of the template. Anything loaded by script goes through onConsent() instead.
+import '../styles/contrast.css'
 import config from 'virtual:astro-consent/config'
 import { deEmbed } from '../embed-url'
 import { scanError } from '../scan'

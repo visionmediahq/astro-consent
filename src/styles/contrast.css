@@ -1,0 +1,11 @@
+/* Button text on the site's primary colour: black or white, whichever reads better (WCAG AA).
+   DaisyUI's own text colour is the theme's primary-content, which a site rarely tunes. Needs
+   relative colour syntax; browsers without it keep DaisyUI's colour. The factor is large enough
+   to saturate the clamp for any lightness difference above one in a million. */
+@supports (color: oklch(from red clamp(0, (0.6 - l) * 1000000, 1) 0 0)) {
+  [data-consent-banner] .btn-primary,
+  [data-consent-embed] .btn-primary {
+    --btn-fg: oklch(from var(--color-primary) clamp(0, (0.58 - l) * 1000000, 1) 0 0);
+    color: var(--btn-fg);
+  }
+}
