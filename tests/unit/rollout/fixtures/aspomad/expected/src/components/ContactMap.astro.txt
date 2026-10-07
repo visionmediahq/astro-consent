@@ -8,8 +8,17 @@ import ConsentEmbed from '@visionmediahq/astro-consent/components/ConsentEmbed.a
 </section>
 
 <style>
+  iframe {
+    filter: grayscale(0.2);
+  }
+
   div :global(iframe) {
     filter: grayscale(0.2);
+  }
+
+  iframe:hover {
+    filter: grayscale(0);
+    transition: filter 0.3s ease;
   }
 
   div:hover :global(iframe) {

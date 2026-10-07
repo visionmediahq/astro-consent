@@ -18,6 +18,8 @@ by this oracle, and are not listed below.
 - 20: PrivacyLinks contrast is verify's job.
 - 21: `gdpr*` and `dataskydd*` count as policy pages.
 - 22: only `height="N"`/`"Npx"`/`"Nrem"` or `h-<n>`/`h-[<n>px|rem|em|vh]` count as a fixed height.
+- 23 (amends 17): decoration children don't count: `aria-hidden="true"`, a class with `absolute`, `fixed` or `pointer-events-none`, or an `<svg>`/`<img>` with empty alt.
+- 24 (amends 19): the original style rule stays as it was; a new `:global(iframe)` rule after it carries only its `filter` and `transition` declarations.
 
 **Detect input** (`detect(before, 'aspomad', ['aspomad.se'])`): `maps`; no `integrations` in the config;
 layout `Base.astro` with footer reference `Footer`; one footer, `src/components/Footer.astro`,
@@ -50,12 +52,14 @@ and `src/data/privacy.json`.
 6. **`ContactMap.astro`: no `href`, no placeholder slot, no `address`/`mapsLink` constants**; the pilot
    added all three. **Acceptable**: C8 lists `href` workarounds and placeholder text as hand decisions;
    the component's default link (de-embedded `src`) and default text are used.
-7. **`ContactMap.astro`: the scoped filter rules become `div :global(iframe)` and
-   `div:hover :global(iframe)`**; the pilot wrote `section :global(iframe)` and
-   `section:hover :global(iframe)` and added a comment. **Acceptable (Ruling 19)**: the selectors had no
-   ancestor part, so the rule scopes them under the wrapper `div` (the component's only `div`, so
-   Astro's scoping limits it to this map) and moves `:hover` from the iframe to the wrapper, as the
-   pilot did with the section. Same filter, same hover behaviour.
+7. **`ContactMap.astro`: the scoped `iframe {…}` and `iframe:hover {…}` rules stay, and each is
+   followed by a new rule, `div :global(iframe) { filter: grayscale(0.2); }` and
+   `div:hover :global(iframe) { filter: grayscale(0); transition: filter 0.3s ease; }`.** The pilot
+   rewrote the two rules in place as `section :global(iframe)` / `section:hover :global(iframe)` and
+   added a comment. **Acceptable (Rulings 19, 24)**: the selectors had no ancestor part, so the new rules
+   are scoped under the wrapper `div` (the component's only `div`, so Astro's scoping limits them to
+   this map), and `:hover` moves from the iframe to the wrapper, as the pilot did with the section.
+   Same filter, same hover behaviour. The original rules stay but no longer match anything.
 8. **`ContactMap.astro`: the ConsentEmbed import comes after `kontakt.json`**; the pilot put it before.
    **Acceptable**: import order only.
 9. **`ContactMap.astro`: one-line `<div><ConsentEmbed … /></div>`**, the pilot's multi-line element.

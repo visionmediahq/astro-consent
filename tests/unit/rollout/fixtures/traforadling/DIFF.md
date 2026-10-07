@@ -18,6 +18,8 @@ by this oracle, and are not listed below.
 - 20: PrivacyLinks contrast is verify's job.
 - 21: `gdpr*` and `dataskydd*` count as policy pages.
 - 22: only `height="N"`/`"Npx"`/`"Nrem"` or `h-<n>`/`h-[<n>px|rem|em|vh]` count as a fixed height.
+- 23 (amends 17): decoration children don't count: `aria-hidden="true"`, a class with `absolute`, `fixed` or `pointer-events-none`, or an `<svg>`/`<img>` with empty alt.
+- 24 (amends 19): the original style rule stays as it was; a new `:global(iframe)` rule after it carries only its `filter` and `transition` declarations.
 
 **Detect input** (`detect(before, 'traforadling', ['traforadling.se'])`): `maps`; layout `Base.astro`
 with footer reference `VisionFooter`; two footers, `FooterLevene.astro` and `FooterSkaraborg.astro`,

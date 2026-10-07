@@ -18,6 +18,8 @@ by this oracle, and are not listed below.
 - 20: PrivacyLinks contrast is verify's job.
 - 21: `gdpr*` and `dataskydd*` count as policy pages.
 - 22: only `height="N"`/`"Npx"`/`"Nrem"` or `h-<n>`/`h-[<n>px|rem|em|vh]` count as a fixed height.
+- 23 (amends 17): decoration children don't count: `aria-hidden="true"`, a class with `absolute`, `fixed` or `pointer-events-none`, or an `<svg>`/`<img>` with empty alt.
+- 24 (amends 19): the original style rule stays as it was; a new `:global(iframe)` rule after it carries only its `filter` and `transition` declarations.
 
 **Detect input** (`detect(before, 'vasshallakatthotell', ['vasshallakatthotell.se'])`): `maps`; layout
 `Base.astro` with footer reference `VisionFooter`; one footer, `src/components/Footer.astro`,
@@ -38,13 +40,12 @@ Identical in both: the config import, the CSS `@source` line, `<ConsentBanner />
    **Acceptable**: order does not matter; appending keeps the comment block attached to `sitemap()`.
 2. **`Base.astro`: the ConsentBanner import comes after `import '../styles/global.css'`**; the pilot put
    it before. **Acceptable**: import order only (see munkfors entry 2).
-3. **`Footer.astro`: `<PrivacyLinks class="justify-start!" />` is the last child of `<footer>`**; the
-   pilot put `<PrivacyLinks class="text-white/70" />` inside the split bottom bar, between © and
-   "Webbplats av". **Rule gap**: `<footer>` has two element children (the decorative
-   `absolute inset-0` paw-print layer and the padded container), so Ruling 17 stops at `<footer>`. The
-   links land outside `max-w-7xl mx-auto px-6 lg:px-8 pt-16 pb-8`, flush with the footer's left and
-   bottom edges. A decoration-only child (`aria-hidden`, absolutely positioned) could be skipped when
-   counting children.
+3. **`Footer.astro`: `<PrivacyLinks class="justify-start!" />` is the last child of
+   `<div class="max-w-7xl mx-auto px-6 lg:px-8 pt-16 pb-8">`**, below the split bottom bar; the pilot put
+   `<PrivacyLinks class="text-white/70" />` inside the bar, between © and "Webbplats av". **Acceptable
+   (Ruling 23)**: the `aria-hidden` `absolute inset-0` paw-print layer doesn't count, so `<footer>` has
+   one element child and the descent continues into the padded container (Ruling 17). The links sit
+   inside its padding, left-aligned like the split bar (Ruling 18).
 4. **`Footer.astro`: no colour class**, the pilot's `text-white/70`. **Acceptable**: per C2 the links
    inherit; the footer's inline `color: rgba(255,255,255,0.6)` is readable on its dark background.
 5. **`404.astro`: `<PrivacyLinks />` at the end of the centred box** (the only child of `<main>`); the

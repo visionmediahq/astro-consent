@@ -129,8 +129,8 @@ import PrivacyLinks from '@visionmediahq/astro-consent/components/PrivacyLinks.a
         </a>
       </p>
     </div>
+    <PrivacyLinks class="justify-start!" />
   </div>
-  <PrivacyLinks class="justify-start!" />
 </footer>
 
 <style>

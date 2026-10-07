@@ -251,13 +251,22 @@ import ConsentEmbed from '@visionmediahq/astro-consent/components/ConsentEmbed.a
     height: 100%;
   }
 
-  .map-wrap :global(iframe) {
+  .map-wrap iframe {
     filter: sepia(15%) contrast(0.92) saturate(0.85);
     display: block;
     width: 100%;
     height: 100%;
     min-height: 480px;
     transition: filter 0.3s ease;
+  }
+
+  .map-wrap :global(iframe) {
+    filter: sepia(15%) contrast(0.92) saturate(0.85);
+    transition: filter 0.3s ease;
+  }
+
+  .map-wrap:hover iframe {
+    filter: none;
   }
 
   .map-wrap:hover :global(iframe) {
