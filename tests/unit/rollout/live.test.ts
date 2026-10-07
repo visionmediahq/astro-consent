@@ -342,13 +342,23 @@ describe('merge', () => {
     expect(m.order[0]).toBe('verify')
   })
 
-  test('stops without merging: no live baseline, a rebase conflict, a failing verify, a PR not open, no app following main', async () => {
+  test('stops without merging: no live baseline, a rebase conflict, a failing verify, a PR not open, no app following main, a following host without baseline', async () => {
     const cases: [Parameters<typeof siteDir>[0], Parameters<typeof mergeExec>[0], RegExp, ((d: ReturnType<typeof mergeDeps>['deps']) => void)?][] = [
       [{ verify: VERIFIED(HEAD), baseline: null }, { head: { sha: HEAD } }, /live baseline/],
       [{ verify: VERIFIED(HEAD) }, { head: { sha: HEAD }, moved: true, rebaseFails: true }, /rebase/],
       [{ verify: VERIFIED(HEAD) }, { head: { sha: HEAD }, moved: true }, /verify/, (d) => (d.verify = async () => ({ ...VERIFIED(HEAD), pass: false }))],
       [{ verify: VERIFIED(HEAD) }, { head: { sha: HEAD }, state: 'MERGED' }, /MERGED/],
       [{ verify: VERIFIED(HEAD) }, { head: { sha: HEAD } }, /nothing would deploy/, (d) => (d.deployments = async () => [])],
+      // Ruling 36: an app that follows main serves a host with no live baseline (not in report.domains).
+      [
+        { verify: VERIFIED(HEAD) },
+        { head: { sha: HEAD } },
+        /www\.nhrk\.se[\s\S]*report\.domains/,
+        (d) => {
+          const listApps = d.listApps
+          d.listApps = async () => (await listApps()).map((a) => (a.uuid === 'web' ? { ...a, fqdns: ['nhrk.se', 'www.nhrk.se'] } : a))
+        },
+      ],
     ]
     for (const [site, git, reason, tweak] of cases) {
       const dir = siteDir(site)

@@ -158,9 +158,15 @@ interface CoolifyDeployment {
   pull_request_id?: number | null
 }
 
-/** The app's latest deployments, newest first. */
+/**
+ * Ruling 36: enough history that the last main deployment is still in the page when an app also
+ * builds many preview deployments.
+ */
+export const DEPLOYMENTS_TAKE = 50
+
+/** The app's latest deployments (DEPLOYMENTS_TAKE of them), newest first. */
 export async function listDeployments(uuid: string, opts: CoolifyOptions & { take?: number } = {}): Promise<Deployment[]> {
-  const body = await getJson(`/api/v1/deployments/applications/${encodeURIComponent(uuid)}?take=${opts.take ?? 10}`, opts)
+  const body = await getJson(`/api/v1/deployments/applications/${encodeURIComponent(uuid)}?take=${opts.take ?? DEPLOYMENTS_TAKE}`, opts)
   const list = Array.isArray(body) ? body : (body as { deployments?: unknown }).deployments
   if (!Array.isArray(list)) throw new Error('Coolify GET /api/v1/deployments/applications did not return a list')
   return (list as CoolifyDeployment[])

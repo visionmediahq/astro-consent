@@ -5,6 +5,7 @@
 //      HEAD is not the commit of a passing verify.json, verify again in full (verify pushes the
 //      branch first). Repeated until main holds still, at most three rounds.
 //   3. Record which Coolify apps follow main (Ruling 14) in .rollout/apps.json, before the merge.
+//      STOP if one of them serves a host outside report.domains: it has no baseline (Ruling 36).
 //   4. gh pr merge --squash --delete-branch, pinned to the verified commit; read the merge commit.
 //   5. live post-merge with the merge commit: waits for the deployments, then the live checks.
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
@@ -109,6 +110,14 @@ export async function merge(dir: string, pr: number | string, opts: { deps?: Par
     writeFileSync(join(root, APPS_FILE), `${JSON.stringify(recorded, null, 2)}\n`)
     if (!recorded.apps.some((a) => a.autoDeploy)) {
       return stop(`no Coolify app of ${repo} on main deployed ${mainHead.slice(0, 7)}: nothing would deploy the merge`)
+    }
+    // Ruling 36: live post-merge checks every host of these apps against the baseline, which was
+    // taken for report.domains only.
+    const uncovered = [...new Set(recorded.apps.filter((a) => a.autoDeploy).flatMap((a) => a.fqdns))].filter((h) => !report.domains.includes(h))
+    if (uncovered.length) {
+      return stop(
+        `the apps that follow main also serve ${uncovered.join(', ')}, not in report.domains (${report.domains.join(', ')}), so there is no live baseline for it: run detect with every --domain, then live baseline`,
+      )
     }
 
     const merged = await gh('pr', 'merge', String(pr), '-R', repo, '--squash', '--delete-branch', '--match-head-commit', head)

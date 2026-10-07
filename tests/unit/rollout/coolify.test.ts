@@ -143,7 +143,7 @@ describe('listDeployments', () => {
   test('GETs the application\'s deployments, newest first, preview deployments kept with their PR id', async () => {
     const api = deploymentsApi([[dep(1, OLD, 'finished'), dep(3, SHA, 'queued'), dep(2, SHA, 'finished', 12)]])
     const list = await listDeployments('web', { env: ENV, fetch: api.fetch })
-    expect(api.urls).toEqual(['https://c.example/api/v1/deployments/applications/web?take=10'])
+    expect(api.urls).toEqual(['https://c.example/api/v1/deployments/applications/web?take=50'])
     expect(list.map((d) => d.id)).toEqual([3, 2, 1])
     expect(list[1]).toEqual({ id: 2, commit: SHA, status: 'finished', pullRequestId: 12 })
   })
