@@ -270,6 +270,28 @@ describe('applyWire', () => {
     expect(existsSync(join(dir, 'src/data/privacy.json'))).toBe(false)
   })
 
+  test('finding 2: a consent-banner on origin (fetched with the clone) is refused, never pushed over', () => {
+    const dir = checkout('munkforstradgardstjanst')
+    const report = runDetect(dir, ['munkforstradgardstjanst.se'])
+    const plan = planWire(fixtureSite(join(FIXTURES, 'munkforstradgardstjanst', 'before')), report)
+    git(dir, 'push', '-q', 'origin', 'main:refs/heads/consent-banner')
+    git(dir, 'fetch', '-q', 'origin')
+    expect(git(dir, 'rev-parse', 'refs/remotes/origin/consent-banner')).toBeTruthy()
+    expect(() => applyWire(dir, plan, { commit: true, install: () => {} })).toThrow(/origin already has a consent-banner branch/)
+    expect(git(dir, 'branch', '--show-current')).toBe('main')
+    expect(existsSync(join(dir, 'src/data/privacy.json'))).toBe(false)
+  })
+
+  test('finding 2: a consent-banner pushed to origin after the clone (only ls-remote sees it) is refused too', () => {
+    const dir = checkout('munkforstradgardstjanst')
+    const report = runDetect(dir, ['munkforstradgardstjanst.se'])
+    const plan = planWire(fixtureSite(join(FIXTURES, 'munkforstradgardstjanst', 'before')), report)
+    git(dir, 'push', '-q', 'origin', 'main:refs/heads/consent-banner')
+    git(dir, 'update-ref', '-d', 'refs/remotes/origin/consent-banner')
+    expect(() => applyWire(dir, plan, { commit: true, install: () => {} })).toThrow(/origin already has a consent-banner branch/)
+    expect(git(dir, 'branch', '--show-current')).toBe('main')
+  })
+
   test('a checkout whose HEAD is not origin/main: refused (the plan was made on another tree)', () => {
     const dir = checkout('munkforstradgardstjanst')
     const report = runDetect(dir, ['munkforstradgardstjanst.se'])

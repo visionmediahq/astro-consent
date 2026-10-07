@@ -85,7 +85,7 @@ function changedPaths(dir: string): string[] {
 export interface ApplyOptions {
   /**
    * true: the full C2 apply (branch, edits, install, commit), which refuses a checkout that is not
-   * a clean origin/main or that already has a consent-banner branch. false: the edits and new files
+   * a clean origin/main or that already has a consent-banner branch, locally or on origin. false: the edits and new files
    * only (no git, no install).
    */
   commit: boolean
@@ -111,6 +111,21 @@ export function applyWire(dir: string, plan: WirePlan, opts: ApplyOptions): void
     if (dirty !== '') throw new Error(`the working tree is not clean, nothing written:\n${dirty}`)
     if (gitOk(root, 'rev-parse', '--verify', '--quiet', `refs/heads/${BRANCH}`)) {
       throw new Error(`branch ${BRANCH} already exists locally, nothing written (delete it by hand if it is stale)`)
+    }
+    // A consent-banner on GitHub is someone's work (or an earlier run's): verify would push over it.
+    // A rerun after this tool's own push has the local branch, which is refused above anyway.
+    const tracking = gitOk(root, 'rev-parse', '--verify', '--quiet', `refs/remotes/origin/${BRANCH}`) ? git(root, 'rev-parse', `refs/remotes/origin/${BRANCH}`) : ''
+    let listed: string
+    try {
+      listed = git(root, 'ls-remote', '--heads', 'origin', BRANCH)
+    } catch (e) {
+      throw new Error(`git ls-remote --heads origin ${BRANCH} failed, so whether GitHub has the branch is unknown; nothing written\n${(e as Error).message}`)
+    }
+    const remote = listed.split(/\s+/)[0] ?? ''
+    for (const sha of [tracking, remote]) {
+      if (sha) {
+        throw new Error(`origin already has a ${BRANCH} branch (${sha.slice(0, 7)}), nothing written: find out whose it is and delete it on GitHub by hand if it is stale`)
+      }
     }
     if (!gitOk(root, 'rev-parse', '--verify', '--quiet', 'origin/main^{tree}')) throw new Error('no origin/main to branch from')
     // The plan was made on the working tree; branching from origin/main must not change it.

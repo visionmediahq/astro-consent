@@ -31,7 +31,7 @@ Skärmbilder (360/1280 px, banner och {{#maps}}kartornas platshållare{{/maps}}{
 
 {{#maps}}> Hej! Vi lägger till en cookie- och samtyckesruta på er webbplats, så att den följer reglerna för cookies och externt innehåll. Besökare får välja om kartorna från Google Maps ska visas; annars fungerar sajten precis som förut. Hör av er till oss om ni har frågor.{{/maps}}{{#notice}}> Hej! Vi lägger till en cookie- och samtyckesruta på er webbplats, så att den följer reglerna för cookies. Sajten fungerar precis som förut; besökare får bara information och möjlighet att ändra sitt val. Hör av er till oss om ni har frågor.{{/notice}}
 
-**Mergas av tekniker efter att kunden informerats.**
+**Mergas efter verifiering och livekontroll. Kunden informeras av utvecklarna.**
 
 ## Relaterade ärenden
 

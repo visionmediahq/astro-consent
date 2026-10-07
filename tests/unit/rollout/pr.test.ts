@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, test } from 'vitest'
-import { openPr, renderBody, TEMPLATE_PATH, TITLE } from '../../../ci/rollout/pr'
+import { openPr, originRepo, renderBody, templateKind, TEMPLATE_PATH, TITLE } from '../../../ci/rollout/pr'
 import type { Report, VerifyResult } from '../../../ci/rollout/types'
 
 const DEMO = JSON.parse(readFileSync(join(import.meta.dirname, 'fixtures/demo-report.json'), 'utf8')) as Report
@@ -19,8 +19,8 @@ const PASS: VerifyResult = {
     evidence: 'SECRET-EVIDENCE-TEXT',
   })),
 }
-const render = (over: Partial<Report> = {}, issues: string[] = [], screenshots: { file: string; url: string }[] = []) =>
-  renderBody(template, { report: report(over), verify: PASS, issues, domain: 'kund.se', screenshots })
+const render = (over: { classification?: 'maps' | 'notice' } = {}, issues: string[] = [], screenshots: { file: string; url: string }[] = []) =>
+  renderBody(template, { kind: over.classification ?? 'maps', verify: PASS, issues, domain: 'kund.se', screenshots })
 
 describe('renderBody', () => {
   test('has the five sections', () => {
@@ -60,7 +60,15 @@ describe('renderBody', () => {
   })
 
   test('a failed verify is refused', () => {
-    expect(() => renderBody(template, { report: report(), verify: { ...PASS, pass: false }, issues: [], domain: 'kund.se' })).toThrow(/verify/)
+    expect(() => renderBody(template, { kind: 'maps', verify: { ...PASS, pass: false }, issues: [], domain: 'kund.se' })).toThrow(/verify/)
+  })
+
+  test('finding 7: the merge line matches the process: the tool merges after the live check, developers inform the client', () => {
+    for (const classification of ['notice', 'maps'] as const) {
+      const body = render({ classification })
+      expect(body).toContain('**Mergas efter verifiering och livekontroll. Kunden informeras av utvecklarna.**')
+      expect(body).not.toContain('Mergas av tekniker')
+    }
   })
 })
 
@@ -91,6 +99,7 @@ function fake(answers: Record<string, Answer | (() => Answer)> = {}) {
     'git merge-base --is-ancestor origin/main HEAD': { code: 0, out: '' },
     'git diff --name-only origin/main...HEAD': { code: 0, out: 'src/layouts/Base.astro\nsrc/data/privacy.json\n' },
     'gh pr list': { code: 0, out: '[]' },
+    'git show HEAD:src/data/privacy.json': { code: 0, out: '{ "services": ["google-maps"] }\n' },
     'gh pr create': { code: 0, out: 'https://github.com/visionmediahq/kund/pull/9\n' },
   }
   const exec = async (cmd: string, args: string[]): Promise<Answer> => {
@@ -144,7 +153,7 @@ describe('openPr', () => {
   })
 
   test('an open PR from consent-banner is returned instead of a new one', async () => {
-    const f = fake({ 'gh pr list': { code: 0, out: '[{"url":"https://github.com/visionmediahq/kund/pull/5"}]' } })
+    const f = fake({ 'gh pr list': { code: 0, out: JSON.stringify([{ url: 'https://github.com/visionmediahq/kund/pull/5', title: TITLE }]) } })
     const r = await openPr(siteDir(), opts(f))
     expect(r.url).toBe('https://github.com/visionmediahq/kund/pull/5')
     expect(f.calls.some((c) => c.startsWith('gh pr create'))).toBe(false)
@@ -218,6 +227,62 @@ describe('openPr', () => {
   test('refuses another branch and a foreign origin', async () => {
     await expect(openPr(siteDir(), opts(fake({ 'git rev-parse --abbrev-ref HEAD': { code: 0, out: 'main\n' } })))).rejects.toThrow(/consent-banner/)
     await expect(openPr(siteDir(), opts(fake({ 'git remote get-url origin': { code: 0, out: 'git@github.com:other/kund.git\n' } })))).rejects.toThrow(/visionmediahq/)
+  })
+
+  test('finding 2: an open PR from consent-banner with another title is not ours: refused, nothing created', async () => {
+    const f = fake({ 'gh pr list': { code: 0, out: JSON.stringify([{ url: 'https://github.com/visionmediahq/kund/pull/5', title: 'WIP: cookie banner' }]) } })
+    await expect(openPr(siteDir(), opts(f))).rejects.toThrow(/pull\/5[\s\S]*WIP: cookie banner/)
+    expect(f.calls.some((c) => c.startsWith('gh pr create'))).toBe(false)
+    expect(f.calls.find((c) => c.startsWith('gh pr list'))).toContain('--json url,title')
+  })
+
+  test('finding 4 (Ruling 40): the template block comes from the branch privacy.json, so a hand-wired needs-human site gets a PR', async () => {
+    for (const [privacy, maps] of [
+      ['{ "services": ["google-maps"], "policy_url": "https://kund.se/integritet" }', true],
+      ['{ "services": [] }', false],
+    ] as const) {
+      const dir = siteDir()
+      writeFileSync(join(dir, '.rollout/report.json'), JSON.stringify(report({ classification: 'needs-human', reasons: ['several layouts and no single shared one: a, b'] })))
+      const f = fake({ 'git show HEAD:src/data/privacy.json': { code: 0, out: privacy } })
+      expect((await openPr(dir, opts(f))).url).toBe('https://github.com/visionmediahq/kund/pull/9')
+      const body = readFileSync(join(dir, '.rollout/pr-body.md'), 'utf8')
+      expect(body.includes('Visa Google Maps'), privacy).toBe(maps)
+    }
+  })
+
+  test('finding 4: a maps report but a branch privacy.json without google-maps gets the notice text', async () => {
+    const dir = siteDir()
+    await openPr(dir, opts(fake({ 'git show HEAD:src/data/privacy.json': { code: 0, out: '{"services":[]}' } })))
+    expect(readFileSync(join(dir, '.rollout/pr-body.md'), 'utf8')).not.toContain('Visa Google Maps')
+  })
+
+  test('finding 4: no privacy.json on the branch, or one that is not JSON: refused', async () => {
+    for (const answer of [{ code: 128, out: "fatal: path 'src/data/privacy.json' does not exist in 'HEAD'" }, { code: 0, out: '{ services' }]) {
+      const f = fake({ 'git show HEAD:src/data/privacy.json': answer })
+      await expect(openPr(siteDir(), opts(f))).rejects.toThrow(/privacy\.json/)
+      expect(f.calls.some((c) => c.startsWith('gh pr create'))).toBe(false)
+    }
+  })
+
+  test('finding 4: a needs-human site still needs a passing verify of HEAD', async () => {
+    const dir = siteDir({ ...PASS, pass: false })
+    writeFileSync(join(dir, '.rollout/report.json'), JSON.stringify(report({ classification: 'needs-human' })))
+    const f = fake()
+    await expect(openPr(dir, opts(f, { verify: async () => ({ ...PASS, pass: false }) }))).rejects.toThrow(/verify/)
+    expect(f.calls.some((c) => c.startsWith('gh pr create'))).toBe(false)
+  })
+
+  test('templateKind: google-maps listed → maps, else notice', () => {
+    expect(templateKind('{"services":["google-maps","youtube"]}')).toBe('maps')
+    expect(templateKind('{"services":["youtube"]}')).toBe('notice')
+    expect(templateKind('{}')).toBe('notice')
+    expect(() => templateKind('[]')).toThrow(/privacy\.json/)
+  })
+
+  test('finding 10: originRepo refuses a URL that only contains github.com/visionmediahq', () => {
+    expect(originRepo('git@github.com:visionmediahq/kund.git')).toBe('visionmediahq/kund')
+    expect(originRepo('https://github.com/visionmediahq/kund')).toBe('visionmediahq/kund')
+    expect(() => originRepo('https://evil/github.com/visionmediahq/x')).toThrow(/visionmediahq/)
   })
 
   test('a gh failure is reported', async () => {

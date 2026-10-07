@@ -1,5 +1,6 @@
 // The pr stage (spec C4): opens the consent-banner PR on a client site repo with a Swedish body.
-// The body is built only from the Report, verify.json (step names and results, never evidence text),
+// The body is built only from the branch's src/data/privacy.json (which template block: Ruling 40),
+// the Report, verify.json (step names and results, never evidence text),
 // the changed file names and issue links. Screenshots are not committed to the site repo: openPr
 // returns the files to copy into site-factory (`screenshotsDir`), and the body links them under
 // `screenshotsBase`. The copy, commit and push of site-factory is the controller's job.
@@ -14,7 +15,8 @@ export const TITLE = 'Samtyckesbanner (astro-consent 1.0)'
 export const TEMPLATE_PATH = join(import.meta.dirname, 'pr-body.sv.md')
 
 export interface BodyInput {
-  report: Report
+  /** Which template block: from the branch's privacy.json (`templateKind`), not the classification. */
+  kind: 'maps' | 'notice'
   verify: VerifyResult
   /** Issue URLs. */
   issues: string[]
@@ -25,10 +27,8 @@ export interface BodyInput {
 
 /** Fills `{{name}}` values and `{{#maps}}…{{/maps}}` / `{{#notice}}…{{/notice}}` blocks. */
 export function renderBody(template: string, input: BodyInput): string {
-  const { report, verify, issues, domain } = input
+  const { kind, verify, issues, domain } = input
   if (!verify.pass) throw new Error('verify did not pass: no PR body')
-  const kind = report.classification
-  if (kind !== 'maps' && kind !== 'notice') throw new Error(`classification ${kind} is not wired by the rollout`)
   const values: Record<string, string> = {
     domain,
     files: (input.files?.length ? input.files : ['(se diffen)']).map((f) => `- \`${f}\``).join('\n'),
@@ -62,6 +62,22 @@ export interface PrResult {
   files: { from: string; to: string }[]
 }
 
+/**
+ * Ruling 40: the template block for the branch's src/data/privacy.json text: `maps` when its
+ * services list google-maps, else `notice`. A hand-wired needs-human site gets its PR this way.
+ */
+export function templateKind(privacyJson: string): 'maps' | 'notice' {
+  let json: unknown
+  try {
+    json = JSON.parse(privacyJson)
+  } catch (e) {
+    throw new Error(`src/data/privacy.json on the branch is not JSON: ${(e as Error).message}`)
+  }
+  if (typeof json !== 'object' || json === null || Array.isArray(json)) throw new Error('src/data/privacy.json on the branch is not an object')
+  const services = (json as { services?: unknown }).services
+  return Array.isArray(services) && services.includes('google-maps') ? 'maps' : 'notice'
+}
+
 /** 'visionmediahq/<repo>' from the origin URL; throws for any other remote. */
 export function originRepo(url: string): string {
   const repo = ORIGIN.test(url) ? url.replace(/^.*github\.com[:/]/, '').replace(/\.git$/, '').replace(/\/+$/, '') : null
@@ -76,7 +92,8 @@ const readJson = <T>(path: string, what: string): T => {
 
 /**
  * Opens the PR for the site in `dir` (on consent-banner, verified). Rebases onto origin/main first
- * if it moved and verifies again in full. An open PR from consent-banner is returned as it is.
+ * if it moved and verifies again in full. An open PR from consent-banner titled TITLE is returned as
+ * it is; one with another title is someone else's and is refused.
  */
 export async function openPr(dir: string, opts: PrOptions): Promise<PrResult> {
   const exec = opts.exec ?? realExec
@@ -118,14 +135,21 @@ export async function openPr(dir: string, opts: PrOptions): Promise<PrResult> {
   const names = existsSync(shotsDir) ? readdirSync(shotsDir).filter((f) => f.endsWith('.png')).sort() : []
   const files = names.map((n) => ({ from: join(shotsDir, n), to: `${opts.screenshotsDir.replace(/\/+$/, '')}/${n}` }))
 
-  const existing = await exec('gh', ['pr', 'list', '-R', repo, '--head', BRANCH, '--state', 'open', '--json', 'url'], root)
+  const privacy = await git('show', 'HEAD:src/data/privacy.json')
+  if (privacy.code !== 0) throw new Error(`src/data/privacy.json is not on the branch: wire the site first\n${tail(privacy.out)}`)
+  const kind = templateKind(privacy.out)
+
+  const existing = await exec('gh', ['pr', 'list', '-R', repo, '--head', BRANCH, '--state', 'open', '--json', 'url,title'], root)
   if (existing.code !== 0) throw new Error(`gh pr list failed:\n${tail(existing.out)}`)
-  const open = (JSON.parse(existing.out || '[]') as { url: string }[])[0]
+  const open = (JSON.parse(existing.out || '[]') as { url: string; title: string }[])[0]
+  if (open && open.title !== TITLE) {
+    throw new Error(`an open PR from ${BRANCH} is not this tool's: ${open.url} "${open.title}" (expected "${TITLE}"); resolve it by hand`)
+  }
   if (open) return { url: open.url, files }
 
   const changed = (await git('diff', '--name-only', 'origin/main...HEAD')).out.split('\n').filter(Boolean)
   const body = renderBody(readFileSync(TEMPLATE_PATH, 'utf8'), {
-    report,
+    kind,
     verify: result,
     issues: opts.issues ?? [],
     domain: opts.domain ?? report.domains[0] ?? report.site,
