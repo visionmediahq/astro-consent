@@ -358,3 +358,71 @@ describe('detectIframes: synthetic cases', () => {
     expect(r.parseErrors.map((e) => e.file)).toEqual(['src/pages/bad.astro'])
   })
 })
+
+describe('detectIframes: fails closed (review round 1)', () => {
+  test('about:blank with a lazy data-src map → unresolved, the data-src is the hint', () => {
+    const r = detectIframes(
+      inline({ 'src/pages/index.astro': `<iframe src="about:blank" data-src="${MAP}" title="t"></iframe>\n` }),
+      [],
+    )
+    expect(r.iframes[0]).toMatchObject({ srcKind: 'unresolved', src: null, host: 'www.google.com', service: 'google-maps' })
+  })
+
+  test('data-lazy-src with no src → unresolved, hint from data-lazy-src', () => {
+    const r = detectIframes(inline({ 'src/pages/index.astro': `<iframe data-lazy-src="${MAP}" title="t"></iframe>\n` }), ['x.se'])
+    expect(r.iframes[0]).toMatchObject({ srcKind: 'unresolved', host: 'www.google.com', service: 'google-maps' })
+  })
+
+  test('srcdoc overrides src → unresolved even when src is the own site', () => {
+    const r = detectIframes(
+      inline({
+        'src/pages/index.astro': `<iframe src="/x" srcdoc="<iframe src='https://maps.google.com/maps?q=1&output=embed'></iframe>" title="t"></iframe>\n`,
+      }),
+      ['x.se'],
+    )
+    expect(r.iframes[0]).toMatchObject({ srcKind: 'unresolved', src: null, host: 'maps.google.com', service: 'google-maps' })
+  })
+
+  test.each(['javascript:void(0)', 'data:text/html,<p>x</p>', 'about:blank', ''])('a literal src %j is unresolved', (src) => {
+    const r = detectIframes(inline({ 'src/pages/index.astro': `<iframe src="${src}" title="t"></iframe>\n` }), ['x.se'])
+    expect(r.iframes[0]).toMatchObject({ srcKind: 'unresolved', src: null, host: null, service: null })
+  })
+
+  test('a non-http src from a const is unresolved too', () => {
+    const r = detectIframes(
+      inline({ 'src/pages/index.astro': "---\nconst U = 'about:blank'\n---\n<iframe src={U} title=\"t\"></iframe>\n" }),
+      [],
+    )
+    expect(r.iframes[0]).toMatchObject({ srcKind: 'unresolved', src: null })
+  })
+
+  test('an unresolved iframe never gets an own-domain host from candidates', () => {
+    const r = detectIframes(
+      inline({ 'src/pages/index.astro': "---\nconst home = 'https://www.x.se/'\n---\n<iframe title=\"t\"></iframe>\n" }),
+      ['x.se'],
+    )
+    expect(r.iframes[0]).toMatchObject({ srcKind: 'unresolved', host: null, service: null })
+  })
+
+  test('iframes outside .astro (md, tsx, public html) are found by a text sweep, unresolved', () => {
+    const md = `# Hitta hit\n\n<IFRAME src="${MAP}" title="k"></IFRAME>\n`
+    const tsx = 'export const V = () => <iframe src={url} />\n'
+    const html = '<html><body><iframe src="https://player.vimeo.com/video/1"></iframe></body></html>\n'
+    const r = detectIframes(
+      inline({
+        'src/content/hitta.md': md,
+        'src/components/Video.tsx': tsx,
+        'public/x.html': html,
+        'public/logo.png': '\u0000PNG<iframe',
+        'node_modules/pkg/a.html': '<iframe src="https://example.org"></iframe>',
+      }),
+      [],
+    )
+    const tag = (text: string) => ({ start: text.toLowerCase().indexOf('<iframe'), end: text.indexOf('>', text.toLowerCase().indexOf('<iframe')) + 1 })
+    expect(r.iframes).toEqual([
+      { file: 'public/x.html', ...tag(html), srcKind: 'unresolved', src: null, host: 'player.vimeo.com', service: null, title: null, classes: null, height: null, style: null },
+      { file: 'src/components/Video.tsx', ...tag(tsx), srcKind: 'unresolved', src: null, host: null, service: null, title: null, classes: null, height: null, style: null },
+      { file: 'src/content/hitta.md', ...tag(md), srcKind: 'unresolved', src: null, host: 'www.google.com', service: 'google-maps', title: null, classes: null, height: null, style: null },
+    ])
+  })
+})

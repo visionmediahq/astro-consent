@@ -294,6 +294,24 @@ function classify(url: string, ownDomains: string[]): { host: string | null; ser
 
 const isUrlLike = (s: string): boolean => /^(?:https?:)?\/\//i.test(s.trim())
 
+/**
+ * A src the browser loads from a host: http(s), protocol-relative or relative. `about:`, `data:`,
+ * `javascript:` and an empty src are not, and their real content is set some other way.
+ */
+const isLoadable = (s: string): boolean => {
+  const t = s.trim()
+  return isUrlLike(t) || (t !== '' && !/^[a-z][a-z0-9+.-]*:/i.test(t))
+}
+
+/** URLs written anywhere inside a piece of text (a `srcdoc`, a tag). */
+const urlsIn = (text: string): string[] => text.match(/(?:https?:)?\/\/[^\s"'<>`]+/gi) ?? []
+
+/** Attributes that load or replace the frame's content behind `src`'s back. */
+const LAZY = ['srcdoc', 'data-src', 'data-lazy-src']
+
+/** Where the text sweep looks for iframes the .astro parser does not cover. */
+const SWEEP_SKIP = /\.(?:astro|png|jpe?g|gif|webp|avif|ico|bmp|tiff?|woff2?|ttf|otf|eot|pdf|mp[34]|webm|ogg|wav|mov|zip|gz)$/i
+
 /** A quoted value as written, an expression as `{…}`, a bare attribute as '', or null. */
 function rawAttr(node: AstroNode, name: string): string | null {
   const a = attr(node, name)
@@ -410,6 +428,8 @@ export function detectIframes(files: SiteFiles, ownDomains: string[]): DetectedI
     return out
   }
 
+  const isOwn = (host: string): boolean =>
+    ownDomains.some((d) => host === d.toLowerCase() || host === `www.${d.toLowerCase()}`)
   type Where = { host: string | null; service: IframeInfo['service'] }
   /** The host and service every URL shares, or null when they differ. */
   const shared = (urls: string[]): Where | null => {
@@ -418,7 +438,12 @@ export function detectIframes(files: SiteFiles, ownDomains: string[]): DetectedI
     return first && seen.every((s) => s.host === first.host && s.service === first.service) ? first : null
   }
   /** What the URL-like candidates agree on; nothing when there are none or they differ. */
-  const agreed = (candidates: string[]): Where => shared(candidates.filter(isUrlLike)) ?? { host: null, service: null }
+  const agreed = (candidates: string[]): Where => {
+    const where = shared(candidates.filter(isUrlLike))
+    // A guess must never make an unknown frame look like the site's own.
+    if (!where || where.host === null || isOwn(where.host)) return { host: null, service: null }
+    return where
+  }
 
   const iframes: IframeInfo[] = []
   const invented: string[] = []
@@ -444,11 +469,26 @@ export function detectIframes(files: SiteFiles, ownDomains: string[]): DetectedI
       }
       const src = attr(node, 'src')
 
+      const lazy = LAZY.flatMap((name) => {
+        const a = attr(node, name)
+        if (!a) return []
+        if (a.kind !== 'expression') return [a.value, ...urlsIn(a.value)]
+        const expr = parseExpression(a.value)
+        return expr ? candidatesOf(expr, scopeOf(file, shadowed)) : []
+      })
+      if (LAZY.some((name) => attr(node, name) !== null) || node.attributes.some((a) => a.kind === 'spread')) {
+        iframes.push(unresolved([...lazy, ...(src?.kind === 'quoted' ? [src.value] : [])]))
+        continue
+      }
       if (!src || src.kind === 'empty') {
         iframes.push(unresolved(frontmatterUrls(p.sf)))
         continue
       }
       if (src.kind === 'quoted') {
+        if (!isLoadable(src.value)) {
+          iframes.push(unresolved([]))
+          continue
+        }
         note([src.value])
         iframes.push({ ...base, srcKind: 'literal', src: src.value, ...classify(src.value, ownDomains) })
         continue
@@ -461,6 +501,10 @@ export function detectIframes(files: SiteFiles, ownDomains: string[]): DetectedI
       }
       const scope = scopeOf(file, shadowed)
       const value = evaluator.evaluate(expr, scope)
+      if (value?.kind === 'string' && !isLoadable(value.value)) {
+        iframes.push(unresolved([]))
+        continue
+      }
       if (value?.kind === 'string') {
         note([value.value])
         const srcKind: SrcKind = value.dataPath ? 'data-file' : 'expression'
@@ -485,13 +529,46 @@ export function detectIframes(files: SiteFiles, ownDomains: string[]): DetectedI
       })
       const resolved = callSites.flatMap((c) => (c.src === null ? [] : [c.src]))
       note(resolved)
-      const where = callSites.length > 0 && resolved.length === callSites.length ? shared(resolved) : null
+      const complete = callSites.length > 0 && resolved.length === callSites.length && resolved.every(isLoadable)
+      const where = complete ? shared(resolved) : null
       // Call sites that disagree on host or service are as unknown as an unresolved src: fail closed.
       iframes.push(
         where
           ? { ...base, srcKind: 'expression', src: null, callSites, ...where }
           : { ...base, srcKind: 'unresolved', src: null, callSites, ...agreed(resolved) },
       )
+    }
+  }
+
+  // A cheap sweep over every other text file: Markdown/MDX, JSX/TSX, Vue, Svelte, public HTML.
+  // These iframes are only reported (unresolved, so the site goes to a human), never wired.
+  for (const file of [...files.list('src/**'), ...files.list('public/**')].sort()) {
+    if (SWEEP_SKIP.test(file)) continue
+    let text: string
+    try {
+      text = files.read(file)
+    } catch {
+      continue
+    }
+    if (text.includes('\u0000')) continue
+    for (const m of text.matchAll(/<iframe\b/gi)) {
+      const start = m.index
+      const close = text.indexOf('>', start)
+      const end = close < 0 ? start + '<iframe'.length : close + 1
+      const candidates = urlsIn(text.slice(start, end))
+      note(candidates)
+      iframes.push({
+        file,
+        start,
+        end,
+        srcKind: 'unresolved',
+        src: null,
+        ...agreed(candidates),
+        title: null,
+        classes: null,
+        height: null,
+        style: null,
+      })
     }
   }
 

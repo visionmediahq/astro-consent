@@ -12,10 +12,18 @@ export interface IframeInfo {
   start: number
   end: number
   srcKind: SrcKind
+  /**
+   * The resolved src. Null when unresolved, and also for a resolved `srcKind: 'expression'` whose
+   * value comes from a component prop: then `callSites` holds the value at each call site.
+   */
   src: string | null
   dataPath?: string
   /** When src is a component prop: where the component is used and what each use passes. */
   callSites?: { file: string; src: string | null }[]
+  /**
+   * For `srcKind: 'unresolved'` these two are descriptive hints only, taken from literals the
+   * src could be (or none at all). They must never be used to decide wiring.
+   */
   host: string | null
   service: ServiceSlug | null
   title: string | null
