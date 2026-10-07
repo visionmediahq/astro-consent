@@ -35,16 +35,26 @@ export function wcagContrast(a: Rgb, b: Rgb): number {
   return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05)
 }
 
-/** What contrast.css does: white text on primaries darker than lCut, black on the rest. */
-export function pickText(primary: Rgb, lCut: number): 'black' | 'white' {
-  return oklchL(primary) < lCut ? 'white' : 'black'
+/**
+ * Luminance as contrast.css computes it: the WCAG weights on pow((c + 0.055) / 1.055, 2.4) for
+ * every channel. The sRGB linear segment below 0.04045 is left out, as in the CSS; it only matters
+ * for near-black channels, far from the black/white crossover.
+ */
+export function relativeLuminanceApprox({ r, g, b }: Rgb): number {
+  const ch = (c: number): number => ((c / 255 + 0.055) / 1.055) ** 2.4
+  return 0.2126 * ch(r) + 0.7152 * ch(g) + 0.0722 * ch(b)
 }
 
-/** The cut-off in contrast.css: the number in "(L_CUT - l)", not the @supports probe's 0.6. */
-export function readLCut(cssText: string): number {
+/** What contrast.css does: black text on primaries lighter than yCut, white on the rest. */
+export function pickText(primary: Rgb, yCut: number): 'black' | 'white' {
+  return relativeLuminanceApprox(primary) > yCut ? 'black' : 'white'
+}
+
+/** The cut-off in contrast.css: the number in "(Y_CUT - (0.2126 * pow(", not the @supports probe's. */
+export function readYCut(cssText: string): number {
   const withoutProbe = cssText.replace(/@supports[^{]*\{/, '')
-  const m = /\(\s*([0-9.]+)\s*-\s*l\s*\)/.exec(withoutProbe)
-  if (!m) throw new Error('no "(L_CUT - l)" in the css')
+  const m = /\(\s*([0-9.]+)\s*-\s*\(\s*0\.2126\s*\*\s*pow\(/.exec(withoutProbe)
+  if (!m) throw new Error('no "(Y_CUT - (0.2126 * pow(" in the css')
   return Number(m[1])
 }
 

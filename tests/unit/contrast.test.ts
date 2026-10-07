@@ -1,10 +1,10 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, test } from 'vitest'
-import { oklchL, parseColour, pickText, readLCut, wcagContrast } from '../../ci/rollout/lib/colour'
+import { oklchL, parseColour, pickText, readYCut, relativeLuminanceApprox, wcagContrast } from '../../ci/rollout/lib/colour'
 
 const read = (rel: string) => readFileSync(new URL(rel, import.meta.url), 'utf8')
 const css = read('../../src/styles/contrast.css')
-const L_CUT = readLCut(css)
+const Y_CUT = readYCut(css)
 const primaries: { name: string; primary: string }[] = JSON.parse(read('./fixtures/primaries.json'))
 
 // Primaries where the rule keeps AA but picks the colour with the lower contrast. Filled only
@@ -33,29 +33,40 @@ describe('colour maths', () => {
     expect(white.b).toBeGreaterThan(254.5)
   })
 
-  test('readLCut ignores the @supports probe', () => {
-    expect(readLCut('@supports (color: oklch(from red (0.6 - l) * 1000000 0 0)) { a { --f: (0.42 - l) * 1000000 } }')).toBe(0.42)
+  test('readYCut ignores the @supports probe', () => {
+    expect(
+      readYCut('@supports (color: color(from red srgb clamp(0, (0.5 - (0.2126 * pow(r, 2.4))) * 1000000, 1) 0 0)) { a { --f: color(from x srgb clamp(0, (0.42 - (0.2126 * pow(r, 2.4))) * 1000000, 1) 0 0) } }'),
+    ).toBe(0.42)
+  })
+
+  test('approximate luminance matches WCAG away from the dark end', () => {
+    expect(relativeLuminanceApprox(parseColour('#ff0000'))).toBeCloseTo(0.2126, 2)
+    expect(relativeLuminanceApprox(WHITE)).toBeCloseTo(1, 3)
+  })
+
+  test('the cut is where black and white contrast equally', () => {
+    expect(Y_CUT).toBeCloseTo(Math.sqrt(1.05 * 0.05) - 0.05, 3)
   })
 })
 
 describe('pickText', () => {
   test('red takes black', () => {
-    expect(pickText(parseColour('#ff0000'), L_CUT)).toBe('black')
+    expect(pickText(parseColour('#ff0000'), Y_CUT)).toBe('black')
   })
 
   test('domeij orange takes black at about 6.2', () => {
     const p = parseColour('#eb5e28')
-    expect(wcagContrast(rgbOf(pickText(p, L_CUT)), p)).toBeCloseTo(6.2, 1)
+    expect(wcagContrast(rgbOf(pickText(p, Y_CUT)), p)).toBeCloseTo(6.2, 1)
   })
 
   for (const { name, primary } of primaries) {
     const p = parseColour(primary)
     test(`${name} meets AA`, () => {
-      expect(wcagContrast(rgbOf(pickText(p, L_CUT)), p)).toBeGreaterThanOrEqual(4.5)
+      expect(wcagContrast(rgbOf(pickText(p, Y_CUT)), p)).toBeGreaterThanOrEqual(4.5)
     })
     test(`${name} picks the better colour`, () => {
       if (KNOWN_EXCEPTIONS.includes(name)) return
-      expect(pickText(p, L_CUT)).toBe(better(p))
+      expect(pickText(p, Y_CUT)).toBe(better(p))
     })
   }
 })
@@ -67,10 +78,16 @@ describe('contrast.css', () => {
   })
 
   test('rule is guarded by @supports', () => {
-    const guard = '@supports (color: oklch(from red clamp(0, (0.6 - l) * 1000000, 1) 0 0))'
+    const guard =
+      '@supports (color: color(from red srgb clamp(0, (0.1791 - (0.2126 * pow((r + 0.055) / 1.055, 2.4))) * 1000000, 1) 0 0))'
     const at = css.indexOf(guard)
     expect(at).toBeGreaterThanOrEqual(0)
     expect(css.indexOf('.btn-primary')).toBeGreaterThan(at)
+  })
+
+  test('uses WCAG luminance weights on all three channels', () => {
+    for (const w of ['0.2126', '0.7152', '0.0722']) expect(css).toContain(`${w} * pow(`)
+    expect(css).not.toMatch(/oklch\(from/)
   })
 
   test('uses the 1000000 factor', () => {

@@ -3,7 +3,11 @@ import { parseColour, wcagContrast } from '../../ci/rollout/lib/colour'
 import { action, stub } from './helpers'
 
 // Transitions off: DaisyUI buttons animate colour changes, and we read the settled value.
-const RED = ':root { --color-primary: #ff0000 } * { transition: none !important }'
+const withPrimary = (hex: string) =>
+  `:root { --color-primary: ${hex} } * { transition: none !important }`
+const RED = withPrimary('#ff0000')
+// Worst pool colour under the old lightness rule (4.43:1 with white text): black must win.
+const GREEN = withPrimary('#538264')
 
 async function colours(button: Locator): Promise<{ fg: string; bg: string }> {
   return button.evaluate((el) => {
@@ -41,4 +45,11 @@ test('embed Visa button is AA on a red primary', async ({ page, context }) => {
   const buttons = page.locator('[data-consent-embed] [data-load]')
   expect(await buttons.count()).toBeGreaterThan(0)
   for (const button of await buttons.all()) await expectAa(button)
+})
+
+test('banner buttons are AA on a mid green primary', async ({ page, context }) => {
+  await stub(context)
+  await page.goto('/')
+  await page.addStyleTag({ content: GREEN })
+  for (const name of ['none', 'all']) await expectAa(action(page, name))
 })

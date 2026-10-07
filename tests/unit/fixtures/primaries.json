@@ -170,5 +170,17 @@
   {
     "name": "daisyui:wireframe",
     "primary": "oklch(87% 0 0)"
+  },
+  {
+    "name": "pool-1",
+    "primary": "#538264"
+  },
+  {
+    "name": "pool-2",
+    "primary": "#e02619"
+  },
+  {
+    "name": "pool-3",
+    "primary": "#8b7355"
   }
 ]

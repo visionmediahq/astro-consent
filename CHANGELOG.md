@@ -4,8 +4,9 @@
 
 - Fix: the banner and map buttons failed WCAG AA contrast on light or saturated primary colours
   (seen on three pilot sites). Inside the banner and `<ConsentEmbed>` only, `.btn-primary` text is
-  now black or white, whichever the primary's OKLCH lightness calls for (cut 0.58, checked against
-  every daisyUI theme and the pilot themes). Browsers without relative-colour support keep the
+  now black or white, whichever the primary's WCAG relative luminance calls for (black above 0.1791,
+  where black and white contrast equally; checked against every daisyUI theme and the pilot and
+  pool themes, all AA). Browsers without relative-colour support keep the
   theme's own colour. Neka and Acceptera alla stay identical.
 - Change: the map button reads "Visa {name}" (e.g. "Visa Google Maps") instead of repeating the
   embed's title, may wrap, and is described by the placeholder text through `aria-describedby`.
