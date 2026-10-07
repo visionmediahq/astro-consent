@@ -38,6 +38,18 @@ describe('listPages', () => {
     expect(pages.slice(0, 3)).toEqual(['/', '/kontakt', '/tjanster/bygg'])
   })
 
+  it('finding 12: static output with an adapter (dist/client + dist/server/entry.mjs) lists dist/client, not /client/…', async () => {
+    const distDir = dist(['client/index.html', 'client/om/index.html', 'client/admin/index.html', 'client/404.html', 'server/entry.mjs'])
+    const pages = await listPages('http://127.0.0.1:4321', { distDir, ssr: false })
+    expect(pages.slice(0, -1)).toEqual(['/', '/admin/', '/om/'])
+  })
+
+  it('finding 12: without dist/server/entry.mjs a page folder named client is just a page', async () => {
+    const distDir = dist(['index.html', 'client/index.html'])
+    const pages = await listPages('http://127.0.0.1:4321', { distDir, ssr: false })
+    expect(pages.slice(0, -1)).toEqual(['/', '/client/'])
+  })
+
   it('static: requires a dist dir', async () => {
     await expect(listPages('http://127.0.0.1:4321', { ssr: false })).rejects.toThrow(/distDir/)
   })

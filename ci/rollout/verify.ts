@@ -26,7 +26,7 @@ import type { Browser } from '@playwright/test'
 import { type ClipResult, checkClip } from './checks/clip'
 import { type ConsentPathResult, checkConsentPaths } from './checks/consent-paths'
 import { type ContrastRow, checkContrast } from './checks/contrast'
-import { listPages, MISSING_PREFIX } from './checks/pages'
+import { isCmsAdminRoute, listPages, MISSING_PREFIX } from './checks/pages'
 import { checkRequests, formatRequests, type RequestResult } from './checks/requests'
 import { shots } from './checks/shots'
 import { isRoute, routeOf } from './detect/structure'
@@ -73,11 +73,11 @@ export interface VerifyOptions {
   out?: string
 }
 
-/** Ruling 26: pages under src/pages/admin/ are CMS shells, not visitor pages. */
-const isCmsAdminRoute = (path: string): boolean => path === '/admin' || path.startsWith('/admin/')
-
 /** Step 8 clones only Vision Media's own GitHub repos (Ruling 34b). */
-export const ORIGIN = /github\.com[:/]visionmediahq\//
+export const ORIGIN = /^(git@github\.com:|https:\/\/github\.com\/)visionmediahq\//
+
+/** The remote head of consent-banner verify last pushed, so a rerun may replace its own push. */
+export const PUSHED_FILE = 'pushed.txt'
 
 const norm = (path: string): string => (path.length > 1 ? path.replace(/\/+$/, '') : path)
 
@@ -236,19 +236,49 @@ export async function verify(dir: string, report: Report, opts: VerifyOptions = 
       }
       staleWorktree = true
     }
+    // The checks run on the working tree, but the result is recorded for HEAD: both must be one.
+    const status = await git('status', '--porcelain', '--untracked-files=all')
+    if (status.code !== 0 || status.out.trim() !== '') {
+      const what = status.code !== 0 ? ['git status failed:', tail(status.out)] : ['uncommitted or untracked files:', status.out.trimEnd()]
+      record(0, 'clean', { pass: false, lines: ['the working tree is not clean: commit your changes, then rerun verify', ...what] })
+      return finish()
+    }
+    // Never force-push over a consent-banner on GitHub that this tool did not push (a fresh clone
+    // sees someone else's branch as origin/consent-banner, so --force-with-lease alone would not stop it).
+    const local = (await git('rev-parse', 'HEAD')).out.trim()
+    const remote = await git('ls-remote', '--heads', 'origin', BRANCH)
+    const remoteSha = remote.out.trim().split(/\s+/)[0] ?? ''
+    const pushedPath = join(out, PUSHED_FILE)
+    const pushed = existsSync(pushedPath) ? readFileSync(pushedPath, 'utf8').trim() : ''
+    if (remote.code !== 0) {
+      record(0, 'push', { pass: false, lines: [`git ls-remote --heads origin ${BRANCH} failed: cannot tell whether the branch on GitHub is ours`, tail(remote.out)] })
+      return finish()
+    }
+    if (remoteSha !== '' && remoteSha !== local && remoteSha !== pushed) {
+      record(0, 'push', {
+        pass: false,
+        lines: [
+          `origin/${BRANCH} is ${remoteSha}, which this tool did not push (last push: ${pushed || 'none'}); HEAD is ${local || '(unknown)'}.`,
+          'Not force-pushing over it: find out whose branch it is, and delete or rename it on GitHub by hand.',
+        ],
+      })
+      return finish()
+    }
     const push = await git('push', '--force-with-lease', 'origin', BRANCH)
     if (push.code !== 0) {
       record(0, 'push', { pass: false, lines: [`git push --force-with-lease origin ${BRANCH} failed:`, tail(push.out)] })
       return finish()
     }
     sha = (await git('rev-parse', 'HEAD')).out.trim() || null
+    if (sha) writeFileSync(pushedPath, `${sha}\n`)
   }
 
   const ssr = demo || report.astro.output === 'server'
   const known = mapRoutes(report)
   const filters = filterRoutes(report)
   const expectFilter = filters.size ? (p: string) => filters.has(norm(p)) : undefined
-  const expectBanner = demo ? (p: string) => norm(p) !== '/utan-banner' && !p.startsWith(MISSING_PREFIX) : () => true
+  // CMS admin shells (src/pages/admin/, or Decap's public/admin/ copied to dist/admin/) never get the banner.
+  const expectBanner = demo ? (p: string) => norm(p) !== '/utan-banner' && !p.startsWith(MISSING_PREFIX) : (p: string) => !isCmsAdminRoute(p)
   const previews: Preview[] = []
   let checks = null as Checks | null
   const getChecks = async () => (checks ??= await deps.checks())
@@ -381,7 +411,7 @@ export async function verify(dir: string, report: Report, opts: VerifyOptions = 
           `${r.path ?? ''} ${r.kind} "${r.button}" ${r.ratio.toFixed(2)}:1 ${r.ok ? 'ok' : 'FAIL'}${r.indeterminate ? ` (indeterminate: ${r.indeterminate})` : ''}`,
       )
       // Ruling 20: every page that should show the banner has banner and PrivacyLinks rows. CMS admin
-      // pages (Ruling 26: src/pages/admin/) never get PrivacyLinks.
+      // pages (Ruling 26) get neither and are left out by expectBanner.
       const missing: string[] = []
       for (const p of paths.filter(expectBanner)) {
         const own = rows.filter((r) => norm(r.path ?? '') === norm(p))

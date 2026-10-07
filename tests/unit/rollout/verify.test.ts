@@ -10,7 +10,7 @@ import type { RequestResult } from '../../../ci/rollout/checks/requests'
 import { dockerCheck } from '../../../ci/rollout/docker'
 import { startPreview } from '../../../ci/rollout/preview'
 import type { Report } from '../../../ci/rollout/types'
-import { type Checks, type Exec, mapRoutes, type VerifyDeps, verify } from '../../../ci/rollout/verify'
+import { type Checks, type Exec, mapRoutes, ORIGIN, type VerifyDeps, verify } from '../../../ci/rollout/verify'
 
 const PKG = '@visionmediahq/astro-consent'
 const DEMO_REPORT = JSON.parse(readFileSync(join(import.meta.dirname, 'fixtures/demo-report.json'), 'utf8')) as Report
@@ -332,7 +332,7 @@ describe('verify', () => {
   })
 
   test('step 8: the remote branch head must equal the local HEAD', async () => {
-    const f = fake({ exec: { 'git ls-remote': { code: 0, out: `${'b'.repeat(40)}\trefs/heads/consent-banner\n` } } })
+    const f = fake({ exec: { 'git ls-remote origin': { code: 0, out: `${'b'.repeat(40)}\trefs/heads/consent-banner\n` } } })
     const result = await verify(siteDir(), report(), { deps: f.deps })
     expect(result.steps.at(-1)).toMatchObject({ step: 8, pass: false })
     expect(f.called.has('docker')).toBe(false)
@@ -473,6 +473,96 @@ describe('verify', () => {
     expect(JSON.parse(readFileSync(join(out, 'verify.json'), 'utf8')).sha).toBeNull()
     // Step 4 clicks the banner: the bannerless page is left out.
     expect(consentPages).toEqual(['/karta'])
+  })
+})
+
+describe('verify: final review fixes', () => {
+  test('finding 1: uncommitted or untracked files refuse verify before the push, with a failing verify.json', async () => {
+    const dir = siteDir()
+    const f = fake({ exec: { 'git status --porcelain --untracked-files=all': { code: 0, out: ' M src/layouts/Base.astro\n?? notes.txt\n' } } })
+    const result = await verify(dir, report(), { deps: f.deps })
+    expect(result.pass).toBe(false)
+    expect(result.steps).toEqual([expect.objectContaining({ step: 0, name: 'clean', pass: false })])
+    expect(result.steps[0]!.evidence).toContain('commit your changes, then rerun verify')
+    expect(result.steps[0]!.evidence).toContain('src/layouts/Base.astro')
+    expect(JSON.parse(readFileSync(join(dir, '.rollout/verify.json'), 'utf8'))).toEqual(result)
+    expect(f.calls.some((c) => c.startsWith('git push') || c.startsWith('npm'))).toBe(false)
+  })
+
+  test('finding 1: a failing git status refuses too', async () => {
+    const f = fake({ exec: { 'git status --porcelain --untracked-files=all': { code: 128, out: 'fatal: x' } } })
+    const result = await verify(siteDir(), report(), { deps: f.deps })
+    expect(result.steps).toEqual([expect.objectContaining({ step: 0, name: 'clean', pass: false })])
+    expect(f.calls.some((c) => c.startsWith('git push'))).toBe(false)
+  })
+
+  test('finding 2: a remote consent-banner this tool did not push is never force-pushed over', async () => {
+    const dir = siteDir()
+    const other = 'b'.repeat(40)
+    const f = fake({ exec: { 'git ls-remote --heads origin consent-banner': { code: 0, out: `${other}\trefs/heads/consent-banner\n` } } })
+    const result = await verify(dir, report(), { deps: f.deps })
+    expect(result.pass).toBe(false)
+    expect(result.steps).toEqual([expect.objectContaining({ step: 0, name: 'push', pass: false })])
+    expect(result.steps[0]!.evidence).toContain(other)
+    expect(f.calls.some((c) => c.startsWith('git push'))).toBe(false)
+  })
+
+  test('finding 2: the remote head this tool pushed last (a rerun after a rebase or amend) may be replaced', async () => {
+    const dir = siteDir()
+    const ours = 'b'.repeat(40)
+    const first = fake({ exec: { 'git ls-remote --heads origin consent-banner': { code: 0, out: '' }, 'git rev-parse HEAD': { code: 0, out: `${ours}\n` } } })
+    await verify(dir, report(), { deps: first.deps })
+    expect(first.calls).toContain('git push --force-with-lease origin consent-banner')
+    rmSync(`${dir}-main`, { recursive: true, force: true })
+    const again = fake({ exec: { 'git ls-remote --heads origin consent-banner': { code: 0, out: `${ours}\trefs/heads/consent-banner\n` } } })
+    const result = await verify(dir, report(), { deps: again.deps })
+    expect(again.calls).toContain('git push --force-with-lease origin consent-banner')
+    expect(result.steps[0]).toMatchObject({ step: 1, pass: true })
+  })
+
+  test('finding 2: ls-remote failing refuses the push', async () => {
+    const f = fake({ exec: { 'git ls-remote --heads origin consent-banner': { code: 2, out: 'fatal: could not read' } } })
+    const result = await verify(siteDir(), report(), { deps: f.deps })
+    expect(result.steps).toEqual([expect.objectContaining({ step: 0, name: 'push', pass: false })])
+    expect(f.calls.some((c) => c.startsWith('git push'))).toBe(false)
+  })
+
+  test('finding 3: CMS admin routes (src/pages/admin/ or public/admin/) expect no banner, locally and in Docker', async () => {
+    const asked: Record<string, Record<string, boolean>> = {}
+    const row = (path: string, kind: 'banner' | 'links'): ContrastRow => ({ path, kind, button: 'x', ratio: 7, ok: true, fg: { r: 0, g: 0, b: 0 }, bg: { r: 255, g: 255, b: 255 } })
+    const f = fake({
+      checks: {
+        pages: async () => ['/', '/admin/', '/admin/index.html', '/administration', '/finns-inte-x'],
+        embedPages: async () => [],
+        requests: async (base, paths, opts) =>
+          paths.map((path) => {
+            const expect = opts.expectBanner?.(path) ?? true
+            ;(asked[base] ??= {})[path] = expect
+            const banner = path.startsWith('/admin/') ? false : !base.includes(':4398')
+            return { path, banner, banners: banner ? 1 : 0, blocked: [], errors: [], known: [], ok: banner === expect }
+          }),
+        contrast: async () => [row('/', 'banner'), row('/', 'links'), row('/administration', 'banner'), row('/administration', 'links'), row('/finns-inte-x', 'banner'), row('/finns-inte-x', 'links')],
+      },
+    })
+    const result = await verify(siteDir(), report({ classification: 'notice', iframes: [] }), { deps: f.deps })
+    const want = { '/': true, '/admin/': false, '/admin/index.html': false, '/administration': true, '/finns-inte-x': true }
+    expect(asked['http://127.0.0.1:4399']).toEqual(want)
+    expect(asked['http://127.0.0.1:4397']).toEqual(want)
+    expect(result.pass).toBe(true)
+  })
+
+  test('finding 10: ORIGIN is anchored to github.com/visionmediahq', () => {
+    expect(ORIGIN.test('git@github.com:visionmediahq/x.git')).toBe(true)
+    expect(ORIGIN.test('https://github.com/visionmediahq/x')).toBe(true)
+    expect(ORIGIN.test('https://evil/github.com/visionmediahq/x')).toBe(false)
+    expect(ORIGIN.test('git@evil.com:github.com/visionmediahq/x')).toBe(false)
+  })
+
+  test('finding 10: step 8 refuses an origin that only contains github.com/visionmediahq', async () => {
+    const f = fake({ exec: { 'git remote get-url origin': { code: 0, out: 'https://evil/github.com/visionmediahq/x\n' } } })
+    const result = await verify(siteDir(), report(), { deps: f.deps })
+    expect(result.steps.at(-1)).toMatchObject({ step: 8, pass: false })
+    expect(f.called.has('docker')).toBe(false)
   })
 })
 

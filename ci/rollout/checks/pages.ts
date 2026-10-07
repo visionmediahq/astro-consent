@@ -1,11 +1,17 @@
 // Which pages verify and live check (spec C3 step 3): every built page, plus a missing URL so the
 // 404 page is checked too. Detect only reads source, so this reads the built site instead.
-import { readdirSync } from 'node:fs'
-import { sep } from 'node:path'
+import { existsSync, readdirSync } from 'node:fs'
+import { join, sep } from 'node:path'
 import { parse } from 'node-html-parser'
 
 /** A path no site has: the request lands on the site's 404 page. */
 export const MISSING_PREFIX = '/finns-inte-'
+
+/**
+ * Ruling 26: a CMS admin shell, not a visitor page: no banner, no PrivacyLinks. Covers
+ * src/pages/admin/ and Decap's usual public/admin/index.html (built to dist/admin/).
+ */
+export const isCmsAdminRoute = (path: string): boolean => path === '/admin' || path.startsWith('/admin/')
 
 /** Upper bound for the SSR crawl: a link loop or a calendar must not keep it going for ever. */
 const MAX_CRAWL = 200
@@ -18,9 +24,15 @@ function htmlFiles(dir: string): string[] {
     .map((f) => f.split(sep).join('/'))
 }
 
-/** dist/**\/*.html as URL paths: index.html → '/', om/index.html → '/om/', kontakt.html → '/kontakt'. */
+/**
+ * dist/**\/*.html as URL paths: index.html → '/', om/index.html → '/om/', kontakt.html → '/kontakt'.
+ * Static output with an adapter (Astro 5+) builds the pages to dist/client/ beside dist/server/:
+ * those are listed from dist/client/, so no page shows up as /client/….
+ */
 function staticPages(distDir: string): string[] {
-  const paths = htmlFiles(distDir)
+  const client = join(distDir, 'client')
+  const root = existsSync(join(distDir, 'server', 'entry.mjs')) && existsSync(client) ? client : distDir
+  const paths = htmlFiles(root)
     .filter((f) => !/^(404|500)\.html$/.test(f) && !f.startsWith('_astro/'))
     .map((f) => '/' + (f === 'index.html' ? '' : f.endsWith('/index.html') ? f.slice(0, -'index.html'.length) : f.slice(0, -'.html'.length)))
   return [...new Set(paths)].sort((a, b) => (a === '/' ? -1 : b === '/' ? 1 : a.localeCompare(b)))
