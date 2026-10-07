@@ -2,15 +2,20 @@
 // through .git/info/exclude, so stages can be rerun one at a time.
 //
 //   tsx ci/rollout/run.ts detect <site dir> --domain <d> [--domain <d2>]
+//   tsx ci/rollout/run.ts wire   <site dir> [--dry-run]
 import { execFileSync } from 'node:child_process'
 import { appendFileSync, existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs'
 import { basename, isAbsolute, join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
+import { createTwoFilesPatch, FILE_HEADERS_ONLY } from 'diff'
 import { detect } from './detect/index'
 import { diskSite } from './lib/site-files'
 import type { Report } from './types'
+import { applyWire, BRANCH, planFiles, planWire, refusalLines } from './wire/index'
 
 const DETECT_USAGE = 'usage: tsx ci/rollout/run.ts detect <site dir> --domain <domain> [--domain <domain>]'
+const WIRE_USAGE = 'usage: tsx ci/rollout/run.ts wire <site dir> [--dry-run]'
+const USAGE = `${DETECT_USAGE}\n${WIRE_USAGE}`
 
 export function parseDetectArgs(args: string[]): { dir: string; domains: string[] } {
   let dir: string | null = null
@@ -78,10 +83,84 @@ export function summary(report: Report): string {
   return lines.join('\n')
 }
 
+export function parseWireArgs(args: string[]): { dir: string; dryRun: boolean } {
+  let dir: string | null = null
+  let dryRun = false
+  for (const arg of args) {
+    if (arg === '--dry-run') dryRun = true
+    else if (arg.startsWith('-')) throw new Error(`unknown option ${arg}\n${WIRE_USAGE}`)
+    else if (dir === null) dir = arg
+    else throw new Error(`one site dir only\n${WIRE_USAGE}`)
+  }
+  if (dir === null) throw new Error(WIRE_USAGE)
+  return { dir, dryRun }
+}
+
+function readReport(root: string): Report {
+  const path = join(root, '.rollout/report.json')
+  if (!existsSync(path)) throw new Error(`${path} not found: run detect first`)
+  return JSON.parse(readFileSync(path, 'utf8')) as Report
+}
+
+/**
+ * Plans the wiring of the site in `dir` from its `.rollout/report.json`. A dry run returns the
+ * report summary, the plan summary, the unified diff and any refusals, and writes nothing at all
+ * (spec C2). Otherwise the plan is applied and committed on branch consent-banner. Exit code 1
+ * when the plan is refused.
+ */
+export function runWire(dir: string, opts: { dryRun: boolean }): { code: number; output: string } {
+  const root = resolve(dir)
+  const report = readReport(root)
+  const site = diskSite(root)
+  const plan = planWire(site, report)
+  const lines = [summary(report)]
+  if (!plan.ok) {
+    lines.push(`wire: refused, nothing ${opts.dryRun ? 'would be' : 'was'} written`, ...refusalLines(plan).map((l) => `  ${l}`))
+    return { code: 1, output: `${lines.join('\n')}\n` }
+  }
+  const files = planFiles((path) => site.read(path), plan)
+  lines.push(
+    `wire: ${plan.edits.length} edits in ${new Set(plan.edits.map((e) => e.file)).size} files, ${plan.newFiles.length} new files, ${plan.skipped.length} skipped`,
+    ...files.map((f) => `  ${f.before === null ? 'new ' : 'edit'} ${f.path}`),
+    ...plan.skipped.map((t) => `  skip ${t}`),
+  )
+  if (opts.dryRun) {
+    const diff = files.map((f) =>
+      createTwoFilesPatch(f.before === null ? '/dev/null' : `a/${f.path}`, `b/${f.path}`, f.before ?? '', f.after, undefined, undefined, {
+        context: 3,
+        headerOptions: FILE_HEADERS_ONLY,
+      }),
+    )
+    return { code: 0, output: `${lines.join('\n')}\n\n${diff.join('')}` }
+  }
+  applyWire(root, plan, { commit: true })
+  lines.push(`committed on ${BRANCH}`)
+  return { code: 0, output: `${lines.join('\n')}\n` }
+}
+
+function mainWire(rest: string[]): number {
+  let args: { dir: string; dryRun: boolean }
+  try {
+    args = parseWireArgs(rest)
+  } catch (e) {
+    console.error((e as Error).message)
+    return 2
+  }
+  try {
+    const { code, output } = runWire(args.dir, { dryRun: args.dryRun })
+    process.stdout.write(output)
+    return code
+  } catch (e) {
+    console.error((e as Error).message)
+    return 1
+  }
+}
+
 function main(argv: string[]): number {
   const [command, ...rest] = argv
+  if (command === 'wire') return mainWire(rest)
   if (command !== 'detect') {
-    console.error(DETECT_USAGE)
+    console.error(USAGE)
     return 2
   }
   let args: { dir: string; domains: string[] }
