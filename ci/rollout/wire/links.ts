@@ -1,7 +1,7 @@
 // Wires <PrivacyLinks /> into every client footer and every footerless page.
 //
-// Footer (Rulings 17, 23): from <footer>, descend through elements with exactly one element child
-// (decoration not counted) and append to the first element with more than one, or to the deepest
+// Footer (Rulings 17, 23, 29): from <footer>, descend through elements with exactly one element child
+// (decoration not counted, phrasing/interactive elements never entered) and append to the first element with more than one, or to the deepest
 // single-child wrapper. The class is the footer's own text colour class, plus `justify-start!`
 // when the footer's end is left-aligned or split (Rulings 18, 27: alignment === 'left' only).
 //
@@ -28,6 +28,12 @@ function isDecoration(n: AstroNode): boolean {
   return false
 }
 
+/** Ruling 29: phrasing or interactive content never takes the links (a <nav> inside <p>, <a> or <h1> is invalid). */
+const PHRASING = new Set(['p', 'a', 'span', 'button', 'label', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'strong', 'em', 'small', 'b', 'i'])
+
+/** An element the descent may enter: not phrasing or interactive content. */
+const enterable = (n: AstroNode): boolean => n.type === 'element' && !PHRASING.has(n.name ?? '')
+
 const contentChildren = (n: AstroNode): AstroNode[] => childElements(n).filter((c) => !isDecoration(c))
 
 /** Where the links go in a footer (Rulings 17, 23). */
@@ -36,7 +42,7 @@ export function footerSlot(footer: AstroNode): AstroNode {
   for (;;) {
     const kids = contentChildren(node)
     const only = kids.length === 1 ? kids[0]! : null
-    if (!only || only.type !== 'element' || contentChildren(only).length === 0) return node
+    if (!only || !enterable(only) || contentChildren(only).length === 0) return node
     node = only
   }
 }
@@ -47,13 +53,13 @@ export function linksTag(name: string, footer: Pick<FooterInfo, 'textClass' | 'a
   return classes.length > 0 ? `<${name} class="${classes.join(' ')}" />` : `<${name} />`
 }
 
-/** Where the links go on a footerless page (Ruling 16). */
+/** Where the links go on a footerless page (Rulings 16, 29). */
 function pageSlots(root: AstroNode): AstroNode[] {
   const mains = elements(root, 'main')
   if (mains.length > 0) {
     return mains.map((main) => {
       const kids = childElements(main)
-      return kids.length === 1 && kids[0]!.type === 'element' ? kids[0]! : main
+      return kids.length === 1 && enterable(kids[0]!) ? kids[0]! : main
     })
   }
   const top = childElements(root).filter((n) => n.type !== 'expression')

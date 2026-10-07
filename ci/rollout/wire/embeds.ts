@@ -156,7 +156,8 @@ const COMPOUND = /^([a-zA-Z][\w-]*|\*)?((?:\.[\w-]+|::?[\w-]+(?:\([^)]*\))?|#[\w
  * (the `iframe` element, or only classes the iframe has): `X iframe` → `X :global(iframe)`;
  * otherwise the compound moves to the wrapper (`iframe` → `div`, pseudo-classes kept) and
  * ` :global(iframe)` follows: `iframe:hover` → `div:hover :global(iframe)`. Null when the selector
- * does not target the iframe; an Error when it does but cannot be rewritten safely.
+ * does not target the iframe; an Error when it does but cannot be rewritten safely, or when it
+ * targets the iframe through one of its classes (Ruling 30: the wrapper keeps those classes).
  */
 export function rewriteSelector(selector: string, iframeClasses: readonly string[]): { selector: string; div: boolean } | null | Error {
   const sel = selector.trim()
@@ -176,6 +177,9 @@ export function rewriteSelector(selector: string, iframeClasses: readonly string
   const classes = parts.filter((p) => p.startsWith('.')).map((p) => p.slice(1))
   const targets = (type === 'iframe' || (type === undefined && classes.length > 0)) && classes.every((c) => iframeClasses.includes(c))
   if (!targets) return null
+  // Ruling 30: the wrapper keeps the iframe's classes, so the original rule would match the wrapper
+  // (filtering the placeholder) and the copy would filter the iframe a second time.
+  if (classes.length > 0) return new Error("filter rule targets the iframe's class")
   const pseudos = parts.filter((p) => p.startsWith(':'))
   const unsafe =
     combinator !== '' ||
@@ -185,8 +189,8 @@ export function rewriteSelector(selector: string, iframeClasses: readonly string
   if (type === 'iframe' && classes.length === 0 && pseudos.length === 0 && ancestor !== '') {
     return { selector: `${ancestor} :global(iframe)`, div: false }
   }
-  const wrapper = `${type === 'iframe' ? 'div' : ''}${classes.map((c) => `.${c}`).join('')}${pseudos.join('')}`
-  return { selector: `${ancestor ? `${ancestor} ` : ''}${wrapper} :global(iframe)`, div: type === 'iframe' }
+  const wrapper = `div${pseudos.join('')}`
+  return { selector: `${ancestor ? `${ancestor} ` : ''}${wrapper} :global(iframe)`, div: true }
 }
 
 // ── The iframe itself ──
@@ -232,13 +236,21 @@ function boxOf(node: AstroNode, parent: AstroNode, rules: CssRule[]): Box | Erro
   if (classes === null) return new Error('iframe class is an expression')
   const fixed = classes.find((c) => FIXED_CLASS.test(c))
   if (fixed) return { classes: ['grid', fixed, ...classes.filter((c) => c !== fixed)], aspect: true }
+  // Ruling 31: an inline style height beats the height attribute, as in CSS.
+  const style = attr(node, 'style')
+  const inlineHeight = style?.kind === 'quoted' ? declarations(style.value).findLast((d) => d.prop === 'height')?.value.trim() : undefined
+  const inlineFixed = inlineHeight !== undefined ? /^(\d+(?:\.\d+)?)(px|rem|vh)$/i.exec(inlineHeight) : null
+  if (inlineFixed) return { classes: ['grid', `h-[${inlineFixed[1]}${inlineFixed[2]!.toLowerCase()}]`, ...classes], aspect: true }
   const height = attr(node, 'height')
-  const fills = classes.includes('h-full') || (height?.kind === 'quoted' && height.value.trim() === '100%')
+  const fills =
+    classes.includes('h-full') ||
+    inlineHeight === '100%' ||
+    (inlineHeight === undefined && height?.kind === 'quoted' && height.value.trim() === '100%')
   if (fills) {
     if (!definiteHeight(parent, rules)) return new Error('map fills a parent of unknown height')
     return { classes: ['grid', 'h-full', ...classes.filter((c) => c !== 'h-full')], aspect: true }
   }
-  const n = height?.kind === 'quoted' ? FIXED_ATTR.exec(height.value) : height?.kind === 'expression' ? /^\s*(\d+)()\s*$/.exec(height.value) : null
+  const n = inlineHeight !== undefined ? null : height?.kind === 'quoted' ? FIXED_ATTR.exec(height.value) : height?.kind === 'expression' ? /^\s*(\d+)()\s*$/.exec(height.value) : null
   if (n) return { classes: ['grid', `h-[${n[1]}${n[2] || 'px'}]`, ...classes], aspect: true }
   return { classes, aspect: false }
 }

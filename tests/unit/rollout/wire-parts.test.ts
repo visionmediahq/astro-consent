@@ -276,6 +276,21 @@ describe('wireLinks', () => {
     expect(text).toContain('      <p>b</p>\n      <PrivacyLinks />\n    </div>\n  </div>\n</footer>')
   })
 
+  // Ruling 29: the descent stops before phrasing or interactive content.
+  test('a footer whose only child is a <p> with a link: the links go after the <p>, not inside it (Ruling 29)', () => {
+    const text = wire([wireLinks], site(`<footer class="p-4">\n  <p>© Firma <a href="/integritet">Integritet</a></p>\n</footer>\n`), 'src/components/Footer.astro')
+    expect(text).toContain('  <p>© Firma <a href="/integritet">Integritet</a></p>\n  <PrivacyLinks />\n</footer>')
+  })
+
+  test('a footer wrapper whose only child is a link: the links go in the wrapper, not inside the <a> (Ruling 29)', () => {
+    const text = wire(
+      [wireLinks],
+      site(`<footer>\n  <div class="wrap">\n    <a href="/"><span>Hem</span></a>\n  </div>\n</footer>\n`),
+      'src/components/Footer.astro',
+    )
+    expect(text).toContain('    <a href="/"><span>Hem</span></a>\n    <PrivacyLinks />\n  </div>\n</footer>')
+  })
+
   test('the deepest single-child wrapper takes the links when the chain ends in a leaf', () => {
     const text = wire([wireLinks], site(`<footer>\n  <div class="wrap">\n    <p>©</p>\n  </div>\n</footer>\n`), 'src/components/Footer.astro')
     expect(text).toContain('    <p>©</p>\n    <PrivacyLinks />\n  </div>\n</footer>')
@@ -331,6 +346,15 @@ describe('wireLinks', () => {
       'src/pages/404.astro',
     )
     expect(text).toContain('      <a href="/">Tillbaka</a>\n      <PrivacyLinks />\n    </div>\n  </main>')
+  })
+
+  test('a 404 whose <main> holds only an <h1>: the links go in <main>, not inside the heading (Ruling 29)', () => {
+    const text = wire(
+      [wireLinks],
+      { 'src/pages/404.astro': `<html><body>\n  <main>\n    <h1>Sidan finns inte</h1>\n  </main>\n</body></html>\n` },
+      'src/pages/404.astro',
+    )
+    expect(text).toContain('    <h1>Sidan finns inte</h1>\n    <PrivacyLinks />\n  </main>')
   })
 
   test('footerless page without <main>: the last child of the outermost template element (a <script> beside it does not count)', () => {
@@ -477,6 +501,21 @@ describe('wireEmbeds', () => {
     ).toContain('<div class="grid h-full"><ConsentEmbed')
   })
 
+  test('inline style sizing (Ruling 31): height:100% fills a sized parent; height: <n>px is fixed', () => {
+    expect(
+      embed(`<div class="h-[400px]">\n  <iframe src="https://www.google.com/maps/embed?pb=!1" style="border:0;width:100%;HEIGHT : 100%" title="Karta"></iframe>\n</div>\n`),
+    ).toContain('  <div class="grid h-full"><ConsentEmbed service="google-maps" src="https://www.google.com/maps/embed?pb=!1" title="Karta" aspect="auto" /></div>\n')
+    expect(
+      embed(`<iframe class="w-full" src="https://www.google.com/maps/embed?pb=!1" style="height:450px" title="Karta"></iframe>\n`),
+    ).toContain('<div class="grid h-[450px] w-full"><ConsentEmbed service="google-maps" src="https://www.google.com/maps/embed?pb=!1" title="Karta" aspect="auto" /></div>')
+  })
+
+  test('inline style height:100% in an unsized parent: refused (Ruling 31)', () => {
+    expect(refused(`<div>\n  <iframe src="https://www.google.com/maps/embed?pb=!1" style="width:100%;height:100%" title="Karta"></iframe>\n</div>\n`)).toEqual([
+      'map fills a parent of unknown height',
+    ])
+  })
+
   test('fills a parent of unknown height: refused', () => {
     expect(refused(`<div class="karta">\n  <iframe src="https://www.google.com/maps/embed?pb=!1" height="100%" title="Karta"></iframe>\n</div>\n`)).toEqual([
       'map fills a parent of unknown height',
@@ -499,12 +538,15 @@ describe('wireEmbeds', () => {
     ).toContain('  p {\n    color: red;\n  }\n\n  div :global(iframe) {\n    filter: grayscale(0.2);\n  }\n</style>\n')
   })
 
-  test('a scoped rule targeting the iframe by class: copied for the wrapper, which keeps the class', () => {
+  // Ruling 30: the wrapper keeps the iframe's classes, so a class-targeted rule would filter the
+  // placeholder (and the Visa button) too, and the iframe twice.
+  test.each([
+    ['.karta { filter }', '  .karta {\n    filter: grayscale(1);\n  }'],
+    ['.karta:hover { … filter }', '  .karta:hover {\n    opacity: 0.9;\n    filter: none;\n  }'],
+  ])('a scoped rule targeting the iframe by class (%s): refused (Ruling 30)', (_name, rule) => {
     expect(
-      embed(
-        `<iframe class="karta w-full" src="https://www.google.com/maps/embed?pb=!1" title="Karta"></iframe>\n<style>\n  .karta:hover {\n    opacity: 0.9;\n    filter: none;\n  }\n</style>\n`,
-      ),
-    ).toContain('  .karta:hover {\n    opacity: 0.9;\n    filter: none;\n  }\n\n  .karta:hover :global(iframe) {\n    filter: none;\n  }\n</style>')
+      refused(`<iframe class="karta w-full" src="https://www.google.com/maps/embed?pb=!1" title="Karta"></iframe>\n<style>\n${rule}\n</style>\n`),
+    ).toEqual(["filter rule targets the iframe's class"])
   })
 
   test('a scoped rule that targets the iframe through a child combinator: refused', () => {
