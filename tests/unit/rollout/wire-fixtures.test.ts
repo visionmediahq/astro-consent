@@ -281,6 +281,66 @@ describe('applyWire', () => {
     expect(git(dir, 'branch', '--show-current')).toBe('main')
   })
 
+  test('Ruling 32: a failure after the branch switch names the recovery steps', () => {
+    const dir = checkout('munkforstradgardstjanst')
+    const report = runDetect(dir, ['munkforstradgardstjanst.se'])
+    const plan = planWire(fixtureSite(join(FIXTURES, 'munkforstradgardstjanst', 'before')), report)
+    const err = (() => {
+      try {
+        applyWire(dir, plan, {
+          commit: true,
+          install: () => {
+            throw new Error('npm install failed: E404')
+          },
+        })
+      } catch (e) {
+        return (e as Error).message
+      }
+      return ''
+    })()
+    expect(err).toContain('npm install failed: E404')
+    expect(err).toContain('git reset --hard && git clean -fd && git switch main && git branch -D consent-banner')
+    expect(err).toContain('re-clone')
+    // Stopped uncommitted, on the branch, as the hint says.
+    expect(git(dir, 'branch', '--show-current')).toBe('consent-banner')
+    expect(git(dir, 'rev-parse', 'HEAD')).toBe(git(dir, 'rev-parse', 'origin/main'))
+  })
+
+  test('Ruling 32: a path the plan did not name (besides package.json and the lockfile) stops the commit and is listed', () => {
+    const dir = checkout('munkforstradgardstjanst')
+    const report = runDetect(dir, ['munkforstradgardstjanst.se'])
+    const plan = planWire(fixtureSite(join(FIXTURES, 'munkforstradgardstjanst', 'before')), report)
+    expect(() =>
+      applyWire(dir, plan, {
+        commit: true,
+        install: (d) => {
+          writeFileSync(join(d, 'package.json'), '{"installed":true}\n')
+          writeFileSync(join(d, 'package-lock.json'), '{}\n')
+          mkdirSync(join(d, 'node_modules/x'), { recursive: true })
+          writeFileSync(join(d, 'node_modules/x/index.js'), '\n')
+          writeFileSync(join(d, 'src/pages/index.astro'), 'changed\n')
+        },
+      }),
+    ).toThrow(/not in the plan[\s\S]*node_modules\/x\/index\.js[\s\S]*src\/pages\/index\.astro[\s\S]*git reset --hard/)
+    expect(git(dir, 'branch', '--show-current')).toBe('consent-banner')
+    expect(git(dir, 'rev-parse', 'HEAD')).toBe(git(dir, 'rev-parse', 'origin/main'))
+  })
+
+  test('Ruling 32: package.json and package-lock.json changed by the install are allowed', () => {
+    const dir = checkout('munkforstradgardstjanst')
+    const report = runDetect(dir, ['munkforstradgardstjanst.se'])
+    const plan = planWire(fixtureSite(join(FIXTURES, 'munkforstradgardstjanst', 'before')), report)
+    applyWire(dir, plan, {
+      commit: true,
+      install: (d) => {
+        writeFileSync(join(d, 'package.json'), '{"installed":true}\n')
+        writeFileSync(join(d, 'package-lock.json'), '{}\n')
+      },
+    })
+    expect(git(dir, 'log', '-1', '--format=%s')).toBe(COMMIT_MESSAGE)
+    expect(git(dir, 'show', '--name-only', '--format=', 'HEAD').split('\n')).toEqual(expect.arrayContaining(['package.json', 'package-lock.json']))
+  })
+
   test('a new file that already exists on disk: refused before anything is written', () => {
     const dir = temp('wire-exists-')
     writeTree(dir, treeOf(join(FIXTURES, 'aspomad', 'before')))
@@ -324,13 +384,23 @@ describe('run.ts wire', () => {
     expect(git(dir, 'status', '--porcelain', '--untracked-files=all')).toBe('')
   })
 
-  test('--dry-run of a needs-human site prints the refusals and exits 1', () => {
+  test('--dry-run of a needs-human site prints the refusals and exits 3 (Ruling 32)', () => {
     const dir = checkout('a-tak')
     runDetect(dir, ['a-tak.se'])
     const { code, output } = runWire(dir, { dryRun: true })
-    expect(code).toBe(1)
+    expect(code).toBe(3)
     for (const reason of refusedReasons('a-tak')) expect(output).toContain(reason)
     expect(output).not.toContain('+++')
+  })
+
+  test('a refused plan without --dry-run also exits 3 and leaves the checkout alone (Ruling 32)', () => {
+    const dir = checkout('a-tak')
+    runDetect(dir, ['a-tak.se'])
+    const { code, output } = runWire(dir, { dryRun: false })
+    expect(code).toBe(3)
+    expect(output).toContain('nothing was written')
+    expect(git(dir, 'branch', '--show-current')).toBe('main')
+    expect(git(dir, 'status', '--porcelain', '--untracked-files=all')).toBe('')
   })
 
   test('without .rollout/report.json: an error that says to run detect first', () => {

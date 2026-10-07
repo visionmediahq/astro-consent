@@ -8,6 +8,8 @@
 //   tsx ci/rollout/run.ts pr     <site dir> --shots-dir <path> --shots-base <url> [--issue <url>]...
 //   tsx ci/rollout/run.ts live   <site dir> baseline | post-merge [--sha <merge commit>]
 //   tsx ci/rollout/run.ts merge  <site dir> <pr number>
+//
+// Exit codes: 0 ok, 1 error/failed check/STOP, 2 usage, 3 wire plan refused (see USAGE).
 import { execFileSync } from 'node:child_process'
 import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -30,7 +32,25 @@ const PR_USAGE =
   'usage: tsx ci/rollout/run.ts pr <site dir> --shots-dir <path in site-factory> --shots-base <github url of that folder> [--issue <url>]... [--domain <d>]'
 const LIVE_USAGE = 'usage: tsx ci/rollout/run.ts live <site dir> baseline | post-merge [--sha <merge commit>]'
 const MERGE_USAGE = 'usage: tsx ci/rollout/run.ts merge <site dir> <pr number>'
-const USAGE = `${DETECT_USAGE}\n${WIRE_USAGE}\n${VERIFY_USAGE}\n${PR_USAGE}\n${LIVE_USAGE}\n${MERGE_USAGE}`
+export const USAGE = [
+  DETECT_USAGE,
+  WIRE_USAGE,
+  VERIFY_USAGE,
+  PR_USAGE,
+  LIVE_USAGE,
+  MERGE_USAGE,
+  '',
+  'Every stage reads and writes <site dir>/.rollout/ (kept out of git through .git/info/exclude);',
+  'verify --demo writes to a temp folder instead.',
+  '',
+  'exit codes:',
+  '  0  ok (live baseline: also the expected RED)',
+  '  1  error, a failed verify step, or a live/merge STOP',
+  '  2  usage: bad command or arguments',
+  '  3  wire: the plan was refused (dry run or not); nothing was written',
+].join('\n')
+/** Exit code of a refused wire plan (Ruling 32). */
+export const EXIT_REFUSED = 3
 const DEMO_REPORT = join(import.meta.dirname, '../../tests/unit/rollout/fixtures/demo-report.json')
 
 export function parseDetectArgs(args: string[]): { dir: string; domains: string[] } {
@@ -121,8 +141,8 @@ function readReport(root: string): Report {
 /**
  * Plans the wiring of the site in `dir` from its `.rollout/report.json`. A dry run returns the
  * report summary, the plan summary, the unified diff and any refusals, and writes nothing at all
- * (spec C2). Otherwise the plan is applied and committed on branch consent-banner. Exit code 1
- * when the plan is refused.
+ * (spec C2). Otherwise the plan is applied and committed on branch consent-banner. Exit code 3
+ * when the plan is refused, dry run or not (Ruling 32).
  */
 export function runWire(dir: string, opts: { dryRun: boolean }): { code: number; output: string } {
   const root = resolve(dir)
@@ -132,7 +152,7 @@ export function runWire(dir: string, opts: { dryRun: boolean }): { code: number;
   const lines = [summary(report)]
   if (!plan.ok) {
     lines.push(`wire: refused, nothing ${opts.dryRun ? 'would be' : 'was'} written`, ...refusalLines(plan).map((l) => `  ${l}`))
-    return { code: 1, output: `${lines.join('\n')}\n` }
+    return { code: EXIT_REFUSED, output: `${lines.join('\n')}\n` }
   }
   const files = planFiles((path) => site.read(path), plan)
   lines.push(
@@ -325,8 +345,12 @@ function mainWire(rest: string[]): number {
   }
 }
 
-async function main(argv: string[]): Promise<number> {
+export async function main(argv: string[]): Promise<number> {
   const [command, ...rest] = argv
+  if (command === 'help' || command === '--help' || command === '-h') {
+    console.log(USAGE)
+    return 0
+  }
   if (command === 'wire') return mainWire(rest)
   if (command === 'verify') return mainVerify(rest)
   if (command === 'pr') return mainPr(rest)
@@ -343,10 +367,15 @@ async function main(argv: string[]): Promise<number> {
     console.error((e as Error).message)
     return 2
   }
-  const report = runDetect(args.dir, args.domains)
-  console.log(summary(report))
-  console.log(`  → ${join(resolve(args.dir), '.rollout/report.json')}`)
-  return 0
+  try {
+    const report = runDetect(args.dir, args.domains)
+    console.log(summary(report))
+    console.log(`  → ${join(resolve(args.dir), '.rollout/report.json')}`)
+    return 0
+  } catch (e) {
+    console.error((e as Error).message)
+    return 1
+  }
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

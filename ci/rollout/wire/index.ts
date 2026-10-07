@@ -62,6 +62,26 @@ function gitOk(dir: string, ...args: string[]): boolean {
   }
 }
 
+/** What the install may change besides the planned files. */
+const INSTALL_PATHS = ['package.json', 'package-lock.json']
+
+export const RECOVERY = `the checkout is left on ${BRANCH}, uncommitted; to retry: git reset --hard && git clean -fd && git switch main && git branch -D ${BRANCH}, or re-clone`
+
+/** Every changed, deleted or untracked path (not ignored ones), from `git status --porcelain -z`. */
+function changedPaths(dir: string): string[] {
+  const out = execFileSync('git', ['status', '--porcelain=v1', '-z', '--untracked-files=all'], { cwd: dir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
+  const fields = out.split('\0')
+  const paths: string[] = []
+  for (let i = 0; i < fields.length; i++) {
+    const entry = fields[i]!
+    if (entry.length < 4) continue
+    paths.push(entry.slice(3))
+    // A rename or copy is followed by its source path.
+    if (entry[0] === 'R' || entry[0] === 'C') paths.push(fields[++i]!)
+  }
+  return paths
+}
+
 export interface ApplyOptions {
   /**
    * true: the full C2 apply (branch, edits, install, commit), which refuses a checkout that is not
@@ -100,14 +120,23 @@ export function applyWire(dir: string, plan: WirePlan, opts: ApplyOptions): void
     git(root, 'switch', '-c', BRANCH, 'origin/main')
   }
 
-  for (const f of files) {
-    mkdirSync(dirname(join(root, f.path)), { recursive: true })
-    writeFileSync(join(root, f.path), f.after)
-  }
+  try {
+    for (const f of files) {
+      mkdirSync(dirname(join(root, f.path)), { recursive: true })
+      writeFileSync(join(root, f.path), f.after)
+    }
 
-  if (opts.commit) {
-    ;(opts.install ?? npmInstall)(root)
-    git(root, 'add', '-A')
-    git(root, 'commit', '-q', '-m', COMMIT_MESSAGE)
+    if (opts.commit) {
+      ;(opts.install ?? npmInstall)(root)
+      // Ruling 32: commit only what the plan wrote and what the install may change.
+      const allowed = new Set([...files.map((f) => f.path), ...INSTALL_PATHS])
+      const extra = changedPaths(root).filter((p) => !allowed.has(p)).sort()
+      if (extra.length) throw new Error(`changed paths not in the plan, nothing committed:\n${extra.map((p) => `  ${p}`).join('\n')}`)
+      git(root, 'add', '-A')
+      git(root, 'commit', '-q', '-m', COMMIT_MESSAGE)
+    }
+  } catch (e) {
+    if (!opts.commit) throw e
+    throw new Error(`${(e as Error).message}\n${RECOVERY}`)
   }
 }

@@ -2,8 +2,8 @@ import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
-import { afterEach, describe, expect, test } from 'vitest'
-import { parseDetectArgs, parseLiveArgs, parseMergeArgs, parseVerifyArgs, runDetect } from '../../../ci/rollout/run'
+import { afterEach, describe, expect, test, vi } from 'vitest'
+import { main, parseDetectArgs, parseLiveArgs, parseMergeArgs, parseVerifyArgs, runDetect, USAGE } from '../../../ci/rollout/run'
 import type { Report } from '../../../ci/rollout/types'
 
 const dirs: string[] = []
@@ -108,5 +108,61 @@ describe('parseMergeArgs', () => {
     expect(() => parseMergeArgs(['site'])).toThrow(/usage/)
     expect(() => parseMergeArgs(['site', 'x'])).toThrow(/PR number/)
     expect(() => parseMergeArgs(['site', '7', '8'])).toThrow(/usage/)
+  })
+})
+
+describe('the CLI (Task 23)', () => {
+  /** Runs main with console output captured. */
+  async function run(argv: string[]): Promise<{ code: number; out: string; err: string }> {
+    const out: string[] = []
+    const err: string[] = []
+    const log = vi.spyOn(console, 'log').mockImplementation((...a: unknown[]) => void out.push(a.join(' ')))
+    const error = vi.spyOn(console, 'error').mockImplementation((...a: unknown[]) => void err.push(a.join(' ')))
+    try {
+      return { code: await main(argv), out: out.join('\n'), err: err.join('\n') }
+    } finally {
+      log.mockRestore()
+      error.mockRestore()
+    }
+  }
+
+  test('USAGE names every subcommand, the exit codes and where state lives', () => {
+    for (const cmd of ['detect', 'wire', 'verify', 'pr', 'live', 'merge']) expect(USAGE).toMatch(new RegExp(`run\\.ts ${cmd} `))
+    expect(USAGE).toMatch(/exit codes?:/i)
+    expect(USAGE).toMatch(/0[^\n]*ok/i)
+    expect(USAGE).toMatch(/1[^\n]*error/i)
+    expect(USAGE).toMatch(/2[^\n]*usage/i)
+    expect(USAGE).toMatch(/3[^\n]*refused/i)
+    expect(USAGE).toContain('.rollout/')
+  })
+
+  test('no command or an unknown one prints the usage and exits 2', async () => {
+    for (const argv of [[], ['deploy'], ['--dry-run']]) {
+      const r = await run(argv)
+      expect(r.code).toBe(2)
+      expect(r.err).toContain(USAGE)
+    }
+  })
+
+  test('help, --help and -h print the usage to stdout and exit 0', async () => {
+    for (const argv of [['help'], ['--help'], ['-h']]) {
+      const r = await run(argv)
+      expect(r.code).toBe(0)
+      expect(r.out).toContain(USAGE)
+    }
+  })
+
+  test('bad arguments to any subcommand exit 2', async () => {
+    for (const argv of [['detect', 'site'], ['wire'], ['verify'], ['pr', 'site'], ['live', 'site'], ['merge', 'site', 'x']]) {
+      expect((await run(argv)).code, argv.join(' ')).toBe(2)
+    }
+  })
+
+  test('detect on a dir that is not a git checkout is an error (exit 1), not a crash', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'run-main-nogit-'))
+    dirs.push(dir)
+    const r = await run(['detect', dir, '--domain', 'a.se'])
+    expect(r.code).toBe(1)
+    expect(r.err).toMatch(/not a git checkout/)
   })
 })
