@@ -44,6 +44,15 @@ const POLICY = /^(?:integritet|privacy|cookie|personuppgift|gdpr|dataskydd)/i
 
 const isPage = (file: string): boolean => file.startsWith('src/pages/')
 
+/** Loads a CMS admin app: Decap (`decap-cms`, `decap-cms-app`) or Sveltia (`@sveltia/cms`, `sveltia-cms.js`). */
+const LOADS_CMS = /\bdecap-cms\b|\bsveltia\b/i
+
+/**
+ * A CMS admin shell (Ruling 26): a page under src/pages/admin/, or one whose frontmatter or template
+ * loads Decap or Sveltia. Not a visitor page, so it never gets PrivacyLinks.
+ */
+const isCmsAdmin = (file: string, text: string): boolean => file.startsWith('src/pages/admin/') || LOADS_CMS.test(text)
+
 /** Astro ignores files and folders under src/pages whose name starts with `_`. */
 const isRoute = (file: string): boolean => !file.slice('src/pages/'.length).split('/').some((s) => s.startsWith('_'))
 
@@ -240,6 +249,7 @@ export function detectStructure(files: SiteFiles): DetectedStructure {
 
   const footerless = pages.filter((p) => {
     const { root, frontmatter } = parsed.get(p)!
+    if (isCmsAdmin(p, texts.get(p)!)) return false
     if (frontmatterRedirects(frontmatter) || metaRefreshOnly(root, texts.get(p)!)) return false
     return ![...closures.get(p)!].some((f) => footersIn(f).length > 0)
   })

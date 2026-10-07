@@ -149,6 +149,23 @@ describe('detectStructure: synthetic cases', () => {
     expect(r.footerless).toEqual(['src/pages/blank.astro'])
   })
 
+  test('CMS admin pages are not footerless: anything under src/pages/admin/, and pages loading Decap or Sveltia (Ruling 26)', () => {
+    const r = detectStructure(
+      inline({
+        'src/pages/admin/index.astro': '<html><head><title>Admin</title></head><body></body></html>\n',
+        'src/pages/admin/config.astro': '<main><p>Inställningar</p></main>\n',
+        'src/pages/cms.astro':
+          '<html><head><script src="https://unpkg.com/decap-cms@^3.0.0/dist/decap-cms.js"></script></head><body></body></html>\n',
+        'src/pages/redigera.astro':
+          '<html><head><script src="https://unpkg.com/@sveltia/cms/dist/sveltia-cms.js" type="module"></script></head><body></body></html>\n',
+        'src/pages/studio.astro': "---\nimport CMS from 'decap-cms-app'\n---\n<html><body><div id=\"nc-root\"></div></body></html>\n",
+        'src/pages/administration.astro': '<main><h1>Om vår administration</h1></main>\n',
+        'src/pages/bare.astro': '<main><h1>Hej</h1></main>\n',
+      }),
+    )
+    expect(r.footerless).toEqual(['src/pages/administration.astro', 'src/pages/bare.astro'])
+  })
+
   test('404 with its own <html> is footerless and not a layout', () => {
     const r = detectStructure(
       inline({
