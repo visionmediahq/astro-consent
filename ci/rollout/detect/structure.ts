@@ -9,7 +9,8 @@ import { posix } from 'node:path'
 import ts from 'typescript'
 import type { FooterInfo, Report } from '../types'
 import { type AstroNode, attr, parseAstro } from '../lib/astro-ast'
-import { importsOf, parseModule } from '../lib/ts-ast'
+import { parseModule } from '../lib/ts-ast'
+import { astroImports } from '../lib/site-imports'
 import type { SiteFiles } from '../lib/site-files'
 
 export type DetectedStructure = Pick<Report, 'layouts' | 'footers' | 'footerless' | 'policyPage'> & {
@@ -68,17 +69,6 @@ function componentUses(root: AstroNode): AstroNode[] {
     n.children.forEach(visit)
   }
   visit(root)
-  return out
-}
-
-/** Default-import local name → site-relative path, for relative `.astro` imports. */
-function astroImports(file: string, frontmatter: string): Map<string, string> {
-  const out = new Map<string, string>()
-  if (!frontmatter) return out
-  for (const imp of importsOf(parseModule(frontmatter))) {
-    if (!imp.defaultName || imp.typeOnly || !imp.from.endsWith('.astro') || !imp.from.startsWith('.')) continue
-    out.set(imp.defaultName, posix.normalize(posix.join(posix.dirname(file), imp.from)))
-  }
   return out
 }
 

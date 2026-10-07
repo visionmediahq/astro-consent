@@ -31,7 +31,8 @@ function unwrap(expr: ts.Expression): ts.Expression {
   return e
 }
 
-function topLevelConst(sf: ts.SourceFile, name: string): ts.VariableDeclaration | null {
+/** The top-level `const` declaration of `name`, or null. */
+export function topLevelConst(sf: ts.SourceFile, name: string): ts.VariableDeclaration | null {
   for (const stmt of sf.statements) {
     if (!ts.isVariableStatement(stmt)) continue
     if (!(stmt.declarationList.flags & ts.NodeFlags.Const)) continue
