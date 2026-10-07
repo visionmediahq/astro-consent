@@ -4,7 +4,7 @@ import ConsentEmbed from '@visionmediahq/astro-consent/components/ConsentEmbed.a
 ---
 
 <section class="w-full h-[500px] relative" data-animate>
-  <div><ConsentEmbed service="google-maps" src={kontakt.googleMapsEmbedUrl} title="Karta till Aspö Mad Vin & Café" /></div>
+  <div class="grid h-full"><ConsentEmbed service="google-maps" src={kontakt.googleMapsEmbedUrl} title="Karta till Aspö Mad Vin & Café" aspect="auto" /></div>
 </section>
 
 <style>

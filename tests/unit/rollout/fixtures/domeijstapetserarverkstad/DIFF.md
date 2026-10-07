@@ -20,14 +20,15 @@ by this oracle, and are not listed below.
 - 22: only `height="N"`/`"Npx"`/`"Nrem"` or `h-<n>`/`h-[<n>px|rem|em|vh]` count as a fixed height.
 - 23 (amends 17): decoration children don't count: `aria-hidden="true"`, a class with `absolute`, `fixed` or `pointer-events-none`, or an `<svg>`/`<img>` with empty alt.
 - 24 (amends 19): the original style rule stays as it was; a new `:global(iframe)` rule after it carries only its `filter` and `transition` declarations.
+- 25 (supersedes Ruling 22's "`%`/`h-full` are not fixed"): an iframe that fills its parent (`height="100%"` or `h-full`) inside a parent of definite height becomes `<div class="grid h-full …"><ConsentEmbed … aspect="auto" /></div>`. If the parent's height is unknown, it is refused.
 
 **Detect input** (`detect(before, 'domeijstapetserarverkstad', ['domeijstapetserarverkstad.se'])`):
 `maps`; layout `Base.astro` with no footer reference (the one-page `index.astro` renders `Footer`
 itself), so `<ConsentBanner />` goes before `</body>`; one footer, `src/components/Footer.astro`,
 `textClass: null`. Its last-child chain (`grid … items-end` → `md:text-right` column → `p`) has no
 `justify-between`/`justify-start`/`text-left`, so there is no `justify-start!` (Ruling 18). Footerless:
-`404.astro`; no policy page. One literal Google Maps iframe in `Contact.astro` (`height="100%"`, not
-fixed under Ruling 22). Its scoped `<style>` has `.map-wrap iframe { filter: …; display; width;
+`404.astro`; no policy page. One literal Google Maps iframe in `Contact.astro` (`height="100%"`,
+filling `.map-wrap`, whose scoped CSS gives it `min-height: 480px; height: 100%`: Ruling 25). Its scoped `<style>` has `.map-wrap iframe { filter: …; display; width;
 height; min-height; transition }` and `.map-wrap:hover iframe { filter: none }`.
 
 Identical in both: the config import, the CSS `@source` line, the ConsentBanner import and
@@ -54,11 +55,13 @@ Identical in both: the config import, the CSS `@source` line, the ConsentBanner 
 6. **`404.astro`: `<PrivacyLinks />` at the end of the centred box** (the only child of `<main>`); the
    pilot put it there too, with `mt-8 text-base-content/70`. **Acceptable (Ruling 16)**: same position;
    the links inherit `text-base-content`.
-7. **`Contact.astro`: the map box.** Expected is a plain `<div><ConsentEmbed … /></div>` with the
-   default `16 / 9` aspect inside the unchanged `<div class="map-wrap">`; the pilot made `.map-wrap`
-   itself `display: grid` and used `aspect="auto"`. **Acceptable (Ruling 22)**: `height="100%"` is not
-   a fixed height. The map takes 16 / 9 of the column width, and `.map-wrap` keeps its 480 px minimum
-   with its `#e8e0d5` background showing below the map.
+7. **`Contact.astro`: the map box.** Expected puts `<div class="grid h-full">` around
+   `<ConsentEmbed … aspect="auto" />` inside the unchanged `<div class="map-wrap">`; the pilot made
+   `.map-wrap` itself `display: grid`, with `aspect="auto"`. **Acceptable (Ruling 25)**: `.map-wrap`
+   has a definite height from its scoped CSS (`min-height: 480px`, and `height: 100%` of its
+   contact-grid cell), so the map fills it with no beige band, as the pilot's did. One caveat: the
+   wrapper's `h-full` relies on `.map-wrap`'s `height: 100%` resolving inside the grid cell, where the
+   pilot's grid on `.map-wrap` stretched without it. Verify's mobile screenshot confirms it.
 8. **`Contact.astro`: the iframe's inline `display:block; width:100%; min-height:480px` is dropped**.
    **Acceptable**: only a filter is carried from inline style, and `ConsentEmbed`'s iframe fills its box.
 9. **`Contact.astro`: the filter rules.** Expected keeps `.map-wrap iframe {…}` and
@@ -74,5 +77,5 @@ Identical in both: the config import, the CSS `@source` line, the ConsentBanner 
     titles as hand decisions; the button-clip check in verify step 5 decides whether it fits.
 11. **`Contact.astro`: no placeholder slot**; the pilot added the address. **Acceptable**: the default
     placeholder text is used.
-12. **`Contact.astro`: one-line `<div><ConsentEmbed … /></div>`**, the pilot's multi-line element.
+12. **`Contact.astro`: one-line `<div …><ConsentEmbed … /></div>`**, the pilot's multi-line element.
     **Acceptable**: formatting only.

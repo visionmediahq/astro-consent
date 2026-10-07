@@ -20,13 +20,14 @@ by this oracle, and are not listed below.
 - 22: only `height="N"`/`"Npx"`/`"Nrem"` or `h-<n>`/`h-[<n>px|rem|em|vh]` count as a fixed height.
 - 23 (amends 17): decoration children don't count: `aria-hidden="true"`, a class with `absolute`, `fixed` or `pointer-events-none`, or an `<svg>`/`<img>` with empty alt.
 - 24 (amends 19): the original style rule stays as it was; a new `:global(iframe)` rule after it carries only its `filter` and `transition` declarations.
+- 25 (supersedes Ruling 22's "`%`/`h-full` are not fixed"): an iframe that fills its parent (`height="100%"` or `h-full`) inside a parent of definite height becomes `<div class="grid h-full …"><ConsentEmbed … aspect="auto" /></div>`. If the parent's height is unknown, it is refused.
 
 **Detect input** (`detect(before, 'aspomad', ['aspomad.se'])`): `maps`; no `integrations` in the config;
 layout `Base.astro` with footer reference `Footer`; one footer, `src/components/Footer.astro`,
 `textClass: text-neutral-content`, with a `text-center` bottom bar (no `justify-start!`); footerless:
 none (the 404 renders the layout's footer); no policy page; one Google Maps iframe in
-`ContactMap.astro` whose `src` comes from `src/data/kontakt.json` (`height="100%"`, not fixed under
-Ruling 22; no classes). Its scoped `<style>` has `iframe { filter: … }` and `iframe:hover { filter: … }`.
+`ContactMap.astro` whose `src` comes from `src/data/kontakt.json` (`height="100%"`, filling
+its `h-[500px]` section: Ruling 25; no classes). Its scoped `<style>` has `iframe { filter: … }` and `iframe:hover { filter: … }`.
 
 Identical in both: the config import, the CSS `@source` line, `<ConsentBanner />` before `<Footer />`,
 and `src/data/privacy.json`.
@@ -44,11 +45,11 @@ and `src/data/privacy.json`.
    `<PrivacyLinks class="text-neutral-content/80 mt-2" />` inside the bar under ©. **Acceptable
    (Ruling 17)**: `<footer>`'s only child is that container, so the links sit centred inside its
    padding, in the footer's own text colour; the difference is opacity and spacing.
-5. **`ContactMap.astro`: the map box.** Expected is a plain `<div><ConsentEmbed … /></div>` with the
-   default `16 / 9` aspect inside the unchanged `<section class="w-full h-[500px] relative">`; the pilot
-   made the section `grid` and used `aspect="auto"` to fill all 500 px. **Acceptable (Ruling 22)**:
-   `height="100%"` is not a fixed height. The map is as tall as 16 / 9 of the width (500 px at about
-   890 px wide), so on narrower screens it leaves empty section below. Nothing is clipped.
+5. **`ContactMap.astro`: the map box.** Expected puts `<div class="grid h-full">` around
+   `<ConsentEmbed … aspect="auto" />` inside the unchanged `<section class="w-full h-[500px] relative">`;
+   the pilot made the section itself `grid`, with `aspect="auto"`. **Acceptable (Ruling 25)**: the
+   iframe filled a parent of definite height (`h-[500px]`), so the wrapper fills the same 500 px
+   section, the same visual result as the pilot's.
 6. **`ContactMap.astro`: no `href`, no placeholder slot, no `address`/`mapsLink` constants**; the pilot
    added all three. **Acceptable**: C8 lists `href` workarounds and placeholder text as hand decisions;
    the component's default link (de-embedded `src`) and default text are used.
@@ -62,5 +63,5 @@ and `src/data/privacy.json`.
    Same filter, same hover behaviour. The original rules stay but no longer match anything.
 8. **`ContactMap.astro`: the ConsentEmbed import comes after `kontakt.json`**; the pilot put it before.
    **Acceptable**: import order only.
-9. **`ContactMap.astro`: one-line `<div><ConsentEmbed … /></div>`**, the pilot's multi-line element.
+9. **`ContactMap.astro`: one-line `<div …><ConsentEmbed … /></div>`**, the pilot's multi-line element.
    **Acceptable**: formatting only.

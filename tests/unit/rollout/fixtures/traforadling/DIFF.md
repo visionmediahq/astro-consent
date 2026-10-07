@@ -20,6 +20,7 @@ by this oracle, and are not listed below.
 - 22: only `height="N"`/`"Npx"`/`"Nrem"` or `h-<n>`/`h-[<n>px|rem|em|vh]` count as a fixed height.
 - 23 (amends 17): decoration children don't count: `aria-hidden="true"`, a class with `absolute`, `fixed` or `pointer-events-none`, or an `<svg>`/`<img>` with empty alt.
 - 24 (amends 19): the original style rule stays as it was; a new `:global(iframe)` rule after it carries only its `filter` and `transition` declarations.
+- 25 (supersedes Ruling 22's "`%`/`h-full` are not fixed"): an iframe that fills its parent (`height="100%"` or `h-full`) inside a parent of definite height becomes `<div class="grid h-full …"><ConsentEmbed … aspect="auto" /></div>`. If the parent's height is unknown, it is refused.
 
 **Detect input** (`detect(before, 'traforadling', ['traforadling.se'])`): `maps`; layout `Base.astro`
 with footer reference `VisionFooter`; two footers, `FooterLevene.astro` and `FooterSkaraborg.astro`,

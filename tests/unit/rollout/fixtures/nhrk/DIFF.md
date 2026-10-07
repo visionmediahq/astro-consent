@@ -5,7 +5,7 @@
 pilot's hand wiring. Verdicts: **acceptable** (the rules are fine here) or **rule gap** (the rules
 fall short of the pilot on this site).
 
-**Rulings applied:** none of Rulings 16–24 changes the outcome here: the site is still
+**Rulings applied:** none of Rulings 16–25 changes the outcome here: the site is still
 `needs-human`, and `wire` refuses before any of those rules runs.
 
 1. **Every change in `merged/`** (config, CSS `@source`, banner, footer and 404 links,

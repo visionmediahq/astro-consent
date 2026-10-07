@@ -20,13 +20,14 @@ by this oracle, and are not listed below.
 - 22: only `height="N"`/`"Npx"`/`"Nrem"` or `h-<n>`/`h-[<n>px|rem|em|vh]` count as a fixed height.
 - 23 (amends 17): decoration children don't count: `aria-hidden="true"`, a class with `absolute`, `fixed` or `pointer-events-none`, or an `<svg>`/`<img>` with empty alt.
 - 24 (amends 19): the original style rule stays as it was; a new `:global(iframe)` rule after it carries only its `filter` and `transition` declarations.
+- 25 (supersedes Ruling 22's "`%`/`h-full` are not fixed"): an iframe that fills its parent (`height="100%"` or `h-full`) inside a parent of definite height becomes `<div class="grid h-full …"><ConsentEmbed … aspect="auto" /></div>`. If the parent's height is unknown, it is refused.
 
 **Detect input** (`detect(before, 'vasshallakatthotell', ['vasshallakatthotell.se'])`): `maps`; layout
 `Base.astro` with footer reference `VisionFooter`; one footer, `src/components/Footer.astro`,
 `textClass: null` (its colour is the inline `color: rgba(255,255,255,0.6)`); its last-child chain
 ends in the `justify-between` bottom bar, so `justify-start!` is added (Ruling 18); footerless:
-`404.astro`; one literal Google Maps iframe in `ContactSection.astro` (`height="100%"`, which is not a
-fixed height under Ruling 22; no classes, no filter). The policy page `src/pages/gdpr.astro` was added
+`404.astro`; one literal Google Maps iframe in `ContactSection.astro` (`height="100%"`, filling its
+parent's inline `height: clamp(260px, 50vw, 380px)`: Ruling 25; no classes, no filter). The policy page `src/pages/gdpr.astro` was added
 to the fixture in this amendment (reduced, see SOURCE.md). Under Ruling 21 detect (once Task 16
 changes it) reports it as `policyPage`, which gives `policy_url`.
 
@@ -51,17 +52,18 @@ Identical in both: the config import, the CSS `@source` line, `<ConsentBanner />
 5. **`404.astro`: `<PrivacyLinks />` at the end of the centred box** (the only child of `<main>`); the
    pilot put it there too, with `mt-8 text-base-content/70`. **Acceptable (Ruling 16)**: same position;
    the links inherit `text-base-content`.
-6. **`ContactSection.astro`: the map box.** Expected is a plain `<div><ConsentEmbed … /></div>` (no
-   classes, so no class attribute) with the default `16 / 9` aspect, inside the unchanged
-   `<div … style="height: clamp(260px, 50vw, 380px);">`. The pilot dropped that inline height and used
-   `aspect="4 / 3"`. **Acceptable (Ruling 22)**: `height="100%"` is not a fixed height. The 16 / 9 box
-   fits inside the 260–380 px frame at the column widths this layout has, leaving empty frame below it
-   on narrow screens. If the placeholder grows taller than the frame at 320 px, the frame's
-   `overflow-hidden` clips it, and verify's screenshots must show that.
+6. **`ContactSection.astro`: the map box.** Expected puts `<div class="grid h-full">` around
+   `<ConsentEmbed … aspect="auto" />` inside the unchanged `<div … style="height: clamp(260px, 50vw,
+   380px);">` card; the pilot dropped that inline height and used `aspect="4 / 3"`. **Acceptable
+   (Ruling 25)**: the iframe filled a parent of definite (inline clamp) height, so the map fills the
+   whole card with no empty band, as the pilot's did. The one remaining difference is the card's
+   height: the site's own clamp in expected, 4 / 3 of the width in the pilot. If the placeholder is
+   taller than the card at 320 px, the card's `overflow-hidden` clips it, and verify's screenshots
+   must show that.
 7. **`ContactSection.astro`: title `Karta till Vasshalla Katthotell i Gånghester`** (as on the iframe);
    the pilot shortened it to `Karta till Vasshalla Katthotell`. **Acceptable**: C8 lists shortened titles
    as hand decisions; the script never invents a title. Button clipping is checked by verify step 5.
 8. **`ContactSection.astro`: no placeholder slot**; the pilot added `<Fragment slot="placeholder">` with
    the place name. **Acceptable**: the component's default placeholder text (from `sv.json`) is used.
-9. **`ContactSection.astro`: one-line `<div><ConsentEmbed … /></div>`**, the pilot's multi-line element.
+9. **`ContactSection.astro`: one-line `<div …><ConsentEmbed … /></div>`**, the pilot's multi-line element.
    **Acceptable**: formatting only.
