@@ -1,0 +1,499 @@
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { createServer, type Server } from 'node:http'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, describe, expect, test } from 'vitest'
+import type { ClipResult } from '../../../ci/rollout/checks/clip'
+import type { ConsentPathResult } from '../../../ci/rollout/checks/consent-paths'
+import type { ContrastRow } from '../../../ci/rollout/checks/contrast'
+import type { RequestResult } from '../../../ci/rollout/checks/requests'
+import { dockerCheck } from '../../../ci/rollout/docker'
+import { startPreview } from '../../../ci/rollout/preview'
+import type { Report } from '../../../ci/rollout/types'
+import { type Checks, type Exec, mapRoutes, type VerifyDeps, verify } from '../../../ci/rollout/verify'
+
+const PKG = '@visionmediahq/astro-consent'
+const DEMO_REPORT = JSON.parse(readFileSync(join(import.meta.dirname, 'fixtures/demo-report.json'), 'utf8')) as Report
+const report = (over: Partial<Report> = {}): Report => ({ ...DEMO_REPORT, astro: { major: 7, output: 'static' }, ...over })
+
+const dirs: string[] = []
+afterEach(() => {
+  for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true })
+})
+
+const lock = (packages: Record<string, Record<string, unknown>>) => JSON.stringify({ lockfileVersion: 3, packages })
+const MAIN_LOCK = lock({ '': { name: 'site', dependencies: { astro: '^7.3.5' } }, 'node_modules/zod': { version: '4.1.0' } })
+const BRANCH_LOCK = lock({
+  '': { name: 'site', dependencies: { [PKG]: 'github:visionmediahq/astro-consent#semver:^1.0.2', astro: '^7.3.5' } },
+  [`node_modules/${PKG}`]: { version: '1.0.2' },
+  'node_modules/zod': { version: '4.6.5' },
+})
+const npmLs = (astro: string) =>
+  JSON.stringify({ name: 'site', dependencies: { astro: { version: astro, dependencies: { vite: { version: '7.1.0' } } } } })
+
+/** A site checkout in a temp folder: `<tmp>/site`, so the main worktree `<tmp>/site-main` is beside it. */
+function siteDir(lockText = BRANCH_LOCK): string {
+  const root = mkdtempSync(join(tmpdir(), 'verify-'))
+  dirs.push(root)
+  const dir = join(root, 'site')
+  mkdirSync(dir)
+  writeFileSync(join(dir, 'package-lock.json'), lockText)
+  return dir
+}
+
+const SHA = 'a'.repeat(40)
+
+interface Fake {
+  deps: Partial<VerifyDeps>
+  calls: string[]
+  called: Set<string>
+}
+
+/**
+ * Fakes for every dependency: exec answers git, npm and docker; previews and checks record their
+ * calls. `over` replaces single exec answers (by command line prefix) or checks.
+ */
+function fake(
+  opts: {
+    mainLock?: string
+    exec?: Record<string, { code: number; out: string }>
+    checks?: Partial<Checks>
+    docker?: VerifyDeps['docker']
+  } = {},
+): Fake {
+  const calls: string[] = []
+  const called = new Set<string>()
+  const exec: Exec = async (cmd, args, cwd) => {
+    const line = [cmd, ...args].join(' ')
+    calls.push(line)
+    for (const [prefix, answer] of Object.entries(opts.exec ?? {})) if (line.startsWith(prefix)) return answer
+    if (line.startsWith('git worktree add')) {
+      const target = args[args.indexOf('--detach') + 1]!
+      mkdirSync(target, { recursive: true })
+      writeFileSync(join(target, 'package-lock.json'), opts.mainLock ?? MAIN_LOCK)
+    }
+    if (line === 'git rev-parse --abbrev-ref HEAD') return { code: 0, out: 'consent-banner\n' }
+    if (line === 'git rev-parse HEAD') return { code: 0, out: `${SHA}\n` }
+    if (line.startsWith('git ls-remote')) return { code: 0, out: `${SHA}\trefs/heads/consent-banner\n` }
+    if (line === 'git remote get-url origin') return { code: 0, out: 'git@github.com:visionmediahq/site.git\n' }
+    if (line.startsWith('npm ls')) return { code: 0, out: npmLs('7.3.5') }
+    void cwd
+    return { code: 0, out: '' }
+  }
+  const ok = (path: string): RequestResult => ({ path, banner: true, banners: 1, blocked: [], errors: [], known: [], ok: true })
+  const checks: Checks = {
+    pages: async () => (called.add('pages'), ['/', '/karta', '/finns-inte-x']),
+    embedPages: async () => (called.add('embedPages'), ['/karta']),
+    requests: async (base, paths) => {
+      called.add(`requests ${base}`)
+      return base.includes(':4398')
+        ? paths.map((p) => ({ ...ok(p), banner: false, blocked: p === '/karta' ? ['https://www.google.com/maps/embed?pb=x'] : [], ok: false }))
+        : paths.map(ok)
+    },
+    consentPaths: async (_base, paths) => (
+      called.add('consentPaths'),
+      paths.map((path): ConsentPathResult => ({
+        path,
+        visaLoadsOnlyClicked: true,
+        rememberAutoShows: true,
+        nekaLoadsNothing: true,
+        filterKept: null,
+        filter: 'none',
+        openHref: null,
+        notes: [],
+      }))
+    ),
+    clip: async (_base, paths) => (
+      called.add('clip'),
+      paths.map((path): ClipResult => ({ path, width: 320, kind: 'button', button: 'Neka', w: 80, boxW: 300, over: false, out: false, clipped: false }))
+    ),
+    contrast: async () => (
+      called.add('contrast'),
+      (['banner', 'links'] as const).map((kind): ContrastRow => ({
+        path: '/',
+        kind,
+        button: 'Neka',
+        ratio: 7,
+        ok: true,
+        fg: { r: 0, g: 0, b: 0 },
+        bg: { r: 255, g: 255, b: 255 },
+      }))
+    ),
+    shots: async () => (called.add('shots'), ['/tmp/x.png']),
+    close: async () => void called.add('close'),
+    ...opts.checks,
+  }
+  const deps: Partial<VerifyDeps> = {
+    exec,
+    preview: async (dir, port) => {
+      called.add(`preview ${port}`)
+      calls.push(`preview ${dir} ${port}`)
+      return { url: `http://127.0.0.1:${port}`, stop: async () => void calls.push(`stop ${port}`) }
+    },
+    checks: async () => checks,
+    docker:
+      opts.docker ??
+      (async (_url, _branch, run) => {
+        called.add('docker')
+        return { pass: await run('http://127.0.0.1:4397'), log: 'docker ok' }
+      }),
+  }
+  return { deps, calls, called }
+}
+
+const evidence = (dir: string, file: string) => readFileSync(join(dir, '.rollout/evidence', file), 'utf8')
+
+describe('verify', () => {
+  test('all eight steps pass; pushes consent-banner and nothing else; the main worktree is removed', async () => {
+    const dir = siteDir()
+    const f = fake()
+    const result = await verify(dir, report(), { deps: f.deps })
+    expect(result.steps.map((s) => [s.step, s.pass])).toEqual([1, 2, 3, 4, 5, 6, 7, 8].map((n) => [n, true]))
+    expect(result.pass).toBe(true)
+    const pushes = f.calls.filter((c) => c.startsWith('git push'))
+    expect(pushes).toEqual(['git push --force-with-lease origin consent-banner'])
+    expect(f.calls.indexOf(pushes[0]!)).toBeLessThan(f.calls.findIndex((c) => c.startsWith('npm')))
+    expect(f.calls).toContain(`git worktree add --detach ${dir}-main origin/main`)
+    expect(f.calls.at(-1)).toBe(`git worktree remove --force ${dir}-main`)
+    expect(f.calls).toContain('stop 4398')
+    expect(f.calls).toContain('stop 4399')
+    expect(f.called.has('close')).toBe(true)
+    const written = JSON.parse(readFileSync(join(dir, '.rollout/verify.json'), 'utf8')) as typeof result
+    expect(written).toEqual(result)
+    for (const name of ['1-lockfile', '2-build', '3-requests', '4-consent-paths', '5-clip', '6-contrast', '7-screenshots', '8-docker']) {
+      expect(existsSync(join(dir, '.rollout/evidence', `${name}.txt`)), name).toBe(true)
+    }
+  })
+
+  test('stops at the first failing step: later steps are not run', async () => {
+    const dir = siteDir()
+    const f = fake({ exec: { 'npm run build': { code: 1, out: 'error: build broke' } } })
+    const result = await verify(dir, report(), { deps: f.deps })
+    expect(result.pass).toBe(false)
+    expect(result.steps.map((s) => [s.step, s.pass])).toEqual([
+      [1, true],
+      [2, false],
+    ])
+    expect(evidence(dir, '2-build.txt')).toContain('build broke')
+    expect([...f.called].filter((c) => !c.startsWith('close'))).toEqual([])
+    expect(f.calls.at(-1)).toBe(`git worktree remove --force ${dir}-main`)
+  })
+
+  test('a failing step 5 stops before contrast, screenshots and docker', async () => {
+    const dir = siteDir()
+    const clipped: ClipResult = { path: '/', width: 320, kind: 'button', button: 'Acceptera alla', w: 140, boxW: 120, over: false, out: true, clipped: true }
+    const f = fake({ checks: { clip: async () => [clipped] } })
+    const result = await verify(dir, report(), { deps: f.deps })
+    expect(result.steps.at(-1)).toMatchObject({ step: 5, pass: false })
+    expect(result.steps).toHaveLength(5)
+    expect(f.called.has('contrast')).toBe(false)
+    expect(f.called.has('docker')).toBe(false)
+    expect(evidence(dir, '5-clip.txt')).toContain('Acceptera alla')
+  })
+
+  test('step 1: an unknown lockfile change fails and is listed', async () => {
+    const dir = siteDir(lock({ ...JSON.parse(BRANCH_LOCK).packages, 'node_modules/left-pad': { version: '1.0.0' } }))
+    const result = await verify(dir, report(), { deps: fake().deps })
+    expect(result.steps).toEqual([expect.objectContaining({ step: 1, name: 'lockfile', pass: false })])
+    expect(result.steps[0]!.evidence).toContain('node_modules/left-pad')
+  })
+
+  test('step 1: only allowlisted changes pass', async () => {
+    const result = await verify(siteDir(), report(), { deps: fake().deps })
+    expect(result.steps[0]).toMatchObject({ step: 1, pass: true })
+    expect(result.steps[0]!.evidence).toContain('node_modules/zod: 4.1.0 → 4.6.5')
+  })
+
+  test('step 1: npm ls astro vite @tailwindcss/vite differing between main and the branch fails', async () => {
+    const dir = siteDir()
+    const base = fake()
+    const exec: Exec = async (cmd, args, cwd) => {
+      const answer = await base.deps.exec!(cmd, args, cwd)
+      return [cmd, ...args].join(' ').startsWith('npm ls') && cwd === dir ? { code: 0, out: npmLs('7.4.0') } : answer
+    }
+    const result = await verify(dir, report(), { deps: { ...base.deps, exec } })
+    expect(result.steps).toEqual([expect.objectContaining({ step: 1, pass: false })])
+    expect(result.steps[0]!.evidence).toMatch(/astro@7\.3\.5/)
+    expect(result.steps[0]!.evidence).toMatch(/astro@7\.4\.0/)
+    expect(base.calls.filter((c) => c.startsWith('npm ls'))).toEqual([
+      'npm ls astro vite @tailwindcss/vite --all --json',
+      'npm ls astro vite @tailwindcss/vite --all --json',
+    ])
+  })
+
+  test('step 3: main already showing a banner is recorded as "main already green", not a failure', async () => {
+    const dir = siteDir()
+    const f = fake({
+      checks: {
+        requests: async (_base, paths) => paths.map((path) => ({ path, banner: true, banners: 1, blocked: [], errors: [], known: [], ok: true })),
+      },
+    })
+    const result = await verify(dir, report(), { deps: f.deps })
+    expect(result.steps[2]).toMatchObject({ step: 3, pass: true })
+    expect(result.steps[2]!.evidence).toContain('main already green')
+    expect(result.pass).toBe(true)
+  })
+
+  test('step 3: a blocked request on the branch on a page detect did not know → fail, "detect miss: <path>"', async () => {
+    const dir = siteDir()
+    const f = fake({
+      checks: {
+        pages: async () => ['/', '/om', '/karta', '/finns-inte-x'],
+        requests: async (base, paths) =>
+          paths.map((path) => {
+            const blocked = base.includes(':4399') && path === '/om' ? ['https://www.youtube.com/embed/x'] : []
+            return { path, banner: base.includes(':4399'), banners: 1, blocked, errors: [], known: [], ok: blocked.length === 0 }
+          }),
+      },
+    })
+    const result = await verify(dir, report(), { deps: f.deps })
+    expect(result.steps.at(-1)).toMatchObject({ step: 3, pass: false })
+    expect(result.steps.at(-1)!.evidence.split('\n')).toContain('detect miss: /om')
+    expect(f.called.has('consentPaths')).toBe(false)
+  })
+
+  test('step 3: main console errors are the baseline, with main’s port rewritten to the branch’s', async () => {
+    const dir = siteDir()
+    const seen: (Set<string> | undefined)[] = []
+    const f = fake({
+      checks: {
+        requests: async (base, paths, opts) => {
+          seen.push(opts.baseline)
+          return paths.map((path) => ({
+            path,
+            banner: base.includes(':4399'),
+            banners: 1,
+            blocked: [],
+            errors: base.includes(':4398') ? ['Failed to load http://127.0.0.1:4398/x.js'] : [],
+            known: [],
+            ok: true,
+          }))
+        },
+      },
+    })
+    await verify(dir, report(), { deps: f.deps })
+    expect([...seen[1]!]).toEqual(['Failed to load http://127.0.0.1:4399/x.js'])
+  })
+
+  test('step 4 asserts the filter only where the report has one, and fails when it was lost', async () => {
+    const dir = siteDir()
+    const asked: (boolean | undefined)[] = []
+    const f = fake({
+      checks: {
+        consentPaths: async (_b, paths, opts) =>
+          paths.map((path) => {
+            asked.push(opts.expectFilter?.(path))
+            return { path, visaLoadsOnlyClicked: true, rememberAutoShows: true, nekaLoadsNothing: true, filterKept: false, filter: 'none', openHref: null, notes: [] }
+          }),
+      },
+    })
+    const withFilter = report({ iframes: DEMO_REPORT.iframes.map((i) => ({ ...i, classes: 'w-full grayscale' })) })
+    const result = await verify(dir, withFilter, { deps: f.deps })
+    expect(asked).toEqual([true])
+    expect(result.steps.at(-1)).toMatchObject({ step: 4, pass: false })
+  })
+
+  test('step 4: a maps site with no embed on any built page fails', async () => {
+    const f = fake({ checks: { embedPages: async () => [] } })
+    const result = await verify(siteDir(), report(), { deps: f.deps })
+    expect(result.steps.at(-1)).toMatchObject({ step: 4, pass: false })
+  })
+
+  test('step 6 (Ruling 20): an indeterminate PrivacyLinks row fails', async () => {
+    const f = fake({
+      checks: {
+        contrast: async () => [
+          { path: '/', kind: 'banner', button: 'Neka', ratio: 7, ok: true, fg: { r: 0, g: 0, b: 0 }, bg: { r: 255, g: 255, b: 255 } },
+          { path: '/', kind: 'links', button: 'Integritet', ratio: 5, ok: false, fg: { r: 0, g: 0, b: 0 }, bg: { r: 255, g: 255, b: 255 }, indeterminate: 'background image behind the text' },
+        ],
+      },
+    })
+    const dir = siteDir()
+    const result = await verify(dir, report(), { deps: f.deps })
+    expect(result.steps.at(-1)).toMatchObject({ step: 6, pass: false })
+    expect(evidence(dir, '6-contrast.txt')).toContain('indeterminate')
+  })
+
+  test('step 8: the remote branch head must equal the local HEAD', async () => {
+    const f = fake({ exec: { 'git ls-remote': { code: 0, out: `${'b'.repeat(40)}\trefs/heads/consent-banner\n` } } })
+    const result = await verify(siteDir(), report(), { deps: f.deps })
+    expect(result.steps.at(-1)).toMatchObject({ step: 8, pass: false })
+    expect(f.called.has('docker')).toBe(false)
+  })
+
+  test('step 8 runs steps 3–4 against the container', async () => {
+    const f = fake()
+    await verify(siteDir(), report(), { deps: f.deps })
+    expect(f.called.has('requests http://127.0.0.1:4397')).toBe(true)
+  })
+
+  test('refuses to run on any branch but consent-banner, and pushes nothing', async () => {
+    const f = fake({ exec: { 'git rev-parse --abbrev-ref HEAD': { code: 0, out: 'main\n' } } })
+    await expect(verify(siteDir(), report(), { deps: f.deps })).rejects.toThrow(/consent-banner/)
+    expect(f.calls.some((c) => c.startsWith('git push'))).toBe(false)
+  })
+
+  test('a failed push stops before step 1', async () => {
+    const f = fake({ exec: { 'git push': { code: 1, out: 'rejected (stale info)' } } })
+    const result = await verify(siteDir(), report(), { deps: f.deps })
+    expect(result.pass).toBe(false)
+    expect(result.steps).toEqual([expect.objectContaining({ step: 0, name: 'push', pass: false })])
+    expect(f.calls.some((c) => c.startsWith('npm'))).toBe(false)
+  })
+
+  test('demo mode: no git, no npm, no docker; steps 1, 2 and 8 skipped; /utan-banner and the 404 expect no banner', async () => {
+    const out = mkdtempSync(join(tmpdir(), 'verify-demo-'))
+    dirs.push(out)
+    const expected: [string, boolean][] = []
+    const consentPages: string[] = []
+    const f = fake({
+      checks: {
+        requests: async (_b, paths, opts) =>
+          paths.map((path) => {
+            expected.push([path, opts.expectBanner!(path)])
+            return { path, banner: true, banners: 1, blocked: [], errors: [], known: [], ok: true }
+          }),
+        pages: async () => ['/', '/karta', '/utan-banner', '/finns-inte-x'],
+        embedPages: async () => ['/karta', '/utan-banner/'],
+        consentPaths: async (_b, paths) => {
+          consentPages.push(...paths)
+          return paths.map((path) => ({ path, visaLoadsOnlyClicked: true, rememberAutoShows: true, nekaLoadsNothing: true, filterKept: null, filter: 'none', openHref: null, notes: [] }))
+        },
+      },
+    })
+    const result = await verify('/demo/dist-consent', DEMO_REPORT, { deps: f.deps, demo: true, out })
+    expect(f.calls.filter((c) => !c.startsWith('preview') && !c.startsWith('stop'))).toEqual([])
+    expect(f.called.has('docker')).toBe(false)
+    expect(result.steps.map((s) => [s.step, s.pass, s.skipped ?? false])).toEqual([
+      [1, true, true],
+      [2, true, true],
+      [3, true, false],
+      [4, true, false],
+      [5, true, false],
+      [6, true, false],
+      [7, true, false],
+      [8, true, true],
+    ])
+    expect(expected).toEqual([
+      ['/', true],
+      ['/karta', true],
+      ['/utan-banner', false],
+      ['/finns-inte-x', false],
+    ])
+    expect(existsSync(join(out, 'verify.json'))).toBe(true)
+    // Step 4 clicks the banner: the bannerless page is left out.
+    expect(consentPages).toEqual(['/karta'])
+  })
+})
+
+describe('mapRoutes', () => {
+  test('page files, layouts through their pages, and call sites; dynamic routes are left out', () => {
+    const iframe = DEMO_REPORT.iframes[0]!
+    const r = report({
+      layouts: [{ file: 'src/layouts/Map.astro', pages: ['src/pages/hitta/index.astro'], footerRef: null }],
+      iframes: [
+        { ...iframe, file: 'src/pages/kontakt.astro' },
+        { ...iframe, file: 'src/layouts/Map.astro' },
+        { ...iframe, file: 'src/components/M.astro', callSites: [{ file: 'src/pages/om.astro', src: 'x' }, { file: 'src/pages/[slug].astro', src: 'y' }] },
+      ],
+    })
+    expect([...mapRoutes(r)].sort()).toEqual(['/hitta', '/kontakt', '/om'])
+  })
+})
+
+describe('dockerCheck', () => {
+  function dockerFake(opts: { info?: number; build?: number } = {}) {
+    const calls: string[] = []
+    let clone = ''
+    const exec: Exec = async (cmd, args) => {
+      calls.push([cmd, ...args].join(' '))
+      if (cmd === 'docker' && args[0] === 'info') return { code: opts.info ?? 0, out: opts.info ? 'Cannot connect to the Docker daemon' : '' }
+      if (cmd === 'git' && args[0] === 'clone') {
+        clone = args.at(-1)!
+        mkdirSync(clone, { recursive: true })
+        writeFileSync(join(clone, 'Dockerfile'), 'FROM node:22\nEXPOSE 4321\nCMD ["node", "dist/server/entry.mjs"]\n')
+      }
+      if (cmd === 'docker' && args[0] === 'build') return { code: opts.build ?? 0, out: 'built' }
+      if (cmd === 'docker' && args[0] === 'run') return { code: 0, out: 'c0ffee\n' }
+      return { code: 0, out: '' }
+    }
+    return { exec, calls, clone: () => clone }
+  }
+
+  test('clone, build, run with PORT from EXPOSE, check, then stop, rmi, prune and delete the clone', async () => {
+    const d = dockerFake()
+    const result = await dockerCheck('git@github.com:visionmediahq/site.git', 'consent-banner', async (url) => url === 'http://127.0.0.1:4397', {
+      exec: d.exec,
+      waitUp: async () => true,
+    })
+    expect(result.pass).toBe(true)
+    expect(d.calls).toContain(`git clone --depth 1 --branch consent-banner git@github.com:visionmediahq/site.git ${d.clone()}`)
+    expect(d.calls).toContain(`docker build -t rollout-site ${d.clone()}`)
+    expect(d.calls).toContain('docker run -d --rm -p 4397:4321 -e HOST=0.0.0.0 -e PORT=4321 rollout-site')
+    expect(d.calls.slice(-3)).toEqual(['docker stop c0ffee', 'docker rmi -f rollout-site', 'docker builder prune -f'])
+    expect(existsSync(d.clone())).toBe(false)
+  })
+
+  test('always cleans up (image removed, clone removed) even when run() throws', async () => {
+    const d = dockerFake()
+    const result = await dockerCheck('https://github.com/visionmediahq/site', 'consent-banner', async () => {
+      throw new Error('browser crashed')
+    }, { exec: d.exec, waitUp: async () => true })
+    expect(result.pass).toBe(false)
+    expect(result.log).toContain('browser crashed')
+    expect(d.calls).toContain('docker stop c0ffee')
+    expect(d.calls).toContain('docker rmi -f rollout-site')
+    expect(existsSync(d.clone())).toBe(false)
+  })
+
+  test('a failed build still removes the image and the clone', async () => {
+    const d = dockerFake({ build: 1 })
+    const result = await dockerCheck('https://github.com/visionmediahq/site', 'consent-banner', async () => true, { exec: d.exec, waitUp: async () => true })
+    expect(result.pass).toBe(false)
+    expect(d.calls.some((c) => c.startsWith('docker run'))).toBe(false)
+    expect(d.calls).toContain('docker rmi -f rollout-site')
+    expect(existsSync(d.clone())).toBe(false)
+  })
+
+  test('Docker not running: a clear failure, nothing cloned', async () => {
+    const d = dockerFake({ info: 1 })
+    const result = await dockerCheck('https://github.com/visionmediahq/site', 'consent-banner', async () => true, { exec: d.exec })
+    expect(result.pass).toBe(false)
+    expect(result.log).toMatch(/Docker is not running/)
+    expect(d.calls).toEqual(['docker info'])
+  })
+})
+
+describe('startPreview', () => {
+  let server: Server | null = null
+  afterEach(() => {
+    server?.close()
+    server = null
+  })
+
+  test('starts the SSR entry with HOST and PORT, detached, and stop() kills it', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'preview-'))
+    dirs.push(dir)
+    mkdirSync(join(dir, 'dist/server'), { recursive: true })
+    writeFileSync(
+      join(dir, 'dist/server/entry.mjs'),
+      "import { createServer } from 'node:http'\ncreateServer((q, s) => s.end('hej ' + process.env.HOST)).listen(Number(process.env.PORT), process.env.HOST)\n",
+    )
+    const port = 4380 + Math.floor(Math.random() * 10)
+    const preview = await startPreview(dir, port, true)
+    try {
+      expect(preview.url).toBe(`http://127.0.0.1:${port}`)
+      expect(await (await fetch(preview.url)).text()).toBe('hej 127.0.0.1')
+    } finally {
+      await preview.stop()
+    }
+    await expect(fetch(preview.url, { signal: AbortSignal.timeout(1000) })).rejects.toThrow()
+  })
+
+  test('refuses a port that is already serving', async () => {
+    const port = 4370 + Math.floor(Math.random() * 10)
+    server = createServer((_q, s) => s.end('old')).listen(port, '127.0.0.1')
+    await new Promise((r) => server!.once('listening', r))
+    await expect(startPreview(tmpdir(), port, true)).rejects.toThrow(/in use/)
+  })
+})

@@ -90,6 +90,8 @@ export interface StepResult {
   step: number
   name: string
   pass: boolean
+  /** Not run in this mode (verify --demo skips 1, 2 and 8); pass is then true. */
+  skipped?: boolean
   evidence: string
 }
 

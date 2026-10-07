@@ -54,9 +54,9 @@ const LOADS_CMS = /\bdecap-cms\b|\bsveltia\b/i
 const isCmsAdmin = (file: string, text: string): boolean => file.startsWith('src/pages/admin/') || LOADS_CMS.test(text)
 
 /** Astro ignores files and folders under src/pages whose name starts with `_`. */
-const isRoute = (file: string): boolean => !file.slice('src/pages/'.length).split('/').some((s) => s.startsWith('_'))
+export const isRoute = (file: string): boolean => !file.slice('src/pages/'.length).split('/').some((s) => s.startsWith('_'))
 
-function routeOf(file: string): string {
+export function routeOf(file: string): string {
   const path = file.slice('src/pages'.length).replace(/\.(?:astro|mdx?)$/, '')
   const route = path.replace(/(?:^|\/)index$/, '')
   return route === '' ? '/' : route

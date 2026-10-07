@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 import { afterEach, describe, expect, test } from 'vitest'
-import { parseDetectArgs, runDetect } from '../../../ci/rollout/run'
+import { parseDetectArgs, parseVerifyArgs, runDetect } from '../../../ci/rollout/run'
 import type { Report } from '../../../ci/rollout/types'
 
 const dirs: string[] = []
@@ -71,5 +71,19 @@ describe('runDetect', () => {
     dirs.push(dir)
     expect(() => runDetect(dir, ['a.se'])).toThrow(/git/)
     expect(existsSync(join(dir, '.rollout'))).toBe(false)
+  })
+})
+
+describe('parseVerifyArgs', () => {
+  test('a site dir, or --demo with a dist dir', () => {
+    expect(parseVerifyArgs(['site'])).toEqual({ dir: 'site', demo: false })
+    expect(parseVerifyArgs(['--demo', 'demo/dist-consent'])).toEqual({ dir: 'demo/dist-consent', demo: true })
+  })
+
+  test('no dir, two dirs or an unknown flag is an error', () => {
+    expect(() => parseVerifyArgs([])).toThrow(/usage/)
+    expect(() => parseVerifyArgs(['--demo'])).toThrow(/usage/)
+    expect(() => parseVerifyArgs(['a', 'b'])).toThrow(/one/)
+    expect(() => parseVerifyArgs(['a', '--fast'])).toThrow(/--fast/)
   })
 })

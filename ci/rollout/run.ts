@@ -3,19 +3,25 @@
 //
 //   tsx ci/rollout/run.ts detect <site dir> --domain <d> [--domain <d2>]
 //   tsx ci/rollout/run.ts wire   <site dir> [--dry-run]
+//   tsx ci/rollout/run.ts verify <site dir>
+//   tsx ci/rollout/run.ts verify --demo <dist dir>   CI/self-test: a built demo, no git/npm/Docker
 import { execFileSync } from 'node:child_process'
-import { appendFileSync, existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs'
+import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { basename, isAbsolute, join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { createTwoFilesPatch, FILE_HEADERS_ONLY } from 'diff'
 import { detect } from './detect/index'
 import { diskSite } from './lib/site-files'
 import type { Report } from './types'
+import { formatVerify, verify } from './verify'
 import { applyWire, BRANCH, planFiles, planWire, refusalLines } from './wire/index'
 
 const DETECT_USAGE = 'usage: tsx ci/rollout/run.ts detect <site dir> --domain <domain> [--domain <domain>]'
 const WIRE_USAGE = 'usage: tsx ci/rollout/run.ts wire <site dir> [--dry-run]'
-const USAGE = `${DETECT_USAGE}\n${WIRE_USAGE}`
+const VERIFY_USAGE = 'usage: tsx ci/rollout/run.ts verify <site dir> | verify --demo <dist dir>'
+const USAGE = `${DETECT_USAGE}\n${WIRE_USAGE}\n${VERIFY_USAGE}`
+const DEMO_REPORT = join(import.meta.dirname, '../../tests/unit/rollout/fixtures/demo-report.json')
 
 export function parseDetectArgs(args: string[]): { dir: string; domains: string[] } {
   let dir: string | null = null
@@ -138,6 +144,50 @@ export function runWire(dir: string, opts: { dryRun: boolean }): { code: number;
   return { code: 0, output: `${lines.join('\n')}\n` }
 }
 
+export function parseVerifyArgs(args: string[]): { dir: string; demo: boolean } {
+  let dir: string | null = null
+  let demo = false
+  for (const arg of args) {
+    if (arg === '--demo') demo = true
+    else if (arg.startsWith('-')) throw new Error(`unknown option ${arg}\n${VERIFY_USAGE}`)
+    else if (dir === null) dir = arg
+    else throw new Error(`one dir only\n${VERIFY_USAGE}`)
+  }
+  if (dir === null) throw new Error(VERIFY_USAGE)
+  return { dir, demo }
+}
+
+/**
+ * verify <site dir>: spec C3 on the checkout's consent-banner branch with its .rollout/report.json.
+ * verify --demo <dist dir>: the CI/self-test mode on a built demo (demo/dist-consent) with the
+ * hand-written demo report; evidence goes to a temp folder. Exit code 1 when a step fails.
+ */
+async function mainVerify(rest: string[]): Promise<number> {
+  let args: { dir: string; demo: boolean }
+  try {
+    args = parseVerifyArgs(rest)
+  } catch (e) {
+    console.error((e as Error).message)
+    return 2
+  }
+  try {
+    const dir = resolve(args.dir)
+    const report = args.demo ? (JSON.parse(readFileSync(DEMO_REPORT, 'utf8')) as Report) : readReport(dir)
+    const out = args.demo ? mkdtempSync(join(tmpdir(), 'rollout-verify-demo-')) : join(dir, '.rollout')
+    const result = await verify(dir, report, { demo: args.demo, out })
+    for (const step of result.steps) {
+      console.log(`--- step ${step.step} ${step.name}: ${step.skipped ? 'skipped' : step.pass ? 'pass' : 'FAIL'}`)
+      if (!step.skipped) console.log(step.evidence.replace(/^/gm, '  '))
+    }
+    for (const line of formatVerify(result)) console.log(line)
+    console.log(`  → ${join(out, 'verify.json')}`)
+    return result.pass ? 0 : 1
+  } catch (e) {
+    console.error((e as Error).message)
+    return 1
+  }
+}
+
 function mainWire(rest: string[]): number {
   let args: { dir: string; dryRun: boolean }
   try {
@@ -156,9 +206,10 @@ function mainWire(rest: string[]): number {
   }
 }
 
-function main(argv: string[]): number {
+async function main(argv: string[]): Promise<number> {
   const [command, ...rest] = argv
   if (command === 'wire') return mainWire(rest)
+  if (command === 'verify') return mainVerify(rest)
   if (command !== 'detect') {
     console.error(USAGE)
     return 2
@@ -177,5 +228,5 @@ function main(argv: string[]): number {
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  process.exit(main(process.argv.slice(2)))
+  process.exit(await main(process.argv.slice(2)))
 }
