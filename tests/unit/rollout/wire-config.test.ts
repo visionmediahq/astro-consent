@@ -269,6 +269,15 @@ describe('wireCss', () => {
     )
   })
 
+  test('an unquoted url() with a ; inside is skipped whole', () => {
+    const font = '@import url(https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap);'
+    const src = '@source "../../node_modules/@visionmediahq/astro-consent/src";'
+    const before = `@import "tailwindcss";\n${font}\n\n.a { color: red; }\n`
+    expect(css('src/styles/global.css', before).text).toBe(`@import "tailwindcss";\n${font}\n${src}\n\n.a { color: red; }\n`)
+    const withPlugin = `${font}\n@import "tailwindcss";\n@plugin "daisyui/theme" {\n  name: "light";\n}\n.a { color: red; }\n`
+    expect(css('src/styles/global.css', withPlugin).text).toBe(withPlugin.replace('}\n.a', `}\n${src}\n.a`))
+  })
+
   test('a comment on the same line stays with its statement', () => {
     expect(css('src/styles/global.css', '@import "tailwindcss"; /* v4 */\n.a { color: red; }\n').text).toBe(
       '@import "tailwindcss"; /* v4 */\n@source "../../node_modules/@visionmediahq/astro-consent/src";\n.a { color: red; }\n',

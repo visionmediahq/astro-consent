@@ -200,6 +200,10 @@ describe('detectStructure: synthetic cases', () => {
     // a split class on a row with one child does not stop the chain
     expect(alignment('<footer><div class="flex justify-between"><div class="text-center"><p>©</p></div></div></footer>')).toBe('centred')
     expect(alignment('<footer><div class="flex justify-between"><div><p>©</p></div></div></footer>')).toBe('unknown')
+    // Ruling 27: text-left and justify-start mark left on any element of the chain; justify-between needs a row
+    expect(alignment('<footer class="text-left"><div><p>©</p></div></footer>')).toBe('left')
+    expect(alignment('<footer><div class="justify-start"><p>©</p></div></footer>')).toBe('left')
+    expect(alignment('<footer><div class="flex justify-between"><p>©</p></div></footer>')).not.toBe('left')
     // no alignment utility anywhere on the chain
     expect(alignment('<footer class="footer"><div class="footer-bottom"><p>©</p><p>by</p></div></footer>')).toBe('unknown')
     expect(alignment('<footer><div><p>©</p></div></footer>')).toBe('unknown')

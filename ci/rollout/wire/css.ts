@@ -16,12 +16,14 @@ export function sourcePath(entry: string): string {
 
 /**
  * The end offsets of top-level `@import`/`@plugin` statements: after the `;`, or after the `}`
- * that closes a block such as `@plugin "daisyui/theme" { … }`. Comments and strings are skipped,
+ * that closes a block such as `@plugin "daisyui/theme" { … }`. Comments, strings and unquoted
+ * `url(…)` are skipped, a `;` inside parentheses does not end a statement,
  * and anything inside a block is not top level. A reader, not a CSS parser.
  */
 export function topLevelImportEnds(css: string): number[] {
   const ends: number[] = []
   let depth = 0
+  let parens = 0
   /** Depth-0 at-rule in progress (import/plugin or another), and whether it counts. */
   let current: { counts: boolean } | null = null
   let i = 0
@@ -38,14 +40,22 @@ export function topLevelImportEnds(css: string): number[] {
       i = j + 1
       continue
     }
-    if (c === '{') depth++
+    // An unquoted url(…) may hold anything but `)`, `;` and quotes included: skip it whole.
+    if ((c === 'u' || c === 'U') && /^url\(\s*[^\s"')]/i.test(css.slice(i, i + 6)) && !/[\w-]/.test(css[i - 1] ?? '')) {
+      const close = css.indexOf(')', i)
+      i = close === -1 ? css.length : close + 1
+      continue
+    }
+    if (c === '(') parens++
+    else if (c === ')') parens = Math.max(0, parens - 1)
+    else if (c === '{') depth++
     else if (c === '}') {
       depth = Math.max(0, depth - 1)
       if (depth === 0 && current) {
         if (current.counts) ends.push(i + 1)
         current = null
       }
-    } else if (c === ';' && depth === 0) {
+    } else if (c === ';' && depth === 0 && parens === 0) {
       if (current?.counts) ends.push(i + 1)
       current = null
     } else if (depth === 0 && !current && /\S/.test(c)) {

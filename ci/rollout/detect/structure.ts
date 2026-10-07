@@ -125,14 +125,16 @@ const classesOf = (n: AstroNode): string[] => {
 }
 
 const CENTRING = ['text-center', 'justify-center']
-const SPLIT = ['justify-between', 'justify-start', 'text-left']
+/** Left alignment on any element of the chain (inherited or explicit); justify-between only splits a row. */
+const START = ['justify-start', 'text-left']
 
 /**
  * How the end of the footer, where PrivacyLinks goes, is aligned. Follows the last element child
- * from the <footer> down: 'left' when a row with more than one element child is split or
- * start-aligned; 'centred' at the first `text-center`/`justify-center`; 'unknown' when the chain
- * ends (no element child, or a component whose markup is elsewhere) without either. `items-center`
- * is not counted: on the pilot footers it sits on rows that are also `justify-between`.
+ * from the <footer> down: 'left' at the first `text-left`/`justify-start`, or a `justify-between`
+ * row with more than one element child (Ruling 27); 'centred' at the first `text-center` or
+ * `justify-center`; 'unknown' when the chain ends (no element child, or a component whose markup
+ * is elsewhere) without either. `items-center` is not counted: on the pilot footers it sits on
+ * rows that are also `justify-between`.
  */
 function chainAlignment(footer: AstroNode): FooterInfo['alignment'] {
   let node = footer
@@ -140,7 +142,8 @@ function chainAlignment(footer: AstroNode): FooterInfo['alignment'] {
     const classes = classesOf(node)
     const kids = node.children.filter((c) => c.type === 'element' || c.type === 'component')
     // Checked first: on a flex row, justify-start packs the items left whatever text-center says.
-    if (kids.length > 1 && SPLIT.some((c) => classes.includes(c))) return 'left'
+    if (START.some((c) => classes.includes(c))) return 'left'
+    if (kids.length > 1 && classes.includes('justify-between')) return 'left'
     if (CENTRING.some((c) => classes.includes(c))) return 'centred'
     const last = kids[kids.length - 1]
     if (!last || last.type !== 'element') return 'unknown'
