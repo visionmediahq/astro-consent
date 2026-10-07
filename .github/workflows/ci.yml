@@ -48,6 +48,7 @@ jobs:
         working-directory: demo
       - run: npx playwright install --with-deps chromium
       - run: npm run demo:build -- consent
+      - run: npx tsx ci/rollout/run.ts verify --demo demo/dist-consent
       - run: npm run demo:build -- notice
       - run: npm run test:e2e
       - uses: actions/upload-artifact@v4
