@@ -112,6 +112,53 @@ describe('detectScripts: trackers', () => {
   })
 })
 
+describe('detectScripts: Google Maps loads outside an iframe', () => {
+  test('a Static Maps <img> is tracker google-maps', () => {
+    const r = detectScripts(inline({ 'src/components/Map.astro': '<img src="https://maps.googleapis.com/maps/api/staticmap?center=57.1,12.2&zoom=14" alt="Karta" />\n' }))
+    expect(r.trackers).toEqual(['google-maps'])
+  })
+
+  test('a .ts file that injects the Maps JavaScript API is tracker google-maps', () => {
+    const r = detectScripts(
+      inline({ 'src/scripts/map.ts': "const s = document.createElement('script')\ns.src = 'https://maps.googleapis.com/maps/api/js?key=abc'\ndocument.head.append(s)\n" }),
+    )
+    expect(r.trackers).toEqual(['google-maps'])
+  })
+
+  test('@googlemaps/js-api-loader in package.json or an import is tracker google-maps', () => {
+    expect(detectScripts(inline({ 'package.json': JSON.stringify({ dependencies: { '@googlemaps/js-api-loader': '^1.16.0' } }) })).trackers).toEqual([
+      'google-maps',
+    ])
+    expect(
+      detectScripts(inline({ 'src/components/Map.astro': "---\nimport { Loader } from '@googlemaps/js-api-loader'\n---\n<div id=\"map\" />\n" })).trackers,
+    ).toEqual(['google-maps'])
+  })
+
+  test('a <link> to maps.gstatic.com is tracker google-maps', () => {
+    const r = detectScripts(inline({ 'src/layouts/Base.astro': page('<link rel="preconnect" href="https://maps.gstatic.com" />') }))
+    expect(r.trackers).toEqual(['google-maps'])
+  })
+
+  test('a "Hitta hit" link to google.com/maps and a maps.google. link stay clean', () => {
+    const r = detectScripts(
+      inline({
+        'src/components/Contact.astro':
+          '<a href="https://www.google.com/maps/place/Annebergsv%C3%A4gen+12">Hitta hit</a>\n<a href="https://maps.google.com/?q=Varberg">Karta</a>\n',
+      }),
+    )
+    expect(r.trackers).toEqual([])
+  })
+
+  test('a map iframe src is not also a tracker, even on maps.googleapis.com', () => {
+    const r = detectScripts(
+      inline({
+        'src/components/Map.astro': '<iframe title="Karta" src="https://www.google.com/maps/embed/v1/place?key=abc&q=Varberg"></iframe>\n<iframe title="Karta" src="https://maps.googleapis.com/maps/embed?x"></iframe>\n',
+      }),
+    )
+    expect(r.trackers).toEqual([])
+  })
+})
+
 describe('detectScripts: banners, reCAPTCHA, already wired', () => {
   test.each([
     ['Cookiebot', '<script id="Cookiebot" src="https://consent.cookiebot.com/uc.js" data-cbid="x"></script>', 'cookiebot'],
@@ -129,6 +176,27 @@ describe('detectScripts: banners, reCAPTCHA, already wired', () => {
       }),
     )
     expect(r.banners).toEqual(["home-made gate: localStorage 'maps-consent' in src/components/KontaktMap.astro"])
+  })
+
+  test('a consent gate whose localStorage key is in a variable is an existing banner', () => {
+    const r = detectScripts(
+      inline({ 'src/components/Gate.astro': "<script>\nconst KEY = 'cookie-consent'\nif (localStorage.getItem(KEY) === '1') load()\n</script>\n" }),
+    )
+    expect(r.banners).toEqual(["home-made gate: localStorage with 'cookie-consent' in src/components/Gate.astro"])
+  })
+
+  test('a consent gate whose document.cookie name is in a variable is an existing banner', () => {
+    const r = detectScripts(
+      inline({ 'src/scripts/gate.ts': "const NAME = 'site_consent'\nexport const ok = () => document.cookie.includes(NAME)\n" }),
+    )
+    expect(r.banners).toEqual(["home-made gate: document.cookie with 'site_consent' in src/scripts/gate.ts"])
+  })
+
+  test('a file with localStorage and no consent-like literal is not a banner', () => {
+    const r = detectScripts(
+      inline({ 'src/components/Theme.astro': "<button class=\"btn\">Acceptera</button>\n<script>\nconst KEY = 'theme'\nlocalStorage.setItem(KEY, 'dark')\n</script>\n" }),
+    )
+    expect(r.banners).toEqual([])
   })
 
   test('localStorage that is not about consent is not a banner', () => {

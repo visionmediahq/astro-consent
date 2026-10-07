@@ -20,14 +20,24 @@ const PACKAGE = '@visionmediahq/astro-consent'
 const BINARY = /\.(?:png|jpe?g|gif|webp|avif|ico|bmp|tiff?|svg|woff2?|ttf|otf|eot|pdf|mp[34]|webm|ogg|wav|mov|zip|gz)$/i
 
 /**
- * Registry patterns that are a bare host (no path): safe to find anywhere in text. Path patterns
- * (`facebook.com/tr`, `google.com/maps`) are only matched on parsed URLs, where a page link such
- * as `facebook.com/traforadling` can be told apart. Maps is left out of the text sweep: map URLs
- * in data files feed iframes, which detectIframes reports.
+ * Maps patterns that ordinary links match too: a "Hitta hit" link, JSON-LD `hasMap`, an embed
+ * iframe. They are left out of the text sweep; map iframes are detectIframes' job.
  */
-const HOST_PATTERNS: [string, ServiceSlug][] = SERVICE_SLUGS.filter((s) => s !== 'google-maps').flatMap((slug) =>
-  SERVICES[slug].match.filter((p) => !p.includes('/')).map((p): [string, ServiceSlug] => [p, slug]),
+const LINK_LIKE = new Set(['google.com/maps', 'maps.google.'])
+
+/**
+ * Registry patterns that are a bare host (no path): safe to find anywhere in text. Path patterns
+ * (`facebook.com/tr`) are only matched on parsed URLs, where a page link such as
+ * `facebook.com/traforadling` can be told apart. The Maps API hosts (`maps.googleapis.com`,
+ * `maps.gstatic.com`, `places.googleapis.com`) are kept: outside an iframe they are loads the batch
+ * does not wire (a Static Maps image, the JavaScript API, its fonts and tiles).
+ */
+const HOST_PATTERNS: [string, ServiceSlug][] = SERVICE_SLUGS.flatMap((slug) =>
+  SERVICES[slug].match.filter((p) => !p.includes('/') && !LINK_LIKE.has(p)).map((p): [string, ServiceSlug] => [p, slug]),
 )
+
+/** Opening <iframe> tags, where a map embed's src lives: not a tracker, detectIframes reports it. */
+const IFRAME_TAG = /<iframe\b[^>]*>/gi
 
 /** Calls that only a tracker snippet makes. */
 const CALLS: [RegExp, ServiceSlug][] = [
@@ -41,6 +51,9 @@ const IMPORTS: [RegExp, ServiceSlug][] = [
   [/google[-_]?ads|adsense/i, 'google-ads'],
   [/(?:facebook|meta)[-_]?pixel/i, 'meta-pixel'],
 ]
+
+/** Package names that load Google Maps. Not matched on relative imports: `./GoogleMaps.astro` may hold an iframe. */
+const MAPS_PACKAGE = /^@googlemaps\/|google[-_]?maps/i
 
 const BANNERS: [RegExp, string][] = [
   [/cookiebot/i, 'cookiebot'],
@@ -56,6 +69,10 @@ const BANNERS: [RegExp, string][] = [
 const STORAGE_KEY = /\b(localStorage|sessionStorage)\s*(?:\.\s*(?:getItem|setItem|removeItem)\s*\(\s*|\[\s*)(['"`])([^'"`]+)\2/g
 const CONSENT_KEY = /consent|cookie|gdpr|samtyck|accept|godk/i
 const COOKIE_GATE = /document\.cookie\s*=[^;\n]*(?:consent|samtyck|accept|godk)/i
+/** Where a gate keeps its state, for a key held in a variable. */
+const STORAGE_USE = /\b(localStorage|sessionStorage|document\.cookie)\b/
+/** A quoted literal shaped like a storage key or cookie name. */
+const KEY_LITERAL = /(['"`])([\w.:-]{1,64})\1/g
 
 const RECAPTCHA = /recaptcha\/(?:api|enterprise)\.js|RECAPTCHA_SITE_KEY/
 
@@ -76,11 +93,12 @@ function serviceOfUrl(url: string): ServiceSlug | null {
   return slug
 }
 
-/** Non-Maps trackers anywhere in a text: bare registry hosts, tracker calls, and pixel URLs. */
+/** Trackers anywhere in a text: bare registry hosts (Maps outside iframe tags), tracker calls, pixel URLs. */
 function trackersInText(text: string): ServiceSlug[] {
   const lower = text.toLowerCase()
+  const withoutIframes = lower.replace(IFRAME_TAG, '')
   const out: ServiceSlug[] = []
-  for (const [pattern, slug] of HOST_PATTERNS) if (lower.includes(pattern)) out.push(slug)
+  for (const [pattern, slug] of HOST_PATTERNS) if ((slug === 'google-maps' ? withoutIframes : lower).includes(pattern)) out.push(slug)
   for (const [re, slug] of CALLS) if (re.test(text)) out.push(slug)
   for (const url of urlsIn(text)) {
     const slug = serviceOfUrl(url)
@@ -99,7 +117,10 @@ function trackersInScript(node: AstroNode, text: string): ServiceSlug[] {
 }
 
 function importedTrackers(specifiers: string[]): ServiceSlug[] {
-  return specifiers.flatMap((from) => IMPORTS.flatMap(([re, slug]) => (re.test(from) ? [slug] : [])))
+  return specifiers.flatMap((from) => [
+    ...IMPORTS.flatMap(([re, slug]) => (re.test(from) ? [slug] : [])),
+    ...(!from.startsWith('.') && !from.startsWith('/') && MAPS_PACKAGE.test(from) ? (['google-maps'] as const) : []),
+  ])
 }
 
 function packageDeps(files: SiteFiles): string[] {
@@ -141,10 +162,18 @@ export function detectScripts(files: SiteFiles): DetectedScripts {
 
     for (const slug of trackersInText(text)) trackers.add(slug)
     for (const [re, name] of BANNERS) if (re.test(text)) addBanner(name)
+    const before = banners.length
     for (const m of text.matchAll(STORAGE_KEY)) {
       if (CONSENT_KEY.test(m[3]!)) addBanner(`home-made gate: ${m[1]} '${m[3]}' in ${file}`)
     }
     if (COOKIE_GATE.test(text)) addBanner(`home-made gate: document.cookie in ${file}`)
+    // A key held in a variable (`const KEY = 'cookie-consent'; localStorage.getItem(KEY)`): any
+    // consent-like literal in a file that uses storage counts.
+    const storage = STORAGE_USE.exec(text)?.[1]
+    if (storage && banners.length === before) {
+      const literal = [...text.matchAll(KEY_LITERAL)].map((m) => m[2]!).find((k) => CONSENT_KEY.test(k))
+      if (literal) addBanner(`home-made gate: ${storage} with '${literal}' in ${file}`)
+    }
     if (RECAPTCHA.test(text)) recaptcha = true
 
     if (!file.endsWith('.astro')) continue
