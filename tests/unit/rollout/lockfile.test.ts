@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, test } from 'vitest'
-import { ALLOWLIST, diffLock, majorOf } from '../../../ci/rollout/lib/lockfile'
+import { ALLOWLIST, diffLock, diffPackageJson, majorOf } from '../../../ci/rollout/lib/lockfile'
 
 const FIXTURES = join(import.meta.dirname, 'fixtures')
 const lock = (site: string, side: 'before' | 'merged'): string =>
@@ -139,11 +139,45 @@ describe('diffLock', () => {
     expect(d.unknown).toEqual([expect.stringContaining('root')])
   })
 
+  test('npm re-sorting the root dependencies is not a change (spec C3.1)', () => {
+    const d = diffLock(
+      v3({ '': { name: 'site', dependencies: { astro: '^7.0.0', '@lucide/astro': '^1.0.0' } } }),
+      v3({ '': { name: 'site', dependencies: { '@lucide/astro': '^1.0.0', [PKG]: '^1.0.2', astro: '^7.0.0' } } }),
+      PKG,
+    )
+    expect(d.unknown).toEqual([])
+    expect(d.allowed).toEqual([expect.stringContaining('root')])
+  })
+
   test('every pilot fixture before → merged is fully allowed', () => {
     for (const site of ['a-tak', 'aspomad', 'domeijstapetserarverkstad', 'munkforstradgardstjanst', 'nhrk', 'traforadling', 'vasshallakatthotell']) {
       const d = diffLock(lock(site, 'before'), lock(site, 'merged'), PKG)
       expect(d.unknown, site).toEqual([])
       expect(d.allowed.length, site).toBeGreaterThan(0)
     }
+  })
+})
+
+describe('diffPackageJson', () => {
+  const before = JSON.stringify({ name: 'site', scripts: { build: 'astro build' }, dependencies: { astro: '^7.0.0', '@lucide/astro': '^1.0.0' } })
+
+  test('adding the package, re-sorted, is the only allowed change', () => {
+    const after = JSON.stringify({ scripts: { build: 'astro build' }, name: 'site', dependencies: { '@lucide/astro': '^1.0.0', [PKG]: 'github:visionmediahq/astro-consent#semver:^1.0.2', astro: '^7.0.0' } })
+    expect(diffPackageJson(before, after, PKG)).toEqual([])
+  })
+
+  test('any other change is listed: scripts, overrides, another dependency, a missing package', () => {
+    const after = JSON.stringify({
+      name: 'site',
+      scripts: { build: 'astro build', postinstall: 'x' },
+      overrides: { vite: '7.0.0' },
+      dependencies: { astro: '^7.1.0', '@lucide/astro': '^1.0.0', [PKG]: '^1.0.2' },
+    })
+    expect(diffPackageJson(before, after, PKG)).toEqual([
+      expect.stringContaining('dependencies.astro'),
+      expect.stringContaining('overrides'),
+      expect.stringContaining('scripts'),
+    ])
+    expect(diffPackageJson(before, before, PKG)).toEqual([expect.stringContaining(PKG)])
   })
 })

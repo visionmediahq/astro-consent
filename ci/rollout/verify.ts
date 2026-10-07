@@ -20,7 +20,7 @@
 //
 // Demo mode (`demo: true`, CI/self-test): `dir` is a built demo dist (demo/dist-consent); no git,
 // no npm, no Docker, no network. Steps 1, 2 and 8 are skipped and step 3 has no main side.
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import type { Browser } from '@playwright/test'
 import { type ClipResult, checkClip } from './checks/clip'
@@ -32,7 +32,7 @@ import { shots } from './checks/shots'
 import { isRoute, routeOf } from './detect/structure'
 import { dockerCheck } from './docker'
 import { type Exec, exec as realExec, tail } from './lib/exec'
-import { diffLock } from './lib/lockfile'
+import { diffLock, diffPackageJson } from './lib/lockfile'
 import { type Preview, startPreview } from './preview'
 import type { Report, StepResult, VerifyResult } from './types'
 import { BRANCH } from './wire/index'
@@ -72,6 +72,12 @@ export interface VerifyOptions {
   /** Where evidence and verify.json go; default `<dir>/.rollout`. */
   out?: string
 }
+
+/** Ruling 26: pages under src/pages/admin/ are CMS shells, not visitor pages. */
+const isCmsAdminRoute = (path: string): boolean => path === '/admin' || path.startsWith('/admin/')
+
+/** Step 8 clones only Vision Media's own GitHub repos (Ruling 34b). */
+export const ORIGIN = /github\.com[:/]visionmediahq\//
 
 const norm = (path: string): string => (path.length > 1 ? path.replace(/\/+$/, '') : path)
 
@@ -206,9 +212,29 @@ export async function verify(dir: string, report: Report, opts: VerifyOptions = 
   }
   const git = (...args: string[]) => exec('git', args, root)
 
+  const mainDir = demo ? null : `${root.replace(/\/+$/, '')}-main`
+  /** Whether `mainDir` is listed by `git worktree list` as one of this clone's worktrees. */
+  let staleWorktree = false
   if (!demo) {
     const head = (await git('rev-parse', '--abbrev-ref', 'HEAD')).out.trim()
     if (head !== BRANCH) throw new Error(`verify runs on branch ${BRANCH}; ${root} is on ${head || '(unknown)'}`)
+    if (existsSync(mainDir!)) {
+      const real = (p: string): string => {
+        try {
+          return realpathSync(p)
+        } catch {
+          return resolve(p)
+        }
+      }
+      const listed = (await git('worktree', 'list', '--porcelain')).out
+        .split('\n')
+        .filter((l) => l.startsWith('worktree '))
+        .map((l) => real(l.slice('worktree '.length)))
+      if (!listed.includes(real(mainDir!))) {
+        throw new Error(`${mainDir} exists but is not a worktree of this clone: move it away, verify will not delete it`)
+      }
+      staleWorktree = true
+    }
     const push = await git('push', '--force-with-lease', 'origin', BRANCH)
     if (push.code !== 0) {
       record(0, 'push', { pass: false, lines: [`git push --force-with-lease origin ${BRANCH} failed:`, tail(push.out)] })
@@ -216,7 +242,6 @@ export async function verify(dir: string, report: Report, opts: VerifyOptions = 
     }
   }
 
-  const mainDir = demo ? null : `${root.replace(/\/+$/, '')}-main`
   const ssr = demo || report.astro.output === 'server'
   const known = mapRoutes(report)
   const filters = filterRoutes(report)
@@ -261,6 +286,14 @@ export async function verify(dir: string, report: Report, opts: VerifyOptions = 
       }
       const { allowed, unknown } = diffLock(readFileSync(join(mainDir!, 'package-lock.json'), 'utf8'), readFileSync(join(root, 'package-lock.json'), 'utf8'), PKG)
       lines.push('package-lock.json, main → branch:', ...allowed.map((l) => `  allowed ${l}`), ...unknown.map((l) => `  UNKNOWN ${l}`))
+      const mainPkg = await git('show', 'origin/main:package.json')
+      let pkgChanges: string[]
+      try {
+        pkgChanges = diffPackageJson(mainPkg.out, readFileSync(join(root, 'package.json'), 'utf8'), PKG)
+      } catch (e) {
+        pkgChanges = [`could not compare package.json with origin/main: ${(e as Error).message}`]
+      }
+      lines.push(`package.json, main → branch: ${pkgChanges.length ? 'CHANGED beyond the package' : `only ${PKG} added`}`, ...pkgChanges.map((l) => `  UNKNOWN ${l}`))
       const ls: Record<string, string[]> = {}
       for (const [side, cwd] of [['main', mainDir!], ['branch', root]] as const) {
         const res = await exec('npm', NPM_LS, cwd)
@@ -272,7 +305,7 @@ export async function verify(dir: string, report: Report, opts: VerifyOptions = 
       }
       const same = JSON.stringify(ls['main']) === JSON.stringify(ls['branch'])
       lines.push(`npm ls astro vite @tailwindcss/vite: ${same ? 'same' : 'DIFFERENT'}`, `  main   ${ls['main']!.join(' ')}`, `  branch ${ls['branch']!.join(' ')}`)
-      return { pass: unknown.length === 0 && same, lines }
+      return { pass: unknown.length === 0 && pkgChanges.length === 0 && same, lines }
     },
 
     async build() {
@@ -293,6 +326,7 @@ export async function verify(dir: string, report: Report, opts: VerifyOptions = 
       const c = await getChecks()
       paths = await c.pages(branch.url, { distDir: demo ? root : join(root, 'dist'), ssr })
       lines.push(`pages (${paths.length}): ${paths.join(' ')}`)
+      if (!paths.some((p) => norm(p) === '/')) return { pass: false, lines: [...lines, '"/" is not among the pages: the page list is broken'] }
       if (!demo) {
         const main = await deps.preview(mainDir!, PORTS.main, ssr)
         previews.push(main)
@@ -344,11 +378,16 @@ export async function verify(dir: string, report: Report, opts: VerifyOptions = 
         (r) =>
           `${r.path ?? ''} ${r.kind} "${r.button}" ${r.ratio.toFixed(2)}:1 ${r.ok ? 'ok' : 'FAIL'}${r.indeterminate ? ` (indeterminate: ${r.indeterminate})` : ''}`,
       )
-      const banner = rows.some((r) => r.kind === 'banner')
-      const links = rows.some((r) => r.kind === 'links')
-      if (!banner) lines.push('no banner button was measured')
-      if (!links) lines.push('no PrivacyLinks text was measured')
-      return { pass: banner && links && rows.every((r) => r.ok), lines }
+      // Ruling 20: every page that should show the banner has banner and PrivacyLinks rows. CMS admin
+      // pages (Ruling 26: src/pages/admin/) never get PrivacyLinks.
+      const missing: string[] = []
+      for (const p of paths.filter(expectBanner)) {
+        const own = rows.filter((r) => norm(r.path ?? '') === norm(p))
+        if (!own.some((r) => r.kind === 'banner')) missing.push(`${p}: no banner button measured`)
+        if (!isCmsAdminRoute(p) && !own.some((r) => r.kind === 'links')) missing.push(`${p}: no PrivacyLinks text measured`)
+      }
+      lines.push(...missing)
+      return { pass: missing.length === 0 && rows.every((r) => r.ok), lines }
     },
 
     async screenshots() {
@@ -363,6 +402,7 @@ export async function verify(dir: string, report: Report, opts: VerifyOptions = 
       const remote = (await git('ls-remote', 'origin', `refs/heads/${BRANCH}`)).out.trim().split(/\s+/)[0] ?? ''
       if (!local || remote !== local) return { pass: false, lines: [`origin/${BRANCH} is ${remote || '(missing)'}, HEAD is ${local}: push the branch first`] }
       const repoUrl = (await git('remote', 'get-url', 'origin')).out.trim()
+      if (!ORIGIN.test(repoUrl)) return { pass: false, lines: [`origin is ${repoUrl || '(none)'}, not a github.com/visionmediahq repo: step 8 clones only from there`] }
       const lines = [`origin/${BRANCH} = HEAD = ${local}`]
       const c = await getChecks()
       const result = await deps.docker(repoUrl, BRANCH, async (url) => {
@@ -382,7 +422,7 @@ export async function verify(dir: string, report: Report, opts: VerifyOptions = 
 
   try {
     if (mainDir) {
-      if (existsSync(mainDir)) {
+      if (staleWorktree) {
         await git('worktree', 'remove', '--force', mainDir)
         rmSync(mainDir, { recursive: true, force: true })
         await git('worktree', 'prune')

@@ -69,7 +69,15 @@ const ruleFor = (name: string): AllowRule | undefined =>
 const withinMajor = (rule: AllowRule, was: unknown, now: unknown): boolean =>
   rule.major !== undefined && majorOfVersion(was) === rule.major && majorOfVersion(now) === rule.major
 
-const same = (a: unknown, b: unknown): boolean => JSON.stringify(a) === JSON.stringify(b)
+/** JSON with object keys sorted at every level: npm re-sorting keys is not a change. */
+const canonical = (v: unknown): string =>
+  JSON.stringify(v, (_k, x: unknown) =>
+    x && typeof x === 'object' && !Array.isArray(x)
+      ? Object.fromEntries(Object.entries(x as Record<string, unknown>).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)))
+      : x,
+  )
+
+const same = (a: unknown, b: unknown): boolean => canonical(a) === canonical(b)
 
 function changedFields(before: Entry, after: Entry): string[] {
   const keys = new Set([...Object.keys(before), ...Object.keys(after)])
@@ -160,4 +168,27 @@ export function diffLock(
     }
   }
   return { allowed, unknown }
+}
+
+/**
+ * What changed in package.json besides `pkgName` being added to `dependencies`, compared without
+ * regard to key order (npm re-sorts dependencies, spec C3.1). Empty when the package's dependency
+ * entry is the only change; otherwise one line per changed field, plus one if the package is missing.
+ */
+export function diffPackageJson(before: string, after: string, pkgName: string): string[] {
+  const a = JSON.parse(before) as Record<string, unknown>
+  const b = JSON.parse(after) as Record<string, unknown>
+  const out: string[] = []
+  const depsA = { ...((a['dependencies'] as Record<string, unknown> | undefined) ?? {}) }
+  const depsB = { ...((b['dependencies'] as Record<string, unknown> | undefined) ?? {}) }
+  if (typeof depsB[pkgName] !== 'string') out.push(`dependencies.${pkgName}: missing`)
+  delete depsA[pkgName]
+  delete depsB[pkgName]
+  for (const k of [...new Set([...Object.keys(depsA), ...Object.keys(depsB)])].sort()) {
+    if (!same(depsA[k], depsB[k])) out.push(`dependencies.${k}: ${JSON.stringify(depsA[k] ?? null)} → ${JSON.stringify(depsB[k] ?? null)}`)
+  }
+  for (const k of [...new Set([...Object.keys(a), ...Object.keys(b)])].filter((k) => k !== 'dependencies').sort()) {
+    if (!same(a[k], b[k])) out.push(`${k}: changed`)
+  }
+  return out
 }

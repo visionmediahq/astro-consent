@@ -28,6 +28,8 @@ const BRANCH_LOCK = lock({
   [`node_modules/${PKG}`]: { version: '1.0.2' },
   'node_modules/zod': { version: '4.6.5' },
 })
+const MAIN_PKG = JSON.stringify({ name: 'site', dependencies: { astro: '^7.3.5' } })
+const BRANCH_PKG = JSON.stringify({ name: 'site', dependencies: { [PKG]: 'github:visionmediahq/astro-consent#semver:^1.0.2', astro: '^7.3.5' } })
 const npmLs = (astro: string) =>
   JSON.stringify({ name: 'site', dependencies: { astro: { version: astro, dependencies: { vite: { version: '7.1.0' } } } } })
 
@@ -38,6 +40,7 @@ function siteDir(lockText = BRANCH_LOCK): string {
   const dir = join(root, 'site')
   mkdirSync(dir)
   writeFileSync(join(dir, 'package-lock.json'), lockText)
+  writeFileSync(join(dir, 'package.json'), BRANCH_PKG)
   return dir
 }
 
@@ -77,6 +80,11 @@ function fake(
     if (line.startsWith('git ls-remote')) return { code: 0, out: `${SHA}\trefs/heads/consent-banner\n` }
     if (line === 'git remote get-url origin') return { code: 0, out: 'git@github.com:visionmediahq/site.git\n' }
     if (line.startsWith('npm ls')) return { code: 0, out: npmLs('7.3.5') }
+    if (line === 'git show origin/main:package.json') return { code: 0, out: MAIN_PKG }
+    if (line === 'git worktree list --porcelain') {
+      const listed = calls.filter((c) => c.startsWith('git worktree add')).map((c) => c.split(' ')[4])
+      return { code: 0, out: listed.map((w) => `worktree ${w}\nHEAD ${SHA}\ndetached\n`).join('\n') }
+    }
     void cwd
     return { code: 0, out: '' }
   }
@@ -107,17 +115,17 @@ function fake(
       called.add('clip'),
       paths.map((path): ClipResult => ({ path, width: 320, kind: 'button', button: 'Neka', w: 80, boxW: 300, over: false, out: false, clipped: false }))
     ),
-    contrast: async () => (
+    contrast: async (_base, paths) => (
       called.add('contrast'),
-      (['banner', 'links'] as const).map((kind): ContrastRow => ({
-        path: '/',
+      paths.flatMap((path) => (['banner', 'links'] as const).map((kind): ContrastRow => ({
+        path,
         kind,
         button: 'Neka',
         ratio: 7,
         ok: true,
         fg: { r: 0, g: 0, b: 0 },
         bg: { r: 255, g: 255, b: 255 },
-      }))
+      })))
     ),
     shots: async () => (called.add('shots'), ['/tmp/x.png']),
     close: async () => void called.add('close'),
@@ -339,6 +347,78 @@ describe('verify', () => {
     expect(result.pass).toBe(false)
     expect(result.steps).toEqual([expect.objectContaining({ step: 0, name: 'push', pass: false })])
     expect(f.calls.some((c) => c.startsWith('npm'))).toBe(false)
+  })
+
+  test('step 1: package.json may change only the astro-consent dependency', async () => {
+    const dir = siteDir()
+    writeFileSync(join(dir, 'package.json'), JSON.stringify({ name: 'site', scripts: { postinstall: 'x' }, dependencies: JSON.parse(BRANCH_PKG).dependencies }))
+    const result = await verify(dir, report(), { deps: fake().deps })
+    expect(result.steps).toEqual([expect.objectContaining({ step: 1, pass: false })])
+    expect(result.steps[0]!.evidence).toContain('scripts')
+  })
+
+  test('an unrelated <dir>-main folder is left alone and verify refuses', async () => {
+    const dir = siteDir()
+    mkdirSync(`${dir}-main`)
+    writeFileSync(join(`${dir}-main`, 'keep.txt'), 'mine')
+    const f = fake()
+    await expect(verify(dir, report(), { deps: f.deps })).rejects.toThrow(/-main.*not a worktree of this clone/)
+    expect(readFileSync(join(`${dir}-main`, 'keep.txt'), 'utf8')).toBe('mine')
+    expect(f.calls.some((c) => c.startsWith('git push') || c.startsWith('git worktree remove'))).toBe(false)
+  })
+
+  test('a leftover <dir>-main worktree of this clone is removed and recreated', async () => {
+    const dir = siteDir()
+    const f = fake()
+    await verify(dir, report(), { deps: f.deps })
+    mkdirSync(`${dir}-main`, { recursive: true })
+    const g = fake()
+    const exec: Exec = async (cmd, args, cwd) =>
+      [cmd, ...args].join(' ') === 'git worktree list --porcelain' ? { code: 0, out: `worktree ${dir}\n\nworktree ${dir}-main\ndetached\n` } : g.deps.exec!(cmd, args, cwd)
+    const result = await verify(dir, report(), { deps: { ...g.deps, exec } })
+    expect(result.pass).toBe(true)
+    expect(g.calls.filter((c) => c === `git worktree remove --force ${dir}-main`)).toHaveLength(2)
+  })
+
+  test('step 6 (Ruling 20): a page without PrivacyLinks rows fails even when another page has them', async () => {
+    const row = (path: string, kind: 'banner' | 'links'): ContrastRow => ({ path, kind, button: 'x', ratio: 7, ok: true, fg: { r: 0, g: 0, b: 0 }, bg: { r: 255, g: 255, b: 255 } })
+    const f = fake({
+      checks: {
+        contrast: async () => [row('/', 'banner'), row('/', 'links'), row('/karta', 'banner'), row('/finns-inte-x', 'banner'), row('/finns-inte-x', 'links')],
+      },
+    })
+    const dir = siteDir()
+    const result = await verify(dir, report(), { deps: f.deps })
+    expect(result.steps.at(-1)).toMatchObject({ step: 6, pass: false })
+    expect(evidence(dir, '6-contrast.txt')).toContain('/karta: no PrivacyLinks text measured')
+  })
+
+  test('step 6: CMS admin pages (Ruling 26) need no PrivacyLinks', async () => {
+    const row = (path: string, kind: 'banner' | 'links'): ContrastRow => ({ path, kind, button: 'x', ratio: 7, ok: true, fg: { r: 0, g: 0, b: 0 }, bg: { r: 255, g: 255, b: 255 } })
+    const f = fake({
+      checks: {
+        pages: async () => ['/', '/admin/', '/finns-inte-x'],
+        embedPages: async () => [],
+        contrast: async () => [row('/', 'banner'), row('/', 'links'), row('/admin/', 'banner'), row('/finns-inte-x', 'banner'), row('/finns-inte-x', 'links')],
+      },
+    })
+    const result = await verify(siteDir(), report({ classification: 'notice', iframes: [] }), { deps: f.deps })
+    expect(result.steps[5]).toMatchObject({ step: 6, pass: true })
+  })
+
+  test('step 3 (Ruling 34a): the pages must include "/"', async () => {
+    const f = fake({ checks: { pages: async () => ['/finns-inte-x'], embedPages: async () => [] } })
+    const result = await verify(siteDir(), report({ classification: 'notice', iframes: [] }), { deps: f.deps })
+    expect(result.steps.at(-1)).toMatchObject({ step: 3, pass: false })
+    expect(result.steps.at(-1)!.evidence).toContain('"/" is not among the pages')
+  })
+
+  test('step 8 (Ruling 34b): an origin outside github.com/visionmediahq fails before Docker', async () => {
+    const f = fake({ exec: { 'git remote get-url origin': { code: 0, out: 'https://gitlab.com/someone/site.git\n' } } })
+    const result = await verify(siteDir(), report(), { deps: f.deps })
+    expect(result.steps.at(-1)).toMatchObject({ step: 8, pass: false })
+    expect(result.steps.at(-1)!.evidence).toContain('github.com/visionmediahq')
+    expect(f.called.has('docker')).toBe(false)
   })
 
   test('demo mode: no git, no npm, no docker; steps 1, 2 and 8 skipped; /utan-banner and the 404 expect no banner', async () => {
