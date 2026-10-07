@@ -14,6 +14,11 @@ describe('scanSecrets finds', () => {
     ['a Stripe live key', `sk_live_${'x9Y8z7W6'.repeat(3)}`],
     ['a private key block', '-----BEGIN PRIVATE KEY-----'],
     ['a JWT', `Authorization: Bearer ${JWT}`],
+    ['a JSON-style key (quote before the colon)', '  "SMTP_PASSWORD": "hunter2hunter2",'],
+    ['a JSON-style Resend key', '  "RESEND_API_KEY": "abcdefgh12345678"'],
+    ['a lower-case name in code', "const config = { apiKey: 'abcdefgh12345678' }"],
+    ['a camel-case name in JSON', '{ "accessToken": "abcdefgh12345678" }'],
+    ['a lower-case assignment', 'const secret = "abcdefgh12345678"'],
   ])('%s', (_name, line) => {
     const hits = scanSecrets(`first line\n${line}\nlast line`)
     expect(hits).toHaveLength(1)
@@ -29,6 +34,11 @@ describe('scanSecrets ignores', () => {
     ['a token count', 'input_tokens: 1645'],
     ['a key read from the environment', 'const RECAPTCHA_SITE_KEY = import.meta.env.PUBLIC_RECAPTCHA_SITE_KEY as string'],
     ['a key read from process.env', 'const RESEND_API_KEY = process.env.RESEND_API_KEY'],
+    ['a typed parameter', 'execute: (key: string, opts: { action: string }) => Promise<string>'],
+    ['a typed property', 'secretKey: Promise<string>'],
+    ['a value computed in code', 'const recaptchaToken = await getRecaptchaToken();'],
+    ['an empty JSON value', '"apiKey": ""'],
+    ['a lower-case name read from the environment', 'apiKey: import.meta.env.PUBLIC_API_KEY'],
     [
       'an Umami website id',
       '<script defer src="https://cloud.umami.is/script.js" data-website-id="3f2b1c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d"></script>',

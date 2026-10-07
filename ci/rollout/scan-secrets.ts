@@ -20,9 +20,13 @@ const PATTERNS: RegExp[] = [
   /\bsk-(?:ant-|proj-)?[A-Za-z0-9_-]{20,}/, // OpenAI / Anthropic key
   /\bre_[A-Za-z0-9_]{16,}\b/, // Resend key
   /\beyJ[A-Za-z0-9_-]{8,}\.eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}/, // JWT
-  // An upper-case secret-ish name assigned a literal: RESEND_API_KEY=..., SECRET: "...".
+  // An upper-case secret-ish name assigned a literal, quoted or not: RESEND_API_KEY=...,
+  // SECRET: "...", "SMTP_PASSWORD": "..." (JSON: the quote comes before the colon).
   // A value read from the environment (import.meta.env.X, process.env.X) is code, not a secret.
-  /\b[A-Z][A-Z0-9_]*(?:KEY|SECRET|TOKEN|PASSWORD|PASSWD)[A-Z0-9_]*\s*[=:]\s*['"]?(?!import\.meta\.env\.|process\.env\.)[^\s'"]{8,}/,
+  /\b[A-Z][A-Z0-9_]*(?:KEY|SECRET|TOKEN|PASSWORD|PASSWD)[A-Z0-9_]*['"]?\s*[=:]\s*['"]?(?!import\.meta\.env\.|process\.env\.)[^\s'"]{8,}/,
+  // Any other spelling (apiKey, accessToken, "secret") assigned a quoted literal. The value must
+  // be quoted, so type annotations (`key: string`) and code (`token = await f()`) stay quiet.
+  /\b\w*(?:key|secret|token|password|passwd)\w*['"]?\s*[=:]\s*['"][^\s'"]{8,}/i,
 ]
 
 /** One hit per line at most: the first pattern that matches it. Lines are 1-based. */
