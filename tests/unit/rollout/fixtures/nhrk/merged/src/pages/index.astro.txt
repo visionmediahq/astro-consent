@@ -1,0 +1,31 @@
+---
+import Base from '../layouts/Base.astro';
+import Header from '../components/Header.astro';
+import Footer from '../components/Footer.astro';
+import Hero from '../components/home/Hero.astro';
+import QuickLinks from '../components/home/QuickLinks.astro';
+import NewsSection from '../components/home/NewsSection.astro';
+import KalenderCTA from '../components/home/KalenderCTA.astro';
+import AboutSection from '../components/home/AboutSection.astro';
+import Sponsorer from '../components/Sponsorer.astro';
+---
+
+<Base
+  title="Nordhallands Ridklubb – Familjärt, Glädjefyllt & Tryggt"
+  description="Välkommen till Nordhallands Ridklubb! En ideell förening i Halland med ridskola, tävlingsverksamhet och medlemsstall. Familjärt, glädjefyllt och tryggt."
+  canonical="https://nhrk.se/"
+  ogImage="/images/727314341_1590382656425402_6650807430265-7b5d709e.webp"
+>
+  <Header />
+
+  <main id="main-content">
+    <Hero />
+    <QuickLinks />
+    <NewsSection />
+    <KalenderCTA />
+    <AboutSection />
+    <Sponsorer />
+  </main>
+
+  <Footer />
+</Base>

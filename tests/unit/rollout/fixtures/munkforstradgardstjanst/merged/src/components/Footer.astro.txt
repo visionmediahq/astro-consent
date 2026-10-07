@@ -1,0 +1,106 @@
+---
+import { MapPin, Phone, Mail, Clock } from '@lucide/astro';
+import { BUSINESS } from '../config/business';
+import PrivacyLinks from '@visionmediahq/astro-consent/components/PrivacyLinks.astro';
+---
+
+<footer class="bg-neutral text-neutral-content pt-14 pb-8">
+  <div class="max-w-6xl mx-auto px-4 md:px-6">
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-10 mb-12">
+
+      <!-- Name & About -->
+      <div>
+        <div class="mb-5">
+          <p class="text-2xl font-bold tracking-tight text-white leading-none">Munkfors</p>
+          <p class="text-sm font-semibold tracking-[0.22em] uppercase mt-1" style="color: var(--color-primary);">Trädgårdstjänst AB</p>
+        </div>
+        <p class="text-sm leading-relaxed" style="color: rgba(255,255,255,0.60);">
+          Din lokala partner för trädgård, skog, fastighetsskötsel och verkstad i Munkfors.
+        </p>
+
+        <a
+          href={BUSINESS.facebook}
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label="Besök oss på Facebook"
+          class="inline-flex items-center gap-2 mt-6 text-sm font-medium transition-opacity hover:opacity-100"
+          style="color: rgba(255,255,255,0.55);"
+          onclick="umami.track('cta_click', {label: 'Facebook'})"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/>
+          </svg>
+          Facebook
+        </a>
+      </div>
+
+      <!-- Navigation -->
+      <div>
+        <h3 class="text-sm uppercase tracking-[0.15em] font-semibold mb-5" style="color: rgba(255,255,255,0.45);">Sidor</h3>
+        <ul class="space-y-2.5 text-sm" style="color: rgba(255,255,255,0.70);">
+          <li><a href="/" class="hover:text-white transition-colors" onclick="umami.track('nav_click', {item: 'Hem'})">Hem</a></li>
+          <li><a href="/butik/" class="hover:text-white transition-colors" onclick="umami.track('nav_click', {item: 'Butik'})">Butik</a></li>
+          <li><a href="/verkstad/" class="hover:text-white transition-colors" onclick="umami.track('nav_click', {item: 'Verkstad'})">Verkstad</a></li>
+          <li><a href="/fastighetsskotsel/" class="hover:text-white transition-colors" onclick="umami.track('nav_click', {item: 'Fastighetsskötsel'})">Fastighetsskötsel</a></li>
+          <li><a href="/leverantorer/" class="hover:text-white transition-colors" onclick="umami.track('nav_click', {item: 'Leverantörer'})">Leverantörer</a></li>
+          <li><a href="/nyheter/" class="hover:text-white transition-colors" onclick="umami.track('nav_click', {item: 'Nyheter'})">Nyheter</a></li>
+          <li><a href="/kontakt/" class="hover:text-white transition-colors" onclick="umami.track('nav_click', {item: 'Kontakt'})">Kontakt</a></li>
+        </ul>
+      </div>
+
+      <!-- Contact -->
+      <div>
+        <h3 class="text-sm uppercase tracking-[0.15em] font-semibold mb-5" style="color: rgba(255,255,255,0.45);">Kontakt</h3>
+        <ul class="space-y-4 text-sm" style="color: rgba(255,255,255,0.70);">
+
+          <li class="flex items-start gap-3">
+            <MapPin size={14} class="shrink-0 mt-0.5" aria-hidden="true" style="color: rgba(255,255,255,0.40);" />
+            <span>{BUSINESS.address.street},<br />{BUSINESS.address.postalCode} {BUSINESS.address.city}</span>
+          </li>
+
+          <li class="flex items-center gap-3">
+            <Phone size={14} class="shrink-0" aria-hidden="true" style="color: rgba(255,255,255,0.40);" />
+            <a
+              href={BUSINESS.phoneHref}
+              class="hover:text-white transition-colors"
+              onclick="umami.track('phone_click')"
+            >{BUSINESS.phone}</a>
+          </li>
+
+          <li class="flex items-start gap-3">
+            <Mail size={14} class="shrink-0 mt-0.5" aria-hidden="true" style="color: rgba(255,255,255,0.40);" />
+            <div class="space-y-1">
+              <a
+                href={`mailto:${BUSINESS.emailButik}`}
+                class="block hover:text-white transition-colors"
+                onclick="umami.track('email_click')"
+              >{BUSINESS.emailButik}</a>
+              <a
+                href={`mailto:${BUSINESS.emailYttre}`}
+                class="block hover:text-white transition-colors"
+                onclick="umami.track('email_click')"
+              >{BUSINESS.emailYttre}</a>
+            </div>
+          </li>
+
+          <li class="flex items-start gap-3">
+            <Clock size={14} class="shrink-0 mt-0.5" aria-hidden="true" style="color: rgba(255,255,255,0.40);" />
+            <div>
+              {BUSINESS.hours.map(({ day, time }) => (
+                <div>{day}: {time}</div>
+              ))}
+            </div>
+          </li>
+
+        </ul>
+        <PrivacyLinks class="text-neutral-content mt-5 justify-start!" />
+      </div>
+
+    </div>
+
+    <div class="border-t pt-6 flex flex-col md:flex-row items-center justify-between gap-3 text-xs" style="border-color: rgba(255,255,255,0.12); color: rgba(255,255,255,0.35);">
+      <span>© {new Date().getFullYear()} Munkfors Trädgårdstjänst AB. Alla rättigheter förbehållna.</span>
+      <span>Webbplats av <a href="https://visionmedia.io" target="_blank" rel="noopener noreferrer" class="underline hover:opacity-100 transition-opacity">Vision Media</a></span>
+    </div>
+  </div>
+</footer>

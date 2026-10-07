@@ -1,0 +1,173 @@
+---
+import SEO from '../components/SEO.astro'
+import SchemaOrg from '../components/SchemaOrg.astro'
+import VisionFooter from '../components/VisionFooter.astro'
+import ConsentBanner from '@visionmediahq/astro-consent/components/ConsentBanner.astro'
+import '../styles/global.css'
+
+interface Address {
+  streetAddress: string
+  addressLocality: string
+  postalCode: string
+  addressCountry: string
+}
+
+interface SchemaProps {
+  name: string
+  url: string
+  telephone?: string
+  email?: string
+  address?: Address
+  openingHours?: string[]
+  description?: string
+  image?: string
+  sameAs?: string[]
+}
+
+interface Props {
+  // SEO — required on every page
+  title: string
+  description: string
+  canonical: string
+  ogImage?: string
+  ogType?: string
+  // LocalBusiness schema — omit on pages without business context (e.g. 404)
+  schema?: SchemaProps
+}
+
+const { title, description, canonical, ogImage, ogType, schema } = Astro.props
+
+const umamiScriptUrl = import.meta.env.UMAMI_SCRIPT_URL
+const umamiWebsiteId = import.meta.env.UMAMI_WEBSITE_ID
+const glitchtipDsn = import.meta.env.PUBLIC_GLITCHTIP_DSN
+const recaptchaSiteKey = import.meta.env.PUBLIC_RECAPTCHA_SITE_KEY
+---
+
+<!doctype html>
+<html lang="sv">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="icon" type="image/png" href="/favicon.png" />
+    <link rel="icon" type="image/webp" href="/favicon.webp" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Eczar:wght@400;600;700;800&family=Literata:opsz,wght@7..72,400;7..72,500;7..72,700;7..72,800&family=Nunito+Sans:wght@300;400;500;600;700;800&display=swap" />
+
+    <SEO
+      title={title}
+      description={description}
+      canonical={canonical}
+      ogImage={ogImage}
+      ogType={ogType}
+    />
+
+    {schema && (
+      <SchemaOrg
+        name={schema.name}
+        url={schema.url}
+        telephone={schema.telephone}
+        email={schema.email}
+        address={schema.address}
+        openingHours={schema.openingHours}
+        description={schema.description}
+        image={schema.image}
+        sameAs={schema.sameAs}
+      />
+    )}
+
+    <!-- GlitchTip error tracking — active when PUBLIC_GLITCHTIP_DSN is set -->
+    {glitchtipDsn && (
+      <>
+        <script
+          is:inline
+          src="https://cdn.jsdelivr.net/npm/@sentry/browser@8/build/bundle.min.js"
+          crossorigin="anonymous"
+        ></script>
+        <script is:inline define:vars={{ glitchtipDsn }}>
+          if (typeof Sentry !== 'undefined') {
+            Sentry.init({ dsn: glitchtipDsn, tracesSampleRate: 0.1 })
+          }
+        </script>
+      </>
+    )}
+
+    <!-- Umami analytics — active when both UMAMI_SCRIPT_URL and UMAMI_WEBSITE_ID are set -->
+    {umamiScriptUrl && umamiWebsiteId && (
+      <script
+        is:inline
+        async
+        src={umamiScriptUrl}
+        data-website-id={umamiWebsiteId}
+      ></script>
+    )}
+
+    <!-- reCAPTCHA v3 — active when PUBLIC_RECAPTCHA_SITE_KEY is set -->
+    {recaptchaSiteKey && (
+      <script
+        is:inline
+        async
+        defer
+        src={`https://www.google.com/recaptcha/api.js?render=${recaptchaSiteKey}`}
+      ></script>
+    )}
+
+    <!-- Client theme tokens — overridden per client in index.astro -->
+    <style is:global>
+      :root {
+        --color-primary: var(--client-primary, #2aa5a5);
+        --color-primary-content: #ffffff;
+        --color-secondary: var(--client-secondary, #5abcbc);
+        --color-secondary-content: #ffffff;
+        --color-accent: var(--client-accent, #5abcbc);
+        --color-base-100: var(--client-bg, #f3fafa);
+        --color-base-content: var(--client-text, #1c3636);
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+          animation-duration: 0.01ms !important;
+          animation-iteration-count: 1 !important;
+          transition-duration: 0.01ms !important;
+          scroll-behavior: auto !important;
+        }
+      }
+
+      :root {
+        --client-primary:   #2aa5a5;
+        --client-secondary: #5abcbc;
+        --client-accent:    #5abcbc;
+        --client-bg:        #f3fafa;
+        --client-text:      #1c3636;
+        --color-base-200:   #e0f4f4;
+        --color-warm-border: #b8dede;
+        --color-surface-dark: #162e2e;
+      }
+    </style>
+  </head>
+  <body class="bg-base-100 text-base-content">
+    <slot />
+    <ConsentBanner />
+    <VisionFooter />
+
+    <!-- Global scroll-triggered entrance animations for [data-animate] elements -->
+    <script>
+      import { animate, inView } from 'motion'
+
+      const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+
+      if (!prefersReducedMotion) {
+        inView('[data-animate]', (element) => {
+          const delay = parseFloat((element as HTMLElement).dataset.animateDelay ?? '0')
+          animate(
+            element,
+            { opacity: [0, 1], y: [20, 0] },
+            { duration: 0.5, delay, easing: [0.22, 0.03, 0.26, 1] }
+          )
+        })
+      }
+    </script>
+  </body>
+</html>

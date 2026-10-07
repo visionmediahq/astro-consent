@@ -1,0 +1,27 @@
+---
+import kontakt from '../data/kontakt.json';
+---
+
+<section class="w-full h-[500px] relative" data-animate>
+  <iframe
+    src={kontakt.googleMapsEmbedUrl}
+    width="100%"
+    height="100%"
+    style="border:0;"
+    allowfullscreen=""
+    loading="lazy"
+    referrerpolicy="no-referrer-when-downgrade"
+    title="Karta till Aspö Mad Vin & Café"
+  ></iframe>
+</section>
+
+<style>
+  iframe {
+    filter: grayscale(0.2);
+  }
+
+  iframe:hover {
+    filter: grayscale(0);
+    transition: filter 0.3s ease;
+  }
+</style>

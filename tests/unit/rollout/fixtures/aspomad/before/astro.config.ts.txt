@@ -1,0 +1,32 @@
+import { defineConfig } from 'astro/config'
+import node from '@astrojs/node'
+import tailwindcss from '@tailwindcss/vite'
+
+export default defineConfig({
+  site: import.meta.env.SITE_URL ?? process.env.SITE_URL ?? 'https://example.com',
+
+  output: 'server',
+
+  // Pages that moved: /menyer was renamed (dd495c8) and /oppettider folded
+  // into it (d55c618). Old links and search results still arrive at both.
+  // The target carries the trailing slash the page's canonical and the
+  // sitemap use. Astro only honours a `status` when the destination matches
+  // a route exactly, which the slashed form does not, so these get Astro's
+  // default: 301 for GET, 308 for HEAD and other methods - both permanent.
+  redirects: {
+    '/menyer': '/meny-oppettider/',
+    '/oppettider': '/meny-oppettider/',
+  },
+
+  security: {
+    checkOrigin: false,
+  },
+
+  adapter: node({
+    mode: 'standalone',
+  }),
+
+  vite: {
+    plugins: [tailwindcss()],
+  },
+})

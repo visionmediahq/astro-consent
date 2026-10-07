@@ -1,0 +1,134 @@
+---
+import { CONTACT } from '../lib/contact';
+import PrivacyLinks from '@visionmediahq/astro-consent/components/PrivacyLinks.astro';
+
+const quickLinks = [
+  { label: 'Hem', href: '/' },
+  { label: 'Ridskolan', href: '/ridskolan' },
+  { label: 'Bli medlem', href: '/foreningen-valkommen-som-medlem-i-nhrk' },
+  { label: 'Priser', href: '/ridskolan/priser' },
+  { label: 'Lektionsschema', href: '/ridskolan/lektionsschema' },
+  { label: 'Nyheter', href: '/nyheter' },
+  { label: 'Kontakt ridskolan', href: '/ridskolan-kontakt' },
+  { label: 'Medlemsstall', href: '/medlemsstall' },
+];
+---
+
+<footer class="bg-footer text-white mt-20">
+  <div class="max-w-content mx-auto px-4 sm:px-6 lg:px-8 py-12">
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-10">
+
+      <!-- Club info -->
+      <div>
+        <p class="font-display text-xl mb-4 text-white/90 tracking-wide">Nordhallands Ridklubb</p>
+        <p class="text-sm text-white/60 leading-relaxed mb-5">
+          En ideell förening i Vallda, Halland. Vi bygger på den enskilde
+          medlemmens insats för att hålla nere priserna och göra ridsporten
+          tillgänglig för alla.
+        </p>
+        <div class="flex gap-2">
+          <a
+            href="https://www.facebook.com/Nordhallandsridklubb"
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="NHRK på Facebook"
+            class="flex items-center justify-center w-9 h-9 rounded-lg border border-white/15 text-white/50 hover:text-white hover:border-brand-primary hover:bg-brand-primary/15 transition-all duration-200"
+            onclick="umami?.track('nav_click', {item: 'Facebook'})"
+          >
+            <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/>
+            </svg>
+          </a>
+          <a
+            href="https://www.instagram.com/Nordhallandsridklubb"
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="NHRK på Instagram"
+            class="flex items-center justify-center w-9 h-9 rounded-lg border border-white/15 text-white/50 hover:text-white hover:border-brand-primary hover:bg-brand-primary/15 transition-all duration-200"
+            onclick="umami?.track('nav_click', {item: 'Instagram'})"
+          >
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
+              <rect x="2" y="2" width="20" height="20" rx="5" ry="5"/>
+              <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/>
+              <line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/>
+            </svg>
+          </a>
+        </div>
+      </div>
+
+      <!-- Quick links -->
+      <div>
+        <h3 class="text-xs font-semibold uppercase tracking-widest text-white/55 mb-4">Snabblänkar</h3>
+        <ul class="space-y-2">
+          {quickLinks.map(link => (
+            <li>
+              <a
+                href={link.href}
+                class="text-sm text-white/60 hover:text-white transition-colors"
+                onclick={`umami?.track('nav_click', {item: '${link.label}'})`}
+              >
+                {link.label}
+              </a>
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      <!-- Contact -->
+      <div>
+        <h3 class="text-xs font-semibold uppercase tracking-widest text-white/55 mb-4">Kontakt</h3>
+        <address class="not-italic text-sm text-white/60 space-y-1 mb-5">
+          <p>Nordhallands RK</p>
+          <p>{CONTACT.address.street}</p>
+          <p>{CONTACT.address.postalCode} {CONTACT.address.locality}</p>
+        </address>
+        <div class="space-y-2.5">
+          <a
+            href={`tel:${CONTACT.phone.digits}`}
+            class="flex items-center gap-2 text-sm text-white/60 hover:text-white transition-colors"
+            onclick="umami?.track('phone_click')"
+          >
+            <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 9.81 19.79 19.79 0 01.1 1.18 2 2 0 012.08 0h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L6.91 7.09a16 16 0 006 6l.61-.61a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/>
+            </svg>
+            {CONTACT.phone.display}
+          </a>
+          <a
+            href="mailto:ridskolan@nhrk.se"
+            class="flex items-center gap-2 text-sm text-white/60 hover:text-white transition-colors"
+            onclick="umami?.track('email_click')"
+          >
+            <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+              <polyline points="22,6 12,12 2,6"/>
+            </svg>
+            ridskolan@nhrk.se
+          </a>
+        </div>
+        <div class="mt-6">
+          <a
+            href="https://www.rfsisu.se/Halland/"
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="RF SISU Halland"
+            class="inline-block bg-white/8 hover:bg-white/15 rounded-lg px-3 py-2 transition-colors"
+          >
+            <img
+              src="/images/rf-sisu-halland.svg"
+              alt="Vi samverkar med RF-SISU Halland"
+              class="h-10 w-auto"
+              width="150"
+              height="55"
+              loading="lazy"
+            />
+          </a>
+        </div>
+      </div>
+    </div>
+
+    <div class="border-t border-white/10 mt-10 pt-6 text-center text-xs text-white/50">
+      <p>© {new Date().getFullYear()} Nordhallands Ridklubb</p>
+      <PrivacyLinks class="text-white/70 mt-2" />
+    </div>
+  </div>
+</footer>

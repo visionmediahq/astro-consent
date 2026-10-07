@@ -1,0 +1,11 @@
+{
+  "addressStreet": "Madviksvägen",
+  "addressCity": "Drottningskär",
+  "addressZip": "37364",
+  "addressCountry": "SE",
+  "phone": "0708 143 158",
+  "email": "info@aspomad.se",
+  "facebookUrl": "https://www.facebook.com/people/Asp-Mad-Vin-Caf/61555871051613/",
+  "instagramUrl": "https://www.instagram.com/aspo_mad_vin_och_cafe/",
+  "googleMapsEmbedUrl": "https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d2150.8471873476244!2d15.587845!3d56.167886!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x4657d0b4c8c8c8c8%3A0x4c8c8c8c8c8c8c8c!2sMadviksv%C3%A4gen%2C%20373%2064%20Drottningsk%C3%A4r!5e0!3m2!1ssv!2sse!4v1234567890123!5m2!1ssv!2sse"
+}

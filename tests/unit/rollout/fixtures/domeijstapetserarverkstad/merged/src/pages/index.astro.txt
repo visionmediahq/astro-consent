@@ -1,0 +1,48 @@
+---
+import Base from '../layouts/Base.astro';
+import Header from '../components/Header.astro';
+import Footer from '../components/Footer.astro';
+import Hero from '../components/Hero.astro';
+import Services from '../components/Services.astro';
+import Intro from '../components/Intro.astro';
+import Process from '../components/Process.astro';
+import Suppliers from '../components/Suppliers.astro';
+import About from '../components/About.astro';
+import Contact from '../components/Contact.astro';
+import SchemaOrg from '../components/SchemaOrg.astro';
+
+export const prerender = true;
+---
+
+<Base
+  title="Möbeltapetsering Göteborg – Domeijs Tapetserarverkstad"
+  description="Auktoriserad möbeltapetserare på Hisingen i Göteborg. Omklädsel, stoppning och försäljning av möbeltyger. Mästarbrev 2023. Ring 0739-086639."
+  canonical="https://domeijstapetserarverkstad.se/"
+  ogImage="/og-image.jpg"
+>
+  <SchemaOrg
+    name="Domeijs tapetserarverkstad"
+    url="https://domeijstapetserarverkstad.se/"
+    telephone="0739-086639"
+    email="domeijs.tapetserarverkstad@gmail.com"
+    address={{ streetAddress: "Ängpannegatan 2E", addressLocality: "Göteborg", postalCode: "417 05", addressCountry: "SE" }}
+    openingHours={["Mo-Fr 09:00-16:00"]}
+    description="Domeijs tapetserarverkstad byter/lagar stoppning och klär om möbler för privat och offentlig miljö. Verkstan ligger på Hisingen i Göteborg."
+    image="/images/domeijs_logotyp.webp"
+    sameAs={[
+      "https://www.facebook.com/domeijs.tapetserarverkstad/?locale=sv_SE",
+      "https://www.instagram.com/domeijs_tapetserarverkstad/",
+    ]}
+  />
+  <Header />
+  <main>
+    <Hero />
+    <Services />
+    <Intro />
+    <Process />
+    <Suppliers />
+    <About />
+    <Contact />
+  </main>
+  <Footer />
+</Base>

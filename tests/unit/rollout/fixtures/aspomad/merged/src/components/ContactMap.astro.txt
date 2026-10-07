@@ -1,0 +1,31 @@
+---
+import ConsentEmbed from '@visionmediahq/astro-consent/components/ConsentEmbed.astro';
+import kontakt from '../data/kontakt.json';
+
+const address = `${kontakt.addressStreet}, ${kontakt.addressZip.replace(/^(\d{3})(\d{2})$/, '$1 $2')} ${kontakt.addressCity}`;
+const mapsLink = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`Aspö Mad Vin & Café, ${address}`)}`;
+---
+
+<section class="w-full h-[500px] relative grid" data-animate>
+  <ConsentEmbed
+    service="google-maps"
+    src={kontakt.googleMapsEmbedUrl}
+    href={mapsLink}
+    title="Karta till Aspö Mad Vin & Café"
+    aspect="auto"
+  >
+    <Fragment slot="placeholder"><p>Aspö Mad Vin & Café, {address}</p></Fragment>
+  </ConsentEmbed>
+</section>
+
+<style>
+  /* The iframe is added by ConsentEmbed after consent, so it needs :global() */
+  section :global(iframe) {
+    filter: grayscale(0.2);
+  }
+
+  section:hover :global(iframe) {
+    filter: grayscale(0);
+    transition: filter 0.3s ease;
+  }
+</style>

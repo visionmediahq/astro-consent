@@ -1,0 +1,39 @@
+---
+import Base from '../layouts/Base.astro';
+import Header from '../components/Header.astro';
+import Footer from '../components/Footer.astro';
+import PageHero from '../components/PageHero.astro';
+import KontaktForm from '../components/KontaktForm.astro';
+import KontaktMap from '../components/KontaktMap.astro';
+
+export const prerender = true;
+---
+
+<Base
+  title="Kontakt – A-Tak Takläggare Varberg"
+  description="Kontakta Annebergsvägens Tak AB i Varberg. Ring oss på 0340-679333 eller skicka ett meddelande. Vi hjälper med taklösningar i hela Halland."
+  canonical="https://a-tak.se/kontakt/"
+  ogImage="/og-image.jpg"
+  schema={{
+    name: 'Annebergsvägens Tak AB',
+    url: 'https://a-tak.se/',
+    telephone: '+46340679333',
+    email: 'info@a-tak.se',
+    address: {
+      streetAddress: 'Annebergsvägen 12',
+      addressLocality: 'Varberg',
+      postalCode: '432 48',
+      addressCountry: 'SE',
+    },
+    description: 'Kontakta Annebergsvägens Tak AB i Varberg för takläggning, tätskikt och renoveringar i Halland.',
+    image: 'https://a-tak.se/og-image.jpg',
+  }}
+>
+  <Header />
+  <main>
+    <PageHero title="Kontakt" backgroundImage="/images/kontakt.webp" />
+    <KontaktForm />
+    <KontaktMap />
+  </main>
+  <Footer />
+</Base>

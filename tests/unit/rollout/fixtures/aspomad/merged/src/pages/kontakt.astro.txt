@@ -1,0 +1,35 @@
+---
+import Base from '../layouts/Base.astro';
+import PageHero from '../components/PageHero.astro';
+import ContactInfo from '../components/ContactInfo.astro';
+import BookingInfo from '../components/BookingInfo.astro';
+import ContactMap from '../components/ContactMap.astro';
+import { loadPage } from '../lib/pages';
+import { getHoursState } from '../lib/hours';
+
+const page = loadPage('kontakt');
+const hours = getHoursState();
+---
+
+<Base
+  title={page.title}
+  description={page.metaDescription}
+  canonical="https://aspomad.se/kontakt/"
+  ogImage="/images/logo-transparent-169e2b72.webp"
+>
+  <PageHero
+    title={page.heroTitle ?? 'Kontakt'}
+    backgroundImage={page.heroBackgroundImage}
+  />
+
+  <ContactInfo />
+
+  <BookingInfo
+    heading={page.bookingHeading}
+    textBefore={page.bookingTextBefore}
+    textAfter={page.bookingTextAfter}
+    note={hours.bookingNote}
+  />
+
+  <ContactMap />
+</Base>

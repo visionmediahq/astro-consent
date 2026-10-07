@@ -1,0 +1,124 @@
+@import "tailwindcss";
+@plugin "daisyui";
+@source "../../node_modules/@visionmediahq/astro-consent/src";
+
+/* Fonts — Questrial (headings) and Red Hat Display (body) */
+h1, h2, h3, h4, h5, h6 {
+  font-family: 'Questrial', system-ui, sans-serif;
+}
+
+body {
+  font-family: 'Red Hat Display', system-ui, sans-serif;
+}
+
+/* Smooth scroll */
+html {
+  scroll-behavior: smooth;
+}
+
+/* ::selection */
+::selection {
+  background: var(--color-secondary);
+  color: #ffffff;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-secondary);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-primary);
+}
+
+/* DaisyUI rounded-none override for inputs/buttons */
+.input, .textarea, .btn {
+  border-radius: 0 !important;
+}
+
+/* Animation initial state — hidden by CSS so no flash when JS registers observers */
+@media (prefers-reduced-motion: no-preference) {
+  [data-animate] {
+    opacity: 0;
+    transform: translateY(20px);
+    transition: none;
+  }
+}
+
+/* FAQ accordion cursor and chevron */
+details summary {
+  cursor: pointer;
+  list-style: none;
+}
+details summary::-webkit-details-marker {
+  display: none;
+}
+.faq-chevron {
+  transition: transform 0.3s cubic-bezier(0.22, 0.03, 0.26, 1);
+  flex-shrink: 0;
+}
+details[open] .faq-chevron {
+  transform: rotate(180deg);
+}
+
+/* Default input border */
+.input-bordered,
+.textarea-bordered {
+  border-color: #e5e7eb;
+}
+
+/* Input focus ring */
+.input:focus,
+.textarea:focus,
+input:focus,
+textarea:focus,
+select:focus {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 0;
+  box-shadow: none;
+  border-color: var(--color-primary);
+}
+
+/* Button and link focus-visible ring — keyboard navigation */
+a:focus-visible,
+button:focus-visible,
+.btn:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* Hide reCAPTCHA badge — disclosure text is shown in form components instead */
+.grecaptcha-badge {
+  visibility: hidden !important;
+}
+
+/* Scroll indicator — smooth fade + drift, no bounce */
+@keyframes scroll-hint {
+  0%, 100% { opacity: 0.4; transform: translateY(0); }
+  50% { opacity: 0.75; transform: translateY(5px); }
+}
+.scroll-hint {
+  animation: scroll-hint 2s ease-in-out infinite;
+}
+
+/* Hero secondary (ghost) button — hover + focus via CSS, no inline JS needed */
+.btn-hero-ghost {
+  background: transparent;
+  color: white;
+  border: 1px solid rgba(255,255,255,0.35);
+  transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+}
+.btn-hero-ghost:hover,
+.btn-hero-ghost:focus-visible {
+  background: white !important;
+  color: var(--color-secondary) !important;
+  border-color: white !important;
+  outline: 2px solid white;
+  outline-offset: 2px;
+}

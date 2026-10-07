@@ -1,0 +1,141 @@
+---
+import { Phone, Mail, MapPin, ExternalLink } from '@lucide/astro';
+import ConsentEmbed from '@visionmediahq/astro-consent/components/ConsentEmbed.astro';
+---
+
+<section class="py-16 md:py-24" style="background: var(--color-base-100);">
+  <div class="max-w-6xl mx-auto px-4 md:px-8">
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-12 items-start">
+
+      <!-- Left: Contact info -->
+      <div data-animate>
+        <span class="section-badge mb-5 inline-block">Text.</span>
+
+        <h2 class="text-3xl md:text-4xl font-bold mb-5">
+          Text.
+        </h2>
+
+        <p class="text-base leading-relaxed mb-6 text-muted">
+          Text.
+        </p>
+
+        <address class="not-italic mb-5 text-base">
+          <div class="flex items-start gap-2">
+            <MapPin size={15} class="mt-0.5 shrink-0" style="color: var(--color-secondary);" aria-hidden="true" />
+            <div>
+              <p class="font-semibold">Text.</p>
+              <p class="text-muted">Text.</p>
+            </div>
+          </div>
+        </address>
+
+        <div class="space-y-3 mb-6 text-base">
+          <a
+            href="mailto:info@vasshallakatthotell.se"
+            class="flex items-center gap-2 font-medium hover:underline"
+            style="color: var(--color-primary);"
+            onclick="umami.track('email_click')"
+          >
+            <Mail size={15} aria-hidden="true" />
+            Text.
+          </a>
+        </div>
+
+        <p class="text-sm mb-2 text-subtle">
+          Text.
+        </p>
+
+        <a
+          href="https://www.facebook.com/profile.php?id=100063727656056"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="focus-ring-primary inline-flex items-center gap-2 text-sm font-medium hover:underline mb-6"
+          style="color: var(--color-primary);"
+          onclick="umami.track('nav_click', {item: 'Facebook'})"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/></svg>
+          Text.
+        </a>
+
+        <div class="flex flex-wrap gap-3 mb-7">
+          <a
+            href="https://kartor.eniro.se/m/XiT9T"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="focus-ring-primary inline-flex items-center gap-1.5 text-sm font-semibold hover:underline"
+            style="color: var(--color-primary);"
+            onclick="umami.track('cta_click', {label: 'Karta eniro.se'})"
+          >
+            Text.
+            <ExternalLink size={13} aria-hidden="true" />
+          </a>
+          <span style="color: var(--color-warm-border);">·</span>
+          <a
+            href="https://www.google.com/maps/place/Vasshalla+Hagen,+507+71+G%C3%A5nghester"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="focus-ring-primary inline-flex items-center gap-1.5 text-sm font-semibold hover:underline"
+            style="color: var(--color-primary);"
+            onclick="umami.track('cta_click', {label: 'Google Maps'})"
+          >
+            Text.
+            <ExternalLink size={13} aria-hidden="true" />
+          </a>
+        </div>
+
+        <p class="text-base font-semibold mb-7">
+          Text.
+        </p>
+
+        <div class="flex flex-col sm:flex-row gap-3">
+          <a
+            href="tel:0705771793"
+            class="btn btn-md inline-flex items-center gap-2 font-semibold btn-primary-solid"
+            onclick="umami.track('phone_click')"
+          >
+            <Phone size={15} aria-hidden="true" />
+            Text.
+          </a>
+          <a
+            href="mailto:info@vasshallakatthotell.se"
+            class="btn btn-md inline-flex items-center gap-2 font-semibold btn-outline-primary"
+            onclick="umami.track('email_click')"
+          >
+            <Mail size={15} aria-hidden="true" />
+            Text.
+          </a>
+        </div>
+      </div>
+
+      <!-- Right: Map -->
+      <div data-animate style="--delay: 0.15s;">
+        <div class="rounded-2xl overflow-hidden shadow-sm bordered-warm">
+          <ConsentEmbed
+            service="google-maps"
+            src="https://maps.google.com/maps?q=57.698734,13.042359&hl=sv&z=15&output=embed"
+            title="Karta till Vasshalla Katthotell"
+            aspect="4 / 3"
+          >
+            <Fragment slot="placeholder"><p>Vasshalla Katthotell, Gånghester</p></Fragment>
+          </ConsentEmbed>
+        </div>
+
+        <div
+          class="mt-4 p-5 rounded-xl text-sm bg-section-alt bordered-warm"
+        >
+          <p class="font-semibold mb-0.5">Text.</p>
+          <p class="mb-1 text-muted">Text.</p>
+          <a
+            href="tel:0705771793"
+            class="font-medium hover:underline"
+            style="color: var(--color-primary);"
+            onclick="umami.track('phone_click')"
+          >
+            Text.
+          </a>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>

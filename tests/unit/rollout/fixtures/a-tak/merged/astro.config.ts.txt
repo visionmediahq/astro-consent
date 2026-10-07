@@ -1,0 +1,38 @@
+import { defineConfig } from 'astro/config'
+import node from '@astrojs/node'
+import sitemap from '@astrojs/sitemap'
+import tailwindcss from '@tailwindcss/vite'
+import { loadEnv } from 'vite'
+import consent from '@visionmediahq/astro-consent'
+
+// loadEnv reads all .env files (dev/prod) and makes them available in the config.
+// import.meta.env is not available at config evaluation time.
+const { SITE_URL } = loadEnv(process.env.NODE_ENV ?? 'production', process.cwd(), '')
+
+// https://astro.build/config
+export default defineConfig({
+  // Required for sitemap URL generation.
+  // Builder agent sets SITE_URL per client; Coolify injects it as a system env var.
+  site: SITE_URL ?? process.env.SITE_URL ?? 'https://example.com',
+
+  trailingSlash: 'always',
+
+  output: 'server',
+
+  adapter: node({
+    mode: 'standalone',
+  }),
+
+  integrations: [
+    consent(),
+    // In SSR mode pages are not auto-discovered.
+    // Builder agent should either:
+    //   a) add page URLs to the customPages array below, or
+    //   b) mark individual pages with `export const prerender = true`
+    sitemap(),
+  ],
+
+  vite: {
+    plugins: [tailwindcss()],
+  },
+})

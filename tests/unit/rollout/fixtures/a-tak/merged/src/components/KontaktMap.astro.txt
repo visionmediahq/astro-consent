@@ -1,0 +1,19 @@
+---
+import ConsentEmbed from '@visionmediahq/astro-consent/components/ConsentEmbed.astro'
+
+const MAP_SRC = 'https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d2196.5!2d12.2558!3d57.1058!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x465169e2e2e2e2e3%3A0x0!2sAnnebergsv%C3%A4gen+12%2C+432+48+Varberg!5e0!3m2!1ssv!2sse!4v1700000000000!5m2!1ssv!2sse'
+---
+
+<section class="w-full" data-animate>
+  <div class="grid h-[420px]">
+    <ConsentEmbed
+      service="google-maps"
+      src={MAP_SRC}
+      href="https://www.google.com/maps/search/?api=1&query=Annebergsv%C3%A4gen+12%2C+432+48+Varberg"
+      title="Karta – Annebergsvägens Tak AB, Varberg"
+      aspect="auto"
+    >
+      <Fragment slot="placeholder"><p>Annebergsvägen 12, 432 48 Varberg</p></Fragment>
+    </ConsentEmbed>
+  </div>
+</section>

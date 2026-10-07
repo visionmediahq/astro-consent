@@ -1,0 +1,271 @@
+---
+import { Image } from 'astro:assets';
+import { ChevronRight } from '@lucide/astro';
+import PrivacyLinks from '@visionmediahq/astro-consent/components/PrivacyLinks.astro';
+---
+
+<main id="main-content" class="splash-main">
+
+  <!-- Panel 1: Skaraborgs Träförädling AB -->
+  <a
+    href="/skaraborg-traforadling-ab/"
+    class="splash-panel"
+    aria-label="Besök Skaraborgs Träförädling AB"
+    onclick="umami.track('cta_click', {label: 'Skaraborgs Träförädling – Besök hemsidan'})"
+  >
+    <!-- Background image -->
+    <div class="splash-bg splash-bg--skaraborg" aria-hidden="true"></div>
+    <!-- Overlay -->
+    <div class="splash-overlay" aria-hidden="true"></div>
+
+    <!-- Content -->
+    <div class="splash-content">
+      <div class="splash-logo-wrap">
+        <Image
+          src="/images/logo-skaraborg.png"
+          alt="Skaraborgs Träförädling AB – Logotyp"
+          width={471}
+          height={196}
+          loading="eager"
+          fetchpriority="high"
+          class="splash-logo"
+        />
+      </div>
+      <p class="splash-tagline">Text.</p>
+      <span class="splash-cta">
+        Text.
+        <ChevronRight size={16} aria-hidden="true" class="splash-chevron" />
+      </span>
+    </div>
+
+    <!-- Vertical divider (desktop) / horizontal divider (mobile) -->
+    <div class="splash-divider" aria-hidden="true"></div>
+  </a>
+
+  <!-- Panel 2: Levene Såg AB -->
+  <a
+    href="/levene-sag-ab/"
+    class="splash-panel"
+    aria-label="Besök Levene Såg AB"
+    onclick="umami.track('cta_click', {label: 'Levene Såg AB – Besök hemsidan'})"
+  >
+    <!-- Background image -->
+    <div class="splash-bg splash-bg--levene" aria-hidden="true"></div>
+    <!-- Overlay -->
+    <div class="splash-overlay" aria-hidden="true"></div>
+
+    <!-- Content -->
+    <div class="splash-content">
+      <div class="splash-logo-wrap">
+        <Image
+          src="/images/logo-levene.png"
+          alt="Levene Såg AB – Logotyp"
+          width={436}
+          height={100}
+          loading="lazy"
+          class="splash-logo splash-logo--levene"
+        />
+      </div>
+      <p class="splash-tagline">Text.</p>
+      <span class="splash-cta">
+        Text.
+        <ChevronRight size={16} aria-hidden="true" class="splash-chevron" />
+      </span>
+    </div>
+  </a>
+
+</main>
+
+<!-- The portal has no client footer: cookie settings live in a strip above VisionFooter -->
+<div class="bg-neutral pt-3">
+  <PrivacyLinks class="text-neutral-content" />
+</div>
+
+<style>
+  .splash-main {
+    display: flex;
+    flex-direction: column;
+    min-height: 100dvh;
+  }
+
+  @media (min-width: 768px) {
+    .splash-main {
+      flex-direction: row;
+    }
+  }
+
+  .splash-panel {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: 1;
+    min-height: 50vh;
+    overflow: hidden;
+    text-decoration: none;
+    cursor: pointer;
+  }
+
+  @media (min-width: 768px) {
+    .splash-panel {
+      min-height: 100dvh;
+    }
+  }
+
+  /* Backgrounds */
+  .splash-bg {
+    position: absolute;
+    inset: 0;
+    background-size: cover;
+    background-position: center;
+    transition: transform 0.7s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    z-index: 0;
+  }
+
+  .splash-panel:hover .splash-bg,
+  .splash-panel:focus-visible .splash-bg {
+    transform: scale(1.04);
+  }
+
+  .splash-bg--skaraborg {
+    background-image: url('/images/hero-skaraborg.jpg');
+    background-position: center 35%;
+    filter: brightness(0.55);
+  }
+
+  .splash-bg--levene {
+    background-image: url('/images/header-levene.jpg');
+    background-position: center 50%;
+    filter: brightness(0.5);
+  }
+
+  /* Darken overlays on hover for better contrast */
+  .splash-panel:hover .splash-bg--skaraborg {
+    filter: brightness(0.65);
+  }
+
+  .splash-panel:hover .splash-bg--levene {
+    filter: brightness(0.62);
+  }
+
+  .splash-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    pointer-events: none;
+    /* Bottom-to-top gradient for content legibility */
+    background: linear-gradient(
+      to top,
+      rgba(0,0,0,0.55) 0%,
+      rgba(0,0,0,0.15) 50%,
+      rgba(0,0,0,0.1) 100%
+    );
+  }
+
+  /* Content */
+  .splash-content {
+    position: relative;
+    z-index: 2;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1.25rem;
+    padding: 3rem 2rem;
+    text-align: center;
+    width: 100%;
+    max-width: 520px;
+  }
+
+  .splash-logo-wrap {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 150px;
+  }
+
+  .splash-logo {
+    max-width: min(340px, 75vw);
+    height: auto;
+    filter: drop-shadow(0 4px 20px rgba(0,0,0,0.5));
+    transition: transform 0.4s ease, filter 0.4s ease;
+  }
+
+  .splash-logo--levene {
+    max-width: min(380px, 80vw);
+  }
+
+  .splash-panel:hover .splash-logo,
+  .splash-panel:focus-visible .splash-logo {
+    transform: scale(1.03);
+    filter: drop-shadow(0 6px 28px rgba(0,0,0,0.65));
+  }
+
+  .splash-tagline {
+    font-family: 'Lato', sans-serif;
+    font-size: clamp(0.8rem, 1.5vw, 0.95rem);
+    font-weight: 400;
+    color: rgba(255, 255, 255, 0.75);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin: 0;
+    transition: color 0.3s ease;
+  }
+
+  .splash-panel:hover .splash-tagline {
+    color: rgba(255, 255, 255, 0.95);
+  }
+
+  .splash-cta {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-family: 'Raleway', sans-serif;
+    font-size: clamp(0.75rem, 1.5vw, 0.85rem);
+    font-weight: 700;
+    letter-spacing: 0.18em;
+    color: #fff;
+    text-transform: uppercase;
+    padding-bottom: 0.2rem;
+    border-bottom: 1.5px solid rgba(255, 255, 255, 0.5);
+    transition: border-color 0.25s ease, gap 0.25s ease;
+  }
+
+  .splash-panel:hover .splash-cta,
+  .splash-panel:focus-visible .splash-cta {
+    border-color: #fff;
+    gap: 0.65rem;
+  }
+
+  .splash-chevron {
+    transition: transform 0.25s ease;
+  }
+
+  .splash-panel:hover .splash-chevron {
+    transform: translateX(3px);
+  }
+
+  /* Vertical divider between panels on desktop */
+  .splash-divider {
+    display: none;
+  }
+
+  @media (min-width: 768px) {
+    .splash-divider {
+      display: block;
+      position: absolute;
+      right: 0;
+      top: 10%;
+      bottom: 10%;
+      width: 1px;
+      background: rgba(255, 255, 255, 0.2);
+      z-index: 3;
+    }
+  }
+
+  /* Focus styles */
+  .splash-panel:focus-visible {
+    outline: 3px solid rgba(255, 255, 255, 0.8);
+    outline-offset: -6px;
+  }
+</style>

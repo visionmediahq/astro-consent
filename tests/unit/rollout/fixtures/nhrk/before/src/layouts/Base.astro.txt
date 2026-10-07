@@ -1,0 +1,194 @@
+---
+import SEO from '../components/SEO.astro'
+import SchemaOrg from '../components/SchemaOrg.astro'
+import VisionFooter from '../components/VisionFooter.astro'
+import { CONTACT } from '../lib/contact'
+import '../styles/global.css'
+
+interface Address {
+  streetAddress: string
+  addressLocality: string
+  postalCode: string
+  addressCountry: string
+}
+
+interface SchemaProps {
+  name: string
+  url: string
+  telephone?: string
+  email?: string
+  address?: Address
+  openingHours?: string[]
+  description?: string
+  image?: string
+}
+
+interface Props {
+  // SEO — required on every page
+  title: string
+  description: string
+  canonical: string
+  ogImage?: string
+  ogType?: string
+  // LocalBusiness schema — omit on pages without business context (e.g. 404)
+  schema?: SchemaProps
+}
+
+const { title, description, canonical, ogImage, ogType, schema } = Astro.props
+
+const DEFAULT_SCHEMA: SchemaProps = {
+  name: 'Nordhallands Ridklubb',
+  url: 'https://nhrk.se',
+  telephone: CONTACT.phone.digits,
+  email: CONTACT.email,
+  address: {
+    streetAddress: CONTACT.address.street,
+    addressLocality: CONTACT.address.locality,
+    postalCode: CONTACT.address.postalCode,
+    addressCountry: CONTACT.address.country,
+  },
+  description: 'Nordhallands Ridklubb är en ideell förening som bygger på den enskilde medlemmens insats, för att hålla de priser för verksamheten vi har idag.',
+  image: '/images/logo-nhrk.webp',
+}
+const effectiveSchema = schema ?? DEFAULT_SCHEMA
+
+const umamiScriptUrl = import.meta.env.UMAMI_SCRIPT_URL
+const umamiWebsiteId = import.meta.env.UMAMI_WEBSITE_ID
+const glitchtipDsn = import.meta.env.PUBLIC_GLITCHTIP_DSN
+---
+
+<!doctype html>
+<html lang="sv">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="icon" href="/favicon.webp" type="image/webp" />
+
+    <!-- Fonts: Barlow Condensed (rubriker) + Nunito (brödtext) — loaded async to avoid render blocking -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="preload"
+      as="style"
+      href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700;800&family=Nunito:wght@400;500;600;700&display=swap"
+      onload="this.onload=null;this.rel='stylesheet'"
+    />
+    <noscript>
+      <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700;800&family=Nunito:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    </noscript>
+
+    <SEO
+      title={title}
+      description={description}
+      canonical={canonical}
+      ogImage={ogImage}
+      ogType={ogType}
+    />
+
+    {effectiveSchema && (
+      <SchemaOrg
+        name={effectiveSchema.name}
+        url={effectiveSchema.url}
+        telephone={effectiveSchema.telephone}
+        email={effectiveSchema.email}
+        address={effectiveSchema.address}
+        openingHours={effectiveSchema.openingHours}
+        description={effectiveSchema.description}
+        image={effectiveSchema.image}
+      />
+    )}
+
+    <!-- GlitchTip error tracking — active when PUBLIC_GLITCHTIP_DSN is set -->
+    {glitchtipDsn && (
+      <>
+        <script
+          is:inline
+          defer
+          src="https://cdn.jsdelivr.net/npm/@sentry/browser@8/build/bundle.min.js"
+          crossorigin="anonymous"
+        ></script>
+        <script is:inline define:vars={{ glitchtipDsn }}>
+          if (typeof Sentry !== 'undefined') {
+            Sentry.init({ dsn: glitchtipDsn, tracesSampleRate: 0.1 })
+          }
+        </script>
+      </>
+    )}
+
+    <!-- Umami analytics — active when both UMAMI_SCRIPT_URL and UMAMI_WEBSITE_ID are set -->
+    {umamiScriptUrl && umamiWebsiteId && (
+      <script
+        is:inline
+        async
+        src={umamiScriptUrl}
+        data-website-id={umamiWebsiteId}
+      ></script>
+    )}
+
+    <!-- Client theme tokens — overridden per client in index.astro -->
+    <style is:global>
+      :root {
+        --color-primary: var(--client-primary, #570df8);
+        --color-secondary: var(--client-secondary, #f000b8);
+        --color-accent: var(--client-accent, #37cdbe);
+        --color-base-100: var(--client-bg, #ffffff);
+        --color-base-content: var(--client-text, #1f2937);
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+          animation-duration: 0.01ms !important;
+          animation-iteration-count: 1 !important;
+          transition-duration: 0.01ms !important;
+          scroll-behavior: auto !important;
+        }
+      }
+    
+      :root {
+        --client-primary:   #a05200;
+        --client-secondary: #7a3f00;
+        --client-accent:    #2ea3f2;
+        --client-bg:        #ffffff;
+        --client-text:      #1e1e1e;
+        --color-surface:    #f7f5f2;
+        --color-footer-bg:  #1a1a1a;
+      }
+    </style>
+  </head>
+  <body class="bg-base-100 text-base-content">
+    <slot />
+    <VisionFooter />
+
+    <!-- Global scroll-triggered entrance animations for [data-animate] elements -->
+    <script>
+      const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+
+      if (!prefersReducedMotion) {
+        const observer = new IntersectionObserver(
+          (entries) => {
+            for (const entry of entries) {
+              if (entry.isIntersecting) {
+                const el = entry.target as HTMLElement
+                const delay = parseFloat(el.dataset.animateDelay ?? '0')
+                if (delay > 0) {
+                  setTimeout(() => el.classList.add('is-visible'), delay * 1000)
+                } else {
+                  el.classList.add('is-visible')
+                }
+                observer.unobserve(el)
+              }
+            }
+          },
+          { threshold: 0.1 }
+        )
+        document.querySelectorAll('[data-animate]').forEach(el => observer.observe(el))
+      } else {
+        document.querySelectorAll('[data-animate]').forEach(el =>
+          (el as HTMLElement).classList.add('is-visible')
+        )
+      }
+    </script>
+  </body>
+</html>

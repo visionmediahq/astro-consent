@@ -1,0 +1,109 @@
+---
+import { Image } from 'astro:assets'
+import { Phone, Smartphone, Mail, MapPin } from '@lucide/astro'
+import PrivacyLinks from '@visionmediahq/astro-consent/components/PrivacyLinks.astro'
+---
+
+<footer style="background: var(--color-secondary);" class="text-white">
+  <div class="max-w-6xl mx-auto px-6 py-14 md:py-16">
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-10 md:gap-14">
+
+      <!-- Brand column -->
+      <div class="flex flex-col gap-5">
+        <a href="/">
+          <Image
+            src="/images/A-Tak_logga_official.webp"
+            alt="A-Tak AB logotyp"
+            width={280}
+            height={151}
+            class="h-12 w-auto object-contain brightness-0 invert"
+          />
+        </a>
+        <p class="text-sm leading-relaxed text-white/60 max-w-xs">
+          Annebergsvägens Tak AB — takläggare i Varberg sedan mitten av 1990-talet.
+          Specialister på tätskikt, omläggning och renovering i hela Halland.
+        </p>
+        <div>
+          <div class="w-8 h-0.5" style="background: var(--color-primary);"></div>
+        </div>
+      </div>
+
+      <!-- Contact column -->
+      <div>
+        <h3 class="text-xs font-bold uppercase tracking-[0.18em] text-white/50 mb-6">Kontakt</h3>
+        <ul class="space-y-4">
+          <li>
+            <a
+              href="tel:+46340679333"
+              class="flex items-center gap-3 text-sm text-white/75 hover:text-white transition-colors"
+              onclick="umami.track('phone_click')"
+            >
+              <Phone class="w-4 h-4 flex-shrink-0" style="color: var(--color-primary);" />
+              0340 – 679333
+            </a>
+          </li>
+          <li>
+            <a
+              href="tel:070-000 00 00"
+              class="flex items-center gap-3 text-sm text-white/75 hover:text-white transition-colors"
+              onclick="umami.track('phone_click')"
+            >
+              <Smartphone class="w-4 h-4 flex-shrink-0" style="color: var(--color-primary);" />
+              070-000 00 00
+            </a>
+          </li>
+          <li>
+            <a
+              href="mailto:info@a-tak.se"
+              class="flex items-center gap-3 text-sm text-white/75 hover:text-white transition-colors"
+              onclick="umami.track('email_click')"
+            >
+              <Mail class="w-4 h-4 flex-shrink-0" style="color: var(--color-primary);" />
+              info@a-tak.se
+            </a>
+          </li>
+          <li class="flex items-start gap-3 text-sm text-white/60">
+            <MapPin class="w-4 h-4 flex-shrink-0 mt-0.5" style="color: var(--color-primary);" />
+            <span>Annebergsvägen 12<br />432 48 Varberg</span>
+          </li>
+        </ul>
+      </div>
+
+      <!-- Nav column -->
+      <div>
+        <h3 class="text-xs font-bold uppercase tracking-[0.18em] text-white/50 mb-6">Sidor</h3>
+        <ul class="space-y-3">
+          {[
+            { label: 'Start', url: '/' },
+            { label: 'Tak', url: '/tak/' },
+            { label: 'Referenser', url: '/referenser/' },
+            { label: 'Kontakt', url: '/kontakt/' },
+          ].map(item => (
+            <li>
+              <a
+                href={item.url}
+                class="text-sm text-white/70 hover:text-white transition-colors"
+                onclick={`umami.track('nav_click', {item: '${item.label}'})`}
+              >
+                {item.label}
+              </a>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bottom bar -->
+  <div class="border-t border-white/10">
+    <div class="max-w-6xl mx-auto px-6 py-5 flex flex-col sm:flex-row items-center justify-between gap-2">
+      <p class="text-xs text-white/40">
+        © {new Date().getFullYear()} Annebergsvägens Tak AB. Alla rättigheter förbehållna.
+      </p>
+      <p class="text-xs text-white/30">
+        Varberg · Kungsbacka · Halmstad · Falkenberg
+      </p>
+      <PrivacyLinks class="text-white/70" />
+    </div>
+  </div>
+</footer>
