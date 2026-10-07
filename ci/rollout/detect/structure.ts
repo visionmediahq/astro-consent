@@ -40,7 +40,7 @@ const isBranding = (file: string): boolean => posix.basename(file) === 'VisionFo
 /** A <footer> inside these belongs to that content (a quote, a card), not to the page. */
 const SECTIONING = new Set(['article', 'aside', 'blockquote', 'figure', 'nav', 'section'])
 
-const POLICY = /^(?:integritet|privacy|cookie|personuppgift)/i
+const POLICY = /^(?:integritet|privacy|cookie|personuppgift|gdpr|dataskydd)/i
 
 const isPage = (file: string): boolean => file.startsWith('src/pages/')
 
@@ -128,22 +128,22 @@ const CENTRING = ['text-center', 'justify-center']
 const SPLIT = ['justify-between', 'justify-start', 'text-left']
 
 /**
- * Whether the end of the footer, where PrivacyLinks goes, is centred. Follows the last element
- * child from the <footer> down: false when a row with more than one element child is split or
- * start-aligned; true at the first `text-center`/`justify-center`; false when the chain ends (no
- * element child, or a component whose markup is elsewhere). `items-center` is not counted: on
- * the pilot footers it sits on rows that are also `justify-between`.
+ * How the end of the footer, where PrivacyLinks goes, is aligned. Follows the last element child
+ * from the <footer> down: 'left' when a row with more than one element child is split or
+ * start-aligned; 'centred' at the first `text-center`/`justify-center`; 'unknown' when the chain
+ * ends (no element child, or a component whose markup is elsewhere) without either. `items-center`
+ * is not counted: on the pilot footers it sits on rows that are also `justify-between`.
  */
-function centredChain(footer: AstroNode): boolean {
+function chainAlignment(footer: AstroNode): FooterInfo['alignment'] {
   let node = footer
   for (;;) {
     const classes = classesOf(node)
     const kids = node.children.filter((c) => c.type === 'element' || c.type === 'component')
     // Checked first: on a flex row, justify-start packs the items left whatever text-center says.
-    if (kids.length > 1 && SPLIT.some((c) => classes.includes(c))) return false
-    if (CENTRING.some((c) => classes.includes(c))) return true
+    if (kids.length > 1 && SPLIT.some((c) => classes.includes(c))) return 'left'
+    if (CENTRING.some((c) => classes.includes(c))) return 'centred'
     const last = kids[kids.length - 1]
-    if (!last || last.type !== 'element') return false
+    if (!last || last.type !== 'element') return 'unknown'
     node = last
   }
 }
@@ -222,13 +222,15 @@ export function detectStructure(files: SiteFiles): DetectedStructure {
   const footers: FooterInfo[] = [...rendered].sort().flatMap((file) =>
     footersIn(file).map((n): FooterInfo => {
       const classes = classesOf(n)
+      const alignment = chainAlignment(n)
       return {
         file,
         start: n.start,
         end: n.end,
         kind: isPage(file) ? 'page' : layoutSet.has(file) ? 'layout' : 'component',
         textClass: textClassOf(classes),
-        centred: centredChain(n),
+        alignment,
+        centred: alignment === 'centred',
       }
     }),
   )

@@ -38,6 +38,13 @@ export interface FooterInfo {
   end: number
   kind: 'layout' | 'component' | 'page'
   textClass: string | null
+  /**
+   * How the end of the footer's last-child chain is aligned: 'left' for an explicit split or
+   * start-aligned row, 'centred' for `text-center`/`justify-center`, 'unknown' when the chain has
+   * no alignment utility (e.g. a footer aligned by its own CSS).
+   */
+  alignment: 'centred' | 'left' | 'unknown'
+  /** alignment === 'centred'. */
   centred: boolean
 }
 

@@ -34,6 +34,7 @@ exports[`detect > pilot a-tak: needs-human, matching the committed snapshot 1`] 
   ],
   "footers": [
     {
+      "alignment": "left",
       "centred": false,
       "end": 3836,
       "file": "src/components/Footer.astro",
@@ -115,6 +116,7 @@ exports[`detect > pilot aspomad: maps, matching the committed snapshot 1`] = `
   "footerless": [],
   "footers": [
     {
+      "alignment": "centred",
       "centred": true,
       "end": 5545,
       "file": "src/components/Footer.astro",
@@ -194,6 +196,7 @@ exports[`detect > pilot domeijstapetserarverkstad: maps, matching the committed 
   ],
   "footers": [
     {
+      "alignment": "unknown",
       "centred": false,
       "end": 2631,
       "file": "src/components/Footer.astro",
@@ -268,6 +271,7 @@ exports[`detect > pilot munkforstradgardstjanst: notice, matching the committed 
   ],
   "footers": [
     {
+      "alignment": "left",
       "centred": false,
       "end": 5246,
       "file": "src/components/Footer.astro",
@@ -331,6 +335,7 @@ exports[`detect > pilot nhrk: needs-human, matching the committed snapshot 1`] =
   ],
   "footers": [
     {
+      "alignment": "centred",
       "centred": true,
       "end": 5747,
       "file": "src/components/Footer.astro",
@@ -413,6 +418,7 @@ exports[`detect > pilot traforadling: maps, matching the committed snapshot 1`] 
   ],
   "footers": [
     {
+      "alignment": "unknown",
       "centred": false,
       "end": 1865,
       "file": "src/components/FooterLevene.astro",
@@ -421,6 +427,7 @@ exports[`detect > pilot traforadling: maps, matching the committed snapshot 1`] 
       "textClass": null,
     },
     {
+      "alignment": "unknown",
       "centred": false,
       "end": 2656,
       "file": "src/components/FooterSkaraborg.astro",
@@ -512,6 +519,7 @@ exports[`detect > pilot vasshallakatthotell: maps, matching the committed snapsh
   ],
   "footers": [
     {
+      "alignment": "left",
       "centred": false,
       "end": 7482,
       "file": "src/components/Footer.astro",
@@ -552,7 +560,7 @@ exports[`detect > pilot vasshallakatthotell: maps, matching the committed snapsh
       ],
     },
   ],
-  "policyPage": null,
+  "policyPage": "/gdpr",
   "reasons": [],
   "recaptcha": true,
   "site": "vasshallakatthotell",

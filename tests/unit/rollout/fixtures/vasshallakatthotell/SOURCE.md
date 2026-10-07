@@ -59,4 +59,5 @@ Pages and components that hold a footer, an iframe or a map embed, reduced the s
 - Trackers: none
 - Banners: none
 - reCAPTCHA: true
+- Policy page: `/gdpr` (Ruling 21: `gdpr*` and `dataskydd*` count as policy pages)
 - Already wired: none

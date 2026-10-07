@@ -60,11 +60,16 @@ describe('detectStructure: pilot fixtures', () => {
         kind: 'component',
         textClass: 'text-neutral-content',
         centred: false,
+        alignment: 'left',
       },
     ])
     expect(r.footerless).toEqual(['src/pages/404.astro'])
     expect(r.policyPage).toBeNull()
     expect(r.parseErrors).toEqual([])
+  })
+
+  test('vasshalla: the privacy page is /gdpr', () => {
+    expect(detectStructure(pilot('vasshallakatthotell')).policyPage).toBe('/gdpr')
   })
 
   test('domeij: the layout has no footer; the start page renders the footer itself; 404 is footerless', () => {
@@ -169,6 +174,40 @@ describe('detectStructure: synthetic cases', () => {
     expect(detectStructure(pilot(site)).footers.map((f) => f.centred)).toEqual(centred)
   })
 
+  test.each([
+    ['a-tak', ['left']],
+    ['aspomad', ['centred']],
+    // the chain's only alignment is md:text-right
+    ['domeijstapetserarverkstad', ['unknown']],
+    ['munkforstradgardstjanst', ['left']],
+    ['nhrk', ['centred']],
+    // centred by scoped CSS, which detect cannot see
+    ['traforadling', ['unknown', 'unknown']],
+    ['vasshallakatthotell', ['left']],
+  ])('%s: alignment follows the footer\'s last-child chain', (site, alignment) => {
+    const footers = detectStructure(pilot(site)).footers
+    expect(footers.map((f) => f.alignment)).toEqual(alignment)
+    expect(footers.map((f) => f.centred)).toEqual(alignment.map((a) => a === 'centred'))
+  })
+
+  test('alignment: left for an explicit split or start row, unknown when the chain has no alignment utility', () => {
+    const page = (footer: string) => inline({ 'src/pages/index.astro': `${footer}\n` })
+    const alignment = (footer: string) => detectStructure(page(footer)).footers[0]!.alignment
+    expect(alignment('<footer><div class="border-t text-center"><p>©</p></div></footer>')).toBe('centred')
+    expect(alignment('<footer><div class="flex flex-col md:flex-row items-center justify-between"><p>©</p><p>by</p></div></footer>')).toBe('left')
+    expect(alignment('<footer><div class="flex justify-start text-center"><p>©</p><p>by</p></div></footer>')).toBe('left')
+    expect(alignment('<footer><div class="text-left"><p>©</p><p class="text-center">by</p></div></footer>')).toBe('left')
+    // a split class on a row with one child does not stop the chain
+    expect(alignment('<footer><div class="flex justify-between"><div class="text-center"><p>©</p></div></div></footer>')).toBe('centred')
+    expect(alignment('<footer><div class="flex justify-between"><div><p>©</p></div></div></footer>')).toBe('unknown')
+    // no alignment utility anywhere on the chain
+    expect(alignment('<footer class="footer"><div class="footer-bottom"><p>©</p><p>by</p></div></footer>')).toBe('unknown')
+    expect(alignment('<footer><div><p>©</p></div></footer>')).toBe('unknown')
+    expect(alignment('<footer><div class="md:text-right"><p>©</p><p>by</p></div></footer>')).toBe('unknown')
+    // a component's markup is not visible here
+    expect(alignment('<footer><div><Links /></div></footer>')).toBe('unknown')
+  })
+
   test('centred: a text-center row at the end of the last-child chain', () => {
     const page = (footer: string) => inline({ 'src/pages/index.astro': `${footer}\n` })
     const centred = (footer: string) => detectStructure(page(footer)).footers[0]!.centred
@@ -227,6 +266,7 @@ describe('detectStructure: synthetic cases', () => {
         kind: 'layout',
         textClass: 'text-base-content',
         centred: false,
+        alignment: 'unknown',
       },
     ])
     expect(r.layouts[0]!.footerRef).toBeNull()
@@ -268,6 +308,10 @@ import Bottom from '../components/SiteFooter.astro'
     expect(detectStructure(inline({ 'src/pages/integritetspolicy.astro': page })).policyPage).toBe('/integritetspolicy')
     expect(detectStructure(inline({ 'src/pages/cookies/index.astro': page })).policyPage).toBe('/cookies')
     expect(detectStructure(inline({ 'src/pages/om-oss.astro': page })).policyPage).toBeNull()
+    expect(detectStructure(inline({ 'src/pages/gdpr.astro': page })).policyPage).toBe('/gdpr')
+    expect(detectStructure(inline({ 'src/pages/GDPR-policy.astro': page })).policyPage).toBe('/GDPR-policy')
+    expect(detectStructure(inline({ 'src/pages/dataskyddspolicy.astro': page })).policyPage).toBe('/dataskyddspolicy')
+    expect(detectStructure(inline({ 'src/pages/om/dataskydd.md': page })).policyPage).toBe('/om/dataskydd')
   })
 
   test('pages prefixed with _ are not routes', () => {
