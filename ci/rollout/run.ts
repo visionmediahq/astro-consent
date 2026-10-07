@@ -14,13 +14,16 @@ import { createTwoFilesPatch, FILE_HEADERS_ONLY } from 'diff'
 import { detect } from './detect/index'
 import { diskSite } from './lib/site-files'
 import type { Report } from './types'
+import { openPr } from './pr'
 import { formatVerify, verify } from './verify'
 import { applyWire, BRANCH, planFiles, planWire, refusalLines } from './wire/index'
 
 const DETECT_USAGE = 'usage: tsx ci/rollout/run.ts detect <site dir> --domain <domain> [--domain <domain>]'
 const WIRE_USAGE = 'usage: tsx ci/rollout/run.ts wire <site dir> [--dry-run]'
 const VERIFY_USAGE = 'usage: tsx ci/rollout/run.ts verify <site dir> | verify --demo <dist dir>'
-const USAGE = `${DETECT_USAGE}\n${WIRE_USAGE}\n${VERIFY_USAGE}`
+const PR_USAGE =
+  'usage: tsx ci/rollout/run.ts pr <site dir> --shots-dir <path in site-factory> --shots-base <github url of that folder> [--issue <url>]... [--domain <d>]'
+const USAGE = `${DETECT_USAGE}\n${WIRE_USAGE}\n${VERIFY_USAGE}\n${PR_USAGE}`
 const DEMO_REPORT = join(import.meta.dirname, '../../tests/unit/rollout/fixtures/demo-report.json')
 
 export function parseDetectArgs(args: string[]): { dir: string; domains: string[] } {
@@ -188,6 +191,57 @@ async function mainVerify(rest: string[]): Promise<number> {
   }
 }
 
+export function parsePrArgs(args: string[]): {
+  dir: string
+  issues: string[]
+  shotsDir: string
+  shotsBase: string
+  domain?: string
+} {
+  let dir: string | null = null
+  const issues: string[] = []
+  const vals: Record<string, string> = {}
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i]!
+    if (arg === '--issue' || arg === '--shots-dir' || arg === '--shots-base' || arg === '--domain') {
+      const value = args[++i]
+      if (!value) throw new Error(`${arg} needs a value\n${PR_USAGE}`)
+      if (arg === '--issue') issues.push(value)
+      else vals[arg] = value
+    } else if (arg.startsWith('-')) throw new Error(`unknown option ${arg}\n${PR_USAGE}`)
+    else if (dir === null) dir = arg
+    else throw new Error(`one site dir only\n${PR_USAGE}`)
+  }
+  if (dir === null) throw new Error(PR_USAGE)
+  if (!vals['--shots-dir'] || !vals['--shots-base']) throw new Error(`--shots-dir and --shots-base are required\n${PR_USAGE}`)
+  return { dir, issues, shotsDir: vals['--shots-dir'], shotsBase: vals['--shots-base'], ...(vals['--domain'] ? { domain: vals['--domain'] } : {}) }
+}
+
+/** pr <site dir>: opens the PR and prints its URL and the screenshots to copy into site-factory. */
+async function mainPr(rest: string[]): Promise<number> {
+  let args: ReturnType<typeof parsePrArgs>
+  try {
+    args = parsePrArgs(rest)
+  } catch (e) {
+    console.error((e as Error).message)
+    return 2
+  }
+  try {
+    const r = await openPr(args.dir, {
+      issues: args.issues,
+      screenshotsDir: args.shotsDir,
+      screenshotsBase: args.shotsBase,
+      ...(args.domain ? { domain: args.domain } : {}),
+    })
+    console.log(r.url)
+    for (const f of r.files) console.log(`copy ${f.from} -> ${f.to}`)
+    return 0
+  } catch (e) {
+    console.error((e as Error).message)
+    return 1
+  }
+}
+
 function mainWire(rest: string[]): number {
   let args: { dir: string; dryRun: boolean }
   try {
@@ -210,6 +264,7 @@ async function main(argv: string[]): Promise<number> {
   const [command, ...rest] = argv
   if (command === 'wire') return mainWire(rest)
   if (command === 'verify') return mainVerify(rest)
+  if (command === 'pr') return mainPr(rest)
   if (command !== 'detect') {
     console.error(USAGE)
     return 2
