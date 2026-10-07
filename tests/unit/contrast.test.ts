@@ -98,6 +98,10 @@ describe('contrast.css', () => {
     expect(css).not.toMatch(/pow\(\(\s*[rgb]\s*\+/)
   })
 
+  test('the text colour is forced opaque with "/ 1"', () => {
+    expect(css).toMatch(/--btn-fg: color\(from var\(--color-primary\) srgb [^;]*, 1\) \/ 1\);/)
+  })
+
   test('uses the 1000000 factor', () => {
     expect(css).toContain('* 1000000')
     expect(css).not.toMatch(/\* 1000\b(?!0)/)

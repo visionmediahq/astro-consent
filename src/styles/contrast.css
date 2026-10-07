@@ -6,6 +6,8 @@
    negligible near the crossover. The factor 1000000 saturates the clamp for any difference above
    one in a million. Needs relative colour syntax with pow(); browsers without it keep DaisyUI's
    colour, which is what the @supports probe checks.
+   The trailing "/ 1" makes the text opaque: relative colour copies the origin's alpha, and a
+   primary with alpha would otherwise give see-through text.
    Channels are clamped to 0..1 before pow(): relative colour does no gamut mapping, so an
    out-of-gamut oklch() primary gives a negative channel, pow() of a negative base is NaN and the
    outer clamp would turn that into black. The unit fixtures go through parseColour, which clips,
@@ -13,7 +15,7 @@
 @supports (color: color(from red srgb clamp(0, (0.1791 - (0.2126 * pow((clamp(0, r, 1) + 0.055) / 1.055, 2.4))) * 1000000, 1) 0 0)) {
   [data-consent-banner] .btn-primary,
   [data-consent-embed] .btn-primary {
-    --btn-fg: color(from var(--color-primary) srgb clamp(0, (0.1791 - (0.2126 * pow((clamp(0, r, 1) + 0.055) / 1.055, 2.4) + 0.7152 * pow((clamp(0, g, 1) + 0.055) / 1.055, 2.4) + 0.0722 * pow((clamp(0, b, 1) + 0.055) / 1.055, 2.4))) * 1000000, 1) clamp(0, (0.1791 - (0.2126 * pow((clamp(0, r, 1) + 0.055) / 1.055, 2.4) + 0.7152 * pow((clamp(0, g, 1) + 0.055) / 1.055, 2.4) + 0.0722 * pow((clamp(0, b, 1) + 0.055) / 1.055, 2.4))) * 1000000, 1) clamp(0, (0.1791 - (0.2126 * pow((clamp(0, r, 1) + 0.055) / 1.055, 2.4) + 0.7152 * pow((clamp(0, g, 1) + 0.055) / 1.055, 2.4) + 0.0722 * pow((clamp(0, b, 1) + 0.055) / 1.055, 2.4))) * 1000000, 1));
+    --btn-fg: color(from var(--color-primary) srgb clamp(0, (0.1791 - (0.2126 * pow((clamp(0, r, 1) + 0.055) / 1.055, 2.4) + 0.7152 * pow((clamp(0, g, 1) + 0.055) / 1.055, 2.4) + 0.0722 * pow((clamp(0, b, 1) + 0.055) / 1.055, 2.4))) * 1000000, 1) clamp(0, (0.1791 - (0.2126 * pow((clamp(0, r, 1) + 0.055) / 1.055, 2.4) + 0.7152 * pow((clamp(0, g, 1) + 0.055) / 1.055, 2.4) + 0.0722 * pow((clamp(0, b, 1) + 0.055) / 1.055, 2.4))) * 1000000, 1) clamp(0, (0.1791 - (0.2126 * pow((clamp(0, r, 1) + 0.055) / 1.055, 2.4) + 0.7152 * pow((clamp(0, g, 1) + 0.055) / 1.055, 2.4) + 0.0722 * pow((clamp(0, b, 1) + 0.055) / 1.055, 2.4))) * 1000000, 1) / 1);
     color: var(--btn-fg);
   }
 }

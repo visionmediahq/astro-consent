@@ -9,19 +9,22 @@ const RED = withPrimary('#ff0000')
 // Worst pool colour under the old lightness rule (4.43:1 with white text): black must win.
 const GREEN = withPrimary('#538264')
 
-async function colours(button: Locator): Promise<{ fg: string; bg: string }> {
+async function colours(button: Locator): Promise<{ fg: string; bg: string; fgAlpha: number }> {
   return button.evaluate((el) => {
     const style = getComputedStyle(el)
     // Chromium serialises relative colours as oklch()/oklab(): rasterise each to read plain sRGB.
-    const toRgb = (css: string): string => {
+    const rasterise = (css: string): Uint8ClampedArray => {
       const ctx = document.createElement('canvas').getContext('2d', { willReadFrequently: true })!
       ctx.clearRect(0, 0, 1, 1)
       ctx.fillStyle = css
       ctx.fillRect(0, 0, 1, 1)
-      const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data
+      return ctx.getImageData(0, 0, 1, 1).data
+    }
+    const toRgb = (css: string): string => {
+      const [r, g, b] = rasterise(css)
       return `rgb(${r}, ${g}, ${b})`
     }
-    return { fg: toRgb(style.color), bg: toRgb(style.backgroundColor) }
+    return { fg: toRgb(style.color), bg: toRgb(style.backgroundColor), fgAlpha: rasterise(style.color)[3]! }
   })
 }
 
@@ -66,5 +69,22 @@ for (const [name, primary, text] of [
     await page.goto('/')
     await page.addStyleTag({ content: withPrimary(primary) })
     for (const n of ['none', 'all']) await expectAa(action(page, n), text)
+  })
+}
+
+// A primary with alpha: relative colour copies the origin's alpha unless the rule says "/ 1", which
+// would make the button text half transparent. Pick must still be the better of black and white.
+for (const primary of ['#697d9594', 'oklch(30% 0.1 260 / 0.5)']) {
+  test(`button text is opaque and the better colour on the translucent primary ${primary}`, async ({ page, context }) => {
+    await stub(context)
+    await page.goto('/')
+    await page.addStyleTag({ content: withPrimary(primary) })
+    for (const n of ['none', 'all']) {
+      const { fg, bg, fgAlpha } = await colours(action(page, n))
+      expect(fgAlpha, `text alpha of ${fg}`).toBe(255)
+      const b = parseColour(bg)
+      const best = wcagContrast({ r: 0, g: 0, b: 0 }, b) >= wcagContrast({ r: 255, g: 255, b: 255 }, b) ? 0 : 255
+      expect(parseColour(fg), `fg ${fg} on ${bg}`).toEqual({ r: best, g: best, b: best })
+    }
   })
 }
