@@ -2,7 +2,7 @@
 // Planner. A target is located in the parse tree of its file and must be found exactly once; its
 // edit is a text splice at that offset, so the site's own formatting and comments stay as they are.
 // Nothing is written here: result() is the whole plan, or the refusals if any target failed.
-import type { Edit, Refusal, WirePlan } from '../types'
+import type { Edit, Refusal, Report, WirePlan } from '../types'
 import type { SiteFiles } from '../lib/site-files'
 
 export interface Hit {
@@ -116,4 +116,15 @@ export class Planner {
     for (const [file, edits] of byFile) assertNoOverlap(edits, file)
     return { ok: true, edits: [...this.edits], newFiles: [...this.newFiles], skipped: [...this.skipped] }
   }
+}
+
+/**
+ * Spec C2: a `needs-human` report is refused whole, one refusal per reason. Returns true when it
+ * refused, so a caller can stop before planning anything from the report.
+ */
+export function refuseNeedsHuman(planner: Planner, report: Pick<Report, 'classification' | 'reasons'>): boolean {
+  if (report.classification !== 'needs-human') return false
+  const reasons = report.reasons.length > 0 ? report.reasons : ['classified needs-human']
+  for (const reason of reasons) planner.refuse('', 'classification', reason)
+  return true
 }
