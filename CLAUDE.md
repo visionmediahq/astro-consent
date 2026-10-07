@@ -60,6 +60,7 @@ by Vision Media's Astro sites. Sites install it straight from this GitHub repo. 
 | `demo/` | Demo site the tests build in two modes (`privacy.consent.json`, `privacy.notice.json`) |
 | `scripts/` | `demo-copy`, `build-demo`, `pack-install`, `gen-services` |
 | `ci/wire-starter.ts` | Applies the site wiring to an astro-starter checkout (CI and rollout tool) |
+| `ci/rollout/` | Rollout tool (repo tool, not shipped): detect, wire, verify, pr, live, merge for client sites; state in `<site>/.rollout/`; see README "Rollout tool" |
 
 ## Tests
 

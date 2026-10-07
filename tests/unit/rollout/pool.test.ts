@@ -39,22 +39,22 @@ describe('exclusions.json', () => {
 describe('statsLabels', () => {
   test('CASE domain mapping: every site label counts, enabled false included', () => {
     const yml = [
-      'name: A Fastigheter',
+      'name: Exempel AB',
       'recipients:',
       '  - anna@example.se',
       'sites:',
-      '  - label: afastigheter.se',
+      '  - label: exempel.se',
       '    umami:',
-      '      - 501b1896-0000-0000-0000-000000000000',
+      '      - 00000000-0000-0000-0000-000000000000',
       '    enabled: true',
-      "  - label: 'vasshalla.se'   # retired in the stats, still live",
+      "  - label: 'exempel-tva.se'   # retired in the stats, still live",
       '    umami: [x]',
       '    enabled: false',
       '  - umami: [y]',
-      '    label: "Domeij.se"',
+      '    label: "Exempel-Tre.se"',
       '    enabled: false',
     ].join('\n')
-    expect(statsLabels(yml)).toEqual(['afastigheter.se', 'vasshalla.se', 'domeij.se'])
+    expect(statsLabels(yml)).toEqual(['exempel.se', 'exempel-tva.se', 'exempel-tre.se'])
   })
 
   test('a landingPages label is not a site label', () => {
