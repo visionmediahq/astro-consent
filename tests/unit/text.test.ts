@@ -44,7 +44,8 @@ test('no string claims there are no cookies or no third parties', () => {
 })
 
 test('placeholders are consistent', () => {
-  expect(get('embed.show')).toContain('{title}')
+  expect(get('embed.show')).toContain('{name}')
+  expect(get('embed.show')).not.toContain('{title}')
   expect(get('embed.remember')).toContain('{name}')
   expect(get('embed.info')).toContain('{title}')
   expect(get('embed.info')).toContain('{name}')

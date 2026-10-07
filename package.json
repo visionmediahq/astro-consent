@@ -1,6 +1,6 @@
 {
   "name": "@visionmediahq/astro-consent",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Consent banner, click-to-load embeds and a consent script API for Vision Media's Astro sites.",
   "type": "module",
   "license": "MIT",

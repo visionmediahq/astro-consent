@@ -22,7 +22,7 @@ by Vision Media's Astro sites. Sites install it straight from this GitHub repo. 
   in the node-free `src/types.ts`. A site that imports the script API type-checks `client.ts` and
   everything it imports as part of its own program (`tests/build/site-typecheck.test.ts` pins this).
 - **Every visible string lives in `src/text/sv.json`.** No Swedish in components or `client.ts`.
-  Raise `CONSENT_VERSION` in `src/config.ts` when the wording changes: every visitor is asked again.
+  Raise `CONSENT_VERSION` in `src/config.ts` when the banner or category wording changes, or a service's category, vendor or purpose changes: every visitor is asked again. `tests/unit/consent-terms.test.ts` enforces this; add a new entry to `consent-terms.json`, never edit one.
 - **Neka is as visible and easy as Acceptera alla**: identical classes (`btn btn-primary btn-sm`),
   same row, one click. Nothing is pre-ticked, the banner is not modal and never takes focus on its
   own. A test compares the two buttons' classes and computed colours.

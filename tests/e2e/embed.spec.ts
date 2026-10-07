@@ -10,7 +10,7 @@ test('placeholder shows the slot text, a Visa button, an unticked remember box a
   await stub(context)
   await page.goto('/karta')
   await expect(withHref(page).locator('[data-placeholder]')).toContainText('Demogatan 1, 123 45 Demostad')
-  await expect(show(page, 'with-href')).toHaveText('Visa Karta till oss')
+  await expect(show(page, 'with-href')).toHaveText('Visa Google Maps')
   await expect(remember(page, 'with-href')).not.toBeChecked()
   await expect(withHref(page).locator('label')).toContainText('Visa alltid innehåll från Google Maps')
   const open = withHref(page).locator('a[data-open]')
@@ -243,4 +243,37 @@ test('a page without the banner still activates embeds from a stored grant', asy
   await seed(page, '/', { categories: ['necessary', 'external'] })
   await page.goto('/utan-banner')
   await expect(page.locator('#bare iframe')).toHaveCount(1)
+})
+
+test('the Visa button is described by the placeholder info text, with a distinct id per embed', async ({ page, context }) => {
+  await stub(context)
+  await page.goto('/karta')
+  const buttons = page.locator('[data-load]')
+  expect(await buttons.count()).toBeGreaterThanOrEqual(2)
+  const targets = await buttons.evaluateAll((els) =>
+    els.map((el) => {
+      const id = el.getAttribute('aria-describedby')
+      const target = id ? document.getElementById(id) : null
+      return { id, text: target?.textContent ?? null, wrapsInfo: !!target && !!el.closest('[data-placeholder]')?.contains(target) }
+    }),
+  )
+  for (const t of targets) {
+    expect(t.id).toBeTruthy()
+    expect(t.wrapsInfo).toBe(true)
+  }
+  expect(new Set(targets.map((t) => t.id)).size).toBe(targets.length)
+  await expect(page.locator('#no-href [data-load]')).toHaveAttribute('aria-describedby', /./)
+  const descText = (id: string) =>
+    page.locator(`#${id} [data-load]`).evaluate((el) => document.getElementById(el.getAttribute('aria-describedby') ?? '')?.textContent ?? '')
+  expect(await descText('no-href')).toContain('Karta två')
+  expect(await descText('with-href')).toContain('Demogatan 1, 123 45 Demostad')
+})
+
+test('the button label is the service name, not the iframe title', async ({ page, context }) => {
+  await stub(context)
+  await page.goto('/karta')
+  for (const id of ['with-href', 'no-href']) {
+    await expect(show(page, id)).toHaveText('Visa Google Maps')
+    await expect(show(page, id)).not.toContainText(id === 'no-href' ? 'Karta två' : 'Karta till oss')
+  }
 })
