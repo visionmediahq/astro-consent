@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 import { afterEach, describe, expect, test } from 'vitest'
-import { parseDetectArgs, parseVerifyArgs, runDetect } from '../../../ci/rollout/run'
+import { parseDetectArgs, parseLiveArgs, parseMergeArgs, parseVerifyArgs, runDetect } from '../../../ci/rollout/run'
 import type { Report } from '../../../ci/rollout/types'
 
 const dirs: string[] = []
@@ -85,5 +85,28 @@ describe('parseVerifyArgs', () => {
     expect(() => parseVerifyArgs(['--demo'])).toThrow(/usage/)
     expect(() => parseVerifyArgs(['a', 'b'])).toThrow(/one/)
     expect(() => parseVerifyArgs(['a', '--fast'])).toThrow(/--fast/)
+  })
+})
+
+describe('parseLiveArgs', () => {
+  test('a site dir and a mode; post-merge may take the merge commit', () => {
+    expect(parseLiveArgs(['site', 'baseline'])).toEqual({ dir: 'site', mode: 'baseline' })
+    expect(parseLiveArgs(['site', 'post-merge', '--sha', 'a'.repeat(40)])).toEqual({ dir: 'site', mode: 'post-merge', sha: 'a'.repeat(40) })
+  })
+
+  test('a missing or unknown mode, a bad sha or --sha with baseline is an error', () => {
+    expect(() => parseLiveArgs(['site'])).toThrow(/usage/)
+    expect(() => parseLiveArgs(['site', 'after'])).toThrow(/usage/)
+    expect(() => parseLiveArgs(['site', 'post-merge', '--sha', 'main'])).toThrow(/sha/)
+    expect(() => parseLiveArgs(['site', 'baseline', '--sha', 'a'.repeat(40)])).toThrow(/post-merge/)
+  })
+})
+
+describe('parseMergeArgs', () => {
+  test('a site dir and a PR number', () => {
+    expect(parseMergeArgs(['site', '7'])).toEqual({ dir: 'site', pr: 7 })
+    expect(() => parseMergeArgs(['site'])).toThrow(/usage/)
+    expect(() => parseMergeArgs(['site', 'x'])).toThrow(/PR number/)
+    expect(() => parseMergeArgs(['site', '7', '8'])).toThrow(/usage/)
   })
 })

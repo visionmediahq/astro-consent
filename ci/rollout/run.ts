@@ -5,6 +5,9 @@
 //   tsx ci/rollout/run.ts wire   <site dir> [--dry-run]
 //   tsx ci/rollout/run.ts verify <site dir>
 //   tsx ci/rollout/run.ts verify --demo <dist dir>   CI/self-test: a built demo, no git/npm/Docker
+//   tsx ci/rollout/run.ts pr     <site dir> --shots-dir <path> --shots-base <url> [--issue <url>]...
+//   tsx ci/rollout/run.ts live   <site dir> baseline | post-merge [--sha <merge commit>]
+//   tsx ci/rollout/run.ts merge  <site dir> <pr number>
 import { execFileSync } from 'node:child_process'
 import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -14,6 +17,8 @@ import { createTwoFilesPatch, FILE_HEADERS_ONLY } from 'diff'
 import { detect } from './detect/index'
 import { diskSite } from './lib/site-files'
 import type { Report } from './types'
+import { formatLive, live } from './live'
+import { merge } from './merge'
 import { openPr } from './pr'
 import { formatVerify, verify } from './verify'
 import { applyWire, BRANCH, planFiles, planWire, refusalLines } from './wire/index'
@@ -23,7 +28,9 @@ const WIRE_USAGE = 'usage: tsx ci/rollout/run.ts wire <site dir> [--dry-run]'
 const VERIFY_USAGE = 'usage: tsx ci/rollout/run.ts verify <site dir> | verify --demo <dist dir>'
 const PR_USAGE =
   'usage: tsx ci/rollout/run.ts pr <site dir> --shots-dir <path in site-factory> --shots-base <github url of that folder> [--issue <url>]... [--domain <d>]'
-const USAGE = `${DETECT_USAGE}\n${WIRE_USAGE}\n${VERIFY_USAGE}\n${PR_USAGE}`
+const LIVE_USAGE = 'usage: tsx ci/rollout/run.ts live <site dir> baseline | post-merge [--sha <merge commit>]'
+const MERGE_USAGE = 'usage: tsx ci/rollout/run.ts merge <site dir> <pr number>'
+const USAGE = `${DETECT_USAGE}\n${WIRE_USAGE}\n${VERIFY_USAGE}\n${PR_USAGE}\n${LIVE_USAGE}\n${MERGE_USAGE}`
 const DEMO_REPORT = join(import.meta.dirname, '../../tests/unit/rollout/fixtures/demo-report.json')
 
 export function parseDetectArgs(args: string[]): { dir: string; domains: string[] } {
@@ -242,6 +249,64 @@ async function mainPr(rest: string[]): Promise<number> {
   }
 }
 
+export function parseLiveArgs(args: string[]): { dir: string; mode: 'baseline' | 'post-merge'; sha?: string } {
+  const positional: string[] = []
+  let sha: string | undefined
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i]!
+    if (arg === '--sha') {
+      sha = args[++i]
+      if (!sha || !/^[0-9a-f]{40}$/.test(sha)) throw new Error(`--sha takes a full 40-character commit sha\n${LIVE_USAGE}`)
+    } else if (arg.startsWith('-')) throw new Error(`unknown option ${arg}\n${LIVE_USAGE}`)
+    else positional.push(arg)
+  }
+  const [dir, mode] = positional
+  if (positional.length !== 2 || !dir || (mode !== 'baseline' && mode !== 'post-merge')) throw new Error(LIVE_USAGE)
+  if (sha && mode !== 'post-merge') throw new Error(`--sha is for post-merge only\n${LIVE_USAGE}`)
+  return { dir, mode, ...(sha ? { sha } : {}) }
+}
+
+export function parseMergeArgs(args: string[]): { dir: string; pr: number } {
+  if (args.length !== 2 || args.some((a) => a.startsWith('-'))) throw new Error(MERGE_USAGE)
+  if (!/^[1-9]\d*$/.test(args[1]!)) throw new Error(`${args[1]} is not a PR number\n${MERGE_USAGE}`)
+  return { dir: args[0]!, pr: Number(args[1]) }
+}
+
+/** live <site dir> <mode>: exit 0 for pass (and for the expected RED of baseline), 1 for a STOP. */
+async function mainLive(rest: string[]): Promise<number> {
+  let args: ReturnType<typeof parseLiveArgs>
+  try {
+    args = parseLiveArgs(rest)
+  } catch (e) {
+    console.error((e as Error).message)
+    return 2
+  }
+  try {
+    const r = await live(args.dir, args.mode, args.sha)
+    for (const line of formatLive(args.mode, r)) console.log(line)
+    return r.status === 'stop' ? 1 : 0
+  } catch (e) {
+    console.error((e as Error).message)
+    return 1
+  }
+}
+
+/** merge <site dir> <pr>: exit 0 when merged, deployed and live-checked, 1 for a STOP. */
+async function mainMerge(rest: string[]): Promise<number> {
+  let args: ReturnType<typeof parseMergeArgs>
+  try {
+    args = parseMergeArgs(rest)
+  } catch (e) {
+    console.error((e as Error).message)
+    return 2
+  }
+  const r = await merge(args.dir, args.pr)
+  if (r.live) for (const line of formatLive('post-merge', r.live)) console.log(line)
+  if (r.mergeCommit) console.log(`merge commit ${r.mergeCommit}`)
+  console.log(r.status === 'done' ? 'merge: DONE' : `merge: STOP (${r.reason ?? 'unknown'})`)
+  return r.status === 'done' ? 0 : 1
+}
+
 function mainWire(rest: string[]): number {
   let args: { dir: string; dryRun: boolean }
   try {
@@ -265,6 +330,8 @@ async function main(argv: string[]): Promise<number> {
   if (command === 'wire') return mainWire(rest)
   if (command === 'verify') return mainVerify(rest)
   if (command === 'pr') return mainPr(rest)
+  if (command === 'live') return mainLive(rest)
+  if (command === 'merge') return mainMerge(rest)
   if (command !== 'detect') {
     console.error(USAGE)
     return 2

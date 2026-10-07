@@ -62,6 +62,13 @@ export interface PrResult {
   files: { from: string; to: string }[]
 }
 
+/** 'visionmediahq/<repo>' from the origin URL; throws for any other remote. */
+export function originRepo(url: string): string {
+  const repo = ORIGIN.test(url) ? url.replace(/^.*github\.com[:/]/, '').replace(/\.git$/, '').replace(/\/+$/, '') : null
+  if (!repo || !/^visionmediahq\/[\w.-]+$/.test(repo)) throw new Error(`origin is ${url || '(none)'}, not a github.com/visionmediahq repo`)
+  return repo
+}
+
 const readJson = <T>(path: string, what: string): T => {
   if (!existsSync(path)) throw new Error(`${path} not found: ${what}`)
   return JSON.parse(readFileSync(path, 'utf8')) as T
@@ -79,9 +86,7 @@ export async function openPr(dir: string, opts: PrOptions): Promise<PrResult> {
 
   const head = (await git('rev-parse', '--abbrev-ref', 'HEAD')).out.trim()
   if (head !== BRANCH) throw new Error(`pr runs on branch ${BRANCH}; ${root} is on ${head || '(unknown)'}`)
-  const url = (await git('remote', 'get-url', 'origin')).out.trim()
-  const repo = ORIGIN.test(url) ? url.replace(/^.*github\.com[:/]/, '').replace(/\.git$/, '').replace(/\/+$/, '') : null
-  if (!repo || !/^visionmediahq\/[\w.-]+$/.test(repo)) throw new Error(`origin is ${url || '(none)'}, not a github.com/visionmediahq repo`)
+  const repo = originRepo((await git('remote', 'get-url', 'origin')).out.trim())
 
   const fetched = await git('fetch', 'origin', 'main')
   if (fetched.code !== 0) throw new Error(`git fetch origin main failed:\n${tail(fetched.out)}`)

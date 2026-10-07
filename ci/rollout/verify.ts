@@ -82,7 +82,7 @@ export const ORIGIN = /github\.com[:/]visionmediahq\//
 const norm = (path: string): string => (path.length > 1 ? path.replace(/\/+$/, '') : path)
 
 /** Fetches each path's HTML and keeps those with a ConsentEmbed (`data-consent-embed`). */
-async function embedPagesByFetch(base: string, paths: string[]): Promise<string[]> {
+export async function embedPagesByFetch(base: string, paths: string[]): Promise<string[]> {
   const out: string[] = []
   for (const path of paths) {
     try {
