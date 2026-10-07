@@ -1,6 +1,7 @@
 // Banner and request check (spec C3 step 3), ported from the pilot kit's check.ts. The blocked
 // hosts are the registry patterns of src/services.ts, never a list of their own.
-import type { Browser, BrowserContext, Page } from '@playwright/test'
+import type { Browser, BrowserContext, Page, Response, Route } from '@playwright/test'
+import { parse } from 'node-html-parser'
 import { matchesRegistry } from '../../../src/services'
 
 /** The demo's log endpoint (demo/privacy.*.json). Stubbed with the registry in local runs. */
@@ -35,7 +36,86 @@ export async function stubContext(context: BrowserContext): Promise<void> {
 }
 
 /**
- * A fresh context (empty storage), stubbed when `stub`. Close it with context.close().
+ * Ruling 38: Umami traffic. The src of a script with data-website-id (learned from the pages'
+ * HTML), any path ending in /api/send (the tracker's endpoint, whatever its host), and any URL with
+ * "umami" in its host or path.
+ */
+export function isUmamiUrl(url: URL, scriptSrcs: ReadonlySet<string>): boolean {
+  if (!/^https?:$/.test(url.protocol)) return false
+  return scriptSrcs.has(url.href) || /\/api\/send\/?$/.test(url.pathname) || /umami/i.test(url.hostname + url.pathname)
+}
+
+/** The src of every `<script data-website-id src>` in `html`, resolved against `pageUrl`. */
+export function umamiScriptSrcs(html: string, pageUrl: string): string[] {
+  const out: string[] = []
+  for (const script of parse(html).querySelectorAll('script[data-website-id]')) {
+    const src = script.getAttribute('src')?.trim()
+    if (!src) continue
+    try {
+      out.push(new URL(src, pageUrl).href)
+    } catch {
+      // not a URL
+    }
+  }
+  return out
+}
+
+/** How long a script request waits for the HTML of a page still loading (to learn Umami's src). */
+const DOC_WAIT_MS = 5_000
+
+/**
+ * Ruling 38: answers every Umami request with an empty 204 (CORS allowed), live runs included, so
+ * the checks never create a pageview or an event. Everything else falls through to the registry
+ * stub (if any) or the network. A script's request waits until the documents loading at that time
+ * have been read, so a parser-found Umami script is known before its request is answered.
+ */
+export async function blockUmami(context: BrowserContext): Promise<void> {
+  const srcs = new Set<string>()
+  const pending = new Set<Promise<void>>()
+  context.on('response', (response: Response) => {
+    if (response.request().resourceType() !== 'document') return
+    const read: Promise<void> = response
+      .text()
+      .then((html) => {
+        for (const src of umamiScriptSrcs(html, response.url())) srcs.add(src)
+      })
+      .catch(() => undefined)
+      .finally(() => pending.delete(read))
+    pending.add(read)
+  })
+  await context.route(
+    () => true,
+    async (route: Route) => {
+      const request = route.request()
+      let url: URL
+      try {
+        url = new URL(request.url())
+      } catch {
+        return route.fallback()
+      }
+      if (!isUmamiUrl(url, srcs) && request.resourceType() === 'script' && pending.size > 0) {
+        let timer: ReturnType<typeof setTimeout> | undefined
+        await Promise.race([Promise.all([...pending]), new Promise((r) => (timer = setTimeout(r, DOC_WAIT_MS)))])
+        clearTimeout(timer)
+      }
+      if (!isUmamiUrl(url, srcs)) return route.fallback()
+      const origin = request.headers()['origin']
+      return route.fulfill({
+        status: 204,
+        body: '',
+        headers: {
+          'access-control-allow-origin': origin ?? '*',
+          'access-control-allow-credentials': 'true',
+          'access-control-allow-headers': '*',
+          'access-control-allow-methods': '*',
+        },
+      })
+    },
+  )
+}
+
+/**
+ * A fresh context (empty storage), stubbed when `stub`. Umami is always blocked (Ruling 38). Close it with context.close().
  * Service workers are blocked: their fetches bypass context.route and the page's request events,
  * so a worker could load a registry host unseen.
  */
@@ -46,6 +126,8 @@ export async function freshPage(
 ): Promise<{ context: BrowserContext; page: Page }> {
   const context = await browser.newContext({ locale: 'sv-SE', serviceWorkers: 'block', ...(viewport ? { viewport } : {}) })
   if (stub) await stubContext(context)
+  // Registered last, so it runs first and falls back to the registry stub.
+  await blockUmami(context)
   return { context, page: await context.newPage() }
 }
 

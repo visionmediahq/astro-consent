@@ -220,7 +220,7 @@ npx tsx ci/rollout/run.ts help
   site before the merge; `merge` re-verifies if `main` moved, merges, waits for Coolify and runs
   `live post-merge`.
 - **State** lives in `<site dir>/.rollout/` (`report.json`, `verify.json`, `live-baseline.txt`,
-  `apps.json`, screenshots), which `detect` adds to the checkout's `.git/info/exclude`, so stages
+  `live-baseline-hosts.json`, `apps.json`, screenshots), which `detect` adds to the checkout's `.git/info/exclude`, so stages
   can be rerun one at a time and nothing of it is committed. `verify --demo` writes to a temp folder.
 - **Exit codes:** `0` ok (for `live baseline` also the expected RED), `1` error, a failed verify
   step or a live/merge STOP, `2` usage, `3` the wire plan was refused (dry run or not; nothing was
@@ -229,6 +229,17 @@ npx tsx ci/rollout/run.ts help
   says how to retry: `git reset --hard && git clean -fd && git switch main && git branch -D
   consent-banner`, or re-clone. It also refuses to commit when anything besides the planned files,
   `package.json` and `package-lock.json` changed.
+- `verify` checks the working tree but records the result for `HEAD`, so it refuses uncommitted
+  or untracked files: commit, then rerun. It never pushes over a `consent-banner` on GitHub that it
+  did not push itself, and `wire` refuses to start when origin already has that branch; `pr`
+  refuses an open PR from it with another title. Find out whose it is and clean up by hand.
+- `live baseline` covers `report.domains` and every host of the Coolify apps that follow `main`,
+  and records them in `live-baseline-hosts.json`. If `merge` stops because an app that follows
+  `main` serves a host the baseline did not record (an app started following `main` since), rerun
+  `live <site dir> baseline` and then `merge`. Never re-run `detect` on the wired branch.
+- Every check browser answers Umami (any `script[data-website-id]` src, any `/api/send` and any
+  URL with `umami` in its host or path) with an empty 204, live included, so the tool creates no
+  pageviews or events.
 - Coolify is only read, with `COOLIFY_READ_TOKEN` and `COOLIFY_URL` from `~/sites/vision-books/.env`.
 - CI runs `verify --demo demo/dist-consent` after the consent demo build, which covers the browser
   checks with every registry and log host stubbed.

@@ -4,7 +4,7 @@ import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { contrastRows, coversBackground, measureContrast, type RawContrast } from '../../../ci/rollout/checks/contrast'
 import { extractLinks, listPages, MISSING_PREFIX } from '../../../ci/rollout/checks/pages'
-import { freshPage, isBlocked, notRequested } from '../../../ci/rollout/checks/requests'
+import { blockUmami, freshPage, isBlocked, isUmamiUrl, notRequested, umamiScriptSrcs } from '../../../ci/rollout/checks/requests'
 import { wcagContrast } from '../../../ci/rollout/lib/colour'
 
 const dirs: string[] = []
@@ -101,7 +101,7 @@ describe('notRequested (registry URLs in the DOM)', () => {
 describe('freshPage', () => {
   function fakeBrowser() {
     const calls: { options: unknown; routes: number } = { options: null, routes: 0 }
-    const context = { route: async () => void calls.routes++, newPage: async () => ({}) }
+    const context = { route: async () => void calls.routes++, on: () => undefined, newPage: async () => ({}) }
     const browser = { newContext: async (options: unknown) => ((calls.options = options), context) }
     return { browser: browser as never, calls }
   }
@@ -111,8 +111,66 @@ describe('freshPage', () => {
       const { browser, calls } = fakeBrowser()
       await freshPage(browser, stub)
       expect(calls.options).toMatchObject({ serviceWorkers: 'block' })
-      expect(calls.routes).toBe(stub ? 1 : 0)
+      // The registry stub when stub is true; the Umami block always (Ruling 38).
+      expect(calls.routes).toBe(stub ? 2 : 1)
     }
+  })
+})
+
+describe('Umami (finding 6, Ruling 38)', () => {
+  const u = (s: string) => new URL(s)
+  it('isUmamiUrl: a learned script src, any /api/send, any host or path with "umami"; nothing else', () => {
+    const srcs = new Set(['https://stats.exempel.se/s.js'])
+    expect(isUmamiUrl(u('https://stats.exempel.se/s.js'), srcs)).toBe(true)
+    expect(isUmamiUrl(u('https://stats.exempel.se/api/send'), srcs)).toBe(true)
+    expect(isUmamiUrl(u('https://exempel.se/api/send/'), new Set())).toBe(true)
+    expect(isUmamiUrl(u('https://cloud.umami.is/script.js'), new Set())).toBe(true)
+    expect(isUmamiUrl(u('https://exempel.se/umami/script.js'), new Set())).toBe(true)
+    expect(isUmamiUrl(u('https://stats.exempel.se/other.js'), srcs)).toBe(false)
+    expect(isUmamiUrl(u('https://exempel.se/api/sender'), new Set())).toBe(false)
+    expect(isUmamiUrl(u('https://exempel.se/'), new Set())).toBe(false)
+  })
+
+  it('umamiScriptSrcs: the src of every script with data-website-id, resolved against the page', () => {
+    const html = `<html><head>
+      <script defer src="https://stats.exempel.se/s.js" data-website-id="00000000-0000-0000-0000-000000000000"></script>
+      <script async data-website-id="x" src="/u/t.js"></script>
+      <script src="/app.js"></script>
+      <script data-website-id="y">inline()</script>
+    </head></html>`
+    expect(umamiScriptSrcs(html, 'https://exempel.se/om/')).toEqual(['https://stats.exempel.se/s.js', 'https://exempel.se/u/t.js'])
+  })
+
+  it('blockUmami answers Umami with an empty 204 and passes everything else on; a script waits for the page that names it', async () => {
+    let handler: ((route: unknown) => Promise<void>) | null = null
+    const listeners: ((r: unknown) => void)[] = []
+    const context = {
+      route: async (_match: unknown, h: (route: unknown) => Promise<void>) => void (handler = h),
+      on: (_event: string, l: (r: unknown) => void) => void listeners.push(l),
+    }
+    await blockUmami(context as never)
+    const answer = async (url: string, resourceType: string) => {
+      const seen: string[] = []
+      await handler!({
+        request: () => ({ url: () => url, resourceType: () => resourceType, headers: () => ({}) }),
+        fulfill: async (o: { status: number; body: string }) => void seen.push(`fulfill ${o.status} ${JSON.stringify(o.body)}`),
+        fallback: async () => void seen.push('fallback'),
+      })
+      return seen
+    }
+    // The page's HTML is still downloading when the browser asks for the script.
+    let finish: (html: string) => void = () => undefined
+    const body = new Promise<string>((r) => (finish = r))
+    for (const l of listeners) {
+      l({ url: () => 'https://exempel.se/', request: () => ({ resourceType: () => 'document' }), text: () => body })
+    }
+    const script = answer('https://stats.exempel.se/s.js', 'script')
+    finish('<script defer src="https://stats.exempel.se/s.js" data-website-id="00000000-0000-0000-0000-000000000000"></script>')
+    expect(await script).toEqual(['fulfill 204 ""'])
+    expect(await answer('https://exempel.se/api/send', 'fetch')).toEqual(['fulfill 204 ""'])
+    expect(await answer('https://cloud.umami.is/script.js', 'script')).toEqual(['fulfill 204 ""'])
+    expect(await answer('https://stats.exempel.se/other.js', 'script')).toEqual(['fallback'])
+    expect(await answer('https://exempel.se/', 'document')).toEqual(['fallback'])
   })
 })
 
