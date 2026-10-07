@@ -41,3 +41,16 @@ None. The contact details in these files are the business's own.
 ## Secret scan
 
 `npx tsx ci/rollout/scan-secrets.ts tests/unit/rollout/fixtures`: 0 hits.
+
+## Detect
+
+`detect(before, 'aspomad', ['aspomad.se'])`, pinned by `tests/unit/rollout/__snapshots__/detect.test.ts.snap`:
+
+- Classification: `maps`
+- Reasons: none
+- Trackers: none
+- Banners: none
+- reCAPTCHA: false
+- Already wired: none
+
+The map `src` comes from `src/data/kontakt.json` (`data-file`). Its `pb=` URL is invented (`inventedMaps`), a site finding only.

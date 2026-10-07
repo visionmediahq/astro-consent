@@ -39,3 +39,14 @@ None. The contact details in these files are the business's own.
 ## Secret scan
 
 `npx tsx ci/rollout/scan-secrets.ts tests/unit/rollout/fixtures`: 0 hits.
+
+## Detect
+
+`detect(before, 'domeijstapetserarverkstad', ['domeijstapetserarverkstad.se'])`, pinned by `tests/unit/rollout/__snapshots__/detect.test.ts.snap`:
+
+- Classification: `maps`
+- Reasons: none
+- Trackers: none
+- Banners: none
+- reCAPTCHA: false
+- Already wired: none

@@ -39,3 +39,18 @@ Pages and components that hold a footer, an iframe or a map embed, reduced the s
 ## Secret scan
 
 `npx tsx ci/rollout/scan-secrets.ts tests/unit/rollout/fixtures`: 0 hits.
+
+## Detect
+
+`detect(before, 'a-tak', ['a-tak.se'])`, pinned by `tests/unit/rollout/__snapshots__/detect.test.ts.snap`:
+
+- Classification: `needs-human`
+- Reasons:
+  - unresolved iframe src in src/components/KontaktMap.astro
+  - existing banner: home-made gate: localStorage 'maps-consent' in src/components/KontaktMap.astro
+- Trackers: none
+- Banners: `home-made gate: localStorage 'maps-consent' in src/components/KontaktMap.astro`
+- reCAPTCHA: true
+- Already wired: none
+
+The map iframe has no `src`: a script sets it after a home-made `localStorage` consent click, so the iframe is `unresolved` and the gate is an existing banner. The `pb=` URL is invented (`inventedMaps`), a site finding only.

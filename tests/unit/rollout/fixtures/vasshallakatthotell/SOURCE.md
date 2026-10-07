@@ -47,3 +47,14 @@ Pages and components that hold a footer, an iframe or a map embed, reduced the s
 ## Secret scan
 
 `npx tsx ci/rollout/scan-secrets.ts tests/unit/rollout/fixtures`: 0 hits.
+
+## Detect
+
+`detect(before, 'vasshallakatthotell', ['vasshallakatthotell.se'])`, pinned by `tests/unit/rollout/__snapshots__/detect.test.ts.snap`:
+
+- Classification: `maps`
+- Reasons: none
+- Trackers: none
+- Banners: none
+- reCAPTCHA: true
+- Already wired: none

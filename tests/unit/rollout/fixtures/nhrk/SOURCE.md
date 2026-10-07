@@ -39,3 +39,17 @@ None. The contact details in these files are the business's own.
 ## Secret scan
 
 `npx tsx ci/rollout/scan-secrets.ts tests/unit/rollout/fixtures`: 0 hits.
+
+## Detect
+
+`detect(before, 'nhrk', ['nhrk.se'])`, pinned by `tests/unit/rollout/__snapshots__/detect.test.ts.snap`:
+
+- Classification: `needs-human`
+- Reasons:
+  - unresolved iframe src in src/pages/kalendrar.astro
+- Trackers: none
+- Banners: none
+- reCAPTCHA: false
+- Already wired: none
+
+The brief expected the reason `unregistered iframe host calendar.google.com`. The calendar iframes are rendered in a `calendars.map(cal => …)` callback with `src={cal.src}`, which detectIframes does not resolve, so the iframe is `unresolved` (host hint `calendar.google.com`). Classification keys on `srcKind` only, so the reason is the unresolved src; the site is `needs-human` either way.

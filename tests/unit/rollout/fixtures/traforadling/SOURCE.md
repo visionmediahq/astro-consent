@@ -46,3 +46,16 @@ None. The contact details in these files are the business's own.
 ## Secret scan
 
 `npx tsx ci/rollout/scan-secrets.ts tests/unit/rollout/fixtures`: 0 hits.
+
+## Detect
+
+`detect(before, 'traforadling', ['traforadling.se'])`, pinned by `tests/unit/rollout/__snapshots__/detect.test.ts.snap`:
+
+- Classification: `maps`
+- Reasons: none
+- Trackers: none
+- Banners: none
+- reCAPTCHA: true
+- Already wired: none
+
+The map is a component prop (`ContactFormSection.astro`) passed by two pages; every call site resolves to a Google Maps URL, so the iframe is `expression` with `callSites` and the site is `maps`. Both `pb=` URLs are invented (`inventedMaps`), a site finding only.

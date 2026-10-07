@@ -284,4 +284,27 @@ import Bottom from '../components/SiteFooter.astro'
     expect(r.parseErrors[0]!.message).toMatch(/parse error/i)
     expect(r.footerless).toEqual(['src/pages/ok.astro'])
   })
+
+  test('multiFooterPages: a page that renders more than one client footer, counting repeated uses', () => {
+    const r = detectStructure(
+      inline({
+        'src/layouts/Main.astro': LAYOUT,
+        'src/components/SiteFooter.astro': FOOTER,
+        'src/pages/index.astro': `---\nimport Main from '../layouts/Main.astro'\n---\n<Main><main /></Main>\n`,
+        'src/pages/twice.astro':
+          `---\nimport Main from '../layouts/Main.astro'\nimport SiteFooter from '../components/SiteFooter.astro'\n---\n<Main><main /><SiteFooter /></Main>\n`,
+        'src/pages/own.astro': '<html><body><main /><footer>a</footer><footer>b</footer></body></html>\n',
+      }),
+    )
+    expect(r.multiFooterPages).toEqual([
+      { page: 'src/pages/own.astro', footers: 2 },
+      { page: 'src/pages/twice.astro', footers: 2 },
+    ])
+  })
+
+  test('multiFooterPages is empty on every pilot fixture', () => {
+    for (const site of ['a-tak', 'aspomad', 'domeijstapetserarverkstad', 'munkforstradgardstjanst', 'nhrk', 'traforadling', 'vasshallakatthotell']) {
+      expect(detectStructure(pilot(site)).multiFooterPages, site).toEqual([])
+    }
+  })
 })

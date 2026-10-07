@@ -36,3 +36,16 @@ Pages and components that hold a footer, an iframe or a map embed, reduced the s
 ## Secret scan
 
 `npx tsx ci/rollout/scan-secrets.ts tests/unit/rollout/fixtures`: 0 hits.
+
+## Detect
+
+`detect(before, 'munkforstradgardstjanst', ['munkforstradgardstjanst.se'])`, pinned by `tests/unit/rollout/__snapshots__/detect.test.ts.snap`:
+
+- Classification: `notice`
+- Reasons: none
+- Trackers: none
+- Banners: none
+- reCAPTCHA: false
+- Already wired: none
+
+`recaptcha` is false: `astro.config.ts` only mentions reCAPTCHA in a comment, and the files that load it are not part of this fixture.

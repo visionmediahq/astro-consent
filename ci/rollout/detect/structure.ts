@@ -16,6 +16,11 @@ import type { SiteFiles } from '../lib/site-files'
 export type DetectedStructure = Pick<Report, 'layouts' | 'footers' | 'footerless' | 'policyPage'> & {
   /** `.astro` files under src/ that did not parse; they are skipped everywhere else. */
   parseErrors: { file: string; message: string }[]
+  /**
+   * Pages that render more than one client footer (each use of a component counted), where wire
+   * cannot place PrivacyLinks exactly once.
+   */
+  multiFooterPages: { page: string; footers: number }[]
 }
 
 interface Parsed {
@@ -234,11 +239,22 @@ export function detectStructure(files: SiteFiles): DetectedStructure {
     return ![...closures.get(p)!].some((f) => footersIn(f).length > 0)
   })
 
+  /** Client footers `file` renders, counting each use of a component. A cycle counts nothing. */
+  const footerCount = (file: string, stack: Set<string> = new Set()): number => {
+    if (stack.has(file) || !parsed.has(file)) return 0
+    const inner = new Set([...stack, file])
+    return footersIn(file).length + parsed.get(file)!.uses.reduce((n, u) => n + (u.target ? footerCount(u.target, inner) : 0), 0)
+  }
+  const multiFooterPages = pages.flatMap((page) => {
+    const footers = footerCount(page)
+    return footers > 1 ? [{ page, footers }] : []
+  })
+
   const policy = files
     .list('src/pages/**/*.{astro,md,mdx}')
     .filter((f) => isRoute(f) && !/\[/.test(f))
     .map(routeOf)
     .find((route) => POLICY.test(route.split('/').pop() ?? ''))
 
-  return { layouts, footers, footerless, policyPage: policy ?? null, parseErrors }
+  return { layouts, footers, footerless, policyPage: policy ?? null, parseErrors, multiFooterPages }
 }
