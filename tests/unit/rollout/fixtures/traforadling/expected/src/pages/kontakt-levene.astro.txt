@@ -1,0 +1,30 @@
+---
+import Base from '../layouts/Base.astro';
+import HeaderLevene from '../components/HeaderLevene.astro';
+import FooterLevene from '../components/FooterLevene.astro';
+import HeroLevene from '../components/HeroLevene.astro';
+import ContactCardsLevene from '../components/ContactCardsLevene.astro';
+import ContactFormSection from '../components/ContactFormSection.astro';
+
+export const prerender = true;
+---
+
+<Base
+  title="Kontakt Levene Såg AB – Skaraborgs Träförädling"
+  description="Kontakta Levene Såg AB i Stora Levene. Hitta telefonnummer, e-postadresser och karta till oss. Öppet mån–fre 07.00–16.00."
+  canonical="https://traforadling.se/kontakt-levene/"
+  ogImage="/og-image.jpg"
+  brand="levene"
+>
+  <HeaderLevene currentPath={Astro.url.pathname} />
+  <main id="main-content">
+    <HeroLevene
+      title="Kontakt"
+      ctaLabel="Produkter"
+      ctaHref="/levene-produkter/"
+    />
+    <ContactCardsLevene />
+    <ContactFormSection formTarget="levene" />
+  </main>
+  <FooterLevene />
+</Base>

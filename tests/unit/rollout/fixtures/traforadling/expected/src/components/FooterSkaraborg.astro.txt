@@ -1,0 +1,223 @@
+---
+import { Image } from 'astro:assets';
+import { MapPin, Phone, Mail, Clock } from '@lucide/astro';
+import PrivacyLinks from '@visionmediahq/astro-consent/components/PrivacyLinks.astro';
+---
+
+<footer class="site-footer">
+
+  <div class="footer-inner">
+
+    <!-- Brand column -->
+    <div class="footer-brand">
+      <Image
+        src="/images/logo-skaraborg.png"
+        alt="Skaraborgs Träförädling AB"
+        width={471}
+        height={196}
+        loading="lazy"
+        class="footer-logo"
+      />
+      <p class="footer-tagline">Hyvleri &amp; Träförädling sedan 1985</p>
+    </div>
+
+    <!-- Address + hours -->
+    <div>
+      <h3 class="footer-heading">Kontakt</h3>
+      <address class="not-italic space-y-2">
+        <p class="footer-text flex items-start gap-2">
+          <MapPin size={14} aria-hidden="true" class="footer-icon mt-0.5 flex-shrink-0" />
+          Jonsboda Täppan 1<br />545 93 Töreboda
+        </p>
+        <a
+          href="tel:050621175"
+          class="footer-link flex items-center gap-2"
+          onclick="umami.track('phone_click')"
+        >
+          <Phone size={14} aria-hidden="true" class="footer-icon flex-shrink-0" />
+          0506 – 211 75
+        </a>
+        <a
+          href="mailto:info@traforadling.se"
+          class="footer-link flex items-center gap-2"
+          onclick="umami.track('email_click')"
+        >
+          <Mail size={14} aria-hidden="true" class="footer-icon flex-shrink-0" />
+          info@traforadling.se
+        </a>
+        <p class="footer-text flex items-center gap-2">
+          <Clock size={14} aria-hidden="true" class="footer-icon flex-shrink-0" />
+          Mån–fre: 07.00 – 16.00
+        </p>
+      </address>
+    </div>
+
+    <!-- Quick links -->
+    <div>
+      <h3 class="footer-heading">Snabblänkar</h3>
+      <ul class="footer-links">
+        <li><a href="/skaraborg-traforadling-ab/">Start</a></li>
+        <li><a href="/foretaget/">Om företaget</a></li>
+        <li><a href="/certifikat/">Certifikat</a></li>
+        <li><a href="/kontakt/">Kontakt</a></li>
+      </ul>
+    </div>
+
+    <!-- Koncernen -->
+    <div>
+      <h3 class="footer-heading">Koncernen</h3>
+      <ul class="footer-links">
+        <li>
+          <a href="/" aria-label="Tillbaka till portalen">← Portalen</a>
+        </li>
+        <li>
+          <a href="/levene-sag-ab/">Levene Såg AB</a>
+        </li>
+      </ul>
+    </div>
+
+  </div>
+
+  <!-- Bottom bar -->
+  <div class="footer-bottom">
+    <p class="footer-copy">
+      © {new Date().getFullYear()} Skaraborgs Träförädling AB
+    </p>
+    <p class="footer-copy">
+      Drivs av <a href="https://visionmedia.se" class="hover:underline" target="_blank" rel="noopener noreferrer">Vision Media</a>
+    </p>
+  </div>
+
+  <PrivacyLinks class="justify-start!" />
+</footer>
+
+<style>
+  .site-footer {
+    background-color: #EDE8E0;
+    color: var(--color-base-content);
+    border-top: 4px solid var(--color-primary);
+  }
+
+  .footer-inner {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 3.5rem 1.5rem 3rem;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 2.5rem;
+  }
+
+  @media (min-width: 640px) {
+    .footer-inner {
+      grid-template-columns: 1fr 1fr;
+    }
+  }
+
+  @media (min-width: 1024px) {
+    .footer-inner {
+      grid-template-columns: 2fr 1.5fr 1fr 1fr;
+      gap: 3rem;
+    }
+  }
+
+  .footer-logo {
+    height: 60px;
+    width: auto;
+    opacity: 0.9;
+    margin-bottom: 1rem;
+  }
+
+  .footer-tagline {
+    font-family: 'Lato', sans-serif;
+    font-size: 0.875rem;
+    color: rgba(42, 46, 39, 0.55);
+    margin: 0;
+  }
+
+  .footer-heading {
+    font-family: 'Raleway', sans-serif;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: rgba(42, 46, 39, 0.45);
+    margin: 0 0 1rem 0;
+  }
+
+  .footer-text {
+    font-size: 0.9rem;
+    color: rgba(42, 46, 39, 0.7);
+    margin: 0;
+  }
+
+  .footer-icon {
+    color: var(--color-primary);
+    opacity: 0.8;
+  }
+
+  .footer-link {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.9rem;
+    color: rgba(42, 46, 39, 0.7);
+    text-decoration: none;
+    transition: color 0.2s ease;
+  }
+  .footer-link:hover {
+    color: var(--color-primary);
+  }
+
+  .footer-links {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.55rem;
+  }
+
+  .footer-links a {
+    font-family: 'Lato', sans-serif;
+    font-size: 0.9rem;
+    color: rgba(42, 46, 39, 0.7);
+    text-decoration: none;
+    transition: color 0.2s ease;
+  }
+  .footer-links a:hover {
+    color: var(--color-primary);
+  }
+
+  .footer-bottom {
+    border-top: 1px solid rgba(42, 46, 39, 0.12);
+    max-width: 100%;
+    padding: 1.25rem 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    align-items: center;
+    text-align: center;
+  }
+
+  @media (min-width: 640px) {
+    .footer-bottom {
+      flex-direction: row;
+      justify-content: space-between;
+    }
+  }
+
+  .footer-copy {
+    font-family: 'Lato', sans-serif;
+    font-size: 0.8rem;
+    color: rgba(42, 46, 39, 0.45);
+    margin: 0;
+  }
+
+  .footer-copy a {
+    color: rgba(42, 46, 39, 0.55);
+    text-decoration: none;
+  }
+  .footer-copy a:hover {
+    color: var(--color-primary);
+  }
+</style>

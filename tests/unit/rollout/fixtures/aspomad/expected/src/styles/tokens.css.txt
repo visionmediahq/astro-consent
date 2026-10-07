@@ -1,0 +1,10 @@
+/* Aspö Mad — client design tokens */
+:root {
+  --client-primary: #8B4513;
+  --client-secondary: #6B3410;
+  --client-accent: #c0813e;
+  --client-bg: #ffffff;
+  --client-text: #1f2937;
+  --client-surface: #faf8f5;
+  --client-btn-primary: #8B4513;
+}

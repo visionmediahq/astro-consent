@@ -1,0 +1,19 @@
+@import "tailwindcss";
+@plugin "daisyui";
+@source "../../node_modules/@visionmediahq/astro-consent/src";
+
+@theme inline {
+  --color-surface: var(--color-surface);
+}
+
+body {
+  font-family: 'Poppins', sans-serif;
+  font-weight: 300;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 300 !important;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}

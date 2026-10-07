@@ -1,0 +1,155 @@
+@import "tailwindcss";
+@plugin "daisyui";
+@source "../../node_modules/@visionmediahq/astro-consent/src";
+
+/* ── Brand tokens ─────────────────────────────────────── */
+/* Defined here (after DaisyUI) so they override DaisyUI defaults */
+:root {
+  --client-primary:     #eb5e28;
+  --client-bg:          #ffffff;
+  --client-text:        #666666;
+
+  --color-primary:      #eb5e28;
+  --color-base-100:     #ffffff;
+  --color-base-content: #666666;
+
+  /* Accessible dark orange for small labels on light backgrounds (4.5:1 on --color-bg-light) */
+  --color-primary-label: #b84520;
+
+  --font-heading: 'Gloock', Georgia, serif;
+  --font-body:    'Raleway', system-ui, sans-serif;
+
+  /* Neutral palette tokens */
+  --color-bg-dark:           #0e0a06;
+  --color-bg-light:          #f7f4f1;
+  --color-bg-card:           #faf8f5;
+  --color-text-heading-dark: #1a1008;
+  --color-text-heading-warm: #f3ede4;
+  --color-text-body:         #5a5046;
+  --color-text-accessible-muted: #6a5a4a;
+
+  --header-height: 64px;
+}
+
+/* ── Google Fonts ─────────────────────────────────────── */
+/* Gloock (headings) + Raleway (body) loaded via Base.astro */
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: 'Gloock', Georgia, serif;
+}
+
+body {
+  font-family: 'Raleway', system-ui, sans-serif;
+}
+
+/* ── Base resets ──────────────────────────────────────── */
+html {
+  scroll-behavior: smooth;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  background-color: var(--color-base-100, #ffffff);
+  color: var(--color-base-content, #4a4a4a);
+  line-height: 1.7;
+}
+
+/* ── Selection ────────────────────────────────────────── */
+::selection {
+  background-color: var(--color-primary, #eb5e28);
+  color: #ffffff;
+}
+
+/* ── Scrollbar ────────────────────────────────────────── */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-primary, #eb5e28);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #c94d1e;
+}
+
+/* ── Scroll-triggered animation ──────────────────────── */
+/*
+ * Only below-fold elements get `will-animate` (added by JS).
+ * Elements already in viewport on load never get opacity:0.
+ */
+[data-animate].will-animate {
+  opacity: 0;
+  transform: translateY(20px);
+  transition:
+    opacity 0.55s ease calc(var(--delay, 0s)),
+    transform 0.55s ease calc(var(--delay, 0s));
+}
+
+[data-animate].will-animate.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-animate].will-animate {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+}
+
+/* ── Focus ring ───────────────────────────────────────── */
+:focus-visible {
+  outline: 2px solid var(--color-primary, #eb5e28);
+  outline-offset: 3px;
+  border-radius: 1px;
+}
+
+/* ── Buttons ──────────────────────────────────────────── */
+.btn {
+  letter-spacing: 0.06em;
+  border-radius: 2px;
+  font-family: var(--font-body, system-ui, sans-serif);
+}
+
+/* ── Links ────────────────────────────────────────────── */
+a {
+  transition: color 0.2s ease;
+}
+
+/* ── Section typography (light-bg sections) ──────────── */
+.section-label {
+  font-family: var(--font-body, sans-serif);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: var(--color-primary);
+  margin-bottom: 0.75rem;
+}
+
+.section-heading {
+  font-family: var(--font-heading, serif);
+  font-size: clamp(2.5rem, 5.5vw, 4rem);
+  font-weight: 400;
+  color: #1a1008;
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+}
+
+/* ── Utility: screen-reader only ─────────────────────── */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
