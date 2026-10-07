@@ -5,14 +5,15 @@
 //      HEAD is not the commit of a passing verify.json, verify again in full (verify pushes the
 //      branch first). Repeated until main holds still, at most three rounds.
 //   3. Record which Coolify apps follow main (Ruling 14) in .rollout/apps.json, before the merge.
-//      STOP if one of them serves a host outside report.domains: it has no baseline (Ruling 36).
+//      STOP if one of them serves a host live baseline did not record: it has no baseline
+//      (Rulings 36, 37). Detect is never re-run on the wired branch; live baseline is.
 //   4. gh pr merge --squash --delete-branch, pinned to the verified commit; read the merge commit.
 //   5. live post-merge with the merge commit: waits for the deployments, then the live checks.
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { type App, appsFor, type Deployment, followsMain, lastDeployed, listApps, listDeployments } from './coolify'
 import { type Exec, exec as realExec, tail } from './lib/exec'
-import { APPS_FILE, BASELINE_FILE, type LiveResult, live as realLive, type RecordedApps } from './live'
+import { APPS_FILE, BASELINE_FILE, BASELINE_HOSTS_FILE, type LiveResult, live as realLive, type RecordedApps } from './live'
 import { originRepo } from './pr'
 import type { Report, VerifyResult } from './types'
 import { verify as realVerify } from './verify'
@@ -57,6 +58,10 @@ export async function merge(dir: string, pr: number | string, opts: { deps?: Par
     if (!existsSync(reportPath)) return stop(`${reportPath} not found: run detect first`)
     const report = JSON.parse(readFileSync(reportPath, 'utf8')) as Report
     if (!existsSync(join(root, BASELINE_FILE))) return stop(`${BASELINE_FILE} not found: run the live baseline before the merge`)
+    const hostsPath = join(root, BASELINE_HOSTS_FILE)
+    if (!existsSync(hostsPath)) return stop(`${BASELINE_HOSTS_FILE} not found: rerun \`live <dir> baseline\`, which records the hosts it baselined`)
+    const baselined = (JSON.parse(readFileSync(hostsPath, 'utf8')) as { hosts?: unknown }).hosts
+    if (!Array.isArray(baselined)) return stop(`${BASELINE_HOSTS_FILE} has no hosts list: rerun \`live <dir> baseline\``)
 
     const branch = (await git('rev-parse', '--abbrev-ref', 'HEAD')).out.trim()
     if (branch !== BRANCH) return stop(`merge runs on branch ${BRANCH}; ${root} is on ${branch || '(unknown)'}`)
@@ -111,12 +116,12 @@ export async function merge(dir: string, pr: number | string, opts: { deps?: Par
     if (!recorded.apps.some((a) => a.autoDeploy)) {
       return stop(`no Coolify app of ${repo} on main deployed ${mainHead.slice(0, 7)}: nothing would deploy the merge`)
     }
-    // Ruling 36: live post-merge checks every host of these apps against the baseline, which was
-    // taken for report.domains only.
-    const uncovered = [...new Set(recorded.apps.filter((a) => a.autoDeploy).flatMap((a) => a.fqdns))].filter((h) => !report.domains.includes(h))
+    // Rulings 36, 37: live post-merge checks every host of these apps against the baseline, so each
+    // must be among the hosts live baseline recorded.
+    const uncovered = [...new Set(recorded.apps.filter((a) => a.autoDeploy).flatMap((a) => a.fqdns))].filter((h) => !baselined.includes(h))
     if (uncovered.length) {
       return stop(
-        `the apps that follow main also serve ${uncovered.join(', ')}, not in report.domains (${report.domains.join(', ')}), so there is no live baseline for it: run detect with every --domain, then live baseline`,
+        `the apps that follow main serve ${uncovered.join(', ')}, which the live baseline did not record (${baselined.join(', ')}): rerun \`live <dir> baseline\` (it covers every app that follows main), then merge`,
       )
     }
 
@@ -124,7 +129,9 @@ export async function merge(dir: string, pr: number | string, opts: { deps?: Par
     if (merged.code !== 0) return stop(`gh pr merge ${pr} failed:\n${tail(merged.out)}`)
     const after = await gh('pr', 'view', String(pr), '-R', repo, '--json', 'mergeCommit')
     const mergeCommit = after.code === 0 ? ((JSON.parse(after.out) as { mergeCommit?: { oid?: string } | null }).mergeCommit?.oid ?? '') : ''
-    if (!/^[0-9a-f]{40}$/.test(mergeCommit)) return stop(`PR #${pr} merged, but its merge commit could not be read:\n${tail(after.out)}`)
+    if (!/^[0-9a-f]{40}$/.test(mergeCommit)) {
+      return stop(`PR #${pr} merged, but its merge commit could not be read: rerun \`live <dir> post-merge --sha <merge commit>\` with the commit from GitHub\n${tail(after.out)}`)
+    }
 
     const result = await deps.live(root, 'post-merge', mergeCommit)
     if (result.status !== 'pass') return stop(result.reason ?? `live post-merge: ${result.status}`, { mergeCommit, live: result })

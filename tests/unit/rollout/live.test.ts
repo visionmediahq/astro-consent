@@ -21,13 +21,18 @@ afterEach(() => {
   for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true })
 })
 
-function siteDir(opts: { baseline?: string | null; apps?: RecordedApps | null; verify?: VerifyResult; site?: string; domains?: string[] } = {}): string {
+function siteDir(
+  opts: { baseline?: string | null; apps?: RecordedApps | null; verify?: VerifyResult; site?: string; domains?: string[]; baselined?: string[] | null } = {},
+): string {
   const dir = mkdtempSync(join(tmpdir(), 'live-'))
   dirs.push(dir)
   mkdirSync(join(dir, '.rollout'), { recursive: true })
   const report: Report = { ...DEMO, site: opts.site ?? 'nhrk', domains: opts.domains ?? ['nhrk.se'], classification: 'maps' }
   writeFileSync(join(dir, '.rollout/report.json'), JSON.stringify(report))
   if (opts.baseline !== null) writeFileSync(join(dir, '.rollout/live-baseline.txt'), opts.baseline ?? '')
+  if (opts.baseline !== null && opts.baselined !== null) {
+    writeFileSync(join(dir, '.rollout/live-baseline-hosts.json'), JSON.stringify({ hosts: opts.baselined ?? report.domains }))
+  }
   if (opts.apps) writeFileSync(join(dir, '.rollout/apps.json'), JSON.stringify(opts.apps))
   if (opts.verify) writeFileSync(join(dir, '.rollout/verify.json'), JSON.stringify(opts.verify))
   return dir
@@ -79,13 +84,13 @@ const paths = (path: string, over: Partial<ConsentPathResult> = {}): ConsentPath
 
 /** Fake browser checks: `requests` answers from `answers` in turn (the last one repeats). */
 function fakeChecks(answers: ((base: string, paths: string[]) => RequestResult[])[] = [(_, p) => p.map((x) => req(x))]) {
-  const calls: { what: string; base: string; paths: string[]; baseline?: Set<string> }[] = []
+  const calls: { what: string; base: string; paths: string[]; baseline?: Set<string>; expectBanner?: (path: string) => boolean }[] = []
   let n = 0
   const checks: LiveChecks = {
     pages: async (base) => (calls.push({ what: 'pages', base, paths: [] }), ['/', '/kontakt', '/finns-inte-x']),
     embedPages: async (_base, p) => p.filter((x) => x === '/kontakt'),
     requests: async (base, p, opts) => {
-      calls.push({ what: 'requests', base, paths: p, baseline: opts.baseline })
+      calls.push({ what: 'requests', base, paths: p, baseline: opts.baseline, ...(opts.expectBanner ? { expectBanner: opts.expectBanner } : {}) })
       return answers[Math.min(n++, answers.length - 1)]!(base, p)
     },
     consentPaths: async (base, p) => (calls.push({ what: 'consentPaths', base, paths: p }), p.map((x) => paths(x))),
@@ -102,12 +107,24 @@ function fakeGh(issues: { title: string; url: string }[] = []) {
     calls.push([cmd, ...args])
     if (cmd === 'gh' && args[0] === 'issue' && args[1] === 'list') return { code: 0, out: JSON.stringify(issues) }
     if (cmd === 'gh' && args[0] === 'issue' && args[1] === 'create') return { code: 0, out: 'https://github.com/visionmediahq/nhrk/issues/99\n' }
+    const line = [cmd, ...args].join(' ')
+    if (line === 'git fetch origin main') return { code: 0, out: '' }
+    if (line === 'git rev-parse origin/main') return { code: 0, out: `${MAIN}\n` }
+    if (line === 'git remote get-url origin') return { code: 0, out: 'git@github.com:visionmediahq/nhrk.git\n' }
     return { code: 1, out: `unexpected ${cmd} ${args.join(' ')}` }
   }
   return { exec, calls }
 }
 
-function deps(o: { checks?: LiveChecks; exec?: Exec; deploy?: (a: App, sha: string) => Promise<'finished' | 'failed' | 'cancelled' | 'timeout'> } = {}) {
+function deps(
+  o: {
+    checks?: LiveChecks
+    exec?: Exec
+    deploy?: (a: App, sha: string) => Promise<'finished' | 'failed' | 'cancelled' | 'timeout'>
+    listApps?: () => Promise<App[]>
+    deployments?: (uuid: string) => Promise<Deployment[]>
+  } = {},
+) {
   const sleeps: number[] = []
   const waited: string[] = []
   return {
@@ -118,6 +135,8 @@ function deps(o: { checks?: LiveChecks; exec?: Exec; deploy?: (a: App, sha: stri
       exec: o.exec ?? fakeGh().exec,
       sleep: async (ms: number) => void sleeps.push(ms),
       waitDeployed: async (a: App, sha: string) => (waited.push(`${a.uuid}@${sha}`), o.deploy ? o.deploy(a, sha) : 'finished'),
+      listApps: o.listApps ?? (async () => []),
+      deployments: o.deployments ?? (async () => []),
     },
   }
 }
@@ -144,6 +163,57 @@ describe('live baseline', () => {
     expect(calls.filter((c) => c.what === 'requests').map((c) => c.base)).toEqual(['https://nhrk.se'])
     expect(calls.some((c) => c.what === 'consentPaths')).toBe(false)
     expect(d.sleeps).toEqual([])
+  })
+
+  test('finding 5 (Ruling 37): baselines report.domains and every host of the Coolify apps that follow main, and records them', async () => {
+    const dir = siteDir({ baseline: null, domains: ['nhrk.se'] })
+    const { checks, calls } = fakeChecks([(base, p) => p.map((x) => req(x, { banner: false, ok: false, errors: [`Failed to load ${base}/a.js`] }))])
+    const apps: App[] = [
+      { uuid: 'web', name: 'Website', repo: 'nhrk', branch: 'main', fqdns: ['nhrk.se', 'www.nhrk.se'], autoDeploy: true },
+      { uuid: 'cms', name: 'CMS', repo: 'nhrk', branch: 'main', fqdns: ['nhrk.vmedia.se'], autoDeploy: true },
+      { uuid: 'stg', name: 'Staging', repo: 'nhrk', branch: 'staging', fqdns: ['stg.nhrk.se'], autoDeploy: true },
+      { uuid: 'other', name: 'Other', repo: 'annan', branch: 'main', fqdns: ['annan.se'], autoDeploy: true },
+    ]
+    const deployments: Record<string, Deployment[]> = {
+      web: [{ id: 2, commit: MAIN, status: 'finished', pullRequestId: 0 }],
+      cms: [{ id: 1, commit: 'e'.repeat(40), status: 'finished', pullRequestId: 0 }],
+      stg: [{ id: 3, commit: MAIN, status: 'finished', pullRequestId: 0 }],
+      other: [{ id: 4, commit: MAIN, status: 'finished', pullRequestId: 0 }],
+    }
+    const d = deps({ checks, listApps: async () => apps, deployments: async (uuid) => deployments[uuid] ?? [] })
+    const r = await live(dir, 'baseline', undefined, { deps: d.deps })
+    expect(r.status).toBe('red')
+    expect(calls.filter((c) => c.what === 'requests').map((c) => c.base)).toEqual(['https://nhrk.se', 'https://www.nhrk.se'])
+    expect(JSON.parse(readFileSync(join(dir, '.rollout/live-baseline-hosts.json'), 'utf8'))).toEqual({
+      head: MAIN,
+      hosts: ['nhrk.se', 'www.nhrk.se'],
+      apps: [{ uuid: 'web', name: 'Website', fqdns: ['nhrk.se', 'www.nhrk.se'] }],
+    })
+    expect(readFileSync(join(dir, '.rollout/live-baseline.txt'), 'utf8')).toBe('Failed to load https://{host}/a.js\n')
+  })
+
+  test('finding 5: Coolify unreadable → stop, no baseline written', async () => {
+    const dir = siteDir({ baseline: null })
+    const d = deps({
+      listApps: async () => {
+        throw new Error('Coolify GET /api/v1/applications answered 401')
+      },
+    })
+    const r = await live(dir, 'baseline', undefined, { deps: d.deps })
+    expect(r.status).toBe('stop')
+    expect(r.reason).toMatch(/401/)
+    expect(existsSync(join(dir, '.rollout/live-baseline.txt'))).toBe(false)
+    expect(existsSync(join(dir, '.rollout/live-baseline-hosts.json'))).toBe(false)
+  })
+
+  test('finding 3: CMS admin pages expect no banner and do not stop the site being "already green"', async () => {
+    const dir = siteDir({ baseline: null })
+    const { checks, calls } = fakeChecks([(_, p) => p.map((x) => req(x, { banner: x !== '/admin/' }))])
+    checks.pages = async () => ['/', '/admin/', '/finns-inte-x']
+    const r = await live(dir, 'baseline', undefined, { deps: deps({ checks }).deps })
+    expect(r.status).toBe('pass')
+    const expectBanner = calls.find((c) => c.what === 'requests')!.expectBanner!
+    expect(['/', '/admin/', '/admin', '/finns-inte-x'].map(expectBanner)).toEqual([true, false, false, true])
   })
 
   test('a live site that already shows the banner and requests nothing is noted, not red', async () => {
@@ -178,6 +248,19 @@ describe('live post-merge', () => {
     expect(calls.find((c) => c.what === 'consentPaths')!.paths).toEqual(['/kontakt'])
     expect(calls.find((c) => c.what === 'contrast')!.paths).toEqual(['/', '/kontakt', '/finns-inte-x'])
     expect(existsSync(join(dir, '.rollout/live-post-merge.json'))).toBe(true)
+  })
+
+  test('finding 3: post-merge checks CMS admin pages without expecting a banner and leaves them out of the consent paths', async () => {
+    const dir = siteDir({ apps: { head: MAIN, apps: [app('web', ['nhrk.se'], true)] } })
+    const { checks, calls } = fakeChecks()
+    checks.pages = async () => ['/', '/kontakt', '/admin/', '/finns-inte-x']
+    checks.embedPages = async (_b, p) => p.filter((x) => x === '/kontakt' || x === '/admin/')
+    const r = await live(dir, 'post-merge', SHA, { deps: deps({ checks }).deps })
+    expect(r.status).toBe('pass')
+    const expectBanner = calls.find((c) => c.what === 'requests')!.expectBanner!
+    expect(expectBanner('/admin/')).toBe(false)
+    expect(expectBanner('/kontakt')).toBe(true)
+    expect(calls.find((c) => c.what === 'consentPaths')!.paths).toEqual(['/kontakt'])
   })
 
   test('an open issue with the same title is not opened again', async () => {
@@ -349,16 +432,18 @@ describe('merge', () => {
       [{ verify: VERIFIED(HEAD) }, { head: { sha: HEAD }, moved: true }, /verify/, (d) => (d.verify = async () => ({ ...VERIFIED(HEAD), pass: false }))],
       [{ verify: VERIFIED(HEAD) }, { head: { sha: HEAD }, state: 'MERGED' }, /MERGED/],
       [{ verify: VERIFIED(HEAD) }, { head: { sha: HEAD } }, /nothing would deploy/, (d) => (d.deployments = async () => [])],
-      // Ruling 36: an app that follows main serves a host with no live baseline (not in report.domains).
+      // Ruling 36/37: an app that follows main serves a host the live baseline did not record.
       [
         { verify: VERIFIED(HEAD) },
         { head: { sha: HEAD } },
-        /www\.nhrk\.se[\s\S]*report\.domains/,
+        /www\.nhrk\.se[\s\S]*live <dir> baseline/,
         (d) => {
           const listApps = d.listApps
           d.listApps = async () => (await listApps()).map((a) => (a.uuid === 'web' ? { ...a, fqdns: ['nhrk.se', 'www.nhrk.se'] } : a))
         },
       ],
+      // Ruling 37: a baseline from before the hosts were recorded.
+      [{ verify: VERIFIED(HEAD), baselined: null }, { head: { sha: HEAD } }, /live-baseline-hosts\.json[\s\S]*live <dir> baseline/],
     ]
     for (const [site, git, reason, tweak] of cases) {
       const dir = siteDir(site)
@@ -370,6 +455,28 @@ describe('merge', () => {
       expect(r.reason).toMatch(reason)
       expect(g.calls.some((c) => c.startsWith('gh pr merge'))).toBe(false)
     }
+  })
+
+  test('finding 5 (Ruling 37): a following host outside report.domains that the baseline recorded does not stop the merge', async () => {
+    const head = { sha: HEAD }
+    const dir = siteDir({ verify: VERIFIED(HEAD), domains: ['nhrk.se'], baselined: ['nhrk.se', 'www.nhrk.se'] })
+    const g = mergeExec({ head })
+    const m = mergeDeps(g.exec, head)
+    const listApps = m.deps.listApps
+    m.deps.listApps = async () => (await listApps()).map((a) => (a.uuid === 'web' ? { ...a, fqdns: ['nhrk.se', 'www.nhrk.se'] } : a))
+    expect((await merge(dir, 7, { deps: m.deps })).status).toBe('done')
+  })
+
+  test('finding 8: a merge commit that cannot be read names the post-merge rerun', async () => {
+    const head = { sha: HEAD }
+    const dir = siteDir({ verify: VERIFIED(HEAD) })
+    const g = mergeExec({ head })
+    const exec: Exec = async (cmd, args, cwd) =>
+      [cmd, ...args].join(' ') === 'gh pr view 7 -R visionmediahq/nhrk --json mergeCommit' ? { code: 1, out: 'HTTP 502' } : g.exec(cmd, args, cwd)
+    const m = mergeDeps(exec, head)
+    const r = await merge(dir, 7, { deps: m.deps })
+    expect(r.status).toBe('stop')
+    expect(r.reason).toContain('rerun `live <dir> post-merge --sha <merge commit>`')
   })
 
   test('a failing live check after the merge is a stop', async () => {

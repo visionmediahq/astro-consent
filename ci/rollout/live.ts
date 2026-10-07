@@ -2,15 +2,17 @@
 // are never stubbed: registry requests are counted, never blocked, and nothing is clicked before
 // they are counted.
 //
-//   baseline    before the merge, against report.domains: expected RED. Writes the console-error
+//   baseline    before the merge: expected RED. Against report.domains and every host of the
+//               Coolify apps that follow main (Ruling 37, read-only). Writes the console-error
 //               baseline to .rollout/live-baseline.txt (one error per line, the domain's host as
-//               {host}, newlines as \n).
+//               {host}, newlines as \n) and the hosts it covered to .rollout/live-baseline-hosts.json,
+//               which merge checks the following apps against.
 //   post-merge  the apps recorded in .rollout/apps.json before the merge (merge writes it; Ruling
 //               14 decides which follow main). For each app that follows main, wait for its
 //               deployment of the merge commit (`sha`): failed, cancelled or a timeout is a STOP.
 //               An app that does not follow main gets an issue "<fqdn> redeployar inte från main"
 //               (unless one is open) and its domains are skipped. Then every domain of the
-//               waited-for apps: banner shown and zero registry requests (DOM included) on every
+//               waited-for apps: banner shown (not on CMS admin pages) and zero registry requests (DOM included) on every
 //               page, no console error that is not in the baseline, the consent paths on pages with
 //               an embed, every contrast row ok. A failing domain is checked again after 30 s; a
 //               second failure is a STOP.
@@ -21,14 +23,17 @@ import { join, resolve } from 'node:path'
 import type { Browser } from '@playwright/test'
 import { type ConsentPathResult, checkConsentPaths } from './checks/consent-paths'
 import { type ContrastRow, checkContrast } from './checks/contrast'
-import { listPages } from './checks/pages'
+import { isCmsAdminRoute, listPages } from './checks/pages'
 import { checkRequests, formatRequests, type RequestResult } from './checks/requests'
-import { type App, type DeployStatus, waitDeployed } from './coolify'
+import { type App, appsFor, type Deployment, type DeployStatus, followsMain, listApps, listDeployments, waitDeployed } from './coolify'
 import { type Exec, exec as realExec, tail } from './lib/exec'
+import { originRepo } from './pr'
 import type { Report } from './types'
 import { embedPagesByFetch } from './verify'
 
 export const BASELINE_FILE = '.rollout/live-baseline.txt'
+/** `{ head, hosts, apps }`: every host live baseline checked, and the apps following main then (Ruling 37). */
+export const BASELINE_HOSTS_FILE = '.rollout/live-baseline-hosts.json'
 export const APPS_FILE = '.rollout/apps.json'
 const HOST = '{host}'
 const RETRY_MS = 30_000
@@ -57,7 +62,7 @@ export interface LiveResult {
 export interface LiveChecks {
   pages(base: string): Promise<string[]>
   embedPages(base: string, paths: string[]): Promise<string[]>
-  requests(base: string, paths: string[], opts: { baseline: Set<string> }): Promise<RequestResult[]>
+  requests(base: string, paths: string[], opts: { baseline: Set<string>; expectBanner?: (path: string) => boolean }): Promise<RequestResult[]>
   consentPaths(base: string, paths: string[]): Promise<ConsentPathResult[]>
   contrast(base: string, paths: string[]): Promise<ContrastRow[]>
   close(): Promise<void>
@@ -69,6 +74,9 @@ export interface LiveDeps {
   exec: Exec
   sleep: (ms: number) => Promise<void>
   waitDeployed: (app: App, sha: string) => Promise<DeployStatus>
+  /** Coolify, read-only: for the hosts live baseline covers. */
+  listApps: () => Promise<App[]>
+  deployments: (uuid: string) => Promise<Deployment[]>
 }
 
 /** The real checks: one Chromium, launched on first use, `stub: false` everywhere. */
@@ -78,7 +86,8 @@ export function liveChecks(): LiveChecks {
   return {
     pages: (base) => listPages(base, { ssr: true }),
     embedPages: embedPagesByFetch,
-    requests: async (base, paths, opts) => checkRequests(await get(), base, paths, { baseline: opts.baseline, stub: false }),
+    requests: async (base, paths, opts) =>
+      checkRequests(await get(), base, paths, { baseline: opts.baseline, stub: false, ...(opts.expectBanner ? { expectBanner: opts.expectBanner } : {}) }),
     consentPaths: async (base, paths) => checkConsentPaths(await get(), base, paths, { stub: false }),
     contrast: async (base, paths) => checkContrast(await get(), base, paths, { stub: false }),
     async close() {
@@ -92,7 +101,12 @@ const realDeps = (): LiveDeps => ({
   exec: realExec,
   sleep: (ms) => new Promise((r) => setTimeout(r, ms)),
   waitDeployed: (app, sha) => waitDeployed(app, sha),
+  listApps: () => listApps(),
+  deployments: (uuid) => listDeployments(uuid),
 })
+
+/** CMS admin shells (Ruling 26) never show the banner. */
+const expectBanner = (path: string): boolean => !isCmsAdminRoute(path)
 
 const escape = (e: string): string => e.replace(/\\/g, '\\\\').replace(/\r?\n/g, '\\n')
 const unescape = (line: string): string => line.replace(/\\(\\|n)/g, (_, c: string) => (c === 'n' ? '\n' : '\\'))
@@ -150,10 +164,10 @@ async function checkDomain(c: LiveChecks, host: string, baseline: Set<string>): 
   try {
     const paths = await c.pages(base)
     lines.push(`  pages (${paths.length}): ${paths.join(' ')}`)
-    const results = await c.requests(base, paths, { baseline })
+    const results = await c.requests(base, paths, { baseline, expectBanner })
     lines.push(...formatRequests(results).map((l) => `  ${l}`))
     let pass = results.length > 0 && results.every((r) => r.ok)
-    const mapPages = await c.embedPages(base, paths)
+    const mapPages = (await c.embedPages(base, paths)).filter(expectBanner)
     lines.push(`  pages with an embed: ${mapPages.join(' ') || '(none)'}`)
     if (mapPages.length) {
       for (const r of await c.consentPaths(base, mapPages)) {
@@ -209,20 +223,36 @@ export async function live(
   try {
     if (mode === 'baseline') {
       if (report.domains.length === 0) return done({ reason: 'report.json has no domain' })
+      // Ruling 37: also every host of the apps that follow main, since live post-merge checks those.
+      const git = (...args: string[]) => deps.exec('git', args, root)
+      const fetched = await git('fetch', 'origin', 'main')
+      if (fetched.code !== 0) return done({ reason: `git fetch origin main failed:\n${tail(fetched.out)}` })
+      const mainHead = (await git('rev-parse', 'origin/main')).out.trim()
+      const repoName = originRepo((await git('remote', 'get-url', 'origin')).out.trim()).split('/')[1]!
+      const hosts = [...report.domains]
+      const following: { uuid: string; name: string; fqdns: string[] }[] = []
+      for (const app of appsFor(await deps.listApps(), repoName)) {
+        if (!app.autoDeploy || !followsMain(await deps.deployments(app.uuid), mainHead)) continue
+        following.push({ uuid: app.uuid, name: app.name, fqdns: app.fqdns })
+        for (const h of app.fqdns) if (!hosts.includes(h)) hosts.push(h)
+        result.lines.push(`${app.name} follows main: ${app.fqdns.join(', ') || '(no domain)'}`)
+      }
       const entries: { host: string; errors: string[] }[] = []
       let green = true
       const c = await getChecks()
-      for (const host of report.domains) {
+      for (const host of hosts) {
         const base = `https://${host}`
         const paths = await c.pages(base)
-        const results = await c.requests(base, paths, { baseline: new Set() })
+        const results = await c.requests(base, paths, { baseline: new Set(), expectBanner })
         result.lines.push(`${base} (expected RED: no banner, registry requested on map pages):`, ...formatRequests(results).map((l) => `  ${l}`))
         entries.push({ host, errors: results.flatMap((r) => r.errors) })
-        green &&= results.length > 0 && results.every((r) => r.banner && r.blocked.length === 0)
+        const visitor = results.filter((r) => expectBanner(r.path))
+        green &&= visitor.length > 0 && visitor.every((r) => r.banner && r.blocked.length === 0)
       }
       const text = encodeBaseline(entries)
       writeFileSync(join(root, BASELINE_FILE), text)
-      result.lines.push(`console baseline: ${text.split('\n').filter(Boolean).length} errors → ${join(root, BASELINE_FILE)}`)
+      writeFileSync(join(root, BASELINE_HOSTS_FILE), `${JSON.stringify({ head: mainHead, hosts, apps: following }, null, 2)}\n`)
+      result.lines.push(`console baseline: ${text.split('\n').filter(Boolean).length} errors → ${join(root, BASELINE_FILE)}`, `hosts baselined: ${hosts.join(', ')}`)
       if (green) result.lines.push('live site already green: shows the banner and requests nothing from the registry (noted, not a failure)')
       return done({ status: green ? 'pass' : 'red' })
     }
