@@ -5,7 +5,7 @@
 // Effective background: from the element up, every background colour until the first opaque one,
 // composited outside-in. Text with alpha is composited over that. A background image on the way, or
 // no opaque background at all (composited over the white canvas then), makes the row indeterminate:
-// the ratio is still given, but it is not proof. DaisyUI's noise texture on buttons (an inline SVG
+// the ratio is still given, but it is not proof: such a row's `ok` is always false. DaisyUI's noise texture on buttons (an inline SVG
 // feTurbulence at 20 % opacity) is decoration on top of the button colour and does not count.
 import type { Browser, Page } from '@playwright/test'
 import { type Rgb, wcagContrast } from '../lib/colour'
@@ -31,6 +31,8 @@ export interface ContrastRow {
   /** The button's or link's text. */
   button: string
   ratio: number
+  /** ratio ≥ 4.5 and not indeterminate. An indeterminate row is never a pass, whatever its ratio. */
+  ok: boolean
   fg: Rgb
   bg: Rgb
   indeterminate?: string
@@ -83,10 +85,13 @@ export function contrastRows(raw: RawContrast[]): ContrastRow[] {
     let bg = WHITE
     for (const layer of [...r.layers].reverse()) bg = over(layer, bg)
     const fg = over(r.fg, bg)
-    const row: ContrastRow = { kind: r.kind, button: r.label, ratio: wcagContrast(fg, bg), fg, bg }
-    if (r.images.some(coversBackground)) row.indeterminate = 'background image behind the text'
-    else if (!opaque) row.indeterminate = 'no opaque background; composited over white'
-    return row
+    const ratio = wcagContrast(fg, bg)
+    const indeterminate = r.images.some(coversBackground)
+      ? 'background image behind the text'
+      : !opaque
+        ? 'no opaque background; composited over white'
+        : undefined
+    return { kind: r.kind, button: r.label, ratio, ok: ratio >= 4.5 && !indeterminate, fg, bg, ...(indeterminate ? { indeterminate } : {}) }
   })
 }
 

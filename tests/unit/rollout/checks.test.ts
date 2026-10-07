@@ -4,7 +4,7 @@ import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { contrastRows, coversBackground, measureContrast, type RawContrast } from '../../../ci/rollout/checks/contrast'
 import { extractLinks, listPages, MISSING_PREFIX } from '../../../ci/rollout/checks/pages'
-import { isBlocked } from '../../../ci/rollout/checks/requests'
+import { freshPage, isBlocked, notRequested } from '../../../ci/rollout/checks/requests'
 import { wcagContrast } from '../../../ci/rollout/lib/colour'
 
 const dirs: string[] = []
@@ -73,6 +73,37 @@ describe('isBlocked', () => {
   })
 })
 
+describe('notRequested (registry URLs in the DOM)', () => {
+  it('reports registry URLs present in the DOM but never requested, resolved and deduped', () => {
+    const dom = [
+      'https://www.google.com/maps/embed?pb=lazy',
+      'https://www.google.com/maps/embed?pb=lazy',
+      'https://maps.googleapis.com/maps/api/js',
+      'https://exempel.se/bild.jpg',
+    ]
+    const requested = ['https://maps.googleapis.com/maps/api/js']
+    expect(notRequested(dom, requested)).toEqual(['in DOM, not requested: https://www.google.com/maps/embed?pb=lazy'])
+  })
+})
+
+describe('freshPage', () => {
+  function fakeBrowser() {
+    const calls: { options: unknown; routes: number } = { options: null, routes: 0 }
+    const context = { route: async () => void calls.routes++, newPage: async () => ({}) }
+    const browser = { newContext: async (options: unknown) => ((calls.options = options), context) }
+    return { browser: browser as never, calls }
+  }
+
+  it('blocks service workers, which bypass context.route and request events', async () => {
+    for (const stub of [true, false]) {
+      const { browser, calls } = fakeBrowser()
+      await freshPage(browser, stub)
+      expect(calls.options).toMatchObject({ serviceWorkers: 'block' })
+      expect(calls.routes).toBe(stub ? 1 : 0)
+    }
+  })
+})
+
 describe('contrast', () => {
   const raw = (over: Partial<RawContrast>): RawContrast => ({
     kind: 'links',
@@ -115,6 +146,17 @@ describe('contrast', () => {
     expect(coversBackground('none, none')).toBe(false)
     expect(coversBackground(`url("/bg.jpg"), ${noise}`)).toBe(true)
     expect(contrastRows([raw({ images: [`none, ${noise}`] })])[0]!.indeterminate).toBeUndefined()
+  })
+
+  it('ok is ratio ≥ 4.5 and determinate: indeterminate is never a pass', () => {
+    const rows = contrastRows([
+      raw({}),
+      raw({ fg: [119, 119, 119, 255], layers: [[255, 255, 255, 255]] }),
+      raw({ images: ['url("/bg.jpg")'] }),
+      raw({ layers: [] }),
+    ])
+    expect(rows.map((r) => r.ok)).toEqual([true, false, false, false])
+    expect(rows[2]!.ratio).toBeGreaterThan(4.5)
   })
 
   it('labels each row with its kind and text', () => {

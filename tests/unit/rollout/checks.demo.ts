@@ -55,12 +55,13 @@ try {
   console.log('checkRequests:')
   const requests = await checkRequests(browser, BASE, ['/', '/karta'], { stub: true })
   for (const line of formatRequests(requests)) console.log(' ', line)
-  for (const r of requests) fail(r.banner && r.blocked.length === 0, `${r.path} banner/blocked`)
+  for (const r of requests) fail(r.ok && r.banner && r.banners === 1 && r.blocked.length === 0, `${r.path} banner/blocked`)
 
   console.log('checkConsentPaths:')
   for (const r of await checkConsentPaths(browser, BASE, ['/karta'])) {
     console.log(' ', JSON.stringify(r))
-    fail(r.visaLoadsOnlyClicked && r.rememberAutoShows && r.nekaLoadsNothing && r.filterKept, `${r.path} consent paths`)
+    fail(r.visaLoadsOnlyClicked && r.rememberAutoShows && r.nekaLoadsNothing, `${r.path} consent paths`)
+    fail(r.filterKept === null, `${r.path} filter not asserted without expectFilter`)
   }
 
   console.log('checkClip:')
@@ -71,10 +72,10 @@ try {
   console.log('checkContrast:')
   const contrast = await checkContrast(browser, BASE, ['/', '/karta'])
   for (const r of contrast) {
-    console.log(`  ${r.path} ${r.kind} "${r.button}" ${r.ratio.toFixed(2)}${r.indeterminate ? ` (indeterminate: ${r.indeterminate})` : ''}`)
+    console.log(`  ${r.path} ${r.kind} "${r.button}" ${r.ratio.toFixed(2)} ${r.ok ? 'ok' : 'FAIL'}${r.indeterminate ? ` (indeterminate: ${r.indeterminate})` : ''}`)
   }
   fail(contrast.some((r) => r.kind === 'banner') && contrast.some((r) => r.kind === 'links'), 'contrast rows of both kinds')
-  fail(contrast.every((r) => r.ratio >= 4.5 && !r.indeterminate), 'contrast ≥ 4.5')
+  fail(contrast.every((r) => r.ok), 'contrast ≥ 4.5 and determinate')
 
   console.log('shots:')
   const files = await shots(browser, BASE, ['/karta'], out)

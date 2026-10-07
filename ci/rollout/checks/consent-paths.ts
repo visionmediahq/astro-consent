@@ -2,18 +2,26 @@
 // carries over), filter.ts (a CSS filter survives the wiring) and openlink.ts (the embed's "Öppna i"
 // link). Buttons are found through the DOM contract, not their Swedish labels.
 import type { Browser, Page } from '@playwright/test'
-import { freshPage, open, recordBlocked } from './requests'
+import { matchesRegistry } from '../../../src/services'
+import { bannerState, freshPage, open, recordBlocked } from './requests'
 
 export interface ConsentPathResult {
   path: string
-  /** After Neka, clicking "Visa" on the first embed loads that embed's iframe and no other. */
+  /**
+   * After Neka, clicking "Visa" on the first embed loads that embed's iframe and no other, every
+   * registry request after the click belongs to that embed's service, and after a reload no embed
+   * is loaded (the grant was one-off).
+   */
   visaLoadsOnlyClicked: boolean
   /** "Visa alltid" + "Visa", then the next map page (or a reload): its embeds load without a click. */
   rememberAutoShows: boolean
   /** After Neka: no registry request, no iframe, banner closed. */
   nekaLoadsNothing: boolean
-  /** The loaded iframe keeps a CSS filter where one is expected (filter.ts); true where none is. */
-  filterKept: boolean
+  /**
+   * The loaded iframe keeps a CSS filter (filter.ts). null when the caller did not say a filter is
+   * expected (`expectFilter`): not asserted, and never to be read as a pass.
+   */
+  filterKept: boolean | null
   /** The loaded iframe's computed filter, for the evidence. */
   filter: string
   /** The first embed's "Öppna i" link, for the evidence (openlink.ts opened it; we don't). */
@@ -24,10 +32,14 @@ export interface ConsentPathResult {
 const embeds = (page: Page) => page.locator('[data-consent-embed]')
 const iframes = (page: Page) => page.locator('[data-consent-embed] iframe')
 
-async function decline(page: Page): Promise<boolean> {
-  const neka = page.locator('[data-consent-banner] [data-consent-action="none"]')
-  if (!(await neka.isVisible())) return false
-  await neka.click()
+/** Clicks Neka in the banner. False (with a note) unless exactly one banner is really shown. */
+async function decline(page: Page, notes: string[], what: string): Promise<boolean> {
+  const state = await bannerState(page)
+  if (!state.shown) {
+    notes.push(`${what}: banner not shown (${state.problem ?? 'unknown'}), could not click Neka`)
+    return false
+  }
+  await page.locator('[data-consent-banner] [data-consent-action="none"]').click()
   await page.waitForTimeout(300)
   return true
 }
@@ -35,16 +47,19 @@ async function decline(page: Page): Promise<boolean> {
 async function visaOnlyClicked(browser: Browser, base: string, path: string, stub: boolean, notes: string[]) {
   const { context, page } = await freshPage(browser, stub)
   try {
+    const hits = recordBlocked(page)
     await open(page, base, path)
-    if (!(await decline(page))) notes.push('visa: no Neka button in the banner')
+    const declined = await decline(page, notes, 'visa')
     const count = await embeds(page).count()
     if (count === 0) {
       notes.push('visa: no [data-consent-embed] on the page')
       return { ok: false, filter: 'none', openHref: null }
     }
     const first = embeds(page).first()
+    const service = await first.getAttribute('data-consent-embed')
     const openHref = await first.locator('a[data-open]').getAttribute('href')
     await first.scrollIntoViewIfNeeded()
+    const before = hits.length
     await first.locator('[data-load]').click()
     await page.mouse.move(0, 0)
     await page.waitForTimeout(1000)
@@ -52,8 +67,19 @@ async function visaOnlyClicked(browser: Browser, base: string, path: string, stu
     const total = await iframes(page).count()
     const active = await first.getAttribute('data-active')
     const filter = own ? await first.locator('iframe').evaluate((f) => getComputedStyle(f).filter) : 'none'
-    const ok = own === 1 && total === 1 && active !== null
-    if (!ok) notes.push(`visa: clicked iframe=${own}, iframes on page=${total} of ${count} embeds, data-active=${active !== null}`)
+    const foreign = hits.slice(before).filter((u) => matchesRegistry(u) !== service)
+    const afterClick = hits.length
+    // One-off: a reload must show no embed and request nothing from the registry.
+    await open(page, base, path)
+    const reloaded = await iframes(page).count()
+    const afterReload = hits.length - afterClick
+    const ok = declined && before === 0 && own === 1 && total === 1 && active !== null && foreign.length === 0 && reloaded === 0 && afterReload === 0
+    if (!ok) {
+      notes.push(
+        `visa: before click blocked=${before}; clicked iframe=${own}, iframes on page=${total} of ${count} embeds, data-active=${active !== null}; ` +
+          `other services=${JSON.stringify(foreign.slice(0, 3))}; after reload iframes=${reloaded} blocked=${afterReload}`,
+      )
+    }
     return { ok, filter, openHref }
   } finally {
     await context.close()
@@ -64,7 +90,7 @@ async function rememberCarries(browser: Browser, base: string, a: string, b: str
   const { context, page } = await freshPage(browser, stub)
   try {
     await open(page, base, a)
-    await decline(page)
+    if (!(await decline(page, notes, 'remember'))) return false
     const first = embeds(page).first()
     if (!(await first.count())) return false
     await first.scrollIntoViewIfNeeded()
@@ -75,7 +101,7 @@ async function rememberCarries(browser: Browser, base: string, a: string, b: str
     await open(page, base, b)
     const bEmbeds = await embeds(page).count()
     const bLoaded = await iframes(page).count()
-    const bannerB = await page.locator('[data-consent-banner]').isVisible()
+    const bannerB = (await bannerState(page)).open
     const ok = aLoaded === 1 && bEmbeds > 0 && bLoaded === bEmbeds && !bannerB
     if (!ok) notes.push(`remember: ${a} iframe=${aLoaded}; ${b} iframes=${bLoaded}/${bEmbeds} banner=${bannerB}`)
     return ok
@@ -89,11 +115,11 @@ async function nekaNothing(browser: Browser, base: string, path: string, stub: b
   try {
     const hits = recordBlocked(page)
     await open(page, base, path)
-    const declined = await decline(page)
+    const declined = await decline(page, notes, 'neka')
     await page.mouse.wheel(0, 20000)
     await page.waitForTimeout(1500)
     const loaded = await iframes(page).count()
-    const banner = await page.locator('[data-consent-banner]').isVisible()
+    const banner = (await bannerState(page)).open
     const ok = declined && hits.length === 0 && loaded === 0 && !banner
     if (!ok) notes.push(`neka: declined=${declined} blocked=${hits.length} iframes=${loaded} banner=${banner}`)
     return ok
@@ -121,9 +147,8 @@ export async function checkConsentPaths(
     const next = mapPaths[(i + 1) % mapPaths.length]!
     const rememberAutoShows = await rememberCarries(browser, base, path, next, stub, notes)
     const nekaLoadsNothing = await nekaNothing(browser, base, path, stub, notes)
-    const wantFilter = opts.expectFilter?.(path) ?? false
-    const filterKept = !wantFilter || visa.filter !== 'none'
-    if (!filterKept) notes.push('filter: expected a CSS filter on the loaded iframe, got none')
+    const filterKept = opts.expectFilter?.(path) ? visa.filter !== 'none' : null
+    if (filterKept === false) notes.push('filter: expected a CSS filter on the loaded iframe, got none')
     results.push({
       path,
       visaLoadsOnlyClicked: visa.ok,

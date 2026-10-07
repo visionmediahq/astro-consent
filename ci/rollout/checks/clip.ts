@@ -6,37 +6,51 @@ import { freshPage } from './requests'
 export interface ClipResult {
   path: string
   width: number
+  /** 'button': one banner or embed button. 'page': the page itself (horizontal scroll). */
+  kind: 'button' | 'page'
+  /** The button's text, or '(page)'. */
   button: string
-  /** Button width and its container's width, rounded px. */
+  /** Button width and its container's width, rounded px (page: scrollWidth and innerWidth). */
   w: number
   boxW: number
-  /** The text overflows the button: scrollWidth > clientWidth. */
+  /** The text overflows the button: scrollWidth > clientWidth. Page: it scrolls sideways. */
   over: boolean
-  /** The button sticks out of its container (right edge, or left edge). */
+  /** The button sticks out of its container or out of the viewport (right edge, or left edge). */
   out: boolean
   clipped: boolean
 }
 
 // Passed as a string: tsx adds __name helpers to functions, which don't exist in the page.
 const MEASURE = `(() => {
-  const rows = []
+  const rows = [{
+    kind: 'page',
+    button: '(page)',
+    w: document.documentElement.scrollWidth,
+    boxW: innerWidth,
+    over: document.documentElement.scrollWidth > innerWidth,
+    out: false,
+  }]
   const buttons = document.querySelectorAll('[data-consent-banner] button, [data-consent-embed] button')
   for (const b of buttons) {
     const bb = b.getBoundingClientRect()
     if (!b.offsetParent || bb.width === 0) continue
     const box = (b.closest('[data-consent-embed]') || b.closest('.card-body') || b.closest('[data-consent-banner]')).getBoundingClientRect()
     rows.push({
+      kind: 'button',
       button: (b.textContent || '').trim().replace(/\\s+/g, ' ').slice(0, 40),
       w: Math.round(bb.width),
       boxW: Math.round(box.width),
       over: b.scrollWidth > b.clientWidth + 1,
-      out: bb.right > box.right + 1 || bb.left < box.left - 1,
+      out: bb.right > box.right + 1 || bb.left < box.left - 1 || bb.right > innerWidth + 1 || bb.left < -1,
     })
   }
   return rows
 })()`
 
-/** Every path at every width, one fresh page each; rows for every visible banner and embed button. */
+/**
+ * Every path at every width, one fresh page each: a 'page' row (horizontal scroll) and a row for
+ * every visible banner and embed button.
+ */
 export async function checkClip(
   browser: Browser,
   base: string,
