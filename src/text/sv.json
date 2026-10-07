@@ -37,7 +37,7 @@
     }
   },
   "embed": {
-    "show": "Visa {title}",
+    "show": "Visa {name}",
     "remember": "Visa alltid innehåll från {name}",
     "info": "{title} hämtas från {name}. När du visar det skickas din IP-adress dit och cookies kan sättas.",
     "open": "Öppna i {name}"

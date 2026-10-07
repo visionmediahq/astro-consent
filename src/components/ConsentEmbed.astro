@@ -29,6 +29,8 @@ if (!config.services.includes(service)) {
 }
 
 const { name } = SERVICES[service]
+// No per-instance id exists (`id` is optional), so the info element gets a random suffix.
+const infoId = `${id ?? 'consent-embed-' + crypto.randomUUID().slice(0, 8)}-info`
 const openHref = href ?? deEmbed(src)
 const fill = (text: string, vars: Record<string, string>): string =>
   text.replace(/\{(\w+)\}/g, (match, key: string) => vars[key] ?? match)
@@ -51,13 +53,18 @@ const fill = (text: string, vars: Record<string, string>): string =>
   </template>
   {/* In normal flow, not absolute: on a narrow screen the box grows instead of clipping. */}
   <div data-placeholder class="flex flex-1 flex-col justify-between gap-3 p-4">
-    <div class="text-sm">
+    <div class="text-sm" id={infoId}>
       <slot name="placeholder">
         <p>{fill(sv.embed.info, { title, name })}</p>
       </slot>
     </div>
     <div class="flex flex-wrap items-center gap-3">
-      <button type="button" class="btn btn-primary btn-sm" data-load>{fill(sv.embed.show, { title })}</button>
+      <button
+        type="button"
+        class="btn btn-primary btn-sm h-auto min-h-8 whitespace-normal"
+        data-load
+        aria-describedby={infoId}>{fill(sv.embed.show, { name })}</button
+      >
       <label class="flex cursor-pointer items-center gap-2 text-xs">
         <input type="checkbox" class="checkbox checkbox-sm" data-remember />
         {fill(sv.embed.remember, { name })}
