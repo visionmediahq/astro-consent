@@ -38,6 +38,7 @@ export function detect(files: SiteFiles, site: string, domains: string[]): Repor
     parseErrors: [...structure.parseErrors, ...frames.parseErrors, ...scripts.parseErrors],
     aliasImports: aliasedAstroImports(files),
     multiFooterPages: structure.multiFooterPages,
+    ownHtmlPages: structure.ownHtmlPages,
   })
   return { ...findings, classification, reasons }
 }

@@ -21,6 +21,11 @@ export type DetectedStructure = Pick<Report, 'layouts' | 'footers' | 'footerless
    * cannot place PrivacyLinks exactly once.
    */
   multiFooterPages: { page: string; footers: number }[]
+  /**
+   * Ruling 39: visitor pages that render their own <html> outside every layout, so wire cannot put
+   * the banner on them. The 404 and 500 pages, CMS admin shells and redirect-only pages are left out.
+   */
+  ownHtmlPages: string[]
 }
 
 interface Parsed {
@@ -208,15 +213,11 @@ export function detectStructure(files: SiteFiles): DetectedStructure {
   const pages = [...parsed.keys()].filter((f) => isPage(f) && isRoute(f))
   const closures = new Map(pages.map((p) => [p, closure(p)]))
 
-  const layoutFiles = [...parsed.keys()].filter((f) => {
-    if (isPage(f)) return false
-    const root = parsed.get(f)!.root
-    const has = (tag: string): boolean => {
-      const visit = (n: AstroNode): boolean => (n.type === 'element' && n.name === tag) || n.children.some(visit)
-      return visit(root)
-    }
-    return has('html') || has('body')
-  })
+  const hasTag = (file: string, tag: string): boolean => {
+    const visit = (n: AstroNode): boolean => (n.type === 'element' && n.name === tag) || n.children.some(visit)
+    return visit(parsed.get(file)!.root)
+  }
+  const layoutFiles = [...parsed.keys()].filter((f) => !isPage(f) && (hasTag(f, 'html') || hasTag(f, 'body')))
 
   const layouts: Report['layouts'] = layoutFiles.map((file) => {
     const ref = parsed.get(file)!.uses.find(
@@ -254,6 +255,13 @@ export function detectStructure(files: SiteFiles): DetectedStructure {
     return ![...closures.get(p)!].some((f) => footersIn(f).length > 0)
   })
 
+  const ownHtmlPages = pages.filter((p) => {
+    const { root, frontmatter } = parsed.get(p)!
+    if (!hasTag(p, 'html') || /^\/(?:404|500)$/.test(routeOf(p))) return false
+    if (isCmsAdmin(p, texts.get(p)!) || frontmatterRedirects(frontmatter) || metaRefreshOnly(root, texts.get(p)!)) return false
+    return ![...closures.get(p)!].some((f) => layoutFiles.includes(f))
+  })
+
   /** Client footers `file` renders, counting each use of a component. A cycle counts nothing. */
   const footerCount = (file: string, stack: Set<string> = new Set()): number => {
     if (stack.has(file) || !parsed.has(file)) return 0
@@ -271,5 +279,5 @@ export function detectStructure(files: SiteFiles): DetectedStructure {
     .map(routeOf)
     .find((route) => POLICY.test(route.split('/').pop() ?? ''))
 
-  return { layouts, footers, footerless, policyPage: policy ?? null, parseErrors, multiFooterPages }
+  return { layouts, footers, footerless, policyPage: policy ?? null, parseErrors, multiFooterPages, ownHtmlPages }
 }

@@ -9,6 +9,8 @@ export type Findings = Omit<Report, 'classification' | 'reasons'> & {
   parseErrors: { file: string; message: string }[]
   aliasImports: { file: string; specifier: string }[]
   multiFooterPages: { page: string; footers: number }[]
+  /** Ruling 39: pages with their own <html> outside every layout. */
+  ownHtmlPages: string[]
 }
 
 /** The Astro majors the package's peerDependencies accept. */
@@ -69,6 +71,7 @@ export function classify(f: Findings): { classification: Classification; reasons
   if (used.length === 0) add('no layout renders <html>/<body> for any page')
   else if (used.length > 1) add(`several layouts and no single shared one: ${used.map((l) => l.file).join(', ')}`)
   for (const m of f.multiFooterPages) add(`footer ambiguous: ${m.page} renders ${m.footers} footers`)
+  for (const page of f.ownHtmlPages) add(`page renders its own <html>: ${page}`)
 
   for (const frame of f.iframes) {
     const r = iframeReason(frame, f.domains)

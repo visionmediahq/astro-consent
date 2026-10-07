@@ -304,6 +304,7 @@ function clean(over: Partial<Findings> = {}): Findings {
     parseErrors: [],
     aliasImports: [],
     multiFooterPages: [],
+    ownHtmlPages: [],
     ...over,
   }
 }
@@ -394,6 +395,11 @@ describe('classify', () => {
       'footer ambiguous',
       { multiFooterPages: [{ page: 'src/pages/index.astro', footers: 2 }] },
       'footer ambiguous: src/pages/index.astro renders 2 footers',
+    ],
+    [
+      'own <html> page (Ruling 39)',
+      { ownHtmlPages: ['src/pages/kampanj.astro'] },
+      'page renders its own <html>: src/pages/kampanj.astro',
     ],
     [
       'config shape',

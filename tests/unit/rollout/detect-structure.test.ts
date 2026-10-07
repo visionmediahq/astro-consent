@@ -367,6 +367,33 @@ import Bottom from '../components/SiteFooter.astro'
     ])
   })
 
+  test('Ruling 39: ownHtmlPages lists pages that render their own <html> outside every layout', () => {
+    const r = detectStructure(
+      inline({
+        'src/layouts/Main.astro': LAYOUT,
+        'src/components/SiteFooter.astro': FOOTER,
+        'src/pages/index.astro': `---\nimport Main from '../layouts/Main.astro'\n---\n<Main><main /></Main>\n`,
+        'src/pages/kampanj.astro': '<html lang="sv"><head><title>K</title></head><body><main>Erbjudande</main></body></html>\n',
+        'src/pages/blogg/[slug].astro': '---\nconst { slug } = Astro.params\n---\n<html><body><h1>{slug}</h1></body></html>\n',
+        'src/pages/404.astro': '<html><body><h1>Sidan finns inte</h1></body></html>\n',
+        'src/pages/500.astro': '<html><body><h1>Fel</h1></body></html>\n',
+        'src/pages/admin/index.astro': '<html><head><script src="https://unpkg.com/decap-cms@^3/dist/decap-cms.js"></script></head><body></body></html>\n',
+        'src/pages/cms.astro': '<html><head><script src="https://unpkg.com/@sveltia/cms/dist/sveltia-cms.js"></script></head><body></body></html>\n',
+        'src/pages/gammal.astro': '<html><head><meta http-equiv="refresh" content="0; url=/" /></head><body></body></html>\n',
+        'src/pages/flytt.astro': '---\nreturn Astro.redirect("/")\n---\n<html><body></body></html>\n',
+        'src/pages/_utkast.astro': '<html><body></body></html>\n',
+        'src/pages/fragment.astro': '<main>Ingen html</main>\n',
+      }),
+    )
+    expect(r.ownHtmlPages).toEqual(['src/pages/blogg/[slug].astro', 'src/pages/kampanj.astro'])
+  })
+
+  test('ownHtmlPages is empty on every pilot fixture', () => {
+    for (const site of ['a-tak', 'aspomad', 'domeijstapetserarverkstad', 'munkforstradgardstjanst', 'nhrk', 'traforadling', 'vasshallakatthotell']) {
+      expect(detectStructure(pilot(site)).ownHtmlPages, site).toEqual([])
+    }
+  })
+
   test('multiFooterPages is empty on every pilot fixture', () => {
     for (const site of ['a-tak', 'aspomad', 'domeijstapetserarverkstad', 'munkforstradgardstjanst', 'nhrk', 'traforadling', 'vasshallakatthotell']) {
       expect(detectStructure(pilot(site)).multiFooterPages, site).toEqual([])
