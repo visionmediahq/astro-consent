@@ -79,7 +79,7 @@ describe('contrast.css', () => {
 
   test('rule is guarded by @supports', () => {
     const guard =
-      '@supports (color: color(from red srgb clamp(0, (0.1791 - (0.2126 * pow((r + 0.055) / 1.055, 2.4))) * 1000000, 1) 0 0))'
+      '@supports (color: color(from red srgb clamp(0, (0.1791 - (0.2126 * pow((clamp(0, r, 1) + 0.055) / 1.055, 2.4))) * 1000000, 1) 0 0))'
     const at = css.indexOf(guard)
     expect(at).toBeGreaterThanOrEqual(0)
     expect(css.indexOf('.btn-primary')).toBeGreaterThan(at)
@@ -88,6 +88,14 @@ describe('contrast.css', () => {
   test('uses WCAG luminance weights on all three channels', () => {
     for (const w of ['0.2126', '0.7152', '0.0722']) expect(css).toContain(`${w} * pow(`)
     expect(css).not.toMatch(/oklch\(from/)
+  })
+
+  test('every channel is clamped to 0..1 before pow (out-of-gamut primaries)', () => {
+    for (const c of ['r', 'g', 'b']) {
+      const n = css.split(`pow((clamp(0, ${c}, 1) + 0.055)`).length - 1
+      expect(n, c).toBe(c === 'r' ? 4 : 3)
+    }
+    expect(css).not.toMatch(/pow\(\(\s*[rgb]\s*\+/)
   })
 
   test('uses the 1000000 factor', () => {

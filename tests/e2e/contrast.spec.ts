@@ -25,9 +25,10 @@ async function colours(button: Locator): Promise<{ fg: string; bg: string }> {
   })
 }
 
-async function expectAa(button: Locator): Promise<void> {
+async function expectAa(button: Locator, text: 'black' | 'white' = 'black'): Promise<void> {
   const { fg, bg } = await colours(button)
-  expect(parseColour(fg), `fg ${fg}`).toEqual({ r: 0, g: 0, b: 0 })
+  const v = text === 'black' ? 0 : 255
+  expect(parseColour(fg), `fg ${fg}`).toEqual({ r: v, g: v, b: v })
   expect(wcagContrast(parseColour(fg), parseColour(bg)), `${fg} on ${bg}`).toBeGreaterThanOrEqual(4.5)
 }
 
@@ -53,3 +54,17 @@ test('banner buttons are AA on a mid green primary', async ({ page, context }) =
   await page.addStyleTag({ content: GREEN })
   for (const name of ['none', 'all']) await expectAa(action(page, name))
 })
+
+// Out-of-gamut oklch primaries (daisyUI 5 sites mostly write oklch). Relative colour does no gamut
+// mapping, so a channel can be negative; the rule must clamp it. Hex primaries never exercise this.
+for (const [name, primary, text] of [
+  ['fantasy', 'oklch(37.45% 0.189 325.02)', 'white'],
+  ['winter', 'oklch(56.86% 0.255 257.57)', 'white'],
+] as const) {
+  test(`banner buttons are AA on the out-of-gamut ${name} primary`, async ({ page, context }) => {
+    await stub(context)
+    await page.goto('/')
+    await page.addStyleTag({ content: withPrimary(primary) })
+    for (const n of ['none', 'all']) await expectAa(action(page, n), text)
+  })
+}
