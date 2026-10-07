@@ -157,6 +157,37 @@ describe('detectStructure: synthetic cases', () => {
     expect(r.footerless).toEqual(['src/pages/404.astro'])
   })
 
+  test.each([
+    ['a-tak', [false]],
+    ['aspomad', [true]],
+    ['domeijstapetserarverkstad', [false]],
+    ['munkforstradgardstjanst', [false]],
+    ['nhrk', [true]],
+    ['traforadling', [false, false]],
+    ['vasshallakatthotell', [false]],
+  ])('%s: centred follows the footer\'s last-child chain', (site, centred) => {
+    expect(detectStructure(pilot(site)).footers.map((f) => f.centred)).toEqual(centred)
+  })
+
+  test('centred: a text-center row at the end of the last-child chain', () => {
+    const page = (footer: string) => inline({ 'src/pages/index.astro': `${footer}\n` })
+    const centred = (footer: string) => detectStructure(page(footer)).footers[0]!.centred
+    // nhrk's shape: footer > wrapper > [grid, centred © row]
+    expect(centred('<footer><div class="mx-auto"><div class="grid"><p>a</p><p>b</p></div><div class="border-t text-center"><p>©</p></div></div></footer>')).toBe(true)
+    expect(centred('<footer><div><div class="flex justify-center"><a>x</a></div></div></footer>')).toBe(true)
+    // a split bottom row stops the chain, even with items-center on a flex-col
+    expect(centred('<footer><div class="flex flex-col md:flex-row items-center justify-between"><p>©</p><p>by</p></div></footer>')).toBe(false)
+    expect(centred('<footer><div class="flex justify-start text-center"><p>©</p><p>by</p></div></footer>')).toBe(false)
+    expect(centred('<footer><div class="text-left"><p>©</p><p class="text-center">by</p></div></footer>')).toBe(false)
+    // a split class on a row with one child does not stop the chain
+    expect(centred('<footer><div class="flex justify-between"><div class="text-center"><p>©</p></div></div></footer>')).toBe(true)
+    // the chain ends without a centring class; a centred row that is not last does not count
+    expect(centred('<footer><div class="text-center"><p>©</p></div><div><p>by</p></div></footer>')).toBe(false)
+    expect(centred('<footer><div><p>©</p></div></footer>')).toBe(false)
+    // a component's markup is not visible here: the chain ends
+    expect(centred('<footer><div><Links /></div></footer>')).toBe(false)
+  })
+
   test('a footer is centred when its class has text-center or justify-center', () => {
     const files = (cls: string) =>
       inline({ 'src/pages/index.astro': `<html><body><main /><footer class="${cls}">©</footer></body></html>\n` })

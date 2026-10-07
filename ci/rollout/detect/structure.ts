@@ -124,6 +124,35 @@ function metaRefreshOnly(root: AstroNode, text: string): boolean {
   return visit(root, false) && refresh
 }
 
+const classesOf = (n: AstroNode): string[] => {
+  const cls = attr(n, 'class')
+  return cls?.kind === 'quoted' ? cls.value.split(/\s+/).filter(Boolean) : []
+}
+
+const CENTRING = ['text-center', 'justify-center']
+const SPLIT = ['justify-between', 'justify-start', 'text-left']
+
+/**
+ * Whether the end of the footer, where PrivacyLinks goes, is centred. Follows the last element
+ * child from the <footer> down: false when a row with more than one element child is split or
+ * start-aligned; true at the first `text-center`/`justify-center`; false when the chain ends (no
+ * element child, or a component whose markup is elsewhere). `items-center` is not counted: on
+ * the pilot footers it sits on rows that are also `justify-between`.
+ */
+function centredChain(footer: AstroNode): boolean {
+  let node = footer
+  for (;;) {
+    const classes = classesOf(node)
+    const kids = node.children.filter((c) => c.type === 'element' || c.type === 'component')
+    // Checked first: on a flex row, justify-start packs the items left whatever text-center says.
+    if (kids.length > 1 && SPLIT.some((c) => classes.includes(c))) return false
+    if (CENTRING.some((c) => classes.includes(c))) return true
+    const last = kids[kids.length - 1]
+    if (!last || last.type !== 'element') return false
+    node = last
+  }
+}
+
 function textClassOf(classes: string[]): string | null {
   const NOT_COLOUR =
     /^text-(?:left|center|right|justify|start|end|xs|sm|base|lg|xl|\dxl|wrap|nowrap|balance|pretty|ellipsis|clip|\[\d.*\]|\[(?:length|size):.*\])$/
@@ -197,15 +226,14 @@ export function detectStructure(files: SiteFiles): DetectedStructure {
   const rendered = new Set(pages.flatMap((p) => [...closures.get(p)!]))
   const footers: FooterInfo[] = [...rendered].sort().flatMap((file) =>
     footersIn(file).map((n): FooterInfo => {
-      const cls = attr(n, 'class')
-      const classes = cls?.kind === 'quoted' ? cls.value.split(/\s+/).filter(Boolean) : []
+      const classes = classesOf(n)
       return {
         file,
         start: n.start,
         end: n.end,
         kind: isPage(file) ? 'page' : layoutSet.has(file) ? 'layout' : 'component',
         textClass: textClassOf(classes),
-        centred: classes.includes('text-center') || classes.includes('justify-center'),
+        centred: centredChain(n),
       }
     }),
   )
