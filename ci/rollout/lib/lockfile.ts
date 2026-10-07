@@ -11,10 +11,14 @@ export interface Lockfile {
 }
 
 export interface AllowRule {
-  /** Package name; a rule also covers platform builds named `<name>-…` (lightningcss-darwin-arm64). */
+  /** Package name, matched exactly. */
   name: string
-  /** version: a version change within the same major. dev: the `dev: true` flag dropped. */
+  /** Also covers the package's platform builds, `<name>-<os>-<cpu>…` (lightningcss-darwin-arm64). */
+  platformBuilds?: boolean
+  /** version: a version change within `major` (both sides). dev: the `dev: true` flag dropped. */
   changes: ('version' | 'dev')[]
+  /** Required with 'version': the one major the change may move within. */
+  major?: number
   why: string
 }
 
@@ -23,10 +27,12 @@ export const ALLOWLIST: readonly AllowRule[] = [
   {
     name: 'zod',
     changes: ['version'],
+    major: 4,
     why: 'astro-consent depends on zod ^4.6.5, so npm lifts an older zod 4 to satisfy both',
   },
   {
     name: 'lightningcss',
+    platformBuilds: true,
     changes: ['dev'],
     why: 'npm may drop the dev flag from lightningcss and its platform builds (seen on munkforstradgardstjanst in the pilot)',
   },
@@ -52,8 +58,16 @@ function nameOfKey(key: string): string {
   return i < 0 ? key : key.slice(i + 'node_modules/'.length)
 }
 
+const PLATFORM = /^-(?:darwin|linux|win32|android|freebsd|openbsd|netbsd|sunos|aix)-[a-z0-9-]+$/
+
 const ruleFor = (name: string): AllowRule | undefined =>
-  ALLOWLIST.find((r) => name === r.name || name.startsWith(`${r.name}-`))
+  ALLOWLIST.find(
+    (r) => name === r.name || (r.platformBuilds === true && name.startsWith(r.name) && PLATFORM.test(name.slice(r.name.length))),
+  )
+
+/** The version moved within the rule's major: both sides parse and both are `rule.major`. */
+const withinMajor = (rule: AllowRule, was: unknown, now: unknown): boolean =>
+  rule.major !== undefined && majorOfVersion(was) === rule.major && majorOfVersion(now) === rule.major
 
 const same = (a: unknown, b: unknown): boolean => JSON.stringify(a) === JSON.stringify(b)
 
@@ -100,13 +114,19 @@ export function diffLock(
     const rule = ruleFor(name)
 
     if (key === own) {
+      // Installing never removes the package itself: a lockfile without it is not what was wired.
+      if (!now) {
+        unknown.push(`${label}: removed ${String(was?.['version'])}`)
+        continue
+      }
       allowed.push(`${label}: ${was ? `${String(was['version'])} → ` : 'added '}${String(now?.['version'] ?? 'removed')}`)
       continue
     }
     if (!was || !now) {
       const what = now ? `added ${String(now['version'])}` : `removed ${String(was?.['version'])}`
       // A dependency nested under astro-consent itself (its own zod) is its business.
-      if (now && key.startsWith(`${own}/node_modules/`) && rule) allowed.push(`${label}: ${what}`)
+      if (now && key.startsWith(`${own}/node_modules/`) && rule && (!rule.changes.includes('version') || withinMajor(rule, now['version'], now['version'])))
+        allowed.push(`${label}: ${what}`)
       else unknown.push(`${label}: ${what}`)
       continue
     }
@@ -126,8 +146,7 @@ export function diffLock(
       if (
         rule?.changes.includes('version') &&
         ['version', 'resolved', 'integrity'].includes(f) &&
-        majorOfVersion(was['version']) !== null &&
-        majorOfVersion(was['version']) === majorOfVersion(now['version'])
+        withinMajor(rule, was['version'], now['version'])
       ) {
         if (f === 'version') notes.push(`${String(was['version'])} → ${String(now['version'])}`)
         return false

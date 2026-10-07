@@ -51,6 +51,37 @@ describe('diffLock', () => {
     expect(d.unknown).toEqual([expect.stringContaining('node_modules/zod')])
   })
 
+  test('zod moving within 3.x is unknown: the rule covers 4.x only (spec C3.1)', () => {
+    const d = diffLock(v3({ 'node_modules/zod': entry('3.22.0') }), v3({ 'node_modules/zod': entry('3.25.0') }), PKG)
+    expect(d.allowed).toEqual([])
+    expect(d.unknown).toEqual([expect.stringContaining('node_modules/zod')])
+  })
+
+  test('a zod- package does not inherit the zod rule', () => {
+    const d = diffLock(
+      v3({ 'node_modules/zod-validation-error': entry('4.0.0') }),
+      v3({ 'node_modules/zod-validation-error': entry('4.0.2') }),
+      PKG,
+    )
+    expect(d.allowed).toEqual([])
+    expect(d.unknown).toEqual([expect.stringContaining('node_modules/zod-validation-error')])
+  })
+
+  test('a lightningcss- package that is not a platform build is unknown', () => {
+    const d = diffLock(
+      v3({ 'node_modules/lightningcss-loader': entry('2.0.0', { dev: true }) }),
+      v3({ 'node_modules/lightningcss-loader': entry('2.0.0') }),
+      PKG,
+    )
+    expect(d.unknown).toEqual([expect.stringContaining('node_modules/lightningcss-loader')])
+  })
+
+  test('removing the astro-consent entry is unknown', () => {
+    const d = diffLock(v3({ [`node_modules/${PKG}`]: { version: '1.0.1' } }), v3({}), PKG)
+    expect(d.allowed).toEqual([])
+    expect(d.unknown).toEqual([expect.stringContaining(PKG)])
+  })
+
   test('lightningcss losing dev: true is allowed', () => {
     const d = diffLock(
       v3({
