@@ -4,15 +4,15 @@ import ConsentEmbed from '@visionmediahq/astro-consent/components/ConsentEmbed.a
 ---
 
 <section class="w-full h-[500px] relative" data-animate>
-  <div class="grid h-[100%]"><ConsentEmbed service="google-maps" src={kontakt.googleMapsEmbedUrl} title="Karta till Aspö Mad Vin & Café" aspect="auto" /></div>
+  <div><ConsentEmbed service="google-maps" src={kontakt.googleMapsEmbedUrl} title="Karta till Aspö Mad Vin & Café" /></div>
 </section>
 
 <style>
-  iframe {
+  div :global(iframe) {
     filter: grayscale(0.2);
   }
 
-  iframe:hover {
+  div:hover :global(iframe) {
     filter: grayscale(0);
     transition: filter 0.3s ease;
   }

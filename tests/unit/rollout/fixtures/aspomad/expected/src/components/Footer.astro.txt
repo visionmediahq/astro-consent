@@ -149,6 +149,6 @@ const navigation = [
     <div class="border-t border-neutral-content/15 pt-8 text-center text-sm text-neutral-content/50">
       <p>&copy; {new Date().getFullYear()} Madviken Södern AB. Alla rättigheter förbehållna.</p>
     </div>
+    <PrivacyLinks class="text-neutral-content" />
   </div>
-  <PrivacyLinks class="text-neutral-content" />
 </footer>

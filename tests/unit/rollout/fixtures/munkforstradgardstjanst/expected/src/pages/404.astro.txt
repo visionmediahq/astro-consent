@@ -30,7 +30,7 @@ export const prerender = true
           Tillbaka till startsidan
         </a>
       </div>
+      <PrivacyLinks />
     </div>
-    <PrivacyLinks />
   </main>
 </Base>

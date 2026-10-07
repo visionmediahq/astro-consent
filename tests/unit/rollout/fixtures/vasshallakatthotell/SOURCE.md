@@ -23,6 +23,7 @@ Copied as they are, except as noted:
 - `src/data/privacy.json` (merged only: added by the PR)
 - `src/layouts/Base.astro`
 - `src/pages/404.astro`
+- `src/pages/gdpr.astro` (reduced, see below): the site's policy page, added in Task 15's amendment so detect can find the `/gdpr` route (Ruling 21); the PR left it unchanged
 - `src/pages/hitta-hit-kontakt.astro` (reduced, see below)
 - `src/pages/index.astro` (reduced, see below)
 - `src/pages/om-oss.astro` (reduced, see below)
@@ -35,6 +36,7 @@ Pages and components that hold a footer, an iframe or a map embed, reduced the s
 - `src/components/ContactSection.astro`
 - `src/components/OmOssContent.astro`
 - `src/pages/index.astro`
+- `src/pages/gdpr.astro` (a policy page, reduced the same way)
 - `src/pages/hitta-hit-kontakt.astro`
 - `src/pages/om-oss.astro`
 

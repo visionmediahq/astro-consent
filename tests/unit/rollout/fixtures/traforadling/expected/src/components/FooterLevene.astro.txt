@@ -59,7 +59,7 @@ import PrivacyLinks from '@visionmediahq/astro-consent/components/PrivacyLinks.a
     <p class="footer-copy">© {new Date().getFullYear()} Levene Såg AB – del av Skaraborgs Träförädling AB.</p>
     <a href="/" class="footer-portal-link">← Tillbaka till portalen</a>
   </div>
-  <PrivacyLinks class="justify-start!" />
+  <PrivacyLinks />
 </footer>
 
 <style>

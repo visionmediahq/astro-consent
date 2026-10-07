@@ -10,14 +10,27 @@ verdict: **acceptable** (the rule's output is fine; the pilot made a hand decisi
 dependency and lockfile changes in `merged/` are checked by verify step 1 (lockfile allowlist), not
 by this oracle, and are not listed below.
 
+**Rulings applied** (the controller's amendments to spec C2, 2026-10-07):
+- 16: footerless pages and the 404 get the links as the last child of `<main>`'s only element child, if it has exactly one.
+- 17: footer links go into the first element, going down from `<footer>`, that has more than one element child.
+- 18: `justify-start!` only when the footer's last-child chain has `justify-between`, `justify-start` or `text-left`.
+- 19: a scoped `<style>` rule that targets the iframe is rewritten to `:global(iframe)` under the wrapper.
+- 20: PrivacyLinks contrast is verify's job.
+- 21: `gdpr*` and `dataskydd*` count as policy pages.
+- 22: only `height="N"`/`"Npx"`/`"Nrem"` or `h-<n>`/`h-[<n>px|rem|em|vh]` count as a fixed height.
+
 **Detect input** (`detect(before, 'vasshallakatthotell', ['vasshallakatthotell.se'])`): `maps`; layout
 `Base.astro` with footer reference `VisionFooter`; one footer, `src/components/Footer.astro`,
-`textClass: null` (its colour is the inline `color: rgba(255,255,255,0.6)`), not centred (split bottom
-bar); footerless: `404.astro`; no policy page; one literal Google Maps iframe in `ContactSection.astro`
-(`height="100%"`, no classes, no filter).
+`textClass: null` (its colour is the inline `color: rgba(255,255,255,0.6)`); its last-child chain
+ends in the `justify-between` bottom bar, so `justify-start!` is added (Ruling 18); footerless:
+`404.astro`; one literal Google Maps iframe in `ContactSection.astro` (`height="100%"`, which is not a
+fixed height under Ruling 22; no classes, no filter). The policy page `src/pages/gdpr.astro` was added
+to the fixture in this amendment (reduced, see SOURCE.md). Under Ruling 21 detect (once Task 16
+changes it) reports it as `policyPage`, which gives `policy_url`.
 
 Identical in both: the config import, the CSS `@source` line, `<ConsentBanner />` before
-`<VisionFooter />`, the PrivacyLinks and ConsentEmbed imports, and the `services` list.
+`<VisionFooter />`, the PrivacyLinks and ConsentEmbed imports, and `src/data/privacy.json`, including
+`"policy_url": "https://vasshallakatthotell.se/gdpr"` (Ruling 21).
 
 ## Differences
 
@@ -26,29 +39,28 @@ Identical in both: the config import, the CSS `@source` line, `<ConsentBanner />
 2. **`Base.astro`: the ConsentBanner import comes after `import '../styles/global.css'`**; the pilot put
    it before. **Acceptable**: import order only (see munkfors entry 2).
 3. **`Footer.astro`: `<PrivacyLinks class="justify-start!" />` is the last child of `<footer>`**; the
-   pilot put `<PrivacyLinks class="text-white/70" />` inside the split bottom bar, between © and "Webbplats
-   av". **Rule gap**: the last child of this `<footer>` is outside `<div class="max-w-7xl mx-auto px-6
-   lg:px-8 pt-16 pb-8">`, so the links start at the footer's left edge with no side padding and sit on
-   its bottom edge (same gap as munkfors entry 4).
+   pilot put `<PrivacyLinks class="text-white/70" />` inside the split bottom bar, between © and
+   "Webbplats av". **Rule gap**: `<footer>` has two element children (the decorative
+   `absolute inset-0` paw-print layer and the padded container), so Ruling 17 stops at `<footer>`. The
+   links land outside `max-w-7xl mx-auto px-6 lg:px-8 pt-16 pb-8`, flush with the footer's left and
+   bottom edges. A decoration-only child (`aria-hidden`, absolutely positioned) could be skipped when
+   counting children.
 4. **`Footer.astro`: no colour class**, the pilot's `text-white/70`. **Acceptable**: per C2 the links
    inherit; the footer's inline `color: rgba(255,255,255,0.6)` is readable on its dark background.
-5. **`404.astro`: `<PrivacyLinks />` is the last child of `<main>`**; the pilot put it under the back
-   button with `mt-8 text-base-content/70`. **Rule gap**: `<main>` is a row flex container, so the links
-   sit beside the 404 box (see munkfors entry 6).
-6. **`ContactSection.astro`: the map box.** Expected wraps the embed in `<div class="grid h-[100%]">`
-   with `aspect="auto"` inside the original `<div … style="height: clamp(260px, 50vw, 380px);">`; the
-   pilot dropped that inline height and used `aspect="4 / 3"`. **Acceptable**: the rule keeps the site's
-   box size; the placeholder fills a 260–380 px box. Vertical fit at 320 px wide is for verify's
-   screenshots (C3 step 5 measures horizontal overflow only).
+5. **`404.astro`: `<PrivacyLinks />` at the end of the centred box** (the only child of `<main>`); the
+   pilot put it there too, with `mt-8 text-base-content/70`. **Acceptable (Ruling 16)**: same position;
+   the links inherit `text-base-content`.
+6. **`ContactSection.astro`: the map box.** Expected is a plain `<div><ConsentEmbed … /></div>` (no
+   classes, so no class attribute) with the default `16 / 9` aspect, inside the unchanged
+   `<div … style="height: clamp(260px, 50vw, 380px);">`. The pilot dropped that inline height and used
+   `aspect="4 / 3"`. **Acceptable (Ruling 22)**: `height="100%"` is not a fixed height. The 16 / 9 box
+   fits inside the 260–380 px frame at the column widths this layout has, leaving empty frame below it
+   on narrow screens. If the placeholder grows taller than the frame at 320 px, the frame's
+   `overflow-hidden` clips it, and verify's screenshots must show that.
 7. **`ContactSection.astro`: title `Karta till Vasshalla Katthotell i Gånghester`** (as on the iframe);
    the pilot shortened it to `Karta till Vasshalla Katthotell`. **Acceptable**: C8 lists shortened titles
    as hand decisions; the script never invents a title. Button clipping is checked by verify step 5.
 8. **`ContactSection.astro`: no placeholder slot**; the pilot added `<Fragment slot="placeholder">` with
    the place name. **Acceptable**: the component's default placeholder text (from `sv.json`) is used.
-9. **`ContactSection.astro`: one-line `<div …><ConsentEmbed … /></div>`**, the pilot's multi-line
-   element. **Acceptable**: formatting only.
-10. **`src/data/privacy.json`: no `policy_url`**; the pilot set `"policy_url":
-    "https://vasshallakatthotell.se/gdpr"`. **Rule gap**: C1's policy-page patterns (`integritet*`,
-    `privacy*`, `cookie*`, `personuppgift*`) miss a `/gdpr` route, so the site's policy link is lost.
-    Add `gdpr*` to the patterns. (The fixture does not carry the page either; it is not a structural
-    file.)
+9. **`ContactSection.astro`: one-line `<div><ConsentEmbed … /></div>`**, the pilot's multi-line element.
+   **Acceptable**: formatting only.

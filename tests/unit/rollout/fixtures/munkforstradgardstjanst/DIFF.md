@@ -10,10 +10,20 @@ verdict: **acceptable** (the rule's output is fine; the pilot made a hand decisi
 dependency and lockfile changes in `merged/` are checked by verify step 1 (lockfile allowlist), not
 by this oracle, and are not listed below.
 
+**Rulings applied** (the controller's amendments to spec C2, 2026-10-07):
+- 16: footerless pages and the 404 get the links as the last child of `<main>`'s only element child, if it has exactly one.
+- 17: footer links go into the first element, going down from `<footer>`, that has more than one element child.
+- 18: `justify-start!` only when the footer's last-child chain has `justify-between`, `justify-start` or `text-left`.
+- 19: a scoped `<style>` rule that targets the iframe is rewritten to `:global(iframe)` under the wrapper.
+- 20: PrivacyLinks contrast is verify's job.
+- 21: `gdpr*` and `dataskydd*` count as policy pages.
+- 22: only `height="N"`/`"Npx"`/`"Nrem"` or `h-<n>`/`h-[<n>px|rem|em|vh]` count as a fixed height.
+
 **Detect input** (`detect(before, 'munkforstradgardstjanst', ['munkforstradgardstjanst.se'])`):
 `notice`; layout `Base.astro` with footer reference `VisionFooter` (the client `Footer` is rendered by
-`index.astro`); one footer, `src/components/Footer.astro`, `textClass: text-neutral-content`, not
-centred; footerless: `404.astro`; no policy page.
+`index.astro`); one footer, `src/components/Footer.astro`, `textClass: text-neutral-content`; its
+last-child chain ends in the `justify-between` bottom bar, so `justify-start!` is added (Ruling 18);
+footerless: `404.astro`; no policy page.
 
 Identical in both: the config import, the CSS `@source` line, `<ConsentBanner />` before
 `<VisionFooter />`, the PrivacyLinks imports, and `src/data/privacy.json` (`{"services": []}`).
@@ -26,20 +36,12 @@ Identical in both: the config import, the CSS `@source` line, `<ConsentBanner />
 2. **`Base.astro`: the ConsentBanner import comes after `import '../styles/global.css'`**; the pilot put
    it before. **Acceptable**: frontmatter import order only; the package's `contrast.css` lands after
    the site CSS, which is the order its override is meant for.
-3. **`Footer.astro`: `<PrivacyLinks>` is the last child of `<footer>`**, below the bottom bar; the pilot
-   put it at the end of the last column (hours) with `mt-5`. **Acceptable**: spec C2 says the rule does
-   not reproduce munkfors' hand placement; the links are still in the footer, in the footer's colour.
-4. **`Footer.astro`: the links sit outside `<div class="max-w-6xl mx-auto px-4 md:px-6">`**, so with
-   `justify-start!` they start at the footer's left edge with no side padding. **Rule gap**: "last
-   child of `<footer>`" lands outside the padded inner container on footers whose padding lives on a
-   wrapper; the rule should insert into the footer's last-child container (the chain detect follows for
-   `centred`) or give the links the container's padding.
-5. **`Footer.astro`: class `text-neutral-content justify-start!`**, the pilot's `text-neutral-content
-   mt-5 justify-start!`. **Acceptable**: same colour and alignment; `mt-5` was spacing for the hand
-   placement.
-6. **`404.astro`: `<PrivacyLinks />` is the last child of `<main>`**; the pilot put it inside the centred
-   box under the back button. **Rule gap**: this `<main>` is `flex items-center justify-center` (a row),
-   so its last child sits beside the 404 box, not under it. C2's premise ("under the back button, which
-   is the end of `<main>`") does not hold: the back button ends `<main>`'s last child, not `<main>`.
-7. **`404.astro`: no class**, the pilot's `mt-8 text-base-content/70`. **Acceptable**: C2's footerless
-   rule has no class source; the links inherit `text-base-content`, which is readable on `bg-base-100`.
+3. **`Footer.astro`: `<PrivacyLinks class="text-neutral-content justify-start!" />` is the last child
+   of `<div class="max-w-6xl mx-auto px-4 md:px-6">`**, below the bottom bar; the pilot put it at the
+   end of the last column (hours) with `mt-5`. **Acceptable (Ruling 17)**: `<footer>`'s only child is
+   that container, so the links sit inside its padding, left-aligned like the split bar; C2 does not
+   reproduce munkfors' hand placement, and `mt-5` was spacing for it.
+4. **`404.astro`: `<PrivacyLinks />` with no class**, the pilot's `mt-8 text-base-content/70`, both at
+   the end of the centred box under the back button. **Acceptable (Ruling 16)**: same position (the
+   only child of `<main>`); C2's footerless rule has no class source, and the links inherit
+   `text-base-content`, which is readable on `bg-base-100`.

@@ -101,6 +101,6 @@ import PrivacyLinks from '@visionmediahq/astro-consent/components/PrivacyLinks.a
       <span>© {new Date().getFullYear()} Munkfors Trädgårdstjänst AB. Alla rättigheter förbehållna.</span>
       <span>Webbplats av <a href="https://visionmedia.io" target="_blank" rel="noopener noreferrer" class="underline hover:opacity-100 transition-opacity">Vision Media</a></span>
     </div>
+    <PrivacyLinks class="text-neutral-content justify-start!" />
   </div>
-  <PrivacyLinks class="text-neutral-content justify-start!" />
 </footer>

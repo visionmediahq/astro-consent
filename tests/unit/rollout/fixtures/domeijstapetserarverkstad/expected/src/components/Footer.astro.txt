@@ -65,8 +65,8 @@ const currentYear = new Date().getFullYear();
       <p class="footer-attr">Byggd av Vision Media</p>
     </div>
 
+    <PrivacyLinks />
   </div>
-  <PrivacyLinks class="justify-start!" />
 </footer>
 
 <style>

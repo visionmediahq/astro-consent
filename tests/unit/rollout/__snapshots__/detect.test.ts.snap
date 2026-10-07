@@ -545,6 +545,7 @@ exports[`detect > pilot vasshallakatthotell: maps, matching the committed snapsh
       },
       "pages": [
         "src/pages/404.astro",
+        "src/pages/gdpr.astro",
         "src/pages/hitta-hit-kontakt.astro",
         "src/pages/index.astro",
         "src/pages/om-oss.astro",

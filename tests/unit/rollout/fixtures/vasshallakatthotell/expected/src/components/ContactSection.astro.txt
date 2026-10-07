@@ -110,7 +110,7 @@ import ConsentEmbed from '@visionmediahq/astro-consent/components/ConsentEmbed.a
       <!-- Right: Map -->
       <div data-animate style="--delay: 0.15s;">
         <div class="rounded-2xl overflow-hidden shadow-sm bordered-warm" style="height: clamp(260px, 50vw, 380px);">
-          <div class="grid h-[100%]"><ConsentEmbed service="google-maps" src="https://maps.google.com/maps?q=57.698734,13.042359&hl=sv&z=15&output=embed" title="Karta till Vasshalla Katthotell i Gånghester" aspect="auto" /></div>
+          <div><ConsentEmbed service="google-maps" src="https://maps.google.com/maps?q=57.698734,13.042359&hl=sv&z=15&output=embed" title="Karta till Vasshalla Katthotell i Gånghester" /></div>
         </div>
 
         <div

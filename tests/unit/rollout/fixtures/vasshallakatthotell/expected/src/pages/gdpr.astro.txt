@@ -1,0 +1,166 @@
+---
+import Base from '../layouts/Base.astro';
+import Header from '../components/Header.astro';
+import Footer from '../components/Footer.astro';
+import PageHero from '../components/PageHero.astro';
+import CtaBanner from '../components/CtaBanner.astro';
+import { businessSchema } from '../config/site';
+
+export const prerender = true;
+---
+
+<Base
+  title="GDPR – Vasshalla Katthotell"
+  description="Läs om hur Vasshalla Katthotell hanterar dina personuppgifter i enlighet med GDPR och dataskyddsförordningen."
+  canonical="https://vasshallakatthotell.se/gdpr/"
+  ogImage="/og-image.jpg"
+  schema={businessSchema}
+>
+  <Header />
+
+  <main>
+    <PageHero
+      title="GDPR & Integritetspolicy"
+      image="katt-img1-jpg-62730580.webp"
+      alt="Katt vilar i korg vid fönster"
+    />
+
+    <section class="py-16 md:py-24 bg-section-alt">
+      <div class="max-w-3xl mx-auto px-6">
+
+        <div class="mb-10" data-animate>
+          <span class="section-badge mb-5 inline-block">Text.</span>
+          <h2 class="text-3xl font-bold mb-4">Text.</h2>
+          <p class="text-base leading-relaxed gdpr-body">
+            Text.
+          </p>
+        </div>
+
+        <div class="space-y-10" data-animate style="--delay: 0.08s">
+
+          <div class="gdpr-block">
+            <h3>Text.</h3>
+            <p>
+              Text.
+            </p>
+            <p>
+              Text.
+            </p>
+          </div>
+
+          <div class="gdpr-block">
+            <h3>Text.</h3>
+            <p>Text.</p>
+            <ul>
+              <li>Text.</li>
+              <li>Text.</li>
+              <li>Text.</li>
+              <li>Text.</li>
+            </ul>
+          </div>
+
+          <div class="gdpr-block">
+            <h3>Text.</h3>
+            <ul>
+              <li>Text.</li>
+              <li>Text.</li>
+              <li>Text.</li>
+            </ul>
+          </div>
+
+          <div class="gdpr-block">
+            <h3>Text.</h3>
+            <p>Text.</p>
+            <p>Text.</p>
+            <p>
+              Text.
+            </p>
+          </div>
+
+          <div class="gdpr-block">
+            <h3>Text.</h3>
+            <ul>
+              <li>Text.</li>
+              <li>Text.</li>
+              <li>Text.</li>
+              <li>Text.</li>
+            </ul>
+            <p>
+              <a href="/hitta-hit-kontakt/" class="gdpr-link">Text.</a> Text.
+            </p>
+          </div>
+
+          <div class="gdpr-block">
+            <h3>Text.</h3>
+            <ul>
+              <li>Text.</li>
+              <li>Text.</li>
+              <li>Text.</li>
+            </ul>
+          </div>
+
+        </div>
+      </div>
+    </section>
+
+    <CtaBanner />
+  </main>
+
+  <Footer />
+</Base>
+
+<style>
+  .gdpr-block h3 {
+    font-family: 'Literata', Georgia, serif;
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: var(--color-base-content);
+    margin-bottom: 0.75rem;
+  }
+
+  .gdpr-block p,
+  .gdpr-body {
+    font-size: 0.9375rem;
+    line-height: 1.7;
+    color: var(--text-muted);
+    max-width: 68ch;
+    margin-bottom: 0.85rem;
+  }
+
+  .gdpr-block ul {
+    list-style: none;
+    padding: 0;
+    margin: 0 0 0.85rem;
+    space-y: 0.5rem;
+  }
+
+  .gdpr-block ul li {
+    position: relative;
+    padding-left: 1.25rem;
+    font-size: 0.9375rem;
+    line-height: 1.7;
+    color: var(--text-muted);
+    margin-bottom: 0.5rem;
+  }
+
+  .gdpr-block ul li::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0.7em;
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--color-secondary);
+  }
+
+  .gdpr-link {
+    color: var(--color-primary);
+    font-weight: 500;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+  .gdpr-link:hover {
+    opacity: 0.8;
+  }
+</style>

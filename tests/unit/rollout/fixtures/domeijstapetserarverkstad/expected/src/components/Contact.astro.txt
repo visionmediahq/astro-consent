@@ -110,7 +110,7 @@ import ConsentEmbed from '@visionmediahq/astro-consent/components/ConsentEmbed.a
 
       <!-- RIGHT: Map -->
       <div class="map-wrap">
-        <div class="grid h-[100%]"><ConsentEmbed service="google-maps" src="https://www.google.com/maps?q=%C3%85ngpannegatan+2E%2C+417+05+G%C3%B6teborg&output=embed" title="Karta till Domeijs tapetserarverkstad, Ångpannegatan 2E, Göteborg" aspect="auto" /></div>
+        <div><ConsentEmbed service="google-maps" src="https://www.google.com/maps?q=%C3%85ngpannegatan+2E%2C+417+05+G%C3%B6teborg&output=embed" title="Karta till Domeijs tapetserarverkstad, Ångpannegatan 2E, Göteborg" /></div>
       </div>
 
     </div>
@@ -251,7 +251,7 @@ import ConsentEmbed from '@visionmediahq/astro-consent/components/ConsentEmbed.a
     height: 100%;
   }
 
-  .map-wrap iframe {
+  .map-wrap :global(iframe) {
     filter: sepia(15%) contrast(0.92) saturate(0.85);
     display: block;
     width: 100%;
@@ -260,7 +260,7 @@ import ConsentEmbed from '@visionmediahq/astro-consent/components/ConsentEmbed.a
     transition: filter 0.3s ease;
   }
 
-  .map-wrap:hover iframe {
+  .map-wrap:hover :global(iframe) {
     filter: none;
   }
 
