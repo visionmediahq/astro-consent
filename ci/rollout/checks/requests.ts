@@ -51,18 +51,24 @@ export async function freshPage(
 
 /**
  * Opens base + path and lets lazy content load: scrolled to the end one viewport height at a time
- * (a single jump skips loaders that fire mid-page), back to the top, then a short wait.
+ * (a single jump skips loaders that fire mid-page), back to the top, then a short wait. Steps are
+ * instant even on sites with smooth scrolling.
  */
 export async function open(page: Page, base: string, path: string): Promise<void> {
   await page.goto(base + path, GOTO)
+  // behavior 'instant' overrides a site's `html { scroll-behavior: smooth }`, which would animate the
+  // step (scrollY unchanged when read) and let scrollTo(0, 0) cancel it. scrollY is read only in the
+  // next evaluate, after the wait, so even a scroll that still animated has landed by then.
   for (let i = 0; i < 60; i++) {
-    const done = (await page.evaluate(
-      '(() => { const y = scrollY; scrollBy(0, innerHeight); return scrollY === y || scrollY + innerHeight >= document.documentElement.scrollHeight })()',
-    )) as boolean
+    const before = (await page.evaluate('scrollY')) as number
+    await page.evaluate("scrollBy({ top: innerHeight, behavior: 'instant' })")
     await page.waitForTimeout(150)
+    const done = (await page.evaluate(
+      `scrollY <= ${before} || scrollY + innerHeight >= document.documentElement.scrollHeight - 1`,
+    )) as boolean
     if (done) break
   }
-  await page.evaluate('scrollTo(0, 0)')
+  await page.evaluate("scrollTo({ top: 0, behavior: 'instant' })")
   await page.waitForTimeout(1500)
 }
 

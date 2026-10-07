@@ -31,6 +31,9 @@ const embedPage = (onLoad: string, onStart = '') =>
     for (const b of document.querySelectorAll('[data-load]')) b.onclick = (e) => { const el = e.target.closest('[data-consent-embed]'); ${onLoad} }
   </script>`)
 
+const LATE = `${banner()}<div style="height:10000px;position:relative"><div id="s" style="position:absolute;top:3000px;height:10px"></div></div>
+    <script>new IntersectionObserver((es, o) => { if (es.some((e) => e.isIntersecting)) { o.disconnect(); const s = document.createElement('script'); s.src = '${GTAG}'; document.head.appendChild(s) } }).observe(document.getElementById('s'))</script>`
+
 const FIXTURES: Record<string, string> = {
   // Banner controls and look-alikes.
   ok: page(banner()),
@@ -40,8 +43,9 @@ const FIXTURES: Record<string, string> = {
   two: page(banner() + banner()),
   // Item 1: a lazy embed that is in the DOM but never requested, and one that loads only mid-page.
   lazy: page(`${banner()}<iframe data-src="${MAPS}"></iframe>`),
-  late: page(`${banner()}<div style="height:10000px;position:relative"><div id="s" style="position:absolute;top:3000px;height:10px"></div></div>
-    <script>new IntersectionObserver((es, o) => { if (es.some((e) => e.isIntersecting)) { o.disconnect(); const s = document.createElement('script'); s.src = '${GTAG}'; document.head.appendChild(s) } }).observe(document.getElementById('s'))</script>`),
+  late: page(LATE),
+  // The same with smooth scrolling (a fleet site's global.css sets it): scrollBy animates.
+  smooth: page(`<style>html { scroll-behavior: smooth }</style>${LATE}`),
   // Item 4: "Visa" that is not one-off, and "Visa" that loads another service too.
   sticky: embedPage(`add(el); localStorage.setItem('sticky', '1')`, `if (localStorage.getItem('sticky')) document.querySelectorAll('[data-consent-embed]').forEach(add)`),
   other: embedPage(`add(el); const s = document.createElement('script'); s.src = '${PIXEL}'; document.head.appendChild(s)`),
@@ -100,9 +104,9 @@ try {
     const r = await req('/lazy/')
     expect(r.blocked.some((b) => b.startsWith('in DOM, not requested:')) && !r.ok, '/lazy/ data-src iframe counted', r.blocked)
   }
-  {
-    const r = await req('/late/')
-    expect(r.blocked.some((b) => b.startsWith('https://www.googletagmanager.com/')) && !r.ok, '/late/ mid-page loader seen', r.blocked)
+  for (const path of ['/late/', '/smooth/']) {
+    const r = await req(path)
+    expect(r.blocked.some((b) => b.startsWith('https://www.googletagmanager.com/')) && !r.ok, `${path} mid-page loader seen`, r.blocked)
   }
 
   const paths = async (path: string) => (await checkConsentPaths(browser, BASE, [path]))[0]!
