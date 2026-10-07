@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.0.2
+
+- Fix: the banner and map buttons failed WCAG AA contrast on light or saturated primary colours
+  (seen on three pilot sites). Inside the banner and `<ConsentEmbed>` only, `.btn-primary` text is
+  now black or white, whichever the primary's OKLCH lightness calls for (cut 0.58, checked against
+  every daisyUI theme and the pilot themes). Browsers without relative-colour support keep the
+  theme's own colour. Neka and Acceptera alla stay identical.
+- Change: the map button reads "Visa {name}" (e.g. "Visa Google Maps") instead of repeating the
+  embed's title, may wrap, and is described by the placeholder text through `aria-describedby`.
+- Test: a consent-terms guard ties the banner and category wording and each service's category,
+  vendor and description to `CONSENT_VERSION`. `CONSENT_VERSION` is unchanged (1): no visitor is
+  asked again.
+
 ## 1.0.1
 
 - Fix: the "Öppna i Google Maps" link for "Embed a map" URLs (`/maps/embed?pb=…`) opened the
