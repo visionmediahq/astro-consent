@@ -86,20 +86,28 @@ export async function openPr(dir: string, opts: PrOptions): Promise<PrResult> {
   const fetched = await git('fetch', 'origin', 'main')
   if (fetched.code !== 0) throw new Error(`git fetch origin main failed:\n${tail(fetched.out)}`)
   const ancestor = await git('merge-base', '--is-ancestor', 'origin/main', 'HEAD')
-  let result: VerifyResult
-  if (ancestor.code === 0) {
-    result = readJson<VerifyResult>(join(root, '.rollout/verify.json'), 'verify did not run')
-  } else if (ancestor.code === 1) {
+  if (ancestor.code === 1) {
     const rebase = await git('rebase', 'origin/main')
     if (rebase.code !== 0) {
       await git('rebase', '--abort')
       throw new Error(`rebase onto origin/main conflicts, aborted: resolve by hand\n${tail(rebase.out)}`)
     }
-    result = await (opts.verify ?? ((d, r) => realVerify(d, r)))(root, report)
-  } else {
+  } else if (ancestor.code !== 0) {
     throw new Error(`git merge-base --is-ancestor failed:\n${tail(ancestor.out)}`)
   }
-  if (!result.pass) throw new Error(`verify did not pass: fix and run verify again before the PR`)
+  const rebased = ancestor.code === 1
+  // Only a passing verify run of this exact commit counts; verify wipes .rollout/shots when it
+  // starts, so the screenshots below always belong to that run.
+  const current = (await git('rev-parse', 'HEAD')).out.trim()
+  const stored = existsSync(join(root, '.rollout/verify.json')) ? readJson<Partial<VerifyResult>>(join(root, '.rollout/verify.json'), '') : null
+  let result: VerifyResult
+  if (!rebased && stored?.pass === true && stored.sha && stored.sha === current) {
+    result = stored as VerifyResult
+  } else {
+    result = await (opts.verify ?? ((d, r) => realVerify(d, r)))(root, report)
+    if (!result.pass) throw new Error('verify did not pass: fix and run verify again before the PR')
+    if (result.sha !== current) throw new Error(`verify ran for ${result.sha ?? '(no commit)'}, HEAD is ${current}`)
+  }
 
   const shotsDir = join(root, '.rollout/shots')
   const names = existsSync(shotsDir) ? readdirSync(shotsDir).filter((f) => f.endsWith('.png')).sort() : []

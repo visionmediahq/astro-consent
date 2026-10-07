@@ -8,8 +8,10 @@ import type { Report, VerifyResult } from '../../../ci/rollout/types'
 const DEMO = JSON.parse(readFileSync(join(import.meta.dirname, 'fixtures/demo-report.json'), 'utf8')) as Report
 const template = readFileSync(TEMPLATE_PATH, 'utf8')
 const report = (over: Partial<Report> = {}): Report => ({ ...DEMO, site: 'kund', domains: ['kund.se'], ...over })
+const HEAD = 'b'.repeat(40)
 const PASS: VerifyResult = {
   pass: true,
+  sha: HEAD,
   steps: ['lockfile', 'build', 'requests', 'consent-paths', 'clip', 'contrast', 'screenshots', 'docker'].map((name, i) => ({
     step: i + 1,
     name,
@@ -84,6 +86,7 @@ function fake(answers: Record<string, Answer | (() => Answer)> = {}) {
   const defaults: Record<string, Answer> = {
     'git rev-parse --abbrev-ref HEAD': { code: 0, out: 'consent-banner\n' },
     'git remote get-url origin': { code: 0, out: 'git@github.com:visionmediahq/kund.git\n' },
+    'git rev-parse HEAD': { code: 0, out: `${HEAD}\n` },
     'git fetch origin main': { code: 0, out: '' },
     'git merge-base --is-ancestor origin/main HEAD': { code: 0, out: '' },
     'git diff --name-only origin/main...HEAD': { code: 0, out: 'src/layouts/Base.astro\nsrc/data/privacy.json\n' },
@@ -147,6 +150,30 @@ describe('openPr', () => {
     expect(f.calls.some((c) => c.startsWith('gh pr create'))).toBe(false)
   })
 
+  test('up to date but verify.json is for another commit: verify runs again', async () => {
+    let verifies = 0
+    const dir = siteDir({ ...PASS, sha: 'c'.repeat(40) })
+    await openPr(dir, opts(fake(), { verify: async () => (verifies++, PASS) }))
+    expect(verifies).toBe(1)
+  })
+
+  test('up to date but verify.json has no sha: verify runs again', async () => {
+    let verifies = 0
+    const { sha: _sha, ...noSha } = PASS
+    await openPr(siteDir(noSha as VerifyResult), opts(fake(), { verify: async () => (verifies++, PASS) }))
+    expect(verifies).toBe(1)
+  })
+
+  test('up to date, verify.json failed or missing: verify runs again', async () => {
+    let verifies = 0
+    const v = async () => (verifies++, PASS)
+    await openPr(siteDir({ ...PASS, pass: false }), opts(fake(), { verify: v }))
+    const dir = siteDir()
+    rmSync(join(dir, '.rollout/verify.json'))
+    await openPr(dir, opts(fake(), { verify: v }))
+    expect(verifies).toBe(2)
+  })
+
   test('up to date with origin/main: no rebase, no second verify', async () => {
     let verifies = 0
     const f = fake()
@@ -181,10 +208,11 @@ describe('openPr', () => {
   })
 
   test('a failed or missing verify.json fails', async () => {
-    await expect(openPr(siteDir({ ...PASS, pass: false }), opts(fake()))).rejects.toThrow(/verify/)
+    const failing = async () => ({ ...PASS, pass: false })
+    await expect(openPr(siteDir({ ...PASS, pass: false }), opts(fake(), { verify: failing }))).rejects.toThrow(/verify/)
     const dir = siteDir()
     rmSync(join(dir, '.rollout/verify.json'))
-    await expect(openPr(dir, opts(fake()))).rejects.toThrow(/verify/)
+    await expect(openPr(dir, opts(fake(), { verify: failing }))).rejects.toThrow(/verify/)
   })
 
   test('refuses another branch and a foreign origin', async () => {

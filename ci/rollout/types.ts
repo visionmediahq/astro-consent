@@ -97,6 +97,8 @@ export interface StepResult {
 
 export interface VerifyResult {
   pass: boolean
+  /** The commit verified (HEAD after the push); null in demo mode. pr only trusts a run of the current HEAD. */
+  sha: string | null
   steps: StepResult[]
 }
 

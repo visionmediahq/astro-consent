@@ -206,11 +206,12 @@ export async function verify(dir: string, report: Report, opts: VerifyOptions = 
     return o.pass
   }
   const finish = (): VerifyResult => {
-    const result = { pass: steps.length > 0 && steps.every((s) => s.pass), steps }
+    const result: VerifyResult = { pass: steps.length > 0 && steps.every((s) => s.pass), sha, steps }
     writeFileSync(join(out, 'verify.json'), `${JSON.stringify(result, null, 2)}\n`)
     return result
   }
   const git = (...args: string[]) => exec('git', args, root)
+  let sha: string | null = null
 
   const mainDir = demo ? null : `${root.replace(/\/+$/, '')}-main`
   /** Whether `mainDir` is listed by `git worktree list` as one of this clone's worktrees. */
@@ -240,6 +241,7 @@ export async function verify(dir: string, report: Report, opts: VerifyOptions = 
       record(0, 'push', { pass: false, lines: [`git push --force-with-lease origin ${BRANCH} failed:`, tail(push.out)] })
       return finish()
     }
+    sha = (await git('rev-parse', 'HEAD')).out.trim() || null
   }
 
   const ssr = demo || report.astro.output === 'server'

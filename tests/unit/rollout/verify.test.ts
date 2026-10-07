@@ -168,6 +168,7 @@ describe('verify', () => {
     expect(f.called.has('close')).toBe(true)
     const written = JSON.parse(readFileSync(join(dir, '.rollout/verify.json'), 'utf8')) as typeof result
     expect(written).toEqual(result)
+    expect(result.sha).toBe(SHA)
     for (const name of ['1-lockfile', '2-build', '3-requests', '4-consent-paths', '5-clip', '6-contrast', '7-screenshots', '8-docker']) {
       expect(existsSync(join(dir, '.rollout/evidence', `${name}.txt`)), name).toBe(true)
     }
@@ -185,6 +186,14 @@ describe('verify', () => {
     expect(evidence(dir, '2-build.txt')).toContain('build broke')
     expect([...f.called].filter((c) => !c.startsWith('close'))).toEqual([])
     expect(f.calls.at(-1)).toBe(`git worktree remove --force ${dir}-main`)
+  })
+
+  test('stale screenshots from an earlier run are wiped when verify starts', async () => {
+    const dir = siteDir()
+    mkdirSync(join(dir, '.rollout/shots'), { recursive: true })
+    writeFileSync(join(dir, '.rollout/shots/old.png'), 'x')
+    await verify(dir, report(), { deps: fake({ exec: { 'npm run build': { code: 1, out: 'x' } } }).deps })
+    expect(existsSync(join(dir, '.rollout/shots/old.png'))).toBe(false)
   })
 
   test('a failing step 5 stops before contrast, screenshots and docker', async () => {
@@ -461,6 +470,7 @@ describe('verify', () => {
       ['/finns-inte-x', false],
     ])
     expect(existsSync(join(out, 'verify.json'))).toBe(true)
+    expect(JSON.parse(readFileSync(join(out, 'verify.json'), 'utf8')).sha).toBeNull()
     // Step 4 clicks the banner: the bannerless page is left out.
     expect(consentPages).toEqual(['/karta'])
   })
