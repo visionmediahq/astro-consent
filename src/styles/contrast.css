@@ -1,0 +1,21 @@
+/* Button text on the site's primary colour: black or white, whichever reads better (WCAG AA).
+   DaisyUI's own text colour is the theme's primary-content, which a site rarely tunes.
+   Black when the primary's WCAG relative luminance Y is above 0.1791, the Y where black and white
+   give equal contrast ((Y + 0.05) / 0.05 = 1.05 / (Y + 0.05)), white otherwise. Y uses pow() on
+   each sRGB channel (r, g, b in 0..1); the linear segment below 0.04045 is left out, which is
+   negligible near the crossover. The factor 1000000 saturates the clamp for any difference above
+   one in a million. Needs relative colour syntax with pow(); browsers without it keep DaisyUI's
+   colour, which is what the @supports probe checks.
+   The trailing "/ 1" makes the text opaque: relative colour copies the origin's alpha, and a
+   primary with alpha would otherwise give see-through text.
+   Channels are clamped to 0..1 before pow(): relative colour does no gamut mapping, so an
+   out-of-gamut oklch() primary gives a negative channel, pow() of a negative base is NaN and the
+   outer clamp would turn that into black. The unit fixtures go through parseColour, which clips,
+   so they cannot catch this; the oklch cases in tests/e2e/contrast.spec.ts do. */
+@supports (color: color(from red srgb clamp(0, (0.1791 - (0.2126 * pow((clamp(0, r, 1) + 0.055) / 1.055, 2.4))) * 1000000, 1) 0 0)) {
+  [data-consent-banner] .btn-primary,
+  [data-consent-embed] .btn-primary {
+    --btn-fg: color(from var(--color-primary) srgb clamp(0, (0.1791 - (0.2126 * pow((clamp(0, r, 1) + 0.055) / 1.055, 2.4) + 0.7152 * pow((clamp(0, g, 1) + 0.055) / 1.055, 2.4) + 0.0722 * pow((clamp(0, b, 1) + 0.055) / 1.055, 2.4))) * 1000000, 1) clamp(0, (0.1791 - (0.2126 * pow((clamp(0, r, 1) + 0.055) / 1.055, 2.4) + 0.7152 * pow((clamp(0, g, 1) + 0.055) / 1.055, 2.4) + 0.0722 * pow((clamp(0, b, 1) + 0.055) / 1.055, 2.4))) * 1000000, 1) clamp(0, (0.1791 - (0.2126 * pow((clamp(0, r, 1) + 0.055) / 1.055, 2.4) + 0.7152 * pow((clamp(0, g, 1) + 0.055) / 1.055, 2.4) + 0.0722 * pow((clamp(0, b, 1) + 0.055) / 1.055, 2.4))) * 1000000, 1) / 1);
+    color: var(--btn-fg);
+  }
+}

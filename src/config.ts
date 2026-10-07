@@ -6,7 +6,8 @@ import type { ConsentConfig, PrivacyConfig } from './types'
 
 export type { ConsentConfig, PrivacyConfig } from './types'
 
-/** Raised when the banner wording changes, so every visitor is asked again. */
+/** Raise when the banner or category wording changes, or a service's category, vendor or purpose changes:
+ *  every visitor is asked again. tests/unit/consent-terms.test.ts enforces it. */
 export const CONSENT_VERSION = 1
 
 export class ConfigError extends Error {
