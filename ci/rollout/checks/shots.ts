@@ -5,7 +5,7 @@
 import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import type { Browser, Page } from '@playwright/test'
-import { freshPage } from './requests'
+import { freshPage, gotoPage } from './requests'
 
 const slug = (p: string): string => p.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '') || 'home'
 const action = (page: Page, name: string) => page.locator(`[data-consent-banner] [data-consent-action="${name}"]`)
@@ -30,7 +30,7 @@ export async function shots(
         files.push(file)
       }
       try {
-        await page.goto(base + path, { waitUntil: 'networkidle', timeout: 45_000 })
+        await gotoPage(page, base + path)
         await page.waitForTimeout(500)
         await shot('open')
         if (await action(page, 'notice_ok').isVisible()) {

@@ -7,7 +7,6 @@ import { matchesRegistry } from '../../../src/services'
 /** The demo's log endpoint (demo/privacy.*.json). Stubbed with the registry in local runs. */
 export const DEMO_LOG_HOST = 'log.demo.test'
 
-const GOTO = { waitUntil: 'networkidle', timeout: 45_000 } as const
 
 /** True for a URL that must not be requested before consent: it matches a registry pattern. */
 export function isBlocked(url: string): boolean {
@@ -138,8 +137,18 @@ export async function freshPage(
  * (a single jump skips loaders that fire mid-page), back to the top, then a short wait. Steps are
  * instant even on sites with smooth scrolling.
  */
+/**
+ * Opens `url` for a check: the load event, then up to 10 s for networkidle. A looping background
+ * video (aspokarlsson), polling or a websocket keeps the network busy for as long as the page is
+ * open, so networkidle alone would time out; blocked requests are recorded whenever they fire.
+ */
+export async function gotoPage(page: Page, url: string): Promise<void> {
+  await page.goto(url, { waitUntil: 'load', timeout: 45_000 })
+  await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => undefined)
+}
+
 export async function open(page: Page, base: string, path: string): Promise<void> {
-  await page.goto(base + path, GOTO)
+  await gotoPage(page, base + path)
   // behavior 'instant' overrides a site's `html { scroll-behavior: smooth }`, which would animate the
   // step (scrollY unchanged when read) and let scrollTo(0, 0) cancel it. scrollY is read only in the
   // next evaluate, after the wait, so even a scroll that still animated has landed by then.

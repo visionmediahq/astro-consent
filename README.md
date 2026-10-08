@@ -241,6 +241,8 @@ npx tsx ci/rollout/run.ts help
   that answers 2xx with anything but HTML (an endpoint serving a PDF without an extension) is a
   file, not a page. A broken link is still checked. Links under `/cdn-cgi/` are skipped: Cloudflare answers
   those itself (email obfuscation), so they never have the banner.
+- The browser checks open each page up to its `load` event, then wait up to 10 s for the network to
+  go quiet. A looping background video, polling or a websocket never lets it, so the checks carry on.
 - `live baseline` covers `report.domains` and every host of the Coolify apps that follow `main`,
   and records them in `live-baseline-hosts.json`. If `merge` stops because an app that follows
   `main` serves a host the baseline did not record (an app started following `main` since), rerun
