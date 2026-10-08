@@ -211,4 +211,14 @@ describe('diffPackageJson', () => {
     ])
     expect(diffPackageJson(before, before, PKG)).toEqual([expect.stringContaining(PKG)])
   })
+
+  test('npm dropping an empty dependency map is not a change (antonicommunications); emptying one is', () => {
+    const withEmpty = JSON.stringify({ ...JSON.parse(before), devDependencies: {} })
+    const after = JSON.stringify({ ...JSON.parse(before), dependencies: { ...JSON.parse(before).dependencies, [PKG]: '^1.0.2' } })
+    expect(diffPackageJson(withEmpty, after, PKG)).toEqual([])
+    const withDev = JSON.stringify({ ...JSON.parse(before), devDependencies: { prettier: '^3.0.0' } })
+    expect(diffPackageJson(withDev, after, PKG)).toEqual(['devDependencies: changed'])
+    // Only the dependency maps: an empty `overrides` that goes away is still a change.
+    expect(diffPackageJson(JSON.stringify({ ...JSON.parse(before), overrides: {} }), after, PKG)).toEqual(['overrides: changed'])
+  })
 })
