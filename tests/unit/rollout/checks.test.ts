@@ -1,3 +1,5 @@
+import { createServer, type Server } from 'node:http'
+import type { AddressInfo } from 'node:net'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -52,6 +54,33 @@ describe('listPages', () => {
 
   it('static: requires a dist dir', async () => {
     await expect(listPages('http://127.0.0.1:4321', { ssr: false })).rejects.toThrow(/distDir/)
+  })
+})
+
+describe('listPages (ssr crawl)', () => {
+  let server: Server | undefined
+  afterEach(() => new Promise<void>((done) => (server ? server.close(() => done()) : done())))
+
+  /** Serves `routes` (path → status, content type, body); anything else is a 404 page. */
+  async function site(routes: Record<string, [number, string, string]>): Promise<string> {
+    server = createServer((req, res) => {
+      const [status, type, body] = routes[req.url ?? ''] ?? [404, 'text/html', '<html>404</html>']
+      res.writeHead(status, { 'content-type': type })
+      res.end(body)
+    })
+    await new Promise<void>((done) => server!.listen(0, '127.0.0.1', () => done()))
+    return `http://127.0.0.1:${(server!.address() as AddressInfo).port}`
+  }
+
+  it('linjegods: a linked endpoint that answers 2xx with a file (no extension) is not a page; a broken link still is', async () => {
+    const base = await site({
+      '/': [200, 'text/html', '<a href="/om/">om</a> <a href="/api/blankett">blankett</a> <a href="/api/data">data</a> <a href="/borta/">borta</a>'],
+      '/om/': [200, 'text/html; charset=utf-8', '<html>om</html>'],
+      '/api/blankett': [200, 'application/pdf', '%PDF-1.4'],
+      '/api/data': [200, 'application/json', '{}'],
+    })
+    const pages = await listPages(base, { ssr: true })
+    expect(pages.slice(0, -1)).toEqual(['/', '/om/', '/borta/'])
   })
 })
 
