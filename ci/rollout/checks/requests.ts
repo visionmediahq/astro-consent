@@ -93,6 +93,8 @@ export async function blockUmami(context: BrowserContext): Promise<void> {
       } catch {
         return route.fallback()
       }
+      // A page under test is never the tracker, even when its path says "umami" (/meny/umami-burgare).
+      if (request.resourceType() === 'document') return route.fallback()
       if (!isUmamiUrl(url, srcs) && request.resourceType() === 'script' && pending.size > 0) {
         let timer: ReturnType<typeof setTimeout> | undefined
         await Promise.race([Promise.all([...pending]), new Promise((r) => (timer = setTimeout(r, DOC_WAIT_MS)))])

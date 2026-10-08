@@ -198,7 +198,7 @@ exports[`detect > pilot domeijstapetserarverkstad: maps, matching the committed 
     {
       "alignment": "unknown",
       "centred": false,
-      "end": 2631,
+      "end": 2595,
       "file": "src/components/Footer.astro",
       "kind": "component",
       "start": 55,
@@ -208,14 +208,14 @@ exports[`detect > pilot domeijstapetserarverkstad: maps, matching the committed 
   "iframes": [
     {
       "classes": null,
-      "end": 4321,
+      "end": 4303,
       "file": "src/components/Contact.astro",
       "height": "100%",
       "host": "www.google.com",
       "service": "google-maps",
       "src": "https://www.google.com/maps?q=%C3%85ngpannegatan+2E%2C+417+05+G%C3%B6teborg&output=embed",
       "srcKind": "literal",
-      "start": 3873,
+      "start": 3855,
       "style": "border:0; display:block; width:100%; min-height:480px;",
       "title": "Karta till Domeijs tapetserarverkstad, Ångpannegatan 2E, Göteborg",
     },

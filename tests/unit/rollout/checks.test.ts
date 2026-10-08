@@ -171,6 +171,8 @@ describe('Umami (finding 6, Ruling 38)', () => {
     expect(await answer('https://cloud.umami.is/script.js', 'script')).toEqual(['fulfill 204 ""'])
     expect(await answer('https://stats.exempel.se/other.js', 'script')).toEqual(['fallback'])
     expect(await answer('https://exempel.se/', 'document')).toEqual(['fallback'])
+    // A visitor page whose path happens to say "umami" is the page under test, not the tracker.
+    expect(await answer('https://exempel.se/meny/umami-burgare', 'document')).toEqual(['fallback'])
   })
 })
 

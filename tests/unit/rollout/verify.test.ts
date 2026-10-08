@@ -499,7 +499,7 @@ describe('verify: final review fixes', () => {
   test('finding 2: a remote consent-banner this tool did not push is never force-pushed over', async () => {
     const dir = siteDir()
     const other = 'b'.repeat(40)
-    const f = fake({ exec: { 'git ls-remote --heads origin consent-banner': { code: 0, out: `${other}\trefs/heads/consent-banner\n` } } })
+    const f = fake({ exec: { 'git ls-remote --heads origin refs/heads/consent-banner': { code: 0, out: `${other}\trefs/heads/consent-banner\n` } } })
     const result = await verify(dir, report(), { deps: f.deps })
     expect(result.pass).toBe(false)
     expect(result.steps).toEqual([expect.objectContaining({ step: 0, name: 'push', pass: false })])
@@ -510,21 +510,45 @@ describe('verify: final review fixes', () => {
   test('finding 2: the remote head this tool pushed last (a rerun after a rebase or amend) may be replaced', async () => {
     const dir = siteDir()
     const ours = 'b'.repeat(40)
-    const first = fake({ exec: { 'git ls-remote --heads origin consent-banner': { code: 0, out: '' }, 'git rev-parse HEAD': { code: 0, out: `${ours}\n` } } })
+    const first = fake({ exec: { 'git ls-remote --heads origin refs/heads/consent-banner': { code: 0, out: '' }, 'git rev-parse HEAD': { code: 0, out: `${ours}\n` } } })
     await verify(dir, report(), { deps: first.deps })
     expect(first.calls).toContain('git push --force-with-lease origin consent-banner')
     rmSync(`${dir}-main`, { recursive: true, force: true })
-    const again = fake({ exec: { 'git ls-remote --heads origin consent-banner': { code: 0, out: `${ours}\trefs/heads/consent-banner\n` } } })
+    const again = fake({ exec: { 'git ls-remote --heads origin refs/heads/consent-banner': { code: 0, out: `${ours}\trefs/heads/consent-banner\n` } } })
     const result = await verify(dir, report(), { deps: again.deps })
     expect(again.calls).toContain('git push --force-with-lease origin consent-banner')
     expect(result.steps[0]).toMatchObject({ step: 1, pass: true })
   })
 
   test('finding 2: ls-remote failing refuses the push', async () => {
-    const f = fake({ exec: { 'git ls-remote --heads origin consent-banner': { code: 2, out: 'fatal: could not read' } } })
+    const f = fake({ exec: { 'git ls-remote --heads origin refs/heads/consent-banner': { code: 2, out: 'fatal: could not read' } } })
     const result = await verify(siteDir(), report(), { deps: f.deps })
     expect(result.steps).toEqual([expect.objectContaining({ step: 0, name: 'push', pass: false })])
     expect(f.calls.some((c) => c.startsWith('git push'))).toBe(false)
+  })
+
+  test('pre-run: another branch ending in /consent-banner on origin is not ours to refuse over', async () => {
+    const f = fake({ exec: { 'git ls-remote --heads origin': { code: 0, out: `${'b'.repeat(40)}\trefs/heads/feature/consent-banner\n` } } })
+    const result = await verify(siteDir(), report(), { deps: f.deps })
+    expect(f.calls).toContain('git ls-remote --heads origin refs/heads/consent-banner')
+    expect(f.calls).toContain('git push --force-with-lease origin consent-banner')
+    expect(result.steps[0]).toMatchObject({ step: 1, pass: true })
+  })
+
+  test("pre-run: verify's own npm ci/build leaving the tree dirty fails as a site problem (the next verify would refuse)", async () => {
+    const f = fake()
+    const inner = f.deps.exec!
+    let statuses = 0
+    f.deps.exec = async (cmd, args, cwd) => {
+      if (cmd === 'git' && args[0] === 'status' && statuses++ > 0) return { code: 0, out: '?? .astro/types.d.ts\n' }
+      return inner(cmd, args, cwd)
+    }
+    const result = await verify(siteDir(), report(), { deps: f.deps })
+    expect(result.pass).toBe(false)
+    expect(result.steps.map((s) => [s.step, s.pass])).toEqual([...[1, 2, 3, 4, 5, 6, 7, 8].map((n) => [n, true]), [9, false]])
+    expect(result.steps.at(-1)).toMatchObject({ name: 'clean' })
+    expect(result.steps.at(-1)!.evidence).toContain('.astro/types.d.ts')
+    expect(result.steps.at(-1)!.evidence).toMatch(/\.gitignore/)
   })
 
   test('finding 3: CMS admin routes (src/pages/admin/ or public/admin/) expect no banner, locally and in Docker', async () => {

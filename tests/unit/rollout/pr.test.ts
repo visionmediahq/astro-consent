@@ -23,9 +23,12 @@ const render = (over: { classification?: 'maps' | 'notice' } = {}, issues: strin
   renderBody(template, { kind: over.classification ?? 'maps', verify: PASS, issues, domain: 'kund.se', screenshots })
 
 describe('renderBody', () => {
-  test('has the five sections', () => {
-    const body = render({ classification: 'notice' })
-    for (const h of ['Vad ändras', 'Så testar du', 'Till kunden', 'Relaterade ärenden', 'Kontroller']) expect(body).toMatch(new RegExp(`^## ${h}$`, 'm'))
+  test('has the four sections; nothing addressed to the client (clients already know the banner is coming)', () => {
+    for (const classification of ['notice', 'maps'] as const) {
+      const body = render({ classification })
+      for (const h of ['Vad ändras', 'Så testar du', 'Relaterade ärenden', 'Kontroller']) expect(body).toMatch(new RegExp(`^## ${h}$`, 'm'))
+      expect(body).not.toMatch(/Till kunden|kunden/i)
+    }
   })
 
   test('notice and maps wording differ; maps mentions the maps and "Visa Google Maps"', () => {
@@ -63,10 +66,10 @@ describe('renderBody', () => {
     expect(() => renderBody(template, { kind: 'maps', verify: { ...PASS, pass: false }, issues: [], domain: 'kund.se' })).toThrow(/verify/)
   })
 
-  test('finding 7: the merge line matches the process: the tool merges after the live check, developers inform the client', () => {
+  test('finding 7: the merge line matches the process: the tool merges after the live check', () => {
     for (const classification of ['notice', 'maps'] as const) {
       const body = render({ classification })
-      expect(body).toContain('**Mergas efter verifiering och livekontroll. Kunden informeras av utvecklarna.**')
+      expect(body).toContain('**Mergas efter verifiering och livekontroll.**')
       expect(body).not.toContain('Mergas av tekniker')
     }
   })

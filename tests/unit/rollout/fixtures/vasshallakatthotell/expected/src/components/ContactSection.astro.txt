@@ -89,7 +89,7 @@ import ConsentEmbed from '@visionmediahq/astro-consent/components/ConsentEmbed.a
 
         <div class="flex flex-col sm:flex-row gap-3">
           <a
-            href="tel:0705771793"
+            href="tel:0700000000"
             class="btn btn-md inline-flex items-center gap-2 font-semibold btn-primary-solid"
             onclick="umami.track('phone_click')"
           >
@@ -119,7 +119,7 @@ import ConsentEmbed from '@visionmediahq/astro-consent/components/ConsentEmbed.a
           <p class="font-semibold mb-0.5">Text.</p>
           <p class="mb-1 text-muted">Text.</p>
           <a
-            href="tel:0705771793"
+            href="tel:0700000000"
             class="font-medium hover:underline"
             style="color: var(--color-primary);"
             onclick="umami.track('phone_click')"

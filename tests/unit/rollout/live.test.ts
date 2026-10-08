@@ -192,6 +192,18 @@ describe('live baseline', () => {
     expect(readFileSync(join(dir, '.rollout/live-baseline.txt'), 'utf8')).toBe('Failed to load https://{host}/a.js\n')
   })
 
+  test('pre-run: rev-parse origin/main failing → stop with its reason, no baseline written', async () => {
+    const dir = siteDir({ baseline: null })
+    const gh = fakeGh()
+    const exec: Exec = async (cmd, args, cwd) =>
+      [cmd, ...args].join(' ') === 'git rev-parse origin/main' ? { code: 128, out: "fatal: ambiguous argument 'origin/main'" } : gh.exec(cmd, args, cwd)
+    const r = await live(dir, 'baseline', undefined, { deps: deps({ exec }).deps })
+    expect(r.status).toBe('stop')
+    expect(r.reason).toMatch(/git rev-parse origin\/main failed/)
+    expect(r.reason).toMatch(/ambiguous argument/)
+    expect(existsSync(join(dir, '.rollout/live-baseline.txt'))).toBe(false)
+  })
+
   test('finding 5: Coolify unreadable → stop, no baseline written', async () => {
     const dir = siteDir({ baseline: null })
     const d = deps({

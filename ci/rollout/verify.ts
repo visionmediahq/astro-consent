@@ -246,12 +246,12 @@ export async function verify(dir: string, report: Report, opts: VerifyOptions = 
     // Never force-push over a consent-banner on GitHub that this tool did not push (a fresh clone
     // sees someone else's branch as origin/consent-banner, so --force-with-lease alone would not stop it).
     const local = (await git('rev-parse', 'HEAD')).out.trim()
-    const remote = await git('ls-remote', '--heads', 'origin', BRANCH)
-    const remoteSha = remote.out.trim().split(/\s+/)[0] ?? ''
+    const remote = await git('ls-remote', '--heads', 'origin', `refs/heads/${BRANCH}`)
+    const remoteSha = headSha(remote.out)
     const pushedPath = join(out, PUSHED_FILE)
     const pushed = existsSync(pushedPath) ? readFileSync(pushedPath, 'utf8').trim() : ''
     if (remote.code !== 0) {
-      record(0, 'push', { pass: false, lines: [`git ls-remote --heads origin ${BRANCH} failed: cannot tell whether the branch on GitHub is ours`, tail(remote.out)] })
+      record(0, 'push', { pass: false, lines: [`git ls-remote --heads origin refs/heads/${BRANCH} failed: cannot tell whether the branch on GitHub is ours`, tail(remote.out)] })
       return finish()
     }
     if (remoteSha !== '' && remoteSha !== local && remoteSha !== pushed) {
@@ -431,7 +431,7 @@ export async function verify(dir: string, report: Report, opts: VerifyOptions = 
     async docker() {
       if (demo) return { pass: true, skipped: true, lines: ['skipped (demo)'] }
       const local = (await git('rev-parse', 'HEAD')).out.trim()
-      const remote = (await git('ls-remote', 'origin', `refs/heads/${BRANCH}`)).out.trim().split(/\s+/)[0] ?? ''
+      const remote = headSha((await git('ls-remote', 'origin', `refs/heads/${BRANCH}`)).out)
       if (!local || remote !== local) return { pass: false, lines: [`origin/${BRANCH} is ${remote || '(missing)'}, HEAD is ${local}: push the branch first`] }
       const repoUrl = (await git('remote', 'get-url', 'origin')).out.trim()
       if (!ORIGIN.test(repoUrl)) return { pass: false, lines: [`origin is ${repoUrl || '(none)'}, not a github.com/visionmediahq repo: step 8 clones only from there`] }
@@ -475,12 +475,33 @@ export async function verify(dir: string, report: Report, opts: VerifyOptions = 
       }
       if (!record(i + 1, name, outcome)) break
     }
+    // npm ci and the build ran in the clone: whatever they left uncommitted makes the next verify
+    // refuse at its own clean check, so it is reported now, as the site's problem it is.
+    if (!demo) {
+      const after = await git('status', '--porcelain', '--untracked-files=all')
+      if (after.code !== 0 || after.out.trim() !== '') {
+        const what = after.code !== 0 ? ['git status failed:', tail(after.out)] : ['left by npm ci or the build:', after.out.trimEnd()]
+        record(STEPS.length + 1, 'clean', {
+          pass: false,
+          lines: ["verify's own npm ci or build left the working tree dirty, so the next verify would refuse: add these to the site's .gitignore on the branch, commit, then rerun verify", ...what],
+        })
+      }
+    }
     return finish()
   } finally {
     for (const p of previews) await p.stop().catch(() => undefined)
     if (checks) await checks.close().catch(() => undefined)
     if (mainDir) await git('worktree', 'remove', '--force', mainDir)
   }
+}
+
+/** The sha of exactly refs/heads/consent-banner in `git ls-remote` output ('' when absent). */
+function headSha(out: string): string {
+  for (const line of out.split('\n')) {
+    const [sha, ref] = line.trim().split(/\s+/)
+    if (ref === `refs/heads/${BRANCH}`) return sha ?? ''
+  }
+  return ''
 }
 
 /** One line per step, as run.ts prints them. */
