@@ -113,7 +113,7 @@ function fake(
     ),
     clip: async (_base, paths) => (
       called.add('clip'),
-      paths.map((path): ClipResult => ({ path, width: 320, kind: 'button', button: 'Neka', w: 80, boxW: 300, over: false, out: false, clipped: false }))
+      paths.map((path): ClipResult => ({ path, width: 320, kind: 'button', button: 'Neka', w: 80, boxW: 300, over: false, out: false, covered: false, clipped: false }))
     ),
     contrast: async (_base, paths) => (
       called.add('contrast'),
@@ -198,7 +198,7 @@ describe('verify', () => {
 
   test('a failing step 5 stops before contrast, screenshots and docker', async () => {
     const dir = siteDir()
-    const clipped: ClipResult = { path: '/', width: 320, kind: 'button', button: 'Acceptera alla', w: 140, boxW: 120, over: false, out: true, clipped: true }
+    const clipped: ClipResult = { path: '/', width: 320, kind: 'button', button: 'Acceptera alla', w: 140, boxW: 120, over: false, out: true, covered: false, clipped: true }
     const f = fake({ checks: { clip: async () => [clipped] } })
     const result = await verify(dir, report(), { deps: f.deps })
     expect(result.steps.at(-1)).toMatchObject({ step: 5, pass: false })
@@ -206,6 +206,15 @@ describe('verify', () => {
     expect(f.called.has('contrast')).toBe(false)
     expect(f.called.has('docker')).toBe(false)
     expect(evidence(dir, '5-clip.txt')).toContain('Acceptera alla')
+  })
+
+  test('step 5: a covered banner button fails and says so (aspokarlsson)', async () => {
+    const dir = siteDir()
+    const covered: ClipResult = { path: '/', width: 360, kind: 'button', button: 'OK', w: 44, boxW: 326, over: false, out: false, covered: true, clipped: true }
+    const f = fake({ checks: { clip: async () => [covered] } })
+    const result = await verify(dir, report(), { deps: f.deps })
+    expect(result.steps.at(-1)).toMatchObject({ step: 5, pass: false })
+    expect(evidence(dir, '5-clip.txt')).toContain('/ 360px button "OK" 44px in 326px CLIPPED (covered by another element)')
   })
 
   test('step 1: an unknown lockfile change fails and is listed', async () => {
