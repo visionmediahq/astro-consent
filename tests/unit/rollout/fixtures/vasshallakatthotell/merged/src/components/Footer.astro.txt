@@ -47,14 +47,14 @@ import PrivacyLinks from '@visionmediahq/astro-consent/components/PrivacyLinks.a
 
         <!-- Prominent phone CTA -->
         <a
-          href="tel:0705771793"
+          href="tel:0700000000"
           class="footer-phone-cta inline-flex items-center gap-3 mb-5"
           onclick="umami.track('phone_click')"
         >
           <span class="phone-bubble flex items-center justify-center w-10 h-10 rounded-full shrink-0" style="background: var(--color-secondary); color: #fff;">
             <Phone size={15} aria-hidden="true" />
           </span>
-          <span class="text-lg font-bold text-white" style="font-family: 'Eczar', serif; letter-spacing: -0.02em;">0705-77 17 93</span>
+          <span class="text-lg font-bold text-white" style="font-family: 'Eczar', serif; letter-spacing: -0.02em;">0700-00 00 00</span>
         </a>
 
         <div class="flex items-start gap-2 text-xs" style="color: rgba(255,255,255,0.35);">
@@ -69,12 +69,12 @@ import PrivacyLinks from '@visionmediahq/astro-consent/components/PrivacyLinks.a
         <ul class="space-y-3 text-sm">
           <li>
             <a
-              href="tel:0705771793"
+              href="tel:0700000000"
               class="flex items-center gap-2 transition-colors hover:text-white"
               onclick="umami.track('phone_click')"
             >
               <Phone size={12} aria-hidden="true" />
-              0705-77 17 93
+              0700-00 00 00
             </a>
           </li>
           <li>

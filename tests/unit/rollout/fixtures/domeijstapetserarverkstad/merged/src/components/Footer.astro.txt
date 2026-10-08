@@ -21,11 +21,11 @@ const currentYear = new Date().getFullYear();
 
     <!-- Column 2: Quick contact (centered on desktop) -->
     <div class="md:text-center">
-      <a href="tel:0739086639" class="footer-phone" onclick="umami.track('phone_click')">
-        0739-086639
+      <a href="tel:0700000000" class="footer-phone" onclick="umami.track('phone_click')">
+        0700-000000
       </a>
-      <a href="mailto:domeijs.tapetserarverkstad@gmail.com" class="footer-email" onclick="umami.track('email_click')">
-        domeijs.tapetserarverkstad@gmail.com
+      <a href="mailto:kontakt@exempel.se" class="footer-email" onclick="umami.track('email_click')">
+        kontakt@exempel.se
       </a>
       <p class="footer-address">
         Ångpannegatan 2E · 417 05 Göteborg

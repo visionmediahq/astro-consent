@@ -25,7 +25,7 @@ import { ArrowUpRight } from '@lucide/astro';
         <div class="contact-primary-block">
           <p class="contact-field-label">Text.</p>
           <a
-            href="tel:0739086639"
+            href="tel:0700000000"
             class="contact-phone"
             onclick="umami.track('phone_click')"
           >
@@ -40,7 +40,7 @@ import { ArrowUpRight } from '@lucide/astro';
         <div class="contact-block">
           <p class="contact-field-label">Text.</p>
           <a
-            href="mailto:domeijs.tapetserarverkstad@gmail.com"
+            href="mailto:kontakt@exempel.se"
             class="contact-email"
             onclick="umami.track('email_click')"
           >
