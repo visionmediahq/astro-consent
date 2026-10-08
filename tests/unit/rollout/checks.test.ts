@@ -102,6 +102,14 @@ describe('extractLinks (ssr crawl)', () => {
       <a>Ingen href</a>`
     expect(extractLinks(html, `${base}/sida/`, base)).toEqual(['/om', '/kontakt/', '/sida/tjanster'])
   })
+
+  it('linjegods: skips /cdn-cgi/, which Cloudflare reserves and answers itself (email obfuscation)', () => {
+    const html = `
+      <a href="/cdn-cgi/l/email-protection#a1c8cfc7cee1">Mejl</a>
+      <a href="https://exempel.se/cdn-cgi/l/email-protection">Mejl igen</a>
+      <a href="/om/cdn-cgi/">En sida som bara heter så</a>`
+    expect(extractLinks(html, `${base}/`, base)).toEqual(['/om/cdn-cgi/'])
+  })
 })
 
 describe('isBlocked', () => {

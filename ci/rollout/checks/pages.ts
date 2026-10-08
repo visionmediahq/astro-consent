@@ -52,6 +52,9 @@ export function extractLinks(html: string, pageUrl: string, base: string): strin
       continue
     }
     if (url.origin !== origin || !/^https?:$/.test(url.protocol)) continue
+    // Cloudflare reserves /cdn-cgi/ on every domain it proxies and answers it itself: email
+    // obfuscation rewrites mailto: links to /cdn-cgi/l/email-protection. Not the site's page.
+    if (url.pathname.startsWith('/cdn-cgi/')) continue
     // A file (pdf, image, …) is not a page; .html is.
     const last = url.pathname.split('/').at(-1) ?? ''
     if (/\.[a-z0-9]+$/i.test(last) && !/\.html?$/i.test(last)) continue
