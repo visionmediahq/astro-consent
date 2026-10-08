@@ -139,6 +139,37 @@ describe('diffLock', () => {
     expect(d.unknown).toEqual([expect.stringContaining('root')])
   })
 
+  test('the root engines catching up with package.json is allowed (stale lockfile on main, mannature)', () => {
+    const d = diffLock(
+      v3({ '': { name: 'site', dependencies: {}, engines: { node: '>=22.0.0' } } }),
+      v3({ '': { name: 'site', dependencies: { [PKG]: '^1.0.2' }, engines: { node: '>=22.12.0' } } }),
+      PKG,
+      { engines: { node: '>=22.12.0' } },
+    )
+    expect(d.unknown).toEqual([])
+    expect(d.allowed).toEqual([`(root): dependency on ${PKG}; engines synced to package.json ({"node":">=22.0.0"} → {"node":">=22.12.0"})`])
+  })
+
+  test('a root engines change that does not match package.json, or without package.json, is unknown', () => {
+    const before = v3({ '': { name: 'site', dependencies: {}, engines: { node: '>=22.0.0' } } })
+    const after = v3({ '': { name: 'site', dependencies: { [PKG]: '^1.0.2' }, engines: { node: '>=22.12.0' } } })
+    expect(diffLock(before, after, PKG, { engines: { node: '>=24.0.0' } }).unknown).toEqual(['(root): engines changed'])
+    expect(diffLock(before, after, PKG).unknown).toEqual(['(root): engines changed'])
+    // Dropped from the lockfile while package.json has none: still a sync, but never with a missing package.json value.
+    const dropped = v3({ '': { name: 'site', dependencies: { [PKG]: '^1.0.2' } } })
+    expect(diffLock(before, dropped, PKG, { engines: undefined }).unknown).toEqual(['(root): engines changed'])
+  })
+
+  test('an engines sync does not hide another root change', () => {
+    const d = diffLock(
+      v3({ '': { name: 'site', dependencies: {}, engines: { node: '>=22.0.0' } } }),
+      v3({ '': { name: 'site', dependencies: { [PKG]: '^1.0.2', react: '^19.0.0' }, engines: { node: '>=22.12.0' } } }),
+      PKG,
+      { engines: { node: '>=22.12.0' } },
+    )
+    expect(d.unknown).toEqual(['(root): dependencies, engines changed'])
+  })
+
   test('npm re-sorting the root dependencies is not a change (spec C3.1)', () => {
     const d = diffLock(
       v3({ '': { name: 'site', dependencies: { astro: '^7.0.0', '@lucide/astro': '^1.0.0' } } }),

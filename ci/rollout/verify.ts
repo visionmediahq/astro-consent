@@ -316,12 +316,19 @@ export async function verify(dir: string, report: Report, opts: VerifyOptions = 
         const ci = await exec('npm', ['ci', '--no-audit', '--no-fund'], cwd)
         if (ci.code !== 0) return { pass: false, lines: [`npm ci failed on ${side}:`, tail(ci.out)] }
       }
-      const { allowed, unknown } = diffLock(readFileSync(join(mainDir!, 'package-lock.json'), 'utf8'), readFileSync(join(root, 'package-lock.json'), 'utf8'), PKG)
+      const branchPkg = readFileSync(join(root, 'package.json'), 'utf8')
+      let engines: unknown
+      try {
+        engines = (JSON.parse(branchPkg) as { engines?: unknown }).engines
+      } catch {
+        engines = undefined // the package.json comparison below reports it
+      }
+      const { allowed, unknown } = diffLock(readFileSync(join(mainDir!, 'package-lock.json'), 'utf8'), readFileSync(join(root, 'package-lock.json'), 'utf8'), PKG, { engines })
       lines.push('package-lock.json, main → branch:', ...allowed.map((l) => `  allowed ${l}`), ...unknown.map((l) => `  UNKNOWN ${l}`))
       const mainPkg = await git('show', 'origin/main:package.json')
       let pkgChanges: string[]
       try {
-        pkgChanges = diffPackageJson(mainPkg.out, readFileSync(join(root, 'package.json'), 'utf8'), PKG)
+        pkgChanges = diffPackageJson(mainPkg.out, branchPkg, PKG)
       } catch (e) {
         pkgChanges = [`could not compare package.json with origin/main: ${(e as Error).message}`]
       }
