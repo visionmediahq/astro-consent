@@ -1,7 +1,7 @@
 // Clipped buttons (spec C3 step 5), ported from the pilot kit's clip.ts. The pilot checked the
 // embed's "Visa" at 320/360/375 px; this checks every visible banner and embed button, plus 1280.
 import type { Browser } from '@playwright/test'
-import { freshPage } from './requests'
+import { freshPage, gotoPage } from './requests'
 
 export interface ClipResult {
   path: string
@@ -63,7 +63,7 @@ export async function checkClip(
     for (const width of widths) {
       const { context, page } = await freshPage(browser, opts.stub ?? true, { width, height: 800 })
       try {
-        await page.goto(base + path, { waitUntil: 'networkidle', timeout: 45_000 })
+        await gotoPage(page, base + path)
         await page.waitForTimeout(300)
         const rows = (await page.evaluate(MEASURE)) as Omit<ClipResult, 'path' | 'width' | 'clipped'>[]
         for (const r of rows) results.push({ path, width, ...r, clipped: r.over || r.out })

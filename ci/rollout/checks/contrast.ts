@@ -9,7 +9,7 @@
 // feTurbulence at 20 % opacity) is decoration on top of the button colour and does not count.
 import type { Browser, Page } from '@playwright/test'
 import { type Rgb, wcagContrast } from '../lib/colour'
-import { freshPage } from './requests'
+import { freshPage, gotoPage } from './requests'
 
 type Rgba = [number, number, number, number] // 0..255, alpha too
 
@@ -114,7 +114,7 @@ export async function checkContrast(
   for (const path of paths) {
     const { context, page } = await freshPage(browser, opts.stub ?? true)
     try {
-      await page.goto(base + path, { waitUntil: 'networkidle', timeout: 45_000 })
+      await gotoPage(page, base + path)
       // DaisyUI buttons animate colour changes; read the settled value.
       await page.addStyleTag({ content: '* { transition: none !important }' })
       await page.waitForTimeout(300)
