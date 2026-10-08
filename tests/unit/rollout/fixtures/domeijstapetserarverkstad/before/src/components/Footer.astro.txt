@@ -1,0 +1,154 @@
+---
+const currentYear = new Date().getFullYear();
+---
+
+<footer
+  class="site-footer py-12 px-8 md:px-12"
+  style="background: var(--color-bg-dark, #0e0a06); border-top: 1px solid rgba(255,255,255,0.06);"
+>
+  <div class="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-8 items-end">
+
+    <!-- Column 1: Logotype text + tagline -->
+    <div>
+      <p class="footer-brand">Domeijs Tapetserarverkstad</p>
+      <p class="footer-tagline">
+        Auktoriserad möbeltapetserare<br />
+        Hisingen, Göteborg
+      </p>
+    </div>
+
+    <!-- Column 2: Quick contact (centered on desktop) -->
+    <div class="md:text-center">
+      <a href="tel:0739086639" class="footer-phone" onclick="umami.track('phone_click')">
+        0739-086639
+      </a>
+      <a href="mailto:domeijs.tapetserarverkstad@gmail.com" class="footer-email" onclick="umami.track('email_click')">
+        domeijs.tapetserarverkstad@gmail.com
+      </a>
+      <p class="footer-address">
+        Ångpannegatan 2E · 417 05 Göteborg
+      </p>
+    </div>
+
+    <!-- Column 3: Social + attribution (right-aligned) -->
+    <div class="md:text-right">
+      <div class="flex gap-3 md:justify-end mb-4">
+        <a
+          href="https://www.facebook.com/domeijs.tapetserarverkstad/?locale=sv_SE"
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label="Facebook"
+          class="footer-social"
+          onclick="umami.track('nav_click', {item: 'facebook footer'})"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/>
+          </svg>
+        </a>
+        <a
+          href="https://www.instagram.com/domeijs_tapetserarverkstad/"
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label="Instagram"
+          class="footer-social"
+          onclick="umami.track('nav_click', {item: 'instagram footer'})"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <rect x="2" y="2" width="20" height="20" rx="5" ry="5"/>
+            <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/>
+            <line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/>
+          </svg>
+        </a>
+      </div>
+      <p class="footer-copy">&copy; {currentYear} Domeijs Tapetserarverkstad</p>
+      <p class="footer-attr">Byggd av Vision Media</p>
+    </div>
+
+  </div>
+</footer>
+
+<style>
+  .footer-brand {
+    font-family: var(--font-heading, serif);
+    font-size: 1rem;
+    font-weight: 400;
+    color: rgba(255, 255, 255, 0.8);
+    margin-bottom: 0.5rem;
+    letter-spacing: 0.01em;
+  }
+
+  .footer-tagline {
+    font-family: var(--font-body, sans-serif);
+    font-size: 0.78rem;
+    line-height: 1.7;
+    color: rgba(255, 255, 255, 0.52);
+    letter-spacing: 0.02em;
+  }
+
+  .footer-phone {
+    display: block;
+    font-family: var(--font-heading, serif);
+    font-size: 1.35rem;
+    font-weight: 400;
+    color: var(--color-primary);
+    text-decoration: none;
+    margin-bottom: 0.5rem;
+    transition: opacity 0.2s ease;
+  }
+
+  .footer-phone:hover {
+    opacity: 0.75;
+  }
+
+  .footer-email {
+    display: block;
+    font-family: var(--font-body, sans-serif);
+    font-size: 0.72rem;
+    color: rgba(255, 255, 255, 0.45);
+    text-decoration: none;
+    margin-bottom: 0.35rem;
+    letter-spacing: 0.01em;
+    transition: color 0.2s ease;
+    overflow-wrap: break-word;
+  }
+
+  .footer-email:hover {
+    color: rgba(255, 255, 255, 0.75);
+  }
+
+  .footer-address {
+    font-family: var(--font-body, sans-serif);
+    font-size: 0.75rem;
+    color: rgba(255, 255, 255, 0.52);
+    letter-spacing: 0.03em;
+  }
+
+  .footer-social {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    color: rgba(255, 255, 255, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    transition: color 0.2s ease, border-color 0.2s ease;
+  }
+
+  .footer-social:hover {
+    color: var(--color-primary);
+    border-color: color-mix(in srgb, var(--color-primary) 40%, transparent);
+  }
+
+  .footer-copy {
+    font-family: var(--font-body, sans-serif);
+    font-size: 0.72rem;
+    color: rgba(255, 255, 255, 0.45);
+    margin-bottom: 0.25rem;
+  }
+
+  .footer-attr {
+    font-family: var(--font-body, sans-serif);
+    font-size: 0.68rem;
+    color: rgba(255, 255, 255, 0.15);
+  }
+</style>

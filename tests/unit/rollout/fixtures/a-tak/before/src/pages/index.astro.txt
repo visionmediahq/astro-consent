@@ -1,0 +1,53 @@
+---
+import Base from '../layouts/Base.astro';
+import Header from '../components/Header.astro';
+import Footer from '../components/Footer.astro';
+import Hero from '../components/Hero.astro';
+import TrustBadges from '../components/TrustBadges.astro';
+import AboutSection from '../components/AboutSection.astro';
+import CtaBanner from '../components/CtaBanner.astro';
+import ServicesSection from '../components/ServicesSection.astro';
+import ExtraServices from '../components/ExtraServices.astro';
+import FaqSection from '../components/FaqSection.astro';
+import PageLinksSection from '../components/PageLinksSection.astro';
+import BookingAndTestimonial from '../components/BookingAndTestimonial.astro';
+import SchemaOrg from '../components/SchemaOrg.astro';
+
+export const prerender = true;
+---
+
+<Base
+  title="Takläggare Varberg & Kungsbacka – A-Tak AB"
+  description="A-Tak AB – mer än 30 års erfarenhet av takläggning i Varberg, Kungsbacka, Halmstad och Falkenberg. Tätskiktsgaranti, omläggning och renovering."
+  canonical="https://a-tak.se/"
+  ogImage="/og-image.jpg"
+  preloadImage="/images/papptak.webp"
+>
+  <SchemaOrg
+    name="Annebergsvägens Tak AB"
+    url="https://a-tak.se/"
+    telephone="+46340679333"
+    email="info@a-tak.se"
+    address={{
+      streetAddress: 'Annebergsvägen 12',
+      addressLocality: 'Varberg',
+      postalCode: '432 48',
+      addressCountry: 'SE',
+    }}
+    description="Professionell takläggning med mer än 30 års erfarenhet. Specialister inom tätskikt, omläggning och renovering i Varberg, Kungsbacka, Halmstad och Falkenberg."
+    image="https://a-tak.se/og-image.jpg"
+  />
+  <Header />
+  <main>
+    <Hero />
+    <TrustBadges />
+    <AboutSection />
+    <ServicesSection />
+    <ExtraServices />
+    <FaqSection />
+    <CtaBanner />
+    <PageLinksSection />
+    <BookingAndTestimonial />
+  </main>
+  <Footer />
+</Base>

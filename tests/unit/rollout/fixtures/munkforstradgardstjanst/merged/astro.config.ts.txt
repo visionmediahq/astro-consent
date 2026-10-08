@@ -1,0 +1,38 @@
+import { defineConfig } from 'astro/config'
+import node from '@astrojs/node'
+import sitemap from '@astrojs/sitemap'
+import tailwindcss from '@tailwindcss/vite'
+import consent from '@visionmediahq/astro-consent'
+
+// https://astro.build/config
+export default defineConfig({
+  // Required for sitemap URL generation.
+  // import.meta.env reads from .env files (dev); process.env reads from system env (Docker/CI).
+  // Builder agent sets SITE_URL per client.
+  site: import.meta.env.SITE_URL ?? process.env.SITE_URL ?? 'https://example.com',
+
+  output: 'server',
+
+  security: {
+    // Disabled because the contact endpoint is protected by reCAPTCHA v3 instead.
+    // Re-enable only after ensuring SITE_URL matches the request origin in all environments.
+    checkOrigin: false,
+  },
+
+  adapter: node({
+    mode: 'standalone',
+  }),
+
+  integrations: [
+    consent(),
+    // In SSR mode pages are not auto-discovered.
+    // Builder agent should either:
+    //   a) add page URLs to the customPages array below, or
+    //   b) mark individual pages with `export const prerender = true`
+    sitemap(),
+  ],
+
+  vite: {
+    plugins: [tailwindcss()],
+  },
+})

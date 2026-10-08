@@ -27,6 +27,9 @@ by Vision Media's Astro sites. Sites install it straight from this GitHub repo. 
   same row, one click. Nothing is pre-ticked, the banner is not modal and never takes focus on its
   own. A test compares the two buttons' classes and computed colours.
 - **TypeScript only, strict.** No `.js`/`.mjs`, scripts and CI helpers included.
+  Exception: `tests/unit/rollout/fixtures/` holds files copied from client sites as data, with a
+  `.txt` suffix; they are excluded from `tsc` and scanned with `ci/rollout/scan-secrets.ts` before
+  commit.
 - **DaisyUI 5:** `form-control` no longer exists and `.label` does not wrap and dims its text. Use
   plain flex rows for anything descriptive.
 - **Never stub `window.umami`** outside tests. Call `window.umami?.track(...)`.
@@ -57,6 +60,7 @@ by Vision Media's Astro sites. Sites install it straight from this GitHub repo. 
 | `demo/` | Demo site the tests build in two modes (`privacy.consent.json`, `privacy.notice.json`) |
 | `scripts/` | `demo-copy`, `build-demo`, `pack-install`, `gen-services` |
 | `ci/wire-starter.ts` | Applies the site wiring to an astro-starter checkout (CI and rollout tool) |
+| `ci/rollout/` | Rollout tool (repo tool, not shipped): detect, wire, verify, pr, live, merge for client sites; state in `<site>/.rollout/`; see README "Rollout tool" |
 
 ## Tests
 

@@ -1,0 +1,54 @@
+{
+  "site": "demo",
+  "domains": ["demo.test"],
+  "astro": { "major": 7, "output": "server" },
+  "config": { "path": "astro.config.ts", "hasIntegrations": true, "hasTailwindVite": true, "isDefineConfigObject": true },
+  "css": { "entry": "src/styles/global.css", "tailwindMajor": 4, "daisyuiMajor": 5, "primaries": [] },
+  "layouts": [
+    {
+      "file": "src/layouts/Base.astro",
+      "pages": ["src/pages/index.astro", "src/pages/karta.astro", "src/pages/skript.astro", "src/pages/ssr.astro"],
+      "footerRef": null
+    }
+  ],
+  "footers": [
+    { "file": "src/layouts/Base.astro", "start": 0, "end": 0, "kind": "layout", "textClass": "text-neutral-content", "alignment": "unknown", "centred": false }
+  ],
+  "footerless": ["src/pages/utan-banner.astro"],
+  "policyPage": null,
+  "iframes": [
+    {
+      "file": "src/pages/karta.astro",
+      "start": 0,
+      "end": 0,
+      "srcKind": "literal",
+      "src": "https://www.google.com/maps/embed?pb=demo",
+      "host": "www.google.com",
+      "service": "google-maps",
+      "title": "Karta till oss",
+      "classes": null,
+      "height": null,
+      "style": null
+    },
+    {
+      "file": "src/pages/karta.astro",
+      "start": 0,
+      "end": 0,
+      "srcKind": "literal",
+      "src": "https://maps.google.com/maps?q=demo&output=embed",
+      "host": "maps.google.com",
+      "service": "google-maps",
+      "title": "Karta två",
+      "classes": null,
+      "height": null,
+      "style": null
+    }
+  ],
+  "trackers": [],
+  "banners": [],
+  "recaptcha": false,
+  "inventedMaps": [],
+  "alreadyWired": [],
+  "classification": "maps",
+  "reasons": []
+}

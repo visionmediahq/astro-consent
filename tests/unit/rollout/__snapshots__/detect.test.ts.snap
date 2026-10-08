@@ -1,0 +1,569 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`detect > pilot a-tak: needs-human, matching the committed snapshot 1`] = `
+{
+  "alreadyWired": [],
+  "astro": {
+    "major": 6,
+    "output": "server",
+  },
+  "banners": [
+    "home-made gate: localStorage 'maps-consent' in src/components/KontaktMap.astro",
+  ],
+  "classification": "needs-human",
+  "config": {
+    "hasIntegrations": true,
+    "hasTailwindVite": true,
+    "isDefineConfigObject": true,
+    "path": "astro.config.ts",
+  },
+  "css": {
+    "daisyuiMajor": 5,
+    "entry": "src/styles/global.css",
+    "primaries": [
+      "#570df8",
+      "#ff0000",
+    ],
+    "tailwindMajor": 4,
+  },
+  "domains": [
+    "a-tak.se",
+  ],
+  "footerless": [
+    "src/pages/404.astro",
+  ],
+  "footers": [
+    {
+      "alignment": "left",
+      "centred": false,
+      "end": 3836,
+      "file": "src/components/Footer.astro",
+      "kind": "component",
+      "start": 110,
+      "textClass": "text-white",
+    },
+  ],
+  "iframes": [
+    {
+      "classes": null,
+      "end": 1380,
+      "file": "src/components/KontaktMap.astro",
+      "height": "420",
+      "host": "www.google.com",
+      "service": "google-maps",
+      "src": null,
+      "srcKind": "unresolved",
+      "start": 1033,
+      "style": "border:0; display:none; position:absolute; inset:0;",
+      "title": "Karta – Annebergsvägens Tak AB, Varberg",
+    },
+  ],
+  "inventedMaps": [
+    "https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d2196.5!2d12.2558!3d57.1058!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x465169e2e2e2e2e3%3A0x0!2sAnnebergsv%C3%A4gen+12%2C+432+48+Varberg!5e0!3m2!1ssv!2sse!4v1700000000000!5m2!1ssv!2sse",
+  ],
+  "layouts": [
+    {
+      "file": "src/layouts/Base.astro",
+      "footerRef": {
+        "name": "VisionFooter",
+        "start": 4995,
+      },
+      "pages": [
+        "src/pages/404.astro",
+        "src/pages/index.astro",
+        "src/pages/kontakt.astro",
+      ],
+    },
+  ],
+  "policyPage": null,
+  "reasons": [
+    "unresolved iframe src in src/components/KontaktMap.astro",
+    "existing banner: home-made gate: localStorage 'maps-consent' in src/components/KontaktMap.astro",
+  ],
+  "recaptcha": true,
+  "site": "a-tak",
+  "trackers": [],
+}
+`;
+
+exports[`detect > pilot aspomad: maps, matching the committed snapshot 1`] = `
+{
+  "alreadyWired": [],
+  "astro": {
+    "major": 6,
+    "output": "server",
+  },
+  "banners": [],
+  "classification": "maps",
+  "config": {
+    "hasIntegrations": false,
+    "hasTailwindVite": true,
+    "isDefineConfigObject": true,
+    "path": "astro.config.ts",
+  },
+  "css": {
+    "daisyuiMajor": 5,
+    "entry": "src/styles/global.css",
+    "primaries": [
+      "#8B4513",
+      "#570df8",
+    ],
+    "tailwindMajor": 4,
+  },
+  "domains": [
+    "aspomad.se",
+  ],
+  "footerless": [],
+  "footers": [
+    {
+      "alignment": "centred",
+      "centred": true,
+      "end": 5545,
+      "file": "src/components/Footer.astro",
+      "kind": "component",
+      "start": 631,
+      "textClass": "text-neutral-content",
+    },
+  ],
+  "iframes": [
+    {
+      "classes": null,
+      "dataPath": "src/data/kontakt.json",
+      "end": 359,
+      "file": "src/components/ContactMap.astro",
+      "height": "100%",
+      "host": "www.google.com",
+      "service": "google-maps",
+      "src": "https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d2150.8471873476244!2d15.587845!3d56.167886!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x4657d0b4c8c8c8c8%3A0x4c8c8c8c8c8c8c8c!2sMadviksv%C3%A4gen%2C%20373%2064%20Drottningsk%C3%A4r!5e0!3m2!1ssv!2sse!4v1234567890123!5m2!1ssv!2sse",
+      "srcKind": "data-file",
+      "start": 112,
+      "style": "border:0;",
+      "title": "Karta till Aspö Mad Vin & Café",
+    },
+  ],
+  "inventedMaps": [
+    "https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d2150.8471873476244!2d15.587845!3d56.167886!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x4657d0b4c8c8c8c8%3A0x4c8c8c8c8c8c8c8c!2sMadviksv%C3%A4gen%2C%20373%2064%20Drottningsk%C3%A4r!5e0!3m2!1ssv!2sse!4v1234567890123!5m2!1ssv!2sse",
+  ],
+  "layouts": [
+    {
+      "file": "src/layouts/Base.astro",
+      "footerRef": {
+        "name": "Footer",
+        "start": 4442,
+      },
+      "pages": [
+        "src/pages/404.astro",
+        "src/pages/kontakt.astro",
+      ],
+    },
+  ],
+  "policyPage": null,
+  "reasons": [],
+  "recaptcha": false,
+  "site": "aspomad",
+  "trackers": [],
+}
+`;
+
+exports[`detect > pilot domeijstapetserarverkstad: maps, matching the committed snapshot 1`] = `
+{
+  "alreadyWired": [],
+  "astro": {
+    "major": 6,
+    "output": "server",
+  },
+  "banners": [],
+  "classification": "maps",
+  "config": {
+    "hasIntegrations": true,
+    "hasTailwindVite": true,
+    "isDefineConfigObject": true,
+    "path": "astro.config.ts",
+  },
+  "css": {
+    "daisyuiMajor": 5,
+    "entry": "src/styles/global.css",
+    "primaries": [
+      "#eb5e28",
+    ],
+    "tailwindMajor": 4,
+  },
+  "domains": [
+    "domeijstapetserarverkstad.se",
+  ],
+  "footerless": [
+    "src/pages/404.astro",
+  ],
+  "footers": [
+    {
+      "alignment": "unknown",
+      "centred": false,
+      "end": 2631,
+      "file": "src/components/Footer.astro",
+      "kind": "component",
+      "start": 55,
+      "textClass": null,
+    },
+  ],
+  "iframes": [
+    {
+      "classes": null,
+      "end": 4321,
+      "file": "src/components/Contact.astro",
+      "height": "100%",
+      "host": "www.google.com",
+      "service": "google-maps",
+      "src": "https://www.google.com/maps?q=%C3%85ngpannegatan+2E%2C+417+05+G%C3%B6teborg&output=embed",
+      "srcKind": "literal",
+      "start": 3873,
+      "style": "border:0; display:block; width:100%; min-height:480px;",
+      "title": "Karta till Domeijs tapetserarverkstad, Ångpannegatan 2E, Göteborg",
+    },
+  ],
+  "inventedMaps": [],
+  "layouts": [
+    {
+      "file": "src/layouts/Base.astro",
+      "footerRef": null,
+      "pages": [
+        "src/pages/404.astro",
+        "src/pages/index.astro",
+      ],
+    },
+  ],
+  "policyPage": null,
+  "reasons": [],
+  "recaptcha": false,
+  "site": "domeijstapetserarverkstad",
+  "trackers": [],
+}
+`;
+
+exports[`detect > pilot munkforstradgardstjanst: notice, matching the committed snapshot 1`] = `
+{
+  "alreadyWired": [],
+  "astro": {
+    "major": 6,
+    "output": "server",
+  },
+  "banners": [],
+  "classification": "notice",
+  "config": {
+    "hasIntegrations": true,
+    "hasTailwindVite": true,
+    "isDefineConfigObject": true,
+    "path": "astro.config.ts",
+  },
+  "css": {
+    "daisyuiMajor": 5,
+    "entry": "src/styles/global.css",
+    "primaries": [
+      "#570df8",
+      "#ff3824",
+    ],
+    "tailwindMajor": 4,
+  },
+  "domains": [
+    "munkforstradgardstjanst.se",
+  ],
+  "footerless": [
+    "src/pages/404.astro",
+  ],
+  "footers": [
+    {
+      "alignment": "left",
+      "centred": false,
+      "end": 5246,
+      "file": "src/components/Footer.astro",
+      "kind": "component",
+      "start": 116,
+      "textClass": "text-neutral-content",
+    },
+  ],
+  "iframes": [],
+  "inventedMaps": [],
+  "layouts": [
+    {
+      "file": "src/layouts/Base.astro",
+      "footerRef": {
+        "name": "VisionFooter",
+        "start": 4533,
+      },
+      "pages": [
+        "src/pages/404.astro",
+        "src/pages/index.astro",
+      ],
+    },
+  ],
+  "policyPage": null,
+  "reasons": [],
+  "recaptcha": false,
+  "site": "munkforstradgardstjanst",
+  "trackers": [],
+}
+`;
+
+exports[`detect > pilot nhrk: needs-human, matching the committed snapshot 1`] = `
+{
+  "alreadyWired": [],
+  "astro": {
+    "major": 7,
+    "output": "server",
+  },
+  "banners": [],
+  "classification": "needs-human",
+  "config": {
+    "hasIntegrations": false,
+    "hasTailwindVite": true,
+    "isDefineConfigObject": true,
+    "path": "astro.config.ts",
+  },
+  "css": {
+    "daisyuiMajor": 5,
+    "entry": "src/styles/global.css",
+    "primaries": [
+      "#570df8",
+      "#a05200",
+    ],
+    "tailwindMajor": 4,
+  },
+  "domains": [
+    "nhrk.se",
+  ],
+  "footerless": [
+    "src/pages/404.astro",
+  ],
+  "footers": [
+    {
+      "alignment": "centred",
+      "centred": true,
+      "end": 5747,
+      "file": "src/components/Footer.astro",
+      "kind": "component",
+      "start": 501,
+      "textClass": "text-white",
+    },
+  ],
+  "iframes": [
+    {
+      "classes": null,
+      "end": 3342,
+      "file": "src/pages/kalendrar.astro",
+      "height": "700",
+      "host": "calendar.google.com",
+      "service": null,
+      "src": null,
+      "srcKind": "unresolved",
+      "start": 3072,
+      "style": null,
+      "title": "{cal.title}",
+    },
+  ],
+  "inventedMaps": [],
+  "layouts": [
+    {
+      "file": "src/layouts/Base.astro",
+      "footerRef": {
+        "name": "VisionFooter",
+        "start": 4968,
+      },
+      "pages": [
+        "src/pages/404.astro",
+        "src/pages/index.astro",
+        "src/pages/kalendrar.astro",
+      ],
+    },
+  ],
+  "policyPage": null,
+  "reasons": [
+    "unresolved iframe src in src/pages/kalendrar.astro",
+  ],
+  "recaptcha": false,
+  "site": "nhrk",
+  "trackers": [],
+}
+`;
+
+exports[`detect > pilot traforadling: maps, matching the committed snapshot 1`] = `
+{
+  "alreadyWired": [],
+  "astro": {
+    "major": 6,
+    "output": "server",
+  },
+  "banners": [],
+  "classification": "maps",
+  "config": {
+    "hasIntegrations": true,
+    "hasTailwindVite": true,
+    "isDefineConfigObject": true,
+    "path": "astro.config.ts",
+  },
+  "css": {
+    "daisyuiMajor": 5,
+    "entry": "src/styles/global.css",
+    "primaries": [
+      "#2C5F3A",
+      "#005229",
+      "#0460c7",
+    ],
+    "tailwindMajor": 4,
+  },
+  "domains": [
+    "traforadling.se",
+  ],
+  "footerless": [
+    "src/pages/404.astro",
+    "src/pages/index.astro",
+  ],
+  "footers": [
+    {
+      "alignment": "unknown",
+      "centred": false,
+      "end": 1865,
+      "file": "src/components/FooterLevene.astro",
+      "kind": "component",
+      "start": 47,
+      "textClass": null,
+    },
+    {
+      "alignment": "unknown",
+      "centred": false,
+      "end": 2656,
+      "file": "src/components/FooterSkaraborg.astro",
+      "kind": "component",
+      "start": 107,
+      "textClass": null,
+    },
+  ],
+  "iframes": [
+    {
+      "callSites": [
+        {
+          "file": "src/pages/kontakt-levene.astro",
+          "src": "https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d2116.3748!2d12.8920!3d58.3268!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x464c19c12a7fc1f1%3A0x1b1c4e5b6a7d8e9f!2sLevene+Furubacken+1%2C+534+93+Stora+Levene!5e0!3m2!1ssv!2sse!4v1700000000000!5m2!1ssv!2sse",
+        },
+        {
+          "file": "src/pages/kontakt.astro",
+          "src": "https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d2127.8!2d14.1!3d58.7!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x0%3A0x0!2sSkaraborgs+Tr%C3%A4f%C3%B6r%C3%A4dling+AB!5e0!3m2!1ssv!2sse!4v1700000000000!5m2!1ssv!2sse",
+        },
+      ],
+      "classes": null,
+      "end": 2209,
+      "file": "src/components/ContactFormSection.astro",
+      "height": "320",
+      "host": "www.google.com",
+      "service": "google-maps",
+      "src": null,
+      "srcKind": "expression",
+      "start": 1340,
+      "style": "border:0; display:block;",
+      "title": "{isLevene ? 'Karta till Levene Såg AB' : 'Karta till Skaraborgs Träförädling AB'}",
+    },
+  ],
+  "inventedMaps": [
+    "https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d2116.3748!2d12.8920!3d58.3268!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x464c19c12a7fc1f1%3A0x1b1c4e5b6a7d8e9f!2sLevene+Furubacken+1%2C+534+93+Stora+Levene!5e0!3m2!1ssv!2sse!4v1700000000000!5m2!1ssv!2sse",
+    "https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d2127.8!2d14.1!3d58.7!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x0%3A0x0!2sSkaraborgs+Tr%C3%A4f%C3%B6r%C3%A4dling+AB!5e0!3m2!1ssv!2sse!4v1700000000000!5m2!1ssv!2sse",
+  ],
+  "layouts": [
+    {
+      "file": "src/layouts/Base.astro",
+      "footerRef": {
+        "name": "VisionFooter",
+        "start": 4904,
+      },
+      "pages": [
+        "src/pages/404.astro",
+        "src/pages/index.astro",
+        "src/pages/kontakt-levene.astro",
+        "src/pages/kontakt.astro",
+      ],
+    },
+  ],
+  "policyPage": null,
+  "reasons": [],
+  "recaptcha": true,
+  "site": "traforadling",
+  "trackers": [],
+}
+`;
+
+exports[`detect > pilot vasshallakatthotell: maps, matching the committed snapshot 1`] = `
+{
+  "alreadyWired": [],
+  "astro": {
+    "major": 7,
+    "output": "server",
+  },
+  "banners": [],
+  "classification": "maps",
+  "config": {
+    "hasIntegrations": true,
+    "hasTailwindVite": true,
+    "isDefineConfigObject": true,
+    "path": "astro.config.ts",
+  },
+  "css": {
+    "daisyuiMajor": 5,
+    "entry": "src/styles/global.css",
+    "primaries": [
+      "#2aa5a5",
+    ],
+    "tailwindMajor": 4,
+  },
+  "domains": [
+    "vasshallakatthotell.se",
+  ],
+  "footerless": [
+    "src/pages/404.astro",
+  ],
+  "footers": [
+    {
+      "alignment": "left",
+      "centred": false,
+      "end": 7482,
+      "file": "src/components/Footer.astro",
+      "kind": "component",
+      "start": 100,
+      "textClass": null,
+    },
+  ],
+  "iframes": [
+    {
+      "classes": null,
+      "end": 4488,
+      "file": "src/components/ContactSection.astro",
+      "height": "100%",
+      "host": "maps.google.com",
+      "service": "google-maps",
+      "src": "https://maps.google.com/maps?q=57.698734,13.042359&hl=sv&z=15&output=embed",
+      "srcKind": "literal",
+      "start": 4110,
+      "style": "border:0;",
+      "title": "Karta till Vasshalla Katthotell i Gånghester",
+    },
+  ],
+  "inventedMaps": [],
+  "layouts": [
+    {
+      "file": "src/layouts/Base.astro",
+      "footerRef": {
+        "name": "VisionFooter",
+        "start": 4475,
+      },
+      "pages": [
+        "src/pages/404.astro",
+        "src/pages/gdpr.astro",
+        "src/pages/hitta-hit-kontakt.astro",
+        "src/pages/index.astro",
+        "src/pages/om-oss.astro",
+      ],
+    },
+  ],
+  "policyPage": "/gdpr",
+  "reasons": [],
+  "recaptcha": true,
+  "site": "vasshallakatthotell",
+  "trackers": [],
+}
+`;

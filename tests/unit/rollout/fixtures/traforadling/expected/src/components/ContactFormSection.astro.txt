@@ -1,0 +1,261 @@
+---
+import { Send, MapPin } from '@lucide/astro';
+import ConsentEmbed from '@visionmediahq/astro-consent/components/ConsentEmbed.astro';
+
+interface Props {
+  formTarget?: 'levene' | 'skaraborg';
+}
+
+const { formTarget = 'levene' } = Astro.props;
+const apiRoute = formTarget === 'levene' ? '/api/contact-levene' : '/api/contact';
+const isLevene = formTarget === 'levene';
+---
+
+<section class="contact-section relative overflow-hidden">
+  <!-- Background texture -->
+  <div
+    class="absolute inset-0 z-0 opacity-20"
+    style="background-image: url('/images/hyvleri_img-jpg-11a40512.webp'); background-size: cover; background-position: center;"
+    aria-hidden="true"
+  ></div>
+  <div class="absolute inset-0 z-0 contact-overlay"></div>
+
+  <div class="relative z-10 max-w-5xl mx-auto px-6 py-20 grid grid-cols-1 md:grid-cols-2 gap-12 items-start">
+
+    <!-- Left: Map + address -->
+    <div data-animate>
+      <div class="flex items-center gap-3 mb-6">
+        <div class="map-icon-wrap">
+          <MapPin size={18} color="white" aria-hidden="true" />
+        </div>
+        <div>
+          <p class="text-xs font-bold uppercase tracking-widest text-white/60">Text.</p>
+          <p class="text-sm text-white/90 mt-0.5">
+            {isLevene ? 'Levene Furubacken 1, 534 93 Stora Levene' : 'Jonsboda Täppan 1, 545 93 Töreboda'}
+          </p>
+        </div>
+      </div>
+
+      <div class="map-frame overflow-hidden">
+        <div class="grid h-[320px]"><ConsentEmbed service="google-maps" src={isLevene
+            ? 'https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d2116.3748!2d12.8920!3d58.3268!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x464c19c12a7fc1f1%3A0x1b1c4e5b6a7d8e9f!2sLevene+Furubacken+1%2C+534+93+Stora+Levene!5e0!3m2!1ssv!2sse!4v1700000000000!5m2!1ssv!2sse'
+            : 'https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d2127.8!2d14.1!3d58.7!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x0%3A0x0!2sSkaraborgs+Tr%C3%A4f%C3%B6r%C3%A4dling+AB!5e0!3m2!1ssv!2sse!4v1700000000000!5m2!1ssv!2sse'} title={isLevene ? 'Karta till Levene Såg AB' : 'Karta till Skaraborgs Träförädling AB'} aspect="auto" /></div>
+      </div>
+    </div>
+
+    <!-- Right: Form -->
+    <div data-animate style="--delay: 0.1s">
+      <p class="text-xs font-bold uppercase tracking-[0.2em] text-white/60 mb-3">Text.</p>
+      <h2 class="text-4xl md:text-5xl font-extrabold text-white mb-2 leading-[1.05]" style="letter-spacing: -0.03em; font-family: 'Raleway', sans-serif;">
+        Text.
+      </h2>
+      <p class="text-base text-white/70 mb-8">
+        Text.
+      </p>
+
+      <form
+        id="contact-form-section"
+        method="POST"
+        action={apiRoute}
+        class="flex flex-col gap-4"
+      >
+        <div>
+          <label for="cf-name" class="block text-xs font-semibold uppercase tracking-widest text-white/75 mb-1.5">
+            Text. <span aria-hidden="true" class="text-white/50">*</span>
+          </label>
+          <input
+            id="cf-name"
+            name="name"
+            type="text"
+            placeholder="Ditt namn"
+            class="form-input w-full"
+            required
+            aria-required="true"
+          />
+        </div>
+
+        <div>
+          <label for="cf-email" class="block text-xs font-semibold uppercase tracking-widest text-white/75 mb-1.5">
+            Text. <span aria-hidden="true" class="text-white/50">*</span>
+          </label>
+          <input
+            id="cf-email"
+            name="email"
+            type="email"
+            placeholder="din@epost.se"
+            class="form-input w-full"
+            required
+            aria-required="true"
+          />
+        </div>
+
+        <div>
+          <label for="cf-message" class="block text-xs font-semibold uppercase tracking-widest text-white/75 mb-1.5">
+            Text. <span aria-hidden="true" class="text-white/50">*</span>
+          </label>
+          <textarea
+            id="cf-message"
+            name="message"
+            placeholder="Berätta vad du behöver hjälp med..."
+            rows="4"
+            class="form-input form-textarea w-full"
+            required
+            aria-required="true"
+          ></textarea>
+        </div>
+
+        <!-- Status messages -->
+        <div id="form-success" class="hidden text-green-300 text-sm font-medium py-2 flex items-center gap-2">
+          Text.
+        </div>
+        <div id="form-error" class="hidden text-red-300 text-sm font-medium py-2">
+          Text. <a href={isLevene ? 'tel:0512782000' : 'tel:050621175'} class="underline hover:text-white transition-colors">{isLevene ? '0512 – 78 20 00' : '0506 – 211 75'}</a>.
+        </div>
+
+        <div class="flex justify-end mt-1">
+          <button
+            type="submit"
+            id="form-submit-btn"
+            class="form-btn inline-flex items-center gap-2 px-8 py-3 text-sm font-semibold uppercase tracking-wide text-white transition-all"
+            onclick="umami.track('form_submit')"
+          >
+            <span id="form-btn-label">Text.</span>
+            <Send size={15} aria-hidden="true" id="form-btn-icon" />
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</section>
+
+<script>
+  const RECAPTCHA_SITE_KEY = import.meta.env.PUBLIC_RECAPTCHA_SITE_KEY as string | undefined;
+
+  // Load reCAPTCHA v3 script if configured
+  if (RECAPTCHA_SITE_KEY) {
+    const script = document.createElement('script');
+    script.src = `https://www.google.com/recaptcha/api.js?render=${RECAPTCHA_SITE_KEY}`;
+    script.async = true;
+    document.head.appendChild(script);
+  }
+
+  const form = document.getElementById('contact-form-section') as HTMLFormElement | null;
+  const successMsg = document.getElementById('form-success');
+  const errorMsg = document.getElementById('form-error');
+  const submitBtn = document.getElementById('form-submit-btn') as HTMLButtonElement | null;
+  const btnLabel = document.getElementById('form-btn-label');
+  const btnIcon = document.getElementById('form-btn-icon');
+
+  async function getRecaptchaToken(): Promise<string> {
+    if (!RECAPTCHA_SITE_KEY) return '';
+    return new Promise<string>((resolve) => {
+      (window as { grecaptcha?: { ready: (cb: () => void) => void; execute: (key: string, opts: { action: string }) => Promise<string> } }).grecaptcha?.ready(() => {
+        (window as { grecaptcha?: { ready: (cb: () => void) => void; execute: (key: string, opts: { action: string }) => Promise<string> } }).grecaptcha!.execute(RECAPTCHA_SITE_KEY, { action: 'contact' }).then(resolve).catch(() => resolve(''));
+      });
+    });
+  }
+
+  if (form && submitBtn) {
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const data = new FormData(form);
+
+      successMsg?.classList.add('hidden');
+      errorMsg?.classList.add('hidden');
+
+      submitBtn.disabled = true;
+      if (btnLabel) btnLabel.textContent = 'Skickar…';
+      if (btnIcon) (btnIcon as HTMLElement).style.display = 'none';
+
+      try {
+        const recaptchaToken = await getRecaptchaToken();
+
+        const res = await fetch(form.action, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: data.get('name'),
+            email: data.get('email'),
+            message: data.get('message'),
+            recaptchaToken,
+          }),
+        });
+
+        if (res.ok) {
+          successMsg?.classList.remove('hidden');
+          form.reset();
+        } else {
+          errorMsg?.classList.remove('hidden');
+        }
+      } catch {
+        errorMsg?.classList.remove('hidden');
+      } finally {
+        submitBtn.disabled = false;
+        if (btnLabel) btnLabel.textContent = 'Skicka meddelande';
+        if (btnIcon) (btnIcon as HTMLElement).style.display = '';
+      }
+    });
+  }
+</script>
+
+<style>
+  .contact-section {
+    background: var(--color-primary);
+  }
+
+  .contact-overlay {
+    background: var(--color-primary);
+    opacity: 0.93;
+  }
+
+  .map-icon-wrap {
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .map-frame {
+    border-radius: 2px;
+    overflow: hidden;
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.35);
+  }
+
+  .form-input {
+    background: rgba(255, 255, 255, 0.07);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    color: #fff;
+    padding: 0.75rem 1rem;
+    border-radius: 2px;
+    font-family: 'Lato', sans-serif;
+    font-size: 0.95rem;
+    transition: border-color 0.2s ease, background 0.2s ease;
+    outline: none;
+  }
+
+  .form-input::placeholder {
+    color: rgba(255, 255, 255, 0.35);
+  }
+
+  .form-input:focus {
+    border-color: rgba(255, 255, 255, 0.4);
+    background: rgba(255, 255, 255, 0.1);
+  }
+
+  .form-textarea {
+    resize: none;
+  }
+
+  .form-btn {
+    background: var(--color-primary);
+  }
+
+  .form-btn:hover {
+    background: color-mix(in srgb, var(--color-primary) 85%, black);
+    transform: translateY(-1px);
+  }
+</style>

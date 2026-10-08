@@ -1,0 +1,42 @@
+---
+import Base from '../layouts/Base.astro';
+import Header from '../components/Header.astro';
+import Footer from '../components/Footer.astro';
+import HomeHero from '../components/HomeHero.astro';
+import HomeServices from '../components/HomeServices.astro';
+import HomeAbout from '../components/HomeAbout.astro';
+import ContactForm from '../components/ContactForm.astro';
+
+export const prerender = true;
+---
+
+<Base
+  title="Munkfors Trädgårdstjänst – Butik, Verkstad & Skötsel"
+  description="Munkfors Trädgårdstjänst erbjuder butik för skog och trädgård, fastighetsskötsel samt auktoriserad verkstad. Besök oss i Munkfors, vardagar 09–18."
+  canonical="https://munkforstradgardstjanst.se/"
+  ogImage="/og-image.jpg"
+  schema={{
+    name: "Munkfors Trädgårdstjänst",
+    url: "https://munkforstradgardstjanst.se/",
+    telephone: "0563-50030",
+    email: "placeholder@example.invalid",
+    address: {
+      streetAddress: "Munkerudsvägen 23",
+      addressLocality: "Munkfors",
+      postalCode: "684 32",
+      addressCountry: "SE",
+    },
+    openingHours: ["Mo-Fr 09:00-18:00"],
+    description: "Munkfors Trädgårdstjänst erbjuder butik för skog och trädgård, fastighetsskötsel samt auktoriserad verkstad i Munkfors.",
+    image: "/images/logo_red_svart-f08874b4.webp",
+  }}
+>
+  <Header />
+  <main id="main-content">
+    <HomeHero />
+    <HomeServices />
+    <HomeAbout />
+    <ContactForm />
+  </main>
+  <Footer />
+</Base>

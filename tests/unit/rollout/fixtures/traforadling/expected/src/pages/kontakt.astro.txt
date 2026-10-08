@@ -1,0 +1,46 @@
+---
+import Base from '../layouts/Base.astro';
+import HeaderSkaraborg from '../components/HeaderSkaraborg.astro';
+import FooterSkaraborg from '../components/FooterSkaraborg.astro';
+import HeroSkaraborg from '../components/HeroSkaraborg.astro';
+import ContactCardsSkaraborg from '../components/ContactCardsSkaraborg.astro';
+import ContactFormSection from '../components/ContactFormSection.astro';
+import SchemaOrg from '../components/SchemaOrg.astro';
+
+export const prerender = true;
+---
+
+<Base
+  title="Kontakt – Skaraborgs Träförädling AB"
+  description="Kontakta Skaraborgs Träförädling AB i Töreboda. Telefon, e-post och adress till våra medarbetare. Öppet mån–fre 07.00–16.00."
+  canonical="https://traforadling.se/kontakt/"
+  ogImage="/og-image.jpg"
+>
+  <SchemaOrg
+    type="Organization"
+    name="Skaraborgs Träförädling AB"
+    url="https://traforadling.se"
+    telephone="0506-21175"
+    email="info@traforadling.se"
+    address="Jonsboda Täppan 1, 545 93 Töreboda"
+    description="Skaraborgs Träförädling AB – familjeägt hyvleri i Töreboda sedan 1985."
+    image="/images/logo-skaraborg.png"
+  />
+
+  <HeaderSkaraborg />
+
+  <main id="main-content">
+    <HeroSkaraborg
+      title="Kontakt"
+      subtitle="Välkommen att kontakta eller besöka oss."
+      ctaLabel="Produkter"
+      ctaHref="/skaraborg-traforadling-ab/"
+    />
+
+    <ContactCardsSkaraborg />
+
+    <ContactFormSection formTarget="skaraborg" />
+  </main>
+
+  <FooterSkaraborg />
+</Base>

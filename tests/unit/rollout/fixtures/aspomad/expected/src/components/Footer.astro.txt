@@ -1,0 +1,154 @@
+---
+import { Image } from 'astro:assets';
+import kontakt from '../data/kontakt.json';
+import { getHoursState, summerHours } from '../lib/hours';
+import PrivacyLinks from '@visionmediahq/astro-consent/components/PrivacyLinks.astro';
+
+const hours = getHoursState();
+// Säsongslistan nedan är allmän referens — hoppa över den post som redan står
+// som aktuellt läge högst upp.
+const showSummerReference = hours.kind !== 'closed' && hours.heading !== summerHours.heading;
+
+const navigation = [
+  { label: 'Hem', url: '/' },
+  { label: 'Om oss', url: '/om-oss' },
+  { label: 'Meny & Öppettider', url: '/meny-oppettider' },
+  { label: 'Om Södern II', url: '/om-sodern-ii' },
+  { label: 'Kontakt', url: '/kontakt' }
+];
+---
+
+<footer class="bg-neutral text-neutral-content pt-16 pb-8">
+  <div class="container mx-auto px-4">
+    <div class="grid grid-cols-1 md:grid-cols-[2fr_1fr_1fr_1fr] gap-12 mb-12">
+      <!-- Logo and tagline -->
+      <div>
+        <Image
+          src="/images/logo-transparent.webp"
+          alt="Aspö Mad Vin & Café"
+          width={120}
+          height={120}
+          loading="lazy"
+          class="h-40 w-auto mb-4 brightness-0 invert"
+        />
+        <p class="text-neutral-content/60 text-sm leading-relaxed">
+          Mat, vin, vänskap och lite vågskvalp.
+        </p>
+      </div>
+
+      <!-- Navigation -->
+      <div>
+        <h3 class="text-lg font-bold mb-4">Navigation</h3>
+        <ul class="space-y-2">
+          {navigation.map((item) => (
+            <li>
+              <a
+                href={item.url}
+                class="text-neutral-content/60 hover:text-neutral-content transition-colors text-sm"
+                onclick={`umami.track('nav_click', {item: '${item.label}'})`}
+              >
+                {item.label}
+              </a>
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      <!-- Open hours -->
+      <div>
+        <h3 class="text-lg font-bold mb-4">Öppettider</h3>
+        <ul class="space-y-3 text-sm text-neutral-content/60">
+          <li>
+            <strong class="text-neutral-content">{hours.heading}</strong><br />
+            {hours.lines.map((line) => (
+              <Fragment>{line}<br /></Fragment>
+            ))}
+            {hours.note && (
+              <span class="text-neutral-content/40 text-xs">{hours.note}</span>
+            )}
+          </li>
+          <li>
+            <strong class="text-neutral-content">Vår</strong><br />
+            Fredag & lördag från 17.00
+          </li>
+          {showSummerReference && (
+            <li>
+              <strong class="text-neutral-content">{summerHours.shortLabel}</strong><br />
+              {summerHours.lines.map((line) => (
+                <Fragment>{line}<br /></Fragment>
+              ))}
+              <span class="text-neutral-content/40 text-xs">Glassvagnen: onsdag–söndag 11–18</span>
+            </li>
+          )}
+          <li>
+            <strong class="text-neutral-content">Vinter</strong><br />
+            Öppet för gruppbokningar
+          </li>
+        </ul>
+      </div>
+
+      <!-- Contact -->
+      <div>
+        <h3 class="text-lg font-bold mb-4">Kontakt</h3>
+        <ul class="space-y-3 text-sm text-neutral-content/60">
+          <li>
+            <strong class="text-neutral-content">Adress</strong><br />
+            Aspö, vid färjeläget<br />
+            {kontakt.addressStreet}<br />
+            {kontakt.addressZip} {kontakt.addressCity}
+          </li>
+          <li>
+            <strong class="text-neutral-content">E-post</strong><br />
+            <a
+              href={`mailto:${kontakt.email}`}
+              class="hover:text-neutral-content transition-colors"
+              onclick="umami.track('email_click')"
+            >
+              {kontakt.email}
+            </a>
+          </li>
+        </ul>
+
+        <!-- Social media -->
+        <div class="flex gap-2 mt-6">
+          {kontakt.facebookUrl && (
+            <a
+              href={kontakt.facebookUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              class="p-2 -m-2 hover:opacity-70 transition-opacity"
+              aria-label="Facebook"
+              onclick="umami.track('social_click', {platform: 'facebook'})"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/>
+              </svg>
+            </a>
+          )}
+          {kontakt.instagramUrl && (
+            <a
+              href={kontakt.instagramUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              class="p-2 -m-2 hover:opacity-70 transition-opacity"
+              aria-label="Instagram"
+              onclick="umami.track('social_click', {platform: 'instagram'})"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <rect width="20" height="20" x="2" y="2" rx="5" ry="5"/>
+                <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/>
+                <line x1="17.5" x2="17.51" y1="6.5" y2="6.5"/>
+              </svg>
+            </a>
+          )}
+        </div>
+      </div>
+    </div>
+
+    <!-- Bottom bar -->
+    <div class="border-t border-neutral-content/15 pt-8 text-center text-sm text-neutral-content/50">
+      <p>&copy; {new Date().getFullYear()} Madviken Södern AB. Alla rättigheter förbehållna.</p>
+    </div>
+    <PrivacyLinks class="text-neutral-content" />
+  </div>
+</footer>

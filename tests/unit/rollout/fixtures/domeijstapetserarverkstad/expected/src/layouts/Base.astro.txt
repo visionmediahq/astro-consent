@@ -1,0 +1,131 @@
+---
+import '../styles/global.css';
+import SchemaOrg from '../components/SchemaOrg.astro';
+import ConsentBanner from '@visionmediahq/astro-consent/components/ConsentBanner.astro';
+
+interface Props {
+  title: string;
+  description?: string;
+  canonical?: string;
+  ogImage?: string;
+}
+
+const {
+  title,
+  description = '',
+  canonical = 'https://domeijstapetserarverkstad.se/',
+  ogImage = '/og-image.jpg',
+} = Astro.props;
+
+const siteUrl = 'https://domeijstapetserarverkstad.se';
+const ogImageAbsolute = ogImage.startsWith('http') ? ogImage : `${siteUrl}${ogImage}`;
+---
+
+<!doctype html>
+<html lang="sv">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="generator" content={Astro.generator} />
+
+    <title>{title}</title>
+    {description && <meta name="description" content={description} />}
+    <link rel="canonical" href={canonical} />
+
+    <!-- OG / Social -->
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content={title} />
+    {description && <meta property="og:description" content={description} />}
+    <meta property="og:url" content={canonical} />
+    <meta property="og:image" content={ogImageAbsolute} />
+    <meta property="og:locale" content="sv_SE" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={title} />
+    {description && <meta name="twitter:description" content={description} />}
+    <meta name="twitter:image" content={ogImageAbsolute} />
+
+    <!-- Preload LCP hero image -->
+    <link rel="preload" as="image" href="/images/domeijs_header1.webp" fetchpriority="high" />
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" href="/favicon.ico" sizes="32x32" />
+    <link rel="apple-touch-icon" href="/images/favicon-stm-180.webp" />
+
+    <!-- Google Fonts: Gloock (headings) + Raleway (body) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Gloock&family=Raleway:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap"
+    />
+
+    <!-- DaisyUI theme tokens mapped from client brand colors -->
+    <style is:global>
+      :root {
+        --client-primary:   #eb5e28;
+        --client-bg:        #ffffff;
+        --client-text:      #666666;
+
+        --color-primary:      var(--client-primary, #eb5e28);
+        --color-base-100:     var(--client-bg,      #ffffff);
+        --color-base-content: var(--client-text,    #666666);
+
+        --font-heading: 'Gloock', Georgia, serif;
+        --font-body:    'Raleway', system-ui, sans-serif;
+
+        --color-primary-label: #b84520;
+
+        --color-bg-dark:           #0e0a06;
+        --color-bg-light:          #f7f4f1;
+        --color-bg-card:           #faf8f5;
+        --color-text-heading-dark: #1a1008;
+        --color-text-heading-warm: #f3ede4;
+        --color-text-body:         #5a5046;
+        --color-text-accessible-muted: #6a5a4a;
+      }
+    </style>
+  </head>
+
+  <body>
+    <slot />
+
+    <!-- Scroll-triggered animation observer -->
+    <script is:inline>
+      (function () {
+        var els = document.querySelectorAll('[data-animate]');
+        if (!els.length) return;
+        var vh = window.innerHeight;
+        var io = new IntersectionObserver(
+          function (entries) {
+            entries.forEach(function (entry) {
+              if (entry.isIntersecting) {
+                entry.target.classList.add('is-visible');
+                io.unobserve(entry.target);
+              }
+            });
+          },
+          { threshold: 0, rootMargin: '0px 0px 80px 0px' }
+        );
+        els.forEach(function (el) {
+          var r = el.getBoundingClientRect();
+          if (r.top < vh && r.bottom > 0) {
+            // Already in viewport: show immediately, no animation
+            el.classList.add('is-visible');
+          } else {
+            // Below fold: hide and observe
+            el.classList.add('will-animate');
+            io.observe(el);
+          }
+        });
+      })();
+    </script>
+
+    <!-- Umami analytics stub (replaced by actual script in production) -->
+    <script is:inline>
+      if (typeof window.umami === 'undefined') {
+        window.umami = { track: function () {} };
+      }
+    </script>
+    <ConsentBanner />
+  </body>
+</html>

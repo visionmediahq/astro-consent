@@ -1,0 +1,287 @@
+---
+import { ArrowUpRight } from '@lucide/astro';
+import ConsentEmbed from '@visionmediahq/astro-consent/components/ConsentEmbed.astro';
+---
+
+<section
+  id="kontakt"
+  class="contact-section w-full py-24 md:py-36 px-6 md:px-12"
+  style="background: var(--color-bg-light, #f7f4f1);"
+  aria-label="Kontakta oss"
+>
+  <div class="max-w-7xl mx-auto">
+
+    <!-- Header -->
+    <div class="mb-16 md:mb-20" data-animate>
+      <p class="section-label">Text.</p>
+      <h2 class="section-heading">Text.</h2>
+    </div>
+
+    <div class="contact-grid">
+
+      <!-- LEFT: Large typographic contact details -->
+      <div class="contact-details">
+
+        <!-- Phone — displayed large as primary action -->
+        <div class="contact-primary-block">
+          <p class="contact-field-label">Text.</p>
+          <a
+            href="tel:0739086639"
+            class="contact-phone"
+            onclick="umami.track('phone_click')"
+          >
+            Text.
+            <ArrowUpRight size={24} strokeWidth={1.5} class="contact-arrow" aria-hidden="true" />
+          </a>
+        </div>
+
+        <div class="contact-sep" aria-hidden="true"></div>
+
+        <!-- Email -->
+        <div class="contact-block">
+          <p class="contact-field-label">Text.</p>
+          <a
+            href="mailto:domeijs.tapetserarverkstad@gmail.com"
+            class="contact-email"
+            onclick="umami.track('email_click')"
+          >
+            Text.
+          </a>
+        </div>
+
+        <div class="contact-sep" aria-hidden="true"></div>
+
+        <!-- Address + hours in a mini-grid -->
+        <div class="contact-meta-row">
+          <div class="contact-block">
+            <p class="contact-field-label">Text.</p>
+            <address class="contact-address not-italic">
+              Text.<br />
+              Text.
+            </address>
+          </div>
+          <div class="contact-block">
+            <p class="contact-field-label">Text.</p>
+            <p class="contact-hours">
+              Text.<br />
+              <span class="contact-note">Text.</span>
+            </p>
+          </div>
+        </div>
+
+        <div class="contact-sep" aria-hidden="true"></div>
+
+        <!-- Social row -->
+        <div class="social-row">
+          <p class="contact-field-label">Text.</p>
+          <div class="flex gap-3 mt-3">
+            <a
+              href="https://www.facebook.com/domeijs.tapetserarverkstad/?locale=sv_SE"
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="Domeijs tapetserarverkstad på Facebook"
+              class="social-btn"
+              onclick="umami.track('nav_click', {item: 'facebook'})"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/>
+              </svg>
+              <span class="sr-only">Text.</span>
+            </a>
+            <a
+              href="https://www.instagram.com/domeijs_tapetserarverkstad/"
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="Domeijs tapetserarverkstad på Instagram"
+              class="social-btn"
+              onclick="umami.track('nav_click', {item: 'instagram'})"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <rect x="2" y="2" width="20" height="20" rx="5" ry="5"/>
+                <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/>
+                <line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/>
+              </svg>
+              <span class="sr-only">Text.</span>
+            </a>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- RIGHT: Map -->
+      <div class="map-wrap">
+        <div class="grid h-full"><ConsentEmbed service="google-maps" src="https://www.google.com/maps?q=%C3%85ngpannegatan+2E%2C+417+05+G%C3%B6teborg&output=embed" title="Karta till Domeijs tapetserarverkstad, Ångpannegatan 2E, Göteborg" aspect="auto" /></div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<style>
+  /* Dark orange for label contrast on light bg */
+  .section-label {
+    color: var(--color-primary-label, #b84520);
+  }
+
+  .contact-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4rem 8rem;
+    align-items: stretch;
+  }
+
+  /* ── Primary phone block ── */
+  .contact-primary-block {
+    padding: 1.5rem 0 2rem;
+  }
+
+  .contact-field-label {
+    font-family: var(--font-body, sans-serif);
+    font-size: 0.65rem;
+    font-weight: 700;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--color-primary-label, #b84520);
+    margin-bottom: 0.6rem;
+  }
+
+  .contact-phone {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-family: var(--font-heading, serif);
+    font-size: clamp(2.5rem, 5vw, 4rem);
+    font-weight: 400;
+    color: var(--color-text-heading-dark, #1a1008);
+    text-decoration: none;
+    letter-spacing: -0.01em;
+    line-height: 1.1;
+    transition: color 0.2s ease;
+  }
+
+  .contact-phone:hover {
+    color: var(--color-primary);
+  }
+
+  .contact-arrow {
+    margin-top: 0.25rem;
+    opacity: 0.4;
+    transition: opacity 0.2s ease, transform 0.2s ease;
+    flex-shrink: 0;
+  }
+
+  .contact-phone:hover .contact-arrow {
+    opacity: 1;
+    transform: translate(3px, -3px);
+  }
+
+  /* ── Email ── */
+  .contact-email {
+    font-family: var(--font-body, sans-serif);
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: #2a2a2a;
+    text-decoration: none;
+    overflow-wrap: break-word;
+    transition: color 0.2s ease;
+    line-height: 1.5;
+  }
+
+  .contact-email:hover {
+    color: var(--color-primary);
+  }
+
+  /* ── Address + hours ── */
+  .contact-meta-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2rem;
+    padding: 2rem 0;
+  }
+
+  .contact-address,
+  .contact-hours {
+    font-family: var(--font-body, sans-serif);
+    font-size: 0.9rem;
+    line-height: 1.7;
+    color: #3a3028;
+  }
+
+  .contact-note {
+    font-size: 0.8rem;
+    color: var(--color-text-accessible-muted, #6a5a4a);
+    font-style: italic;
+  }
+
+  .contact-block {
+    padding: 2rem 0;
+  }
+
+  .contact-sep {
+    height: 1px;
+    background: rgba(0, 0, 0, 0.08);
+  }
+
+  /* ── Social ── */
+  .social-row {
+    padding-top: 2rem;
+  }
+
+  .social-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    color: #6a5a4a;
+    border: 1px solid rgba(0, 0, 0, 0.15);
+    transition: color 0.2s ease, border-color 0.2s ease;
+  }
+
+  .social-btn:hover {
+    color: var(--color-primary);
+    border-color: var(--color-primary);
+  }
+
+  /* ── Map ── */
+  .map-wrap {
+    overflow: hidden;
+    background: #e8e0d5;
+    min-height: 480px;
+    height: 100%;
+  }
+
+  .map-wrap iframe {
+    filter: sepia(15%) contrast(0.92) saturate(0.85);
+    display: block;
+    width: 100%;
+    height: 100%;
+    min-height: 480px;
+    transition: filter 0.3s ease;
+  }
+
+  .map-wrap :global(iframe) {
+    filter: sepia(15%) contrast(0.92) saturate(0.85);
+    transition: filter 0.3s ease;
+  }
+
+  .map-wrap:hover iframe {
+    filter: none;
+  }
+
+  .map-wrap:hover :global(iframe) {
+    filter: none;
+  }
+
+  @media (max-width: 900px) {
+    .contact-grid {
+      grid-template-columns: 1fr;
+      gap: 3rem;
+    }
+
+    .contact-meta-row {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
+

@@ -1,0 +1,183 @@
+---
+import SEO from '../components/SEO.astro'
+import SchemaOrg from '../components/SchemaOrg.astro'
+import VisionFooter from '../components/VisionFooter.astro'
+import Lightbox from '../components/Lightbox.astro'
+import '../styles/global.css'
+
+interface Address {
+  streetAddress: string
+  addressLocality: string
+  postalCode: string
+  addressCountry: string
+}
+
+interface SchemaProps {
+  name: string
+  url: string
+  telephone?: string
+  email?: string
+  address?: Address
+  openingHours?: string[]
+  description?: string
+  image?: string
+}
+
+interface Props {
+  // SEO — required on every page
+  title: string
+  description: string
+  canonical: string
+  ogImage?: string
+  ogType?: string
+  // LocalBusiness schema — omit on pages without business context (e.g. 404)
+  schema?: SchemaProps
+}
+
+const { title, description, canonical, ogImage, ogType, schema } = Astro.props
+
+const umamiScriptUrl = import.meta.env.UMAMI_SCRIPT_URL
+const umamiWebsiteId = import.meta.env.UMAMI_WEBSITE_ID
+const glitchtipDsn = import.meta.env.PUBLIC_GLITCHTIP_DSN
+---
+
+<!doctype html>
+<html lang="sv">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <link rel="icon" href="/favicon.png" type="image/png" />
+    <link rel="apple-touch-icon" href="/favicon.png" />
+
+    <SEO
+      title={title}
+      description={description}
+      canonical={canonical}
+      ogImage={ogImage}
+      ogType={ogType}
+    />
+
+    {schema && (
+      <SchemaOrg
+        name={schema.name}
+        url={schema.url}
+        telephone={schema.telephone}
+        email={schema.email}
+        address={schema.address}
+        openingHours={schema.openingHours}
+        description={schema.description}
+        image={schema.image}
+      />
+    )}
+
+    <!-- GlitchTip error tracking — active when PUBLIC_GLITCHTIP_DSN is set -->
+    {glitchtipDsn && (
+      <>
+        <script
+          is:inline
+          src="https://cdn.jsdelivr.net/npm/@sentry/browser@8/build/bundle.min.js"
+          crossorigin="anonymous"
+        ></script>
+        <script is:inline define:vars={{ glitchtipDsn }}>
+          if (typeof Sentry !== 'undefined') {
+            Sentry.init({ dsn: glitchtipDsn, tracesSampleRate: 0.1 })
+          }
+        </script>
+      </>
+    )}
+
+    <!-- Umami analytics — active when both UMAMI_SCRIPT_URL and UMAMI_WEBSITE_ID are set -->
+    {umamiScriptUrl && umamiWebsiteId && (
+      <script
+        is:inline
+        async
+        src={umamiScriptUrl}
+        data-website-id={umamiWebsiteId}
+      ></script>
+    )}
+
+    <!-- Client theme tokens — overridden per client in index.astro -->
+    <style is:global>
+      :root {
+        --color-primary: var(--client-primary, #570df8);
+        --color-primary-content: #ffffff;
+        /* Darkened primary for text on light backgrounds — achieves ≥4.5:1 contrast on white */
+        --color-primary-text: color-mix(in srgb, var(--color-primary) 70%, black 30%);
+        --color-secondary: var(--client-secondary, #1c1c1c);
+        --color-secondary-content: #ffffff;
+        --color-accent: var(--client-accent, #8b5e3c);
+        --color-accent-content: #ffffff;
+        --color-neutral: #1c1c1c;
+        --color-neutral-content: #ffffff;
+        --color-base-100: var(--client-bg, #ffffff);
+        --color-base-200: #f4f1ed;
+        --color-base-300: #e8e4df;
+        --color-base-content: var(--client-text, #1f2937);
+      }
+
+      .skip-link {
+        position: absolute;
+        top: -9999px;
+        left: 0;
+        z-index: 9999;
+        padding: 0.5rem 1rem;
+        background: var(--color-primary);
+        color: #fff;
+        font-weight: 600;
+        font-size: 0.875rem;
+        text-decoration: none;
+      }
+      .skip-link:focus {
+        top: 0;
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+          animation-duration: 0.01ms !important;
+          animation-iteration-count: 1 !important;
+          transition-duration: 0.01ms !important;
+          scroll-behavior: auto !important;
+        }
+      }
+
+      /* client colors */
+      :root {
+        --client-primary:   #ff3824;
+        --client-secondary: #1c1c1c;
+        --client-accent:    #8b5e3c;
+        --client-bg:        #ffffff;
+        --client-text:      #1a1a1a;
+      }
+    </style>
+  </head>
+  <body class="bg-base-100 text-base-content">
+    <a
+      href="#main-content"
+      class="skip-link"
+    >Hoppa till innehåll</a>
+    <slot />
+    <VisionFooter />
+    <Lightbox />
+
+    <!-- Global scroll-triggered entrance animations for [data-animate] elements -->
+    <script>
+      import { animate, inView } from 'motion'
+
+      const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+
+      if (!prefersReducedMotion) {
+        inView('[data-animate]', (element) => {
+          const delay = parseFloat((element as HTMLElement).dataset.animateDelay ?? '0')
+          animate(
+            element,
+            { opacity: [0, 1], y: [20, 0] },
+            { duration: 0.5, delay, easing: [0.22, 0.03, 0.26, 1] }
+          )
+        })
+      }
+    </script>
+  </body>
+</html>

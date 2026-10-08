@@ -1,0 +1,16 @@
+{
+  "dependencies": {
+    "@astrojs/node": "^10.0.4",
+    "@lucide/astro": "^1.8.0",
+    "@visionmediahq/astro-consent": "github:visionmediahq/astro-consent#semver:^1.0.0",
+    "astro": "^6.1.6",
+    "daisyui": "^5.5.19",
+    "motion": "^12.38.0",
+    "resend": "^6.11.0",
+    "tailwindcss": "^4.2.2"
+  },
+  "devDependencies": {
+    "@astrojs/sitemap": "^3.7.2",
+    "@tailwindcss/vite": "^4.2.2"
+  }
+}

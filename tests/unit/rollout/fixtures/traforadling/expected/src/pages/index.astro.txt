@@ -1,0 +1,25 @@
+---
+import Base from '../layouts/Base.astro';
+import HomeSplash from '../components/HomeSplash.astro';
+import SchemaOrg from '../components/SchemaOrg.astro';
+import PrivacyLinks from '@visionmediahq/astro-consent/components/PrivacyLinks.astro';
+
+export const prerender = true;
+---
+
+<Base
+  title="Skaraborgs Träförädling AB – Hyvleri & Sågverk sedan 1985"
+  description="Skaraborgs Träförädling AB är ett familjeägt hyvleri i Töreboda med dotterbolaget Levene Såg AB. Högkvalitativa träprodukter sedan 1985."
+  canonical="https://traforadling.se/"
+  ogImage="/og-image.jpg"
+>
+  <SchemaOrg
+    type="Organization"
+    name="Skaraborgs Träförädling AB"
+    url="https://traforadling.se/"
+    description="Familjeägt hyvleri beläget strax utanför Töreboda. Grundat 1985. Hyvleri, måleri, sågverk och träförädling."
+    image="/images/logo-skaraborg.png"
+  />
+  <HomeSplash />
+  <PrivacyLinks />
+</Base>

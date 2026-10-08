@@ -1,0 +1,95 @@
+---
+import Base from '../layouts/Base.astro';
+import Header from '../components/Header.astro';
+import Footer from '../components/Footer.astro';
+
+const calendars = [
+  {
+    id: 'stora-ridhuset',
+    title: 'Stora ridhuset',
+    description: 'Se vad som är inbokat i stora ridhuset.',
+    color: '#7CB342',
+    src: 'https://calendar.google.com/calendar/embed?height=600&wkst=2&bgcolor=%237CB342&ctz=Europe%2FStockholm&mode=WEEK&showTabs=1&showNav=1&showTz=0&showCalendars=0&src=NDQ1MzA4NmVmMWM4ZDcwNzRhZTE0OGY2YTQyMjNkYTc1MDhhMTZhMmQ1ZmI5NTc2MDFlMjcyOGJkODRjNjU0ZUBncm91cC5jYWxlbmRhci5nb29nbGUuY29t&src=c3Yuc3dlZGlzaCNob2xpZGF5QGdyb3VwLnYuY2FsZW5kYXIuZ29vZ2xlLmNvbQ&color=%237CB342&color=%23039BE5',
+  },
+  {
+    id: 'lilla-ridhuset',
+    title: 'Lilla ridhuset',
+    description: 'Se vad som är inbokat i lilla ridhuset.',
+    color: '#F09300',
+    src: 'https://calendar.google.com/calendar/embed?height=600&wkst=2&bgcolor=%23F09300&ctz=Europe%2FStockholm&showTz=0&showCalendars=0&mode=WEEK&src=ODFhZTZhNjYwZDRhYjk3NGZiZmZiMWM2OGRlZDVmY2FkNzdlOWQ4NGFlOTE4NDEzOTY2OTUyZTU1YmJiYjNlYkBncm91cC5jYWxlbmRhci5nb29nbGUuY29t&src=c3Yuc3dlZGlzaCNob2xpZGF5QGdyb3VwLnYuY2FsZW5kYXIuZ29vZ2xlLmNvbQ&color=%23F09300&color=%23039BE5',
+  },
+  {
+    id: 'utebanan',
+    title: 'Utebanan',
+    description: 'Se vad som är inbokat på utebanan.',
+    color: '#7986CB',
+    src: 'https://calendar.google.com/calendar/embed?height=600&wkst=2&bgcolor=%237986CB&ctz=Europe%2FStockholm&mode=WEEK&src=ZjMyNmVhMGZmMDhmNWQ5ZGY1NjYwNzU4MDY0YTNmMTlkYTU5ZTdkYzM2NTgzY2FiNjU0MTVjOGNlZmIxMTVhNEBncm91cC5jYWxlbmRhci5nb29nbGUuY29t&src=c3Yuc3dlZGlzaCNob2xpZGF5QGdyb3VwLnYuY2FsZW5kYXIuZ29vZ2xlLmNvbQ&color=%237986CB&color=%23039BE5',
+  },
+];
+---
+
+<Base
+  title="Kalendrar – Nordhallands Ridklubb"
+  description="Se vad som är inbokat i stora ridhuset, lilla ridhuset och på utebanan på Nordhallands Ridklubb."
+  canonical="https://nhrk.se/kalendrar/"
+  ogImage="/og-image.jpg"
+>
+  <Header />
+
+  <main id="main-content">
+    <section class="page-header-plain">
+      <div class="page-header-inner">
+        <nav class="breadcrumb" aria-label="Brödsmulor">
+          <a href="/">Text.</a>
+          <span aria-hidden="true">›</span>
+          <span>Text.</span>
+        </nav>
+        <span class="section-overline">Text.</span>
+        <h1 class="ph-h1">Text.</h1>
+        <p class="kal-sub">
+          Text.
+        </p>
+      </div>
+    </section>
+
+    <section class="kal-section">
+      <div class="kal-inner">
+        {calendars.map((cal, i) => (
+          <div class="calendar-block" id={cal.id} data-animate data-animate-delay={String(i * 0.1)}>
+            <div class="cal-header mb-5">
+              <div class="cal-dot" style={`background: ${cal.color};`}></div>
+              <div>
+                <h2 class="text-2xl font-bold" style="color: var(--color-base-content);">{cal.title}</h2>
+                <p class="text-sm mt-0.5" style="color: var(--color-base-content); opacity: 0.6;">{cal.description}</p>
+              </div>
+            </div>
+            <div class="cal-wrapper">
+              <iframe
+                src={cal.src}
+                title={cal.title}
+                width="100%"
+                height="700"
+                frameborder="0"
+                scrolling="no"
+                loading={i === 0 ? 'eager' : 'lazy'}
+              ></iframe>
+            </div>
+            <p class="cal-tip">
+              <a
+                href={cal.src.replace('/embed?', '/r/week?')}
+                target="_blank"
+                rel="noopener noreferrer"
+                style="color: var(--color-primary);"
+              >
+                Öppna i Google Kalender →
+              </a>
+            </p>
+          </div>
+        ))}
+      </div>
+    </section>
+  </main>
+
+  <Footer />
+</Base>
+

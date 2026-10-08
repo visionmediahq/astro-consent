@@ -1,0 +1,100 @@
+---
+import { Image } from 'astro:assets';
+---
+
+<section class="py-20 md:py-28" style="background: var(--color-base-100);">
+  <div class="max-w-6xl mx-auto px-6 lg:px-8">
+
+    <!-- Main two-column content -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-12 md:gap-16 items-start">
+
+      <!-- Images column -->
+      <div class="flex flex-col gap-5" data-animate>
+        <Image
+          src="/images/katthotell-img2-e47ba1e2.webp"
+          alt="Inomhusmiljö och korridor på Vasshalla Katthotell"
+          width={600}
+          height={400}
+          loading="lazy"
+          class="w-full rounded-2xl object-cover"
+          style="max-height: 280px;"
+        />
+        <Image
+          src="/images/katt-i-fonster-d5098145.webp"
+          alt="Katt sitter i fönster"
+          width={600}
+          height={340}
+          loading="lazy"
+          class="w-full rounded-2xl object-cover"
+          style="max-height: 240px;"
+        />
+      </div>
+
+      <!-- Text column -->
+      <div data-animate style="--delay: 0.12s">
+        <span class="section-badge mb-6 inline-block">Text.</span>
+
+        <h2 class="text-3xl md:text-4xl font-bold mb-7">
+          Text.
+        </h2>
+
+        <div class="space-y-4 text-base leading-relaxed text-muted">
+          <p>
+            Text.
+          </p>
+          <p>
+            Text.
+          </p>
+          <p>
+            Text.
+          </p>
+<p>
+            Text.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Pull quote — the owner's personal message -->
+    <div class="mt-20 md:mt-28" data-animate>
+      <div
+        class="relative py-12 md:py-16 px-8 md:px-16 rounded-2xl overflow-hidden bg-section-alt bordered-warm"
+      >
+        <!-- Decorative quotation mark -->
+        <div
+          class="absolute top-6 left-8 text-8xl md:text-9xl font-bold leading-none select-none pointer-events-none"
+          style="color: color-mix(in srgb, var(--color-secondary) 18%, transparent); font-family: 'Literata', Georgia, serif; line-height: 0.8;"
+          aria-hidden="true"
+        >"</div>
+
+        <blockquote class="relative z-10 max-w-3xl">
+          <p
+            class="text-xl md:text-2xl leading-relaxed mb-6"
+            style="font-family: 'Literata', Georgia, serif; font-style: italic;"
+          >
+            Text.
+          </p>
+          <footer class="flex items-center gap-3">
+            <div
+              class="w-8 h-0.5 rounded-full"
+              style="background: var(--color-secondary);"
+              aria-hidden="true"
+            ></div>
+            <cite
+              class="not-italic text-sm font-semibold uppercase tracking-widest"
+              style="color: var(--color-secondary);"
+            >
+              Text., Vasshalla Katthotell
+            </cite>
+          </footer>
+        </blockquote>
+      </div>
+    </div>
+
+    <!-- Closing line -->
+    <p class="mt-10 text-lg font-semibold text-center" style="color: var(--color-primary); font-family: 'Literata', Georgia, serif;">
+      Text.
+    </p>
+
+  </div>
+</section>

@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased: repo tool
+
+Not part of the package (`files` is unchanged) and not a release.
+
+- `ci/rollout/`: the rollout tool, `tsx ci/rollout/run.ts detect | wire | verify | pr | live |
+  merge`, with its state in `<site dir>/.rollout/`. Exit codes: 0 ok, 1 error or STOP, 2 usage, 3
+  a refused wire plan. See README, "Rollout tool".
+- `wire` stops uncommitted, with recovery steps, when anything fails after the branch switch or
+  when the install changed paths outside the plan, `package.json` and `package-lock.json`.
+- `merge` reads the last 50 Coolify deployments per app and stops before merging when an app that
+  follows `main` serves a host that is not in the report's domains (it has no live baseline).
+- CI: the `e2e` job runs `verify --demo demo/dist-consent` after the consent demo build.
+
 ## 1.0.2
 
 - Fix: the banner and map buttons failed WCAG AA contrast on light or saturated primary colours

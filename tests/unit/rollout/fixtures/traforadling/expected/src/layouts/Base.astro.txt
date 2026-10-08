@@ -1,0 +1,193 @@
+---
+import SEO from '../components/SEO.astro'
+import SchemaOrg from '../components/SchemaOrg.astro'
+import VisionFooter from '../components/VisionFooter.astro'
+import '../styles/global.css'
+import ConsentBanner from '@visionmediahq/astro-consent/components/ConsentBanner.astro'
+
+interface Address {
+  streetAddress: string
+  addressLocality: string
+  postalCode: string
+  addressCountry: string
+}
+
+interface SchemaProps {
+  name: string
+  url: string
+  telephone?: string
+  email?: string
+  address?: Address
+  openingHours?: string[]
+  description?: string
+  image?: string
+}
+
+interface Props {
+  // SEO — required on every page
+  title: string
+  description: string
+  canonical: string
+  ogImage?: string
+  ogType?: string
+  // LocalBusiness schema — omit on pages without business context (e.g. 404)
+  schema?: SchemaProps
+  // Brand identity — controls primary color per subsidiary
+  brand?: 'skaraborg' | 'levene'
+}
+
+const { title, description, canonical, ogImage, ogType, schema, brand = 'skaraborg' } = Astro.props
+
+const umamiScriptUrl = import.meta.env.UMAMI_SCRIPT_URL
+const umamiWebsiteId = import.meta.env.UMAMI_WEBSITE_ID
+const glitchtipDsn = import.meta.env.PUBLIC_GLITCHTIP_DSN
+---
+
+<!doctype html>
+<html lang="sv" data-brand={brand}>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="icon" href="/favicon.png" type="image/png" />
+    <link rel="apple-touch-icon" href="/favicon.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Raleway:wght@400;500;600;700;800&family=Lato:wght@400;700&display=swap" rel="stylesheet" />
+
+    <SEO
+      title={title}
+      description={description}
+      canonical={canonical}
+      ogImage={ogImage}
+      ogType={ogType}
+    />
+
+    {schema && (
+      <SchemaOrg
+        name={schema.name}
+        url={schema.url}
+        telephone={schema.telephone}
+        email={schema.email}
+        address={schema.address}
+        openingHours={schema.openingHours}
+        description={schema.description}
+        image={schema.image}
+      />
+    )}
+
+    <!-- GlitchTip error tracking — active when PUBLIC_GLITCHTIP_DSN is set -->
+    {glitchtipDsn && (
+      <>
+        <script
+          is:inline
+          src="https://cdn.jsdelivr.net/npm/@sentry/browser@8/build/bundle.min.js"
+          crossorigin="anonymous"
+        ></script>
+        <script is:inline define:vars={{ glitchtipDsn }}>
+          if (typeof Sentry !== 'undefined') {
+            Sentry.init({ dsn: glitchtipDsn, tracesSampleRate: 0.1 })
+          }
+        </script>
+      </>
+    )}
+
+    <!-- Umami analytics — active when both UMAMI_SCRIPT_URL and UMAMI_WEBSITE_ID are set -->
+    {umamiScriptUrl && umamiWebsiteId && (
+      <script
+        is:inline
+        async
+        src={umamiScriptUrl}
+        data-website-id={umamiWebsiteId}
+      ></script>
+    )}
+
+    <!-- Client theme tokens — overridden per client in index.astro -->
+    <style is:global>
+      :root {
+        --color-primary: var(--client-primary, #2C5F3A);
+        --color-secondary: var(--client-secondary, #C8893A);
+        --color-accent: var(--client-accent, #1C2E3E);
+        --color-base-100: var(--client-bg, #FAFAF8);
+        --color-base-content: var(--client-text, #2A2E27);
+      }
+
+      /* Skip link — visually hidden until focused */
+      .skip-link {
+        position: absolute;
+        left: -9999px;
+        top: 1rem;
+        z-index: 9999;
+        padding: 0.75rem 1.5rem;
+        background: var(--color-primary);
+        color: #fff;
+        font-family: 'Raleway', sans-serif;
+        font-size: 0.875rem;
+        font-weight: 700;
+        text-decoration: none;
+        border-radius: 2px;
+        outline: none;
+      }
+      .skip-link:focus {
+        left: 1rem;
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+          animation-duration: 0.01ms !important;
+          animation-iteration-count: 1 !important;
+          transition-duration: 0.01ms !important;
+          scroll-behavior: auto !important;
+        }
+
+        [data-animate] {
+          opacity: 1 !important;
+          transform: none !important;
+        }
+      }
+    
+      /* Skaraborgs Träförädling — default brand */
+      :root {
+        --client-primary:   #005229;
+        --client-secondary: #C8893A;
+        --client-accent:    #1C2E3E;
+        --client-bg:        #FAFAF8;
+        --client-text:      #2A2E27;
+      }
+
+      /* Levene Såg AB — blue brand */
+      :root[data-brand="levene"] {
+        --client-primary: #0460c7;
+      }
+    </style>
+  </head>
+  <noscript>
+    <style>[data-animate] { opacity: 1 !important; transform: none !important; }</style>
+  </noscript>
+  <body class="bg-base-100 text-base-content">
+    <a href="#main-content" class="skip-link">Hoppa till innehåll</a>
+    <slot />
+    <ConsentBanner />
+    <VisionFooter />
+
+    <!-- Global scroll-triggered entrance animations for [data-animate] elements -->
+    <script>
+      import { animate, inView } from 'motion'
+
+      const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+
+      if (!prefersReducedMotion) {
+        inView('[data-animate]', (element) => {
+          const rawDelay = (element as HTMLElement).style.getPropertyValue('--delay')
+          const delay = parseFloat(rawDelay) || 0
+          animate(
+            element,
+            { opacity: [0, 1], y: [20, 0] },
+            { duration: 0.5, delay, easing: [0.22, 0.03, 0.26, 1] }
+          )
+        })
+      }
+    </script>
+  </body>
+</html>

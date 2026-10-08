@@ -1,0 +1,27 @@
+---
+import Base from '../layouts/Base.astro';
+import Header from '../components/Header.astro';
+import Footer from '../components/Footer.astro';
+import PageHero from '../components/PageHero.astro';
+import OmOssContent from '../components/OmOssContent.astro';
+import VisitCTA from '../components/VisitCTA.astro';
+import { businessSchema } from '../config/site';
+
+export const prerender = true;
+---
+
+<Base
+  title="Om oss – Vasshalla Katthotell i Gånghester"
+  description="Läs om Vasshalla Katthotell i Gånghester nära Borås. Godkänt av Länsstyrelsen, § 16 tillstånd finns. Lantligt, hemtrevligt och fullt av kärlek för katter."
+  canonical="https://vasshallakatthotell.se/om-oss/"
+  ogImage="/og-image.jpg"
+  schema={businessSchema}
+>
+  <Header />
+  <main>
+    <PageHero title="Om oss" image="katt-i-fonster-d5098145.webp" alt="Katt sitter i fönster" />
+    <OmOssContent />
+    <VisitCTA />
+  </main>
+  <Footer />
+</Base>

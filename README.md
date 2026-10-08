@@ -196,6 +196,56 @@ Each choice also calls `window.umami?.track('consent', { choice })`.
 
 See `CLAUDE.md` for the rules and the test commands.
 
+## Rollout tool
+
+`ci/rollout/` is the repo tool that wires a Vision Media site to this package and takes it through
+review, merge and a live check. It is **not shipped**: `package.json` `files` is
+`["src", "services.json"]`, so sites never install it, and it is not part of any release. Run it
+from a checkout of this repo with `npx tsx`:
+
+```bash
+npx tsx ci/rollout/run.ts detect <site dir> --domain <host> [--domain <host>]...
+npx tsx ci/rollout/run.ts wire   <site dir> [--dry-run]
+npx tsx ci/rollout/run.ts verify <site dir>
+npx tsx ci/rollout/run.ts verify --demo <dist dir>      # a built demo, no git/npm/Docker
+npx tsx ci/rollout/run.ts pr     <site dir> --shots-dir <path> --shots-base <url> [--issue <url>]...
+npx tsx ci/rollout/run.ts live   <site dir> baseline | post-merge [--sha <merge commit>]
+npx tsx ci/rollout/run.ts merge  <site dir> <pr number>
+npx tsx ci/rollout/run.ts help
+```
+
+- `detect` reads the site and writes the report; `wire` plans every edit and either prints the
+  diff (`--dry-run`, writes nothing) or applies it all on branch `consent-banner` with one commit;
+  `verify` runs the build and browser checks; `pr` opens the PR; `live baseline` records the live
+  site before the merge; `merge` re-verifies if `main` moved, merges, waits for Coolify and runs
+  `live post-merge`.
+- **State** lives in `<site dir>/.rollout/` (`report.json`, `verify.json`, `live-baseline.txt`,
+  `live-baseline-hosts.json`, `apps.json`, screenshots), which `detect` adds to the checkout's `.git/info/exclude`, so stages
+  can be rerun one at a time and nothing of it is committed. `verify --demo` writes to a temp folder.
+- **Exit codes:** `0` ok (for `live baseline` also the expected RED), `1` error, a failed verify
+  step or a live/merge STOP, `2` usage, `3` the wire plan was refused (dry run or not; nothing was
+  written).
+- If `wire` fails after it switched to `consent-banner`, it leaves the checkout uncommitted and
+  says how to retry: `git reset --hard && git clean -fd && git switch main && git branch -D
+  consent-banner`, or re-clone. It also refuses to commit when anything besides the planned files,
+  `package.json` and `package-lock.json` changed.
+- `verify` checks the working tree but records the result for `HEAD`, so it refuses uncommitted
+  or untracked files: commit, then rerun. It never pushes over a `consent-banner` on GitHub that it
+  did not push itself, and `wire` refuses to start when origin already has that branch; `pr`
+  refuses an open PR from it with another title. Find out whose it is and clean up by hand.
+- `live baseline` covers `report.domains` and every host of the Coolify apps that follow `main`,
+  and records them in `live-baseline-hosts.json`. If `merge` stops because an app that follows
+  `main` serves a host the baseline did not record (an app started following `main` since), rerun
+  `live <site dir> baseline` and then `merge`. Never re-run `detect` on the wired branch.
+- Every check browser answers Umami (any `script[data-website-id]` src, any `/api/send` and any
+  URL with `umami` in its host or path) with an empty 204, live included, so the tool creates no
+  pageviews or events.
+- Coolify is only read, with `COOLIFY_READ_TOKEN` and `COOLIFY_URL` from `~/sites/vision-books/.env`.
+- CI runs `verify --demo demo/dist-consent` after the consent demo build, which covers the browser
+  checks with every registry and log host stubbed.
+- `ci/rollout/pool.ts` and `ci/rollout/select.ts` scan the site pool and draw the rollout batch;
+  their output holds client data and is never committed.
+
 ## Releasing
 
 CI green on `main` **including the `starter-install` job** (repo variable `STARTER_INSTALL=true` and
