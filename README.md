@@ -243,6 +243,8 @@ npx tsx ci/rollout/run.ts help
   those itself (email obfuscation), so they never have the banner.
 - The browser checks open each page up to its `load` event, then wait up to 10 s for the network to
   go quiet. A looping background video, polling or a websocket never lets it, so the checks carry on.
+- `verify` step 5 also hit-tests every visible banner button at each width: if something else is on
+  top of it (a site's fixed mobile call bar), the button is reported as covered.
 - `live baseline` covers `report.domains` and every host of the Coolify apps that follow `main`,
   and records them in `live-baseline-hosts.json`. If `merge` stops because an app that follows
   `main` serves a host the baseline did not record (an app started following `main` since), rerun

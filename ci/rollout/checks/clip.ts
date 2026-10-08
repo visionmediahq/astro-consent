@@ -17,6 +17,12 @@ export interface ClipResult {
   over: boolean
   /** The button sticks out of its container or out of the viewport (right edge, or left edge). */
   out: boolean
+  /**
+   * A banner button another element covers (a site's fixed call bar on top of the banner): one of
+   * five points inside it (centre, and 25 % in from each edge) hits something that is not the
+   * button. Embed buttons are not hit-tested, as they can sit below the fold.
+   */
+  covered: boolean
   clipped: boolean
 }
 
@@ -29,6 +35,7 @@ const MEASURE = `(() => {
     boxW: innerWidth,
     over: document.documentElement.scrollWidth > innerWidth,
     out: false,
+    covered: false,
   }]
   const buttons = document.querySelectorAll('[data-consent-banner] button, [data-consent-embed] button')
   for (const b of buttons) {
@@ -42,6 +49,10 @@ const MEASURE = `(() => {
       boxW: Math.round(box.width),
       over: b.scrollWidth > b.clientWidth + 1,
       out: bb.right > box.right + 1 || bb.left < box.left - 1 || bb.right > innerWidth + 1 || bb.left < -1,
+      covered: !!b.closest('[data-consent-banner]') && [[0.5, 0.5], [0.25, 0.5], [0.75, 0.5], [0.5, 0.25], [0.5, 0.75]].some(([fx, fy]) => {
+        const hit = document.elementFromPoint(bb.left + bb.width * fx, bb.top + bb.height * fy)
+        return !hit || !b.contains(hit)
+      }),
     })
   }
   return rows
@@ -66,7 +77,7 @@ export async function checkClip(
         await gotoPage(page, base + path)
         await page.waitForTimeout(300)
         const rows = (await page.evaluate(MEASURE)) as Omit<ClipResult, 'path' | 'width' | 'clipped'>[]
-        for (const r of rows) results.push({ path, width, ...r, clipped: r.over || r.out })
+        for (const r of rows) results.push({ path, width, ...r, clipped: r.over || r.out || r.covered })
       } finally {
         await context.close()
       }

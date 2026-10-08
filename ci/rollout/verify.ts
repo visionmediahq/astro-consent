@@ -10,7 +10,7 @@
 //                 logs no console error main didn't; a registry request on a page detect didn't
 //                 know is a detect miss
 //   4 consent-paths  Visa / Visa alltid / Neka on every page with an embed
-//   5 clip        no banner or embed button clipped at 320/360/375/1280 px
+//   5 clip        no banner or embed button clipped, no banner button covered, at 320/360/375/1280 px
 //   6 contrast    every banner button and PrivacyLinks row ≥ 4.5:1 and determinate (Ruling 20)
 //   7 screenshots banner and map placeholders at 360 and 1280 px
 //   8 docker      the pushed branch cloned clean, built with its Dockerfile, steps 3–4 against it
@@ -405,7 +405,7 @@ export async function verify(dir: string, report: Report, opts: VerifyOptions = 
 
     async clip() {
       const rows = await (await getChecks()).clip(branch!.url, [...new Set(['/', ...mapPages])])
-      const lines = rows.map((r) => `${r.path} ${r.width}px ${r.kind} "${r.button}" ${r.w}px in ${r.boxW}px ${r.clipped ? `CLIPPED${r.over ? ' (text overflows)' : ''}${r.out ? ' (sticks out)' : ''}` : 'ok'}`)
+      const lines = rows.map((r) => `${r.path} ${r.width}px ${r.kind} "${r.button}" ${r.w}px in ${r.boxW}px ${r.clipped ? `CLIPPED${r.over ? ' (text overflows)' : ''}${r.out ? ' (sticks out)' : ''}${r.covered ? ' (covered by another element)' : ''}` : 'ok'}`)
       const measured = rows.some((r) => r.kind === 'button')
       if (!measured) lines.push('no banner or embed button was measured')
       return { pass: measured && rows.every((r) => !r.clipped), lines }
