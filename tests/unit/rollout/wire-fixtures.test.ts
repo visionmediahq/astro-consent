@@ -292,6 +292,15 @@ describe('applyWire', () => {
     expect(git(dir, 'branch', '--show-current')).toBe('main')
   })
 
+  test('pre-run: another branch ending in /consent-banner on origin does not block wiring', () => {
+    const dir = checkout('munkforstradgardstjanst')
+    const report = runDetect(dir, ['munkforstradgardstjanst.se'])
+    const plan = planWire(fixtureSite(join(FIXTURES, 'munkforstradgardstjanst', 'before')), report)
+    git(dir, 'push', '-q', 'origin', 'main:refs/heads/feature/consent-banner')
+    applyWire(dir, plan, { commit: true, install: () => {} })
+    expect(git(dir, 'branch', '--show-current')).toBe('consent-banner')
+  })
+
   test('a checkout whose HEAD is not origin/main: refused (the plan was made on another tree)', () => {
     const dir = checkout('munkforstradgardstjanst')
     const report = runDetect(dir, ['munkforstradgardstjanst.se'])

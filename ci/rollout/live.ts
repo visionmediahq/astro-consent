@@ -227,7 +227,9 @@ export async function live(
       const git = (...args: string[]) => deps.exec('git', args, root)
       const fetched = await git('fetch', 'origin', 'main')
       if (fetched.code !== 0) return done({ reason: `git fetch origin main failed:\n${tail(fetched.out)}` })
-      const mainHead = (await git('rev-parse', 'origin/main')).out.trim()
+      const revParsed = await git('rev-parse', 'origin/main')
+      if (revParsed.code !== 0) return done({ reason: `git rev-parse origin/main failed:\n${tail(revParsed.out)}` })
+      const mainHead = revParsed.out.trim()
       const repoName = originRepo((await git('remote', 'get-url', 'origin')).out.trim()).split('/')[1]!
       const hosts = [...report.domains]
       const following: { uuid: string; name: string; fqdns: string[] }[] = []

@@ -117,11 +117,12 @@ export function applyWire(dir: string, plan: WirePlan, opts: ApplyOptions): void
     const tracking = gitOk(root, 'rev-parse', '--verify', '--quiet', `refs/remotes/origin/${BRANCH}`) ? git(root, 'rev-parse', `refs/remotes/origin/${BRANCH}`) : ''
     let listed: string
     try {
-      listed = git(root, 'ls-remote', '--heads', 'origin', BRANCH)
+      listed = git(root, 'ls-remote', '--heads', 'origin', `refs/heads/${BRANCH}`)
     } catch (e) {
-      throw new Error(`git ls-remote --heads origin ${BRANCH} failed, so whether GitHub has the branch is unknown; nothing written\n${(e as Error).message}`)
+      throw new Error(`git ls-remote --heads origin refs/heads/${BRANCH} failed, so whether GitHub has the branch is unknown; nothing written\n${(e as Error).message}`)
     }
-    const remote = listed.split(/\s+/)[0] ?? ''
+    // The pattern matches by tail (feature/consent-banner too), so only the exact ref counts.
+    const remote = listed.split('\n').map((l) => l.trim().split(/\s+/)).find(([, ref]) => ref === `refs/heads/${BRANCH}`)?.[0] ?? ''
     for (const sha of [tracking, remote]) {
       if (sha) {
         throw new Error(`origin already has a ${BRANCH} branch (${sha.slice(0, 7)}), nothing written: find out whose it is and delete it on GitHub by hand if it is stale`)
