@@ -234,6 +234,9 @@ npx tsx ci/rollout/run.ts help
   fails a final `clean` step: add them to the site's `.gitignore` on the branch. It never pushes over a `consent-banner` on GitHub that it
   did not push itself, and `wire` refuses to start when origin already has that branch; `pr`
   refuses an open PR from it with another title. Find out whose it is and clean up by hand.
+- `verify` step 1 allows only astro-consent's own lockfile entries, the root's dependency on it and
+  the `ALLOWLIST` in `ci/rollout/lib/lockfile.ts`. One more root change is allowed: `engines`, when
+  the new value is exactly the branch `package.json`'s (main's lockfile was stale and npm resynced it).
 - `live baseline` covers `report.domains` and every host of the Coolify apps that follow `main`,
   and records them in `live-baseline-hosts.json`. If `merge` stops because an app that follows
   `main` serves a host the baseline did not record (an app started following `main` since), rerun

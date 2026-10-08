@@ -84,25 +84,27 @@ function changedFields(before: Entry, after: Entry): string[] {
   return [...keys].filter((k) => !same(before[k], after[k])).sort()
 }
 
-/** True when the root entry ("") changed only in `dependencies[pkgName]`. */
-function rootOnlyAddsPkg(before: Entry, after: Entry, pkgName: string): boolean {
-  const strip = (e: Entry): Entry => {
-    const deps = { ...((e['dependencies'] as Record<string, unknown> | undefined) ?? {}) }
-    delete deps[pkgName]
-    return { ...e, dependencies: deps }
-  }
-  return changedFields(strip(before), strip(after)).length === 0
+/** The root entry ("") without its dependency on `pkgName`: what is left must not change. */
+function stripPkg(e: Entry, pkgName: string): Entry {
+  const deps = { ...((e['dependencies'] as Record<string, unknown> | undefined) ?? {}) }
+  delete deps[pkgName]
+  return { ...e, dependencies: deps }
 }
 
 /**
  * Sorts every changed `packages` entry into allowed (astro-consent's own entries, the root's
  * dependency on it, and the ALLOWLIST) and unknown (everything else, for a human to look at).
  * Each item reads `<key>: <what changed>`; the root entry's key is shown as `(root)`.
+ *
+ * `site.engines` is the branch package.json's `engines`. npm copies it into the root entry on
+ * install, so a lockfile left stale on main changes there too: allowed only when the new value is
+ * exactly package.json's (a missing package.json value never matches).
  */
 export function diffLock(
   before: string | Lockfile,
   after: string | Lockfile,
   pkgName: string,
+  site: { engines?: unknown } = {},
 ): { allowed: string[]; unknown: string[] } {
   const a = toLock(before).packages
   const b = toLock(after).packages
@@ -139,8 +141,15 @@ export function diffLock(
       continue
     }
     if (key === '') {
-      if (rootOnlyAddsPkg(was, now, pkgName)) allowed.push(`${label}: dependency on ${pkgName}`)
-      else unknown.push(`${label}: ${changedFields(was, now).join(', ')} changed`)
+      const fields = changedFields(stripPkg(was, pkgName), stripPkg(now, pkgName))
+      const synced = fields.includes('engines') && site.engines !== undefined && same(now['engines'], site.engines)
+      const rest = synced ? fields.filter((f) => f !== 'engines') : fields
+      if (rest.length === 0)
+        allowed.push(
+          `${label}: dependency on ${pkgName}` +
+            (synced ? `; engines synced to package.json (${canonical(was['engines'])} → ${canonical(now['engines'])})` : ''),
+        )
+      else unknown.push(`${label}: ${fields.join(', ')} changed`)
       continue
     }
 
