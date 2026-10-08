@@ -237,6 +237,9 @@ npx tsx ci/rollout/run.ts help
 - `verify` step 1 allows only astro-consent's own lockfile entries, the root's dependency on it and
   the `ALLOWLIST` in `ci/rollout/lib/lockfile.ts`. One more root change is allowed: `engines`, when
   the new value is exactly the branch `package.json`'s (main's lockfile was stale and npm resynced it).
+- For server output, `verify` finds pages by crawling links from `/` and the sitemap. A linked path
+  that answers 2xx with anything but HTML (an endpoint serving a PDF without an extension) is a
+  file, not a page. A broken link is still checked.
 - `live baseline` covers `report.domains` and every host of the Coolify apps that follow `main`,
   and records them in `live-baseline-hosts.json`. If `merge` stops because an app that follows
   `main` serves a host the baseline did not record (an app started following `main` since), rerun

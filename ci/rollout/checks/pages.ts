@@ -110,21 +110,42 @@ async function sitemapPages(base: string): Promise<string[]> {
   return [...out]
 }
 
-/** Every route reachable by same-origin links from '/', plus the sitemap's pages. */
+/**
+ * A crawled path: its HTML, or `file` when it answers 2xx with anything but HTML (an endpoint
+ * serving a PDF or JSON without an extension: opening it in a browser starts a download). A path
+ * that errors or does not answer stays a page, so a broken link is still checked.
+ */
+async function fetchPage(url: string): Promise<string | 'file' | null> {
+  try {
+    const res = await fetch(url, { redirect: 'follow', signal: AbortSignal.timeout(15_000) })
+    if (!res.ok) return null
+    if (!/html/.test(res.headers.get('content-type') ?? '')) {
+      await res.body?.cancel()
+      return 'file'
+    }
+    return await res.text()
+  } catch {
+    return null
+  }
+}
+
+/** Every page reachable by same-origin links from '/', plus the sitemap's pages. */
 async function crawl(base: string): Promise<string[]> {
   const seen = new Set<string>(['/'])
+  const files = new Set<string>()
   const queue = ['/']
   for (const p of await sitemapPages(base)) if (!seen.has(p)) (seen.add(p), queue.push(p))
   for (let i = 0; i < queue.length && seen.size < MAX_CRAWL; i++) {
     const url = new URL(queue[i]!, base).href
-    const html = await fetchText(url)
-    if (!html) continue
+    const html = await fetchPage(url)
+    if (html === 'file') files.add(queue[i]!)
+    if (!html || html === 'file') continue
     for (const p of extractLinks(html, url, base)) {
       if (seen.size >= MAX_CRAWL) break
       if (!seen.has(p)) (seen.add(p), queue.push(p))
     }
   }
-  return [...seen]
+  return [...seen].filter((p) => !files.has(p))
 }
 
 /**
