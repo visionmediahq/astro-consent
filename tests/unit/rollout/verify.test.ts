@@ -217,6 +217,34 @@ describe('verify', () => {
     expect(evidence(dir, '5-clip.txt')).toContain('/ 360px button "OK" 44px in 326px CLIPPED (covered by another element)')
   })
 
+  describe('step 5: a page that scrolls sideways is compared with main (antonicommunications)', () => {
+    const row = (path: string, kind: 'page' | 'button', w: number, boxW: number): ClipResult => {
+      const over = kind === 'page' && w > boxW
+      return { path, width: 320, kind, button: kind === 'page' ? '(page)' : 'OK', w, boxW, over, out: false, covered: false, clipped: over }
+    }
+    const clipAt = (mainW: number) => async (base: string) =>
+      base.includes(':4398') ? [row('/', 'page', mainW, 320)] : [row('/', 'page', 351, 320), row('/', 'button', 44, 286)]
+
+    test('as wide on main: passes, says main is as wide, and stops the main preview again', async () => {
+      const dir = siteDir()
+      const f = fake({ checks: { clip: clipAt(351) } })
+      const result = await verify(dir, report(), { deps: f.deps })
+      expect(result.steps.find((s) => s.step === 5)).toMatchObject({ pass: true })
+      expect(evidence(dir, '5-clip.txt')).toContain('/ 320px page "(page)" 351px in 320px ok (main 351px too: not the banner)')
+      // Main is started for step 3 and again for step 5, and stopped right after each.
+      const main = f.calls.filter((c) => (c.startsWith('preview') && c.endsWith(' 4398')) || c === 'stop 4398')
+      expect(main.slice(0, 4).map((c) => c.split(' ')[0])).toEqual(['preview', 'stop', 'preview', 'stop'])
+    })
+
+    test('wider than main: fails and names main\'s width', async () => {
+      const dir = siteDir()
+      const f = fake({ checks: { clip: clipAt(320) } })
+      const result = await verify(dir, report(), { deps: f.deps })
+      expect(result.steps.at(-1)).toMatchObject({ step: 5, pass: false })
+      expect(evidence(dir, '5-clip.txt')).toContain('/ 320px page "(page)" 351px in 320px CLIPPED (text overflows) (main 320px)')
+    })
+  })
+
   test('step 1: an unknown lockfile change fails and is listed', async () => {
     const dir = siteDir(lock({ ...JSON.parse(BRANCH_LOCK).packages, 'node_modules/left-pad': { version: '1.0.0' } }))
     const result = await verify(dir, report(), { deps: fake().deps })
