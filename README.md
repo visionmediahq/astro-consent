@@ -235,8 +235,10 @@ npx tsx ci/rollout/run.ts help
   did not push itself, and `wire` refuses to start when origin already has that branch; `pr`
   refuses an open PR from it with another title. Find out whose it is and clean up by hand.
 - `verify` step 1 allows only astro-consent's own lockfile entries, the root's dependency on it and
-  the `ALLOWLIST` in `ci/rollout/lib/lockfile.ts`. One more root change is allowed: `engines`, when
-  the new value is exactly the branch `package.json`'s (main's lockfile was stale and npm resynced it).
+  the `ALLOWLIST` in `ci/rollout/lib/lockfile.ts`. Root fields npm copies from `package.json`
+  (`name`, `version`, `engines`, `license`, `bin`, `funding`) may change only to exactly the branch
+  `package.json`'s value: main's lockfile was stale (another `engines`, astro-starter's `name`) and
+  npm resynced it.
 - For server output, `verify` finds pages by crawling links from `/` and the sitemap. A linked path
   that answers 2xx with anything but HTML (an endpoint serving a PDF without an extension) is a
   file, not a page. A broken link is still checked. Links under `/cdn-cgi/` are skipped: Cloudflare answers

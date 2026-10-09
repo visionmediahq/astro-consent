@@ -160,6 +160,23 @@ describe('diffLock', () => {
     expect(diffLock(before, dropped, PKG, { engines: undefined }).unknown).toEqual(['(root): engines changed'])
   })
 
+  test('the root name catching up with package.json is allowed (lockfile left from astro-starter, bbstad)', () => {
+    const d = diffLock(
+      v3({ '': { name: 'astro-starter', version: '0.0.1', dependencies: {} } }),
+      v3({ '': { name: 'bbstad', version: '0.0.1', dependencies: { [PKG]: '^1.0.2' } } }),
+      PKG,
+      { name: 'bbstad', version: '0.0.1' },
+    )
+    expect(d.unknown).toEqual([])
+    expect(d.allowed).toEqual([`(root): dependency on ${PKG}; name synced to package.json ("astro-starter" → "bbstad")`])
+  })
+
+  test('only the fields npm copies from package.json sync; a root dependency map never does', () => {
+    const before = v3({ '': { name: 'site', dependencies: {}, devDependencies: {} } })
+    const after = v3({ '': { name: 'site', dependencies: { [PKG]: '^1.0.2' }, devDependencies: { prettier: '^3.0.0' } } })
+    expect(diffLock(before, after, PKG, { devDependencies: { prettier: '^3.0.0' } }).unknown).toEqual(['(root): devDependencies changed'])
+  })
+
   test('an engines sync does not hide another root change', () => {
     const d = diffLock(
       v3({ '': { name: 'site', dependencies: {}, engines: { node: '>=22.0.0' } } }),

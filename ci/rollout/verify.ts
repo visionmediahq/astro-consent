@@ -318,13 +318,13 @@ export async function verify(dir: string, report: Report, opts: VerifyOptions = 
         if (ci.code !== 0) return { pass: false, lines: [`npm ci failed on ${side}:`, tail(ci.out)] }
       }
       const branchPkg = readFileSync(join(root, 'package.json'), 'utf8')
-      let engines: unknown
+      let site: Record<string, unknown> = {}
       try {
-        engines = (JSON.parse(branchPkg) as { engines?: unknown }).engines
+        site = JSON.parse(branchPkg) as Record<string, unknown>
       } catch {
-        engines = undefined // the package.json comparison below reports it
+        // the package.json comparison below reports it
       }
-      const { allowed, unknown } = diffLock(readFileSync(join(mainDir!, 'package-lock.json'), 'utf8'), readFileSync(join(root, 'package-lock.json'), 'utf8'), PKG, { engines })
+      const { allowed, unknown } = diffLock(readFileSync(join(mainDir!, 'package-lock.json'), 'utf8'), readFileSync(join(root, 'package-lock.json'), 'utf8'), PKG, site)
       lines.push('package-lock.json, main → branch:', ...allowed.map((l) => `  allowed ${l}`), ...unknown.map((l) => `  UNKNOWN ${l}`))
       const mainPkg = await git('show', 'origin/main:package.json')
       let pkgChanges: string[]
