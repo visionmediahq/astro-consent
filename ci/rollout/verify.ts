@@ -63,7 +63,8 @@ export interface VerifyDeps {
   exec: Exec
   preview: (dir: string, port: number, ssr: boolean, entry?: string) => Promise<Preview>
   checks: () => Promise<Checks>
-  docker: (repoUrl: string, branch: string, run: (url: string) => Promise<boolean>) => Promise<{ pass: boolean; log: string }>
+  /** `buildArgs`: what Coolify passes as build variables (SITE_URL from the site's first domain). */
+  docker: (repoUrl: string, branch: string, run: (url: string) => Promise<boolean>, buildArgs?: Record<string, string>) => Promise<{ pass: boolean; log: string }>
 }
 
 export interface VerifyOptions {
@@ -131,7 +132,7 @@ const realDeps = (): VerifyDeps => ({
   exec: realExec,
   preview: startPreview,
   checks: async () => browserChecks(),
-  docker: (url, branch, run) => dockerCheck(url, branch, run),
+  docker: (url, branch, run, buildArgs) => dockerCheck(url, branch, run, {}, buildArgs),
 })
 
 /** Page files that render `file`: itself if it is a route, else the pages of a layout it is. */
@@ -477,7 +478,7 @@ export async function verify(dir: string, report: Report, opts: VerifyOptions = 
           pass &&= r.pass
         }
         return pass
-      })
+      }, report.domains[0] ? { SITE_URL: `https://${report.domains[0]}` } : {})
       return { pass: result.pass, lines: [...lines, result.log] }
     },
   }

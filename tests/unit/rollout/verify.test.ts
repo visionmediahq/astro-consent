@@ -245,6 +245,19 @@ describe('verify', () => {
     })
   })
 
+  test('step 8 builds with SITE_URL from the first domain, as Coolify does (burnersverige, bbstad)', async () => {
+    const dir = siteDir()
+    const seen: Record<string, string>[] = []
+    const f = fake({
+      docker: async (_url, _branch, run, buildArgs) => {
+        seen.push(buildArgs ?? {})
+        return { pass: await run('http://127.0.0.1:4397'), log: 'docker ok' }
+      },
+    })
+    await verify(dir, report({ domains: ['bbstad.se', 'www.bbstad.se'] }), { deps: f.deps })
+    expect(seen).toEqual([{ SITE_URL: 'https://bbstad.se' }])
+  })
+
   test('step 1: an unknown lockfile change fails and is listed', async () => {
     const dir = siteDir(lock({ ...JSON.parse(BRANCH_LOCK).packages, 'node_modules/left-pad': { version: '1.0.0' } }))
     const result = await verify(dir, report(), { deps: fake().deps })
