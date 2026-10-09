@@ -179,6 +179,9 @@ export function diffLock(
   return { allowed, unknown }
 }
 
+/** package.json maps npm install drops when empty. */
+const DEP_MAPS = ['devDependencies', 'optionalDependencies', 'peerDependencies']
+
 /**
  * What changed in package.json besides `pkgName` being added to `dependencies`, compared without
  * regard to key order (npm re-sorts dependencies, spec C3.1). Empty when the package's dependency
@@ -197,7 +200,9 @@ export function diffPackageJson(before: string, after: string, pkgName: string):
     if (!same(depsA[k], depsB[k])) out.push(`dependencies.${k}: ${JSON.stringify(depsA[k] ?? null)} → ${JSON.stringify(depsB[k] ?? null)}`)
   }
   for (const k of [...new Set([...Object.keys(a), ...Object.keys(b)])].filter((k) => k !== 'dependencies').sort()) {
-    if (!same(a[k], b[k])) out.push(`${k}: changed`)
+    // npm install drops an empty dependency map ("devDependencies": {}): absent and empty are one.
+    const empty = (v: unknown): boolean => DEP_MAPS.includes(k) && (v === undefined || same(v, {}))
+    if (!same(a[k], b[k]) && !(empty(a[k]) && empty(b[k]))) out.push(`${k}: changed`)
   }
   return out
 }
