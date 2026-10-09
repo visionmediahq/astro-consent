@@ -91,20 +91,24 @@ function stripPkg(e: Entry, pkgName: string): Entry {
   return { ...e, dependencies: deps }
 }
 
+/** Root-entry fields npm copies from package.json on install. */
+const SYNCED_FIELDS = ['name', 'version', 'engines', 'license', 'bin', 'funding']
+
 /**
  * Sorts every changed `packages` entry into allowed (astro-consent's own entries, the root's
  * dependency on it, and the ALLOWLIST) and unknown (everything else, for a human to look at).
  * Each item reads `<key>: <what changed>`; the root entry's key is shown as `(root)`.
  *
- * `site.engines` is the branch package.json's `engines`. npm copies it into the root entry on
- * install, so a lockfile left stale on main changes there too: allowed only when the new value is
- * exactly package.json's (a missing package.json value never matches).
+ * `site` is the branch package.json. npm copies some of its fields (SYNCED_FIELDS) into the root
+ * entry on install, so a lockfile left stale on main (another `engines`, astro-starter's `name`)
+ * changes there too: allowed only when the new value is exactly package.json's (a field missing
+ * from package.json never matches).
  */
 export function diffLock(
   before: string | Lockfile,
   after: string | Lockfile,
   pkgName: string,
-  site: { engines?: unknown } = {},
+  site: Record<string, unknown> = {},
 ): { allowed: string[]; unknown: string[] } {
   const a = toLock(before).packages
   const b = toLock(after).packages
@@ -142,12 +146,12 @@ export function diffLock(
     }
     if (key === '') {
       const fields = changedFields(stripPkg(was, pkgName), stripPkg(now, pkgName))
-      const synced = fields.includes('engines') && site.engines !== undefined && same(now['engines'], site.engines)
-      const rest = synced ? fields.filter((f) => f !== 'engines') : fields
+      const synced = fields.filter((f) => SYNCED_FIELDS.includes(f) && site[f] !== undefined && same(now[f], site[f]))
+      const rest = fields.filter((f) => !synced.includes(f))
       if (rest.length === 0)
         allowed.push(
           `${label}: dependency on ${pkgName}` +
-            (synced ? `; engines synced to package.json (${canonical(was['engines'])} → ${canonical(now['engines'])})` : ''),
+            synced.map((f) => `; ${f} synced to package.json (${canonical(was[f])} → ${canonical(now[f])})`).join(''),
         )
       else unknown.push(`${label}: ${fields.join(', ')} changed`)
       continue
