@@ -245,6 +245,8 @@ npx tsx ci/rollout/run.ts help
   go quiet. A looping background video, polling or a websocket never lets it, so the checks carry on.
 - `verify` step 5 also hit-tests every visible banner button at each width: if something else is on
   top of it (a site's fixed mobile call bar), the button is reported as covered.
+  A page that scrolls sideways fails only if it is wider than on main at that width, so a site's
+  own overflow is noted with main's width, not blamed on the banner.
 - `live baseline` covers `report.domains` and every host of the Coolify apps that follow `main`,
   and records them in `live-baseline-hosts.json`. If `merge` stops because an app that follows
   `main` serves a host the baseline did not record (an app started following `main` since), rerun

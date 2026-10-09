@@ -10,7 +10,8 @@
 //                 logs no console error main didn't; a registry request on a page detect didn't
 //                 know is a detect miss
 //   4 consent-paths  Visa / Visa alltid / Neka on every page with an embed
-//   5 clip        no banner or embed button clipped, no banner button covered, at 320/360/375/1280 px
+//   5 clip        no banner or embed button clipped, no banner button covered, no page wider than
+//                 on main, at 320/360/375/1280 px
 //   6 contrast    every banner button and PrivacyLinks row ≥ 4.5:1 and determinate (Ruling 20)
 //   7 screenshots banner and map placeholders at 360 and 1280 px
 //   8 docker      the pushed branch cloned clean, built with its Dockerfile, steps 3–4 against it
@@ -404,8 +405,30 @@ export async function verify(dir: string, report: Report, opts: VerifyOptions = 
     },
 
     async clip() {
-      const rows = await (await getChecks()).clip(branch!.url, [...new Set(['/', ...mapPages])])
-      const lines = rows.map((r) => `${r.path} ${r.width}px ${r.kind} "${r.button}" ${r.w}px in ${r.boxW}px ${r.clipped ? `CLIPPED${r.over ? ' (text overflows)' : ''}${r.out ? ' (sticks out)' : ''}${r.covered ? ' (covered by another element)' : ''}` : 'ok'}`)
+      const c = await getChecks()
+      const rows = await c.clip(branch!.url, [...new Set(['/', ...mapPages])])
+      // A page that already scrolls sideways on main (a site's own wide hamburger) is not the
+      // banner's doing: main is measured for those paths, and only a wider branch fails.
+      const mainW = new Map<string, number>()
+      const wide = rows.filter((r) => r.kind === 'page' && r.clipped)
+      if (!demo && wide.length) {
+        const main = await deps.preview(mainDir!, PORTS.main, ssr)
+        previews.push(main)
+        try {
+          for (const m of await c.clip(main.url, [...new Set(wide.map((r) => r.path))]))
+            if (m.kind === 'page') mainW.set(`${m.path} ${m.width}`, m.w)
+        } finally {
+          await main.stop()
+        }
+      }
+      const lines: string[] = []
+      for (const r of rows) {
+        const onMain = r.kind === 'page' && r.clipped ? mainW.get(`${r.path} ${r.width}`) : undefined
+        if (onMain !== undefined && onMain >= r.w) r.clipped = false
+        const why = `${r.over ? ' (text overflows)' : ''}${r.out ? ' (sticks out)' : ''}${r.covered ? ' (covered by another element)' : ''}`
+        const main = onMain === undefined ? '' : r.clipped ? ` (main ${onMain}px)` : ` (main ${onMain}px too: not the banner)`
+        lines.push(`${r.path} ${r.width}px ${r.kind} "${r.button}" ${r.w}px in ${r.boxW}px ${r.clipped ? `CLIPPED${why}` : 'ok'}${main}`)
+      }
       const measured = rows.some((r) => r.kind === 'button')
       if (!measured) lines.push('no banner or embed button was measured')
       return { pass: measured && rows.every((r) => !r.clipped), lines }
