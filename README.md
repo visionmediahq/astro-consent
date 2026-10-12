@@ -238,7 +238,8 @@ npx tsx ci/rollout/run.ts help
   the `ALLOWLIST` in `ci/rollout/lib/lockfile.ts`. Root fields npm copies from `package.json`
   (`name`, `version`, `engines`, `license`, `bin`, `funding`) may change only to exactly the branch
   `package.json`'s value: main's lockfile was stale (another `engines`, astro-starter's `name`) and
-  npm resynced it.
+  npm resynced it. daisyUI 5 (`REQUIRED`) may be added to `dependencies` where main had none: the
+  banner needs it, so a site without it gets it in its own commit (faluridklubb).
 - For server output, `verify` finds pages by crawling links from `/` and the sitemap. A linked path
   that answers 2xx with anything but HTML (an endpoint serving a PDF without an extension) is a
   file, not a page. A broken link is still checked. Links under `/cdn-cgi/` are skipped: Cloudflare answers

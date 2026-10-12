@@ -187,6 +187,36 @@ describe('diffLock', () => {
     expect(d.unknown).toEqual(['(root): dependencies, engines changed'])
   })
 
+  test('daisyUI 5 added where main had none is allowed, with its root dependency (faluridklubb)', () => {
+    const d = diffLock(
+      v3({ '': { name: 'site', dependencies: { astro: '^6.1.6' } } }),
+      v3({
+        '': { name: 'site', dependencies: { [PKG]: '^1.0.2', astro: '^6.1.6', daisyui: '^5.7.47' } },
+        [`node_modules/${PKG}`]: { version: '1.0.2' },
+        'node_modules/daisyui': entry('5.7.47'),
+      }),
+      PKG,
+    )
+    expect(d.unknown).toEqual([])
+    expect(d.allowed).toEqual(
+      expect.arrayContaining([expect.stringMatching(/^node_modules\/daisyui: added 5\.7\.47 \(.*requires daisyUI 5/), expect.stringContaining('(root): dependency on')]),
+    )
+  })
+
+  test('daisyUI 4 added, a daisyUI already on main changing, or a nested daisyUI is unknown', () => {
+    const root = (deps: Record<string, string>) => ({ '': { name: 'site', dependencies: { [PKG]: '^1.0.2', ...deps } } })
+    const four = diffLock(v3({ '': { name: 'site', dependencies: {} } }), v3({ ...root({ daisyui: '^4.12.0' }), 'node_modules/daisyui': entry('4.12.0') }), PKG)
+    expect(four.unknown).toEqual([expect.stringContaining('(root)'), expect.stringContaining('node_modules/daisyui')])
+    const onMain = diffLock(
+      v3({ '': { name: 'site', dependencies: { daisyui: '^5.0.0' } }, 'node_modules/daisyui': entry('5.0.0') }),
+      v3({ ...root({ daisyui: '^5.7.47' }), 'node_modules/daisyui': entry('5.7.47') }),
+      PKG,
+    )
+    expect(onMain.unknown).toEqual([expect.stringContaining('(root)'), expect.stringContaining('node_modules/daisyui')])
+    const nested = diffLock(v3({}), v3({ 'node_modules/x/node_modules/daisyui': entry('5.7.47') }), PKG)
+    expect(nested.unknown).toEqual([expect.stringContaining('node_modules/x/node_modules/daisyui')])
+  })
+
   test('npm re-sorting the root dependencies is not a change (spec C3.1)', () => {
     const d = diffLock(
       v3({ '': { name: 'site', dependencies: { astro: '^7.0.0', '@lucide/astro': '^1.0.0' } } }),
@@ -237,5 +267,14 @@ describe('diffPackageJson', () => {
     expect(diffPackageJson(withDev, after, PKG)).toEqual(['devDependencies: changed'])
     // Only the dependency maps: an empty `overrides` that goes away is still a change.
     expect(diffPackageJson(JSON.stringify({ ...JSON.parse(before), overrides: {} }), after, PKG)).toEqual(['overrides: changed'])
+  })
+
+  test('daisyUI 5 added to dependencies where main had none is allowed (faluridklubb); 4, or a change to one on main, is not', () => {
+    const withPkg = (deps: Record<string, string>) =>
+      JSON.stringify({ ...JSON.parse(before), dependencies: { ...JSON.parse(before).dependencies, [PKG]: '^1.0.2', ...deps } })
+    expect(diffPackageJson(before, withPkg({ daisyui: '^5.7.47' }), PKG)).toEqual([])
+    expect(diffPackageJson(before, withPkg({ daisyui: '^4.12.0' }), PKG)).toEqual([expect.stringContaining('dependencies.daisyui')])
+    const onMain = JSON.stringify({ ...JSON.parse(before), dependencies: { ...JSON.parse(before).dependencies, daisyui: '^5.0.0' } })
+    expect(diffPackageJson(onMain, withPkg({ daisyui: '^5.7.47' }), PKG)).toEqual([expect.stringContaining('dependencies.daisyui')])
   })
 })

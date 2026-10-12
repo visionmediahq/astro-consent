@@ -38,10 +38,26 @@ export const ALLOWLIST: readonly AllowRule[] = [
   },
 ]
 
+/**
+ * A package the banner needs that a site may not have: added at `major` where main had none of it,
+ * it is part of the wiring (faluridklubb had no daisyUI). An install on main, or another major, is not.
+ */
+export const REQUIRED = {
+  name: 'daisyui',
+  major: 5,
+  why: 'the banner requires daisyUI 5; main had none',
+} as const
+
 const toLock = (lock: string | Lockfile): Lockfile => (typeof lock === 'string' ? (JSON.parse(lock) as Lockfile) : lock)
 
 function majorOfVersion(version: unknown): number | null {
   const m = typeof version === 'string' ? /^v?(\d+)\./.exec(version) : null
+  return m ? Number(m[1]) : null
+}
+
+/** `^5.7.47` → 5: the major a dependency range starts at, or null. */
+function majorOfRange(range: unknown): number | null {
+  const m = typeof range === 'string' ? /^[\^~]?v?(\d+)\./.exec(range) : null
   return m ? Number(m[1]) : null
 }
 
@@ -84,10 +100,13 @@ function changedFields(before: Entry, after: Entry): string[] {
   return [...keys].filter((k) => !same(before[k], after[k])).sort()
 }
 
-/** The root entry ("") without its dependency on `pkgName`: what is left must not change. */
-function stripPkg(e: Entry, pkgName: string): Entry {
-  const deps = { ...((e['dependencies'] as Record<string, unknown> | undefined) ?? {}) }
-  delete deps[pkgName]
+const depsOf = (e: Entry | undefined, map = 'dependencies'): Record<string, unknown> =>
+  (e?.[map] as Record<string, unknown> | undefined) ?? {}
+
+/** The root entry ("") without its dependency on each of `names`: what is left must not change. */
+function stripPkg(e: Entry, names: string[]): Entry {
+  const deps = { ...depsOf(e) }
+  for (const n of names) delete deps[n]
   return { ...e, dependencies: deps }
 }
 
@@ -96,7 +115,8 @@ const SYNCED_FIELDS = ['name', 'version', 'engines', 'license', 'bin', 'funding'
 
 /**
  * Sorts every changed `packages` entry into allowed (astro-consent's own entries, the root's
- * dependency on it, and the ALLOWLIST) and unknown (everything else, for a human to look at).
+ * dependency on it, REQUIRED where main had none, and the ALLOWLIST) and unknown (everything
+ * else, for a human to look at).
  * Each item reads `<key>: <what changed>`; the root entry's key is shown as `(root)`.
  *
  * `site` is the branch package.json. npm copies some of its fields (SYNCED_FIELDS) into the root
@@ -117,6 +137,14 @@ export function diffLock(
   const allowed: string[] = []
   const unknown: string[] = []
   const own = `node_modules/${pkgName}`
+  const required = `node_modules/${REQUIRED.name}`
+  // REQUIRED added: nowhere on main, a top-level install and a root dependency of its major on the branch.
+  const addsRequired =
+    !a[required] &&
+    !(REQUIRED.name in depsOf(a[''])) &&
+    !(REQUIRED.name in depsOf(a[''], 'devDependencies')) &&
+    majorOfVersion(b[required]?.['version']) === REQUIRED.major &&
+    majorOfRange(depsOf(b[''])[REQUIRED.name]) === REQUIRED.major
   const keys = [...new Set([...Object.keys(a), ...Object.keys(b)])].sort()
 
   for (const key of keys) {
@@ -136,6 +164,10 @@ export function diffLock(
       allowed.push(`${label}: ${was ? `${String(was['version'])} → ` : 'added '}${String(now?.['version'] ?? 'removed')}`)
       continue
     }
+    if (key === required && addsRequired) {
+      allowed.push(`${label}: added ${String(now?.['version'])} (${REQUIRED.why})`)
+      continue
+    }
     if (!was || !now) {
       const what = now ? `added ${String(now['version'])}` : `removed ${String(was?.['version'])}`
       // A dependency nested under astro-consent itself (its own zod) is its business.
@@ -145,12 +177,13 @@ export function diffLock(
       continue
     }
     if (key === '') {
-      const fields = changedFields(stripPkg(was, pkgName), stripPkg(now, pkgName))
+      const added = addsRequired ? [pkgName, REQUIRED.name] : [pkgName]
+      const fields = changedFields(stripPkg(was, added), stripPkg(now, added))
       const synced = fields.filter((f) => SYNCED_FIELDS.includes(f) && site[f] !== undefined && same(now[f], site[f]))
       const rest = fields.filter((f) => !synced.includes(f))
       if (rest.length === 0)
         allowed.push(
-          `${label}: dependency on ${pkgName}` +
+          `${label}: dependency on ${added.join(' and ')}` +
             synced.map((f) => `; ${f} synced to package.json (${canonical(was[f])} → ${canonical(now[f])})`).join(''),
         )
       else unknown.push(`${label}: ${fields.join(', ')} changed`)
@@ -187,8 +220,8 @@ export function diffLock(
 const DEP_MAPS = ['devDependencies', 'optionalDependencies', 'peerDependencies']
 
 /**
- * What changed in package.json besides `pkgName` being added to `dependencies`, compared without
- * regard to key order (npm re-sorts dependencies, spec C3.1). Empty when the package's dependency
+ * What changed in package.json besides `pkgName` (and REQUIRED, where main had none) being added
+ * to `dependencies`, compared without regard to key order (npm re-sorts dependencies, spec C3.1). Empty when the package's dependency
  * entry is the only change; otherwise one line per changed field, plus one if the package is missing.
  */
 export function diffPackageJson(before: string, after: string, pkgName: string): string[] {
@@ -200,6 +233,10 @@ export function diffPackageJson(before: string, after: string, pkgName: string):
   if (typeof depsB[pkgName] !== 'string') out.push(`dependencies.${pkgName}: missing`)
   delete depsA[pkgName]
   delete depsB[pkgName]
+  // REQUIRED added to dependencies where main had it in neither map (see diffLock).
+  const devA = (a['devDependencies'] as Record<string, unknown> | undefined) ?? {}
+  if (!(REQUIRED.name in depsA) && !(REQUIRED.name in devA) && majorOfRange(depsB[REQUIRED.name]) === REQUIRED.major)
+    delete depsB[REQUIRED.name]
   for (const k of [...new Set([...Object.keys(depsA), ...Object.keys(depsB)])].sort()) {
     if (!same(depsA[k], depsB[k])) out.push(`dependencies.${k}: ${JSON.stringify(depsA[k] ?? null)} → ${JSON.stringify(depsB[k] ?? null)}`)
   }
