@@ -18,6 +18,8 @@ the same URL if the observation checks (2026-10-15, 10-19, 10-26) add findings.
 - English. Client site names appear; the artifact stays private until Jörgen chooses to share it.
 - Retro discussion happens in Artifact comments.
 - The page shows the date it was compiled and links every row to its source.
+- Build source and data live in the gitignored `.superpowers/retro-artifact/` of this repo, not in
+  tracked files: this repo is public and the data quotes the private batch log and ledger.
 
 ## Time window
 
@@ -77,7 +79,9 @@ type Finding = {
   status: 'fixed-package' | 'fixed-tool' | 'fixed-site-branch' | 'retro-open'
         | 'false-positive' | 'not-a-finding';
   retro: string | null;  // the retro question, if any
-  source: { label: string; url: string; excerpt: string };
+  source: { label: string; url?: string; path?: string; excerpt: string };
+  // url when the source is on GitHub; path (repo-relative, e.g.
+  // "site-factory/.superpowers/…/log.md") when it is a local-only log. At least one is set.
 };
 ```
 
@@ -113,7 +117,8 @@ Sources, in order of preference: `CHANGELOG.md`; `gh pr view` for astro-consent 
 site PRs; ledger `.superpowers/sdd/2026-10-06-astro-consent-pilot-expansion-implementation/progress.md`;
 site-factory batch log `.superpowers/sdd/2026-10-06-astro-consent-pilot-expansion/log.md`;
 site-factory pilot plan `docs/superpowers/plans/2026-10-04-astro-consent-live-pilot-7-sites.md`;
-site-factory branch `rollout-evidence`. Links point to GitHub URLs, not local paths.
+site-factory branch `rollout-evidence`. Links point to GitHub URLs where one exists; the ledger and
+batch log are local-only (gitignored), so rows citing them show the path and the excerpt instead.
 
 ### 4. Open retro items
 
@@ -144,7 +149,7 @@ the data is compiled (not assumed in advance).
 
 ## Checks before publishing
 
-- Every seed-inventory item is present; every row has a working `source.url` and, unless status is
+- Every seed-inventory item is present; every row has a `source.url` or `source.path` and, unless status is
   `retro-open`, `false-positive` or `not-a-finding`, at least one `fixRef`.
 - Stat tiles match a count of the data array.
 - Page checked at 360 px and 1280 px, light and dark.
