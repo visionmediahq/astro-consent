@@ -115,6 +115,7 @@ function fake(
       called.add('clip'),
       paths.map((path): ClipResult => ({ path, width: 320, kind: 'button', button: 'Neka', w: 80, boxW: 300, over: false, out: false, covered: false, clipped: false }))
     ),
+    rootStyles: async () => (called.add('rootStyles'), { 'html scrollbar-color': 'auto', 'html background-color': 'rgb(255, 255, 255)' }),
     contrast: async (_base, paths) => (
       called.add('contrast'),
       paths.flatMap((path) => (['banner', 'links'] as const).map((kind): ContrastRow => ({
@@ -215,6 +216,26 @@ describe('verify', () => {
     const result = await verify(dir, report(), { deps: f.deps })
     expect(result.steps.at(-1)).toMatchObject({ step: 5, pass: false })
     expect(evidence(dir, '5-clip.txt')).toContain('/ 360px button "OK" 44px in 326px CLIPPED (covered by another element)')
+  })
+
+  describe('step 5: the root styles are compared with main (faluridklubb: daisyUI restyled the scrollbar)', () => {
+    const styles = (scrollbar: string) => ({ 'html scrollbar-color': scrollbar, 'html background-color': 'rgb(255, 255, 255)' })
+
+    test('the same as main: passes and says so', async () => {
+      const dir = siteDir()
+      const f = fake()
+      const result = await verify(dir, report(), { deps: f.deps })
+      expect(result.steps.find((s) => s.step === 5)).toMatchObject({ pass: true })
+      expect(evidence(dir, '5-clip.txt')).toContain('root styles on /: same as main')
+    })
+
+    test('different from main: fails and names the property with both values', async () => {
+      const dir = siteDir()
+      const f = fake({ checks: { rootStyles: async (base) => styles(base.includes(':4398') ? 'auto' : 'rgb(1, 2, 3) rgba(0, 0, 0, 0)') } })
+      const result = await verify(dir, report(), { deps: f.deps })
+      expect(result.steps.at(-1)).toMatchObject({ step: 5, pass: false })
+      expect(evidence(dir, '5-clip.txt')).toContain('root styles on / differ from main: html scrollbar-color: main auto, branch rgb(1, 2, 3) rgba(0, 0, 0, 0)')
+    })
   })
 
   describe('step 5: a page that scrolls sideways is compared with main (antonicommunications)', () => {
