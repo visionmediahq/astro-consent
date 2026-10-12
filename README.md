@@ -239,7 +239,23 @@ npx tsx ci/rollout/run.ts help
   (`name`, `version`, `engines`, `license`, `bin`, `funding`) may change only to exactly the branch
   `package.json`'s value: main's lockfile was stale (another `engines`, astro-starter's `name`) and
   npm resynced it. daisyUI 5 (`REQUIRED`) may be added to `dependencies` where main had none: the
-  banner needs it, so a site without it gets it in its own commit (faluridklubb).
+  banner needs it, so a site without it gets it in its own commit (faluridklubb). daisyUI's base
+  styles then reach the whole site, so add it like this, with the primary set to the site's colour:
+
+  ```css
+  @plugin "daisyui" { themes: light --default; exclude: scrollbar; }
+  @plugin "daisyui/theme" {
+    name: "light";
+    default: true;
+    --color-primary: #1B4070;
+    --color-primary-content: #FFFFFF;
+  }
+  /* daisyUI paints :root with --root-bg (white); keep the site background */
+  :root { --root-bg: var(--color-surface-0); }
+  ```
+
+  `exclude: scrollbar` keeps daisyUI's `scrollbar-color` off `:root`, which restyles every
+  scrollbar on Windows and Linux. `--root-bg` takes the variable behind the site's own page background.
 - For server output, `verify` finds pages by crawling links from `/` and the sitemap. A linked path
   that answers 2xx with anything but HTML (an endpoint serving a PDF without an extension) is a
   file, not a page. A broken link is still checked. Links under `/cdn-cgi/` are skipped: Cloudflare answers
@@ -248,6 +264,9 @@ npx tsx ci/rollout/run.ts help
   go quiet. A looping background video, polling or a websocket never lets it, so the checks carry on.
 - `verify` step 5 also hit-tests every visible banner button at each width: if something else is on
   top of it (a site's fixed mobile call bar), the button is reported as covered.
+- `verify` step 5 also compares the computed `scrollbar-color`, `scrollbar-width`,
+  `scrollbar-gutter` and `background-color` of `html`, and `body`'s background, on `/` with main. Any
+  difference fails: it shows on every page, and the screenshots cannot show a scrollbar (faluridklubb).
   A page that scrolls sideways fails only if it is wider than on main at that width, so a site's
   own overflow is noted with main's width, not blamed on the banner.
 - `verify` step 8 builds the site's Dockerfile with `--build-arg SITE_URL=https://<first domain>`,

@@ -25,6 +25,7 @@ import { existsSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSyn
 import { join, resolve } from 'node:path'
 import type { Browser } from '@playwright/test'
 import { type ClipResult, checkClip } from './checks/clip'
+import { type RootStyles, checkRootStyles, diffRootStyles } from './checks/root-styles'
 import { type ConsentPathResult, checkConsentPaths } from './checks/consent-paths'
 import { type ContrastRow, checkContrast } from './checks/contrast'
 import { isCmsAdminRoute, listPages, MISSING_PREFIX } from './checks/pages'
@@ -54,6 +55,8 @@ export interface Checks {
   requests(base: string, paths: string[], opts: { baseline?: Set<string>; expectBanner?: (path: string) => boolean }): Promise<RequestResult[]>
   consentPaths(base: string, mapPaths: string[], opts: { expectFilter?: (path: string) => boolean }): Promise<ConsentPathResult[]>
   clip(base: string, paths: string[]): Promise<ClipResult[]>
+  /** Computed scrollbar and background styles on html and body of `/`, compared with main in step 5. */
+  rootStyles(base: string): Promise<RootStyles>
   contrast(base: string, paths: string[]): Promise<ContrastRow[]>
   shots(base: string, paths: string[], outDir: string): Promise<string[]>
   close(): Promise<void>
@@ -120,6 +123,7 @@ export function browserChecks(): Checks {
     requests: async (base, paths, opts) => checkRequests(await get(), base, paths, { ...opts, stub: true }),
     consentPaths: async (base, paths, opts) => checkConsentPaths(await get(), base, paths, { ...opts, stub: true }),
     clip: async (base, paths) => checkClip(await get(), base, paths, [320, 360, 375, 1280], { stub: true }),
+    rootStyles: async (base) => checkRootStyles(await get(), base, '/', { stub: true }),
     contrast: async (base, paths) => checkContrast(await get(), base, paths, { stub: true }),
     shots: async (base, paths, outDir) => shots(await get(), base, paths, outDir, [360, 1280], { stub: true }),
     async close() {
@@ -410,14 +414,19 @@ export async function verify(dir: string, report: Report, opts: VerifyOptions = 
       const rows = await c.clip(branch!.url, [...new Set(['/', ...mapPages])])
       // A page that already scrolls sideways on main (a site's own wide hamburger) is not the
       // banner's doing: main is measured for those paths, and only a wider branch fails.
+      // Site-wide styles (daisyUI's scrollbar and :root background, faluridklubb) are compared with
+      // main too: a difference shows on every page, and the screenshots cannot show a scrollbar.
       const mainW = new Map<string, number>()
       const wide = rows.filter((r) => r.kind === 'page' && r.clipped)
-      if (!demo && wide.length) {
+      let rootDiff: string[] | null = null
+      if (!demo) {
         const main = await deps.preview(mainDir!, PORTS.main, ssr)
         previews.push(main)
         try {
-          for (const m of await c.clip(main.url, [...new Set(wide.map((r) => r.path))]))
-            if (m.kind === 'page') mainW.set(`${m.path} ${m.width}`, m.w)
+          if (wide.length)
+            for (const m of await c.clip(main.url, [...new Set(wide.map((r) => r.path))]))
+              if (m.kind === 'page') mainW.set(`${m.path} ${m.width}`, m.w)
+          rootDiff = diffRootStyles(await c.rootStyles(main.url), await c.rootStyles(branch!.url))
         } finally {
           await main.stop()
         }
@@ -432,7 +441,10 @@ export async function verify(dir: string, report: Report, opts: VerifyOptions = 
       }
       const measured = rows.some((r) => r.kind === 'button')
       if (!measured) lines.push('no banner or embed button was measured')
-      return { pass: measured && rows.every((r) => !r.clipped), lines }
+      if (rootDiff === null) lines.push('root styles: not compared (no main)')
+      else if (rootDiff.length === 0) lines.push('root styles on /: same as main')
+      else lines.push(...rootDiff.map((d) => `root styles on / differ from main: ${d}`))
+      return { pass: measured && rows.every((r) => !r.clipped) && !rootDiff?.length, lines }
     },
 
     async contrast() {

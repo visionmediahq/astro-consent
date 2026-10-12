@@ -4,6 +4,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
+import { diffRootStyles } from '../../../ci/rollout/checks/root-styles'
 import { contrastRows, coversBackground, measureContrast, type RawContrast } from '../../../ci/rollout/checks/contrast'
 import { extractLinks, listPages, MISSING_PREFIX } from '../../../ci/rollout/checks/pages'
 import { blockUmami, freshPage, isBlocked, isUmamiUrl, notRequested, umamiScriptSrcs } from '../../../ci/rollout/checks/requests'
@@ -272,5 +273,20 @@ describe('contrast', () => {
     const [row] = contrastRows([raw({ kind: 'banner', label: 'Neka' })])
     expect(row).toMatchObject({ kind: 'banner', button: 'Neka' })
     expect(row!.ratio).toBeCloseTo(21, 5)
+  })
+})
+
+describe('root styles (faluridklubb: daisyUI added where main had none)', () => {
+  const main = { 'html scrollbar-color': 'auto', 'html background-color': 'rgb(247, 247, 245)' }
+
+  it('the same on main and the branch: no lines', () => {
+    expect(diffRootStyles(main, { ...main })).toEqual([])
+  })
+
+  it('a difference names the element, the property and both values', () => {
+    const branch = { ...main, 'html scrollbar-color': 'color-mix(in oklch, currentcolor 35%, rgba(0, 0, 0, 0)) rgba(0, 0, 0, 0)' }
+    expect(diffRootStyles(main, branch)).toEqual([
+      'html scrollbar-color: main auto, branch color-mix(in oklch, currentcolor 35%, rgba(0, 0, 0, 0)) rgba(0, 0, 0, 0)',
+    ])
   })
 })
