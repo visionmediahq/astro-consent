@@ -43,8 +43,8 @@ by Vision Media's Astro sites. Sites install it straight from this GitHub repo. 
   [data-consent-category=<category>] input[name=<category>]
   [data-consent-service=<slug>][hidden] input[name="service:<slug>"]
 [data-privacy-links] [data-consent-open]
-[data-consent-embed=<slug>] template[data-payload] [data-placeholder] [data-load] [data-remember] a[data-open]
-  + [data-active] once the iframe is in
+[data-consent-embed=<slug>][data-script=<url>]? template[data-payload] [data-placeholder] [data-load] [data-remember] a[data-open]?
+  + [data-active] once the payload is in; a widget (data-script, no a[data-open]) also gets its script, once per URL
 ```
 
 ## Layout

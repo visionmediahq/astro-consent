@@ -71,7 +71,7 @@ repo tool and is not part of the installed package.)
 
 | Field | Required | Meaning |
 |---|---|---|
-| `services` | yes | Registry slugs the site uses: `google-maps`, `google-analytics`, `google-ads`, `meta-pixel`. An empty list gives notice mode. |
+| `services` | yes | Registry slugs the site uses: `google-maps`, `google-calendar` (ConsentEmbed), `elfsight` (ConsentWidget), `google-analytics`, `google-ads`, `meta-pixel`. An empty list gives notice mode. |
 | `policy_url` | no | Absolute http(s) URL of the site's privacy policy. Without it there is no "Läs mer" / "Integritetspolicy" link. |
 | `log_endpoint` | no | Absolute https URL. When set, every choice is sent there with `navigator.sendBeacon`. Requires Astro's `site` to be set to the real domain. |
 
@@ -111,6 +111,27 @@ import ConsentEmbed from '@visionmediahq/astro-consent/components/ConsentEmbed.a
 The iframe stays inert until the visitor clicks "Visa" or has granted the service. **Do not put a
 `<script>` in its slots**: Astro runs it regardless. Load scripts through `onConsent` instead. Do not
 add preconnect hints or static map images for the provider; they would contact it before consent.
+
+### `<ConsentWidget>`
+
+Click-to-load for widgets that need a `<script>` (Elfsight). Same placeholder, one-off "Visa" and
+"Visa alltid" as `<ConsentEmbed>`; the script is requested only once the visitor activates the
+widget, and only once per page.
+
+```astro
+---
+import ConsentWidget from '@visionmediahq/astro-consent/components/ConsentWidget.astro'
+---
+<ConsentWidget service="elfsight" script="https://elfsightcdn.com/platform.js" title="Vårt Instagramflöde">
+  <div class="elfsight-app-<id>" data-elfsight-app-lazy></div>
+</ConsentWidget>
+```
+
+- `script` must be `https:` on the service's own host, or the build fails.
+- Do not put a `<script>` in the slot (the build fails); pass its URL as `script`.
+- `minHeight` (default `12rem`) sizes the placeholder only.
+- The checks fail the build on prerendered pages. On SSR pages they cannot, so the request fails with a 500.
+- Google Calendar is a `<ConsentEmbed>` (service `google-calendar`); its button reads "Visa Google Kalender".
 
 ### `<PrivacyLinks class="…" />`
 
