@@ -11,6 +11,19 @@ export interface Stubs {
   beacons: unknown[]
 }
 
+/** Stands in for Elfsight's platform.js: counts loads, renders widget divs added later. */
+const FAKE_ELFSIGHT = `
+window.__elfsightLoads = (window.__elfsightLoads || 0) + 1;
+function render() {
+  for (const el of document.querySelectorAll('[class*="elfsight-app-"]:not([data-rendered])')) {
+    el.setAttribute('data-rendered', '');
+    el.textContent = 'flöde';
+  }
+}
+render();
+new MutationObserver(render).observe(document.body, { childList: true, subtree: true });
+`
+
 /**
  * Routes every registry host and the demo log host to local stubs. Every test calls this first:
  * nothing may reach Google, Meta or a real log host.
@@ -22,10 +35,11 @@ export async function stub(context: BrowserContext): Promise<Stubs> {
     async (route) => {
       stubs.registry.push(route.request().url())
       const isDocument = ['document', 'iframe'].includes(route.request().resourceType())
+      const fake = !isDocument && route.request().url().includes('elfsightcdn.com/platform.js')
       await route.fulfill(
         isDocument
           ? { status: 200, contentType: 'text/html', body: '<html><body data-stub></body></html>' }
-          : { status: 200, contentType: 'application/javascript', body: '/* stub */' },
+          : { status: 200, contentType: 'application/javascript', body: fake ? FAKE_ELFSIGHT : '/* stub */' },
       )
     },
   )

@@ -108,7 +108,16 @@ function create(): Runtime {
     }
   }
 
-  /** Swaps an embed's placeholder for its iframe. */
+  /** Adds a widget's script to the head once; only activate() calls this. */
+  function loadScript(src: string): void {
+    if (document.head.querySelector(`script[src="${CSS.escape(src)}"]`)) return
+    const script = document.createElement('script')
+    script.src = src
+    script.async = true
+    document.head.append(script)
+  }
+
+  /** Swaps an embed's placeholder for its payload, and loads a widget's script. */
   function activate(el: HTMLElement): void {
     const template = el.querySelector<HTMLTemplateElement>('template[data-payload]')
     if (!template) return
@@ -117,6 +126,7 @@ function create(): Runtime {
     template.remove()
     el.dataset.active = ''
     active.add(el.dataset.consentEmbed as ServiceSlug)
+    if (el.dataset.script) loadScript(el.dataset.script)
   }
 
   /** Activates every embed the RECORD grants. A one-off "Visa" is never generalised to other embeds. */

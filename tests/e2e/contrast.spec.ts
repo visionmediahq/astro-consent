@@ -51,6 +51,13 @@ test('embed Visa button is AA on a red primary', async ({ page, context }) => {
   for (const button of await buttons.all()) await expectAa(button)
 })
 
+test('widget Visa button is AA on a red primary', async ({ page, context }) => {
+  await stub(context)
+  await page.goto('/flode')
+  await page.addStyleTag({ content: RED })
+  await expectAa(page.locator('#flode-a [data-load]'))
+})
+
 test('banner buttons are AA on a mid green primary', async ({ page, context }) => {
   await stub(context)
   await page.goto('/')
