@@ -30,7 +30,7 @@ describe('parsePrivacyConfig', () => {
   })
 
   test('parsePrivacyConfig rejects an unknown service slug', () => {
-    expect(fieldOf({ services: ['elfsight'] })).toBe('services')
+    expect(fieldOf({ services: ['not-a-service'] })).toBe('services')
   })
 
   test('parsePrivacyConfig rejects duplicate services', () => {

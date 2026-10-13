@@ -133,7 +133,7 @@ describe('detectIframes: pilot fixtures', () => {
         srcKind: 'unresolved',
         src: null,
         host: 'calendar.google.com',
-        service: null,
+        service: 'google-calendar',
         title: '{cal.title}',
         classes: null,
         height: '700',

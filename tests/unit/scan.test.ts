@@ -21,9 +21,9 @@ test('findEmbedServices ignores other components and plain text', () => {
 })
 
 test('scanError names the file, the service and privacy.json', () => {
-  const message = scanError('src/pages/kontakt.astro', 'elfsight', ['google-maps'])
+  const message = scanError('src/pages/kontakt.astro', 'not-a-service', ['google-maps'])
   expect(message).toMatch(/src\/pages\/kontakt\.astro/)
-  expect(message).toMatch(/elfsight/)
+  expect(message).toMatch(/not-a-service/)
   expect(message).toMatch(/privacy\.json/)
   expect(message).toMatch(/google-maps/)
   expect(scanError('a.astro', 'x', [])).toMatch(/services: none/)

@@ -113,6 +113,12 @@ describe('detectScripts: trackers', () => {
 })
 
 describe('detectScripts: Google Maps loads outside an iframe', () => {
+  test('a Google Calendar embed URL in frontmatter data is no tracker: detectIframes reports it', () => {
+    const fm = "const cals = [{ src: 'https://calendar.google.com/calendar/embed?src=x&ctz=Europe%2FStockholm' }]"
+    const r = detectScripts(inline({ 'src/pages/kalendrar.astro': page('', fm) }))
+    expect(r.trackers).toEqual([])
+  })
+
   test('a Static Maps <img> is tracker google-maps', () => {
     const r = detectScripts(inline({ 'src/components/Map.astro': '<img src="https://maps.googleapis.com/maps/api/staticmap?center=57.1,12.2&zoom=14" alt="Karta" />\n' }))
     expect(r.trackers).toEqual(['google-maps'])

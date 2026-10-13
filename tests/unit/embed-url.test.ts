@@ -85,3 +85,8 @@ test('falls back to plain Google Maps for an Embed API URL it cannot translate, 
   )
   expect(deEmbed('https://www.google.com/maps/embed/v1/place?key=AIzaSECRET')).toBe('https://www.google.com/maps')
 })
+
+test('leaves a Google Calendar embed URL with src and ctz as it is', () => {
+  const url = 'https://calendar.google.com/calendar/embed?src=abc%40group.calendar.google.com&ctz=Europe%2FStockholm'
+  expect(deEmbed(url)).toBe(url)
+})

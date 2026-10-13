@@ -76,7 +76,7 @@ describe('parseRecord', () => {
   })
   test('returns null for an unknown category or service', () => {
     expect(parseRecord(JSON.stringify({ ...rec(), categories: ['necessary', 'fun'] }), V, NOW)).toBeNull()
-    expect(parseRecord(JSON.stringify({ ...rec(), services: ['elfsight'] }), V, NOW)).toBeNull()
+    expect(parseRecord(JSON.stringify({ ...rec(), services: ['not-a-service'] }), V, NOW)).toBeNull()
   })
   test('accepts choice null', () => {
     expect(parseRecord(JSON.stringify(rec({ choice: null })), V, NOW)?.choice).toBeNull()

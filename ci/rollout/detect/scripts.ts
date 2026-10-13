@@ -25,6 +25,9 @@ const BINARY = /\.(?:png|jpe?g|gif|webp|avif|ico|bmp|tiff?|svg|woff2?|ttf|otf|eo
  */
 const LINK_LIKE = new Set(['google.com/maps', 'maps.google.'])
 
+/** Google Calendar only ever loads as an iframe and has no tracker script: detectIframes is its only reporter. */
+const IFRAME_ONLY = new Set<ServiceSlug>(['google-calendar'])
+
 /**
  * Registry patterns that are a bare host (no path): safe to find anywhere in text. Path patterns
  * (`facebook.com/tr`) are only matched on parsed URLs, where a page link such as
@@ -32,7 +35,7 @@ const LINK_LIKE = new Set(['google.com/maps', 'maps.google.'])
  * `maps.gstatic.com`, `places.googleapis.com`) are kept: outside an iframe they are loads the batch
  * does not wire (a Static Maps image, the JavaScript API, its fonts and tiles).
  */
-const HOST_PATTERNS: [string, ServiceSlug][] = SERVICE_SLUGS.flatMap((slug) =>
+const HOST_PATTERNS: [string, ServiceSlug][] = SERVICE_SLUGS.filter((slug) => !IFRAME_ONLY.has(slug)).flatMap((slug) =>
   SERVICES[slug].match.filter((p) => !p.includes('/') && !LINK_LIKE.has(p)).map((p): [string, ServiceSlug] => [p, slug]),
 )
 
@@ -102,7 +105,7 @@ function trackersInText(text: string): ServiceSlug[] {
   for (const [re, slug] of CALLS) if (re.test(text)) out.push(slug)
   for (const url of urlsIn(text)) {
     const slug = serviceOfUrl(url)
-    if (slug !== null && slug !== 'google-maps') out.push(slug)
+    if (slug !== null && slug !== 'google-maps' && !IFRAME_ONLY.has(slug)) out.push(slug)
   }
   return out
 }

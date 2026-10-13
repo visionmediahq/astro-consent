@@ -44,7 +44,7 @@ describe('integration', () => {
     })
     expect(build.code).toBe(0)
     const config = JSON.parse(build.html('cfg/index.html').querySelector('#cfg')!.text)
-    expect(config.consentVersion).toMatch(/^1:[0-9a-f]{6}$/)
+    expect(config.consentVersion).toMatch(/^2:[0-9a-f]{6}$/)
     expect(config.site).toBe('demo.test')
     expect(config.services).toEqual(['google-maps', 'google-analytics'])
     expect(config.categories).toEqual(['necessary', 'external', 'statistics'])
@@ -64,7 +64,7 @@ describe('integration', () => {
   })
 
   test('build fails on invalid privacy.json and names the field', TIMEOUT, () => {
-    const build = buildDemo('consent', (dir) => writePrivacy(dir, { services: ['elfsight'] }))
+    const build = buildDemo('consent', (dir) => writePrivacy(dir, { services: ['not-a-service'] }))
     expect(build.code).not.toBe(0)
     expect(build.output).toMatch(/privacy\.json → services/)
   })
