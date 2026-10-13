@@ -220,4 +220,26 @@ again (accepted in #19 and #24).
 
 ## Probe results
 
-(Filled in by step 0.)
+Probed 2026-10-13 with headless Chromium (Playwright) on a pool site with an Elfsight Instagram
+feed (lazy widget, scrolled into view, rendered within 20 s).
+
+Hosts the page itself requests for Elfsight:
+
+- `elfsightcdn.com` (`platform.js`), `phosphor.utils.elfsightcdn.com` (icons)
+- `core.service.elfsight.com`, `widget-data.service.elfsight.com`, `static.elfsight.com`
+
+No Instagram or Meta CDN host (`cdninstagram.com`, `fbcdn.net`) was requested in this run, so
+they are not listed; if they appear they stay out of `match` (see Registry). Other hosts seen were
+the site's own, its analytics, and Google Fonts.
+
+Recommended `match` for `elfsight`: `['elfsightcdn.com', 'elfsight.com']`. Subdomains are covered
+by the suffix match. Note: `elfsight.com` as a bare host also makes detect report a plain
+elfsight.com link in site text as a tracker; acceptable, detect fails toward a human.
+
+Late widget: a second `elfsight-app-*` div appended to `body` after `platform.js` had run
+rendered by itself (3 child elements after 5 s). No re-init hook is needed, so `client.ts` gets
+no Elfsight-specific code.
+
+Calendar: `https://calendar.google.com/calendar/embed?src=en.swedish%23holiday%40group.v.calendar.google.com&ctz=Europe%2FStockholm`
+opened as a top-level page returns 200 and renders the month view (toolbar, October 2026 grid).
+`deEmbed` can pass it through unchanged.
