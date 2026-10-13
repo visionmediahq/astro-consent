@@ -4,6 +4,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
+import { rememberCandidates, rememberOk, type RememberCounts } from '../../../ci/rollout/checks/consent-paths'
 import { diffRootStyles } from '../../../ci/rollout/checks/root-styles'
 import { contrastRows, coversBackground, measureContrast, type RawContrast } from '../../../ci/rollout/checks/contrast'
 import { extractLinks, listPages, MISSING_PREFIX } from '../../../ci/rollout/checks/pages'
@@ -288,5 +289,29 @@ describe('root styles (faluridklubb: daisyUI added where main had none)', () => 
     expect(diffRootStyles(main, branch)).toEqual([
       'html scrollbar-color: main auto, branch color-mix(in oklch, currentcolor 35%, rgba(0, 0, 0, 0)) rgba(0, 0, 0, 0)',
     ])
+  })
+})
+
+describe('consent paths: Visa alltid pairing', () => {
+  it('tries every other page from the next one, then a reload of the page itself', () => {
+    expect(rememberCandidates(['/a', '/b', '/c'], 0)).toEqual(['/b', '/c', '/a'])
+    expect(rememberCandidates(['/a', '/b', '/c'], 1)).toEqual(['/c', '/a', '/b'])
+    expect(rememberCandidates(['/a', '/b', '/c'], 2)).toEqual(['/a', '/b', '/c'])
+    expect(rememberCandidates(['/a'], 0)).toEqual(['/a'])
+  })
+
+  const counts = (c: Partial<RememberCounts> = {}): RememberCounts => ({ clicked: true, same: 2, sameActive: 2, other: 1, otherActive: 0, banner: false, ...c })
+  it('passes when every embed of the remembered service loads and nothing else does', () => {
+    expect(rememberOk(counts())).toBe(true)
+    expect(rememberOk(counts({ other: 0 }))).toBe(true)
+  })
+  it('fails when another service loads too (remembering S grants S only)', () => {
+    expect(rememberOk(counts({ otherActive: 1 }))).toBe(false)
+  })
+  it('fails when an embed of the remembered service stays a placeholder, none exists, the click did nothing or a banner opens', () => {
+    expect(rememberOk(counts({ sameActive: 1 }))).toBe(false)
+    expect(rememberOk(counts({ same: 0, sameActive: 0 }))).toBe(false)
+    expect(rememberOk(counts({ clicked: false }))).toBe(false)
+    expect(rememberOk(counts({ banner: true }))).toBe(false)
   })
 })
