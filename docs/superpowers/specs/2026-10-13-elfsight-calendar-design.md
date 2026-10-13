@@ -38,7 +38,7 @@ ServiceSlug += 'google-calendar' | 'elfsight'
   description_sv: <purpose: show a calendar from Google>,
 }
 'elfsight': {
-  name: 'Elfsight', vendor: 'Elfsight, SL'   // contracting party per elfsight.com/terms-of-service, checked 2026-10-13, category: 'external',
+  name: 'Elfsight', vendor: 'Elfsight, SL', category: 'external',   // vendor = contracting party per elfsight.com/terms-of-service, checked 2026-10-13
   match: <hosts from the probe, e.g. 'elfsightcdn.com', 'elfsight.com'>,
   description_sv: <purpose: show a social media feed (e.g. Instagram) via Elfsight>,
 }
