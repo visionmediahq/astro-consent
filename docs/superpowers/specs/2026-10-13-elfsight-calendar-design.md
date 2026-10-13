@@ -41,7 +41,8 @@ write the results into this spec under "Probe results" before step 1
 ServiceSlug += 'google-calendar' | 'elfsight'
 
 'google-calendar': {
-  name: 'Google Calendar', vendor: 'Google Ireland Ltd', category: 'external',
+  name: 'Google Kalender',   // Swedish UI name; English docs, slug and code say Google Calendar
+  vendor: 'Google Ireland Ltd', category: 'external',
   match: ['calendar.google.com'],
   description_sv: <purpose: show a calendar from Google>,
 }

@@ -141,7 +141,8 @@ Already known (curl of `https://elfsightcdn.com/platform.js`, 2026-10-13): refer
   ```
   ServiceSlug = 'google-maps' | 'google-calendar' | 'google-analytics' | 'google-ads' | 'meta-pixel' | 'elfsight'
   SERVICES['google-calendar'] (after google-maps) = {
-    name 'Google Kalender', vendor 'Google Ireland Ltd', category 'external',
+    name 'Google Kalender' (Swedish: shown in the banner and placeholder; README, CHANGELOG, comments and the slug stay English 'Google Calendar' / google-calendar),
+    vendor 'Google Ireland Ltd', category 'external',
     match ['calendar.google.com'], description_sv 'Kalendrar från Google.' }
   SERVICES['elfsight'] (last) = {
     name 'Elfsight', vendor 'Elfsight, SL', category 'external',
