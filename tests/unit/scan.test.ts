@@ -210,3 +210,28 @@ test('findEmbedServices is linear on unterminated openers', () => {
     expect(Date.now() - started, opener).toBeLessThan(1_000)
   }
 }, 120_000)
+
+const WIDGET = `<ConsentWidget service="elfsight" script="https://elfsightcdn.com/platform.js" title="Instagram"><div class="elfsight-app-a"></div></ConsentWidget>`
+
+test('findEmbedServices reports ConsentWidget services', () => {
+  expect(findEmbedServices(WIDGET)).toEqual(['elfsight'])
+})
+
+test('findEmbedServices follows a ConsentWidget imported under another name', () => {
+  const source = `---\nimport Feed from '@visionmediahq/astro-consent/components/ConsentWidget.astro'\n---\n<Feed service="elfsight" script="x" title="x" />`
+  expect(findEmbedServices(source)).toEqual(['elfsight'])
+})
+
+test('findEmbedServices skips a ConsentWidget that is not live', () => {
+  expect(findEmbedServices(`---\nconst a = '${WIDGET}'\n---\n<p>x</p>`)).toEqual([])
+  expect(findEmbedServices(`<!-- ${WIDGET} -->`)).toEqual([])
+  expect(findEmbedServices(`{/* ${WIDGET} */}`)).toEqual([])
+  expect(findEmbedServices(`{"${WIDGET.replace(/"/g, "'")}"}`)).toEqual([])
+  expect(findEmbedServices(`<script>const a = ${'`'}${WIDGET}${'`'}</script>`)).toEqual([])
+})
+
+test('findEmbedServices ignores a lookalike ConsentWidget and other tags', () => {
+  const source = `---\nimport ConsentWidget from './MyConsentWidget.astro'\n---\n${WIDGET}<ConsentWidgets service="x" />`
+  expect(findEmbedServices(source)).toEqual([])
+  expect(findEmbedServices('<iframe src="https://calendar.google.com/calendar/embed?src=x"></iframe>')).toEqual([])
+})

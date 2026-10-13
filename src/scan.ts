@@ -1,4 +1,4 @@
-// Pure helpers for the build-time check that every <ConsentEmbed> names a service listed in privacy.json.
+// Pure helpers for the build-time check that every <ConsentEmbed> and <ConsentWidget> names a service listed in privacy.json.
 //
 // The scan has two ways to be wrong, and they are not equal:
 //   - Missing a real embed is acceptable: ConsentEmbed.astro checks its own `service` when it renders,
@@ -7,8 +7,9 @@
 // So this reader skips whenever it is unsure. It is not an Astro parser and does not try to be one.
 
 const DEFAULT_IMPORT = /import\s+([A-Za-z_$][\w$]*)\s+from\s+['"]([^'"]+)['"]/g
-/** A module specifier whose file is exactly ConsentEmbed.astro (not e.g. MapConsentEmbed.astro). */
-const EMBED_FILE = /(?:^|\/)ConsentEmbed\.astro$/
+/** A module specifier whose file is exactly ConsentEmbed.astro or ConsentWidget.astro (not e.g. MapConsentEmbed.astro). */
+const EMBED_FILE = /(?:^|\/)Consent(?:Embed|Widget)\.astro$/
+const COMPONENT_NAMES = ['ConsentEmbed', 'ConsentWidget']
 const FRONTMATTER = /^\uFEFF?\s*---[ \t]*\r?\n((?:[\s\S]*?\r?\n)?)---[ \t]*(?:\r?\n|$)/
 const FENCE_LINE = /^---[ \t]*\r?$/m
 const TAG_NAME = /[A-Za-z_$][\w.$:-]*/y
@@ -42,18 +43,19 @@ function stripJsComments(code: string): string {
 }
 
 /**
- * Names the file uses for the embed component: every default import of ConsentEmbed.astro, plus the
- * name `ConsentEmbed` itself (it may arrive through a barrel file) unless the file imports that
- * name from some other component. Commented-out imports do not count.
+ * Names the file uses for the consent components: every default import of ConsentEmbed.astro or
+ * ConsentWidget.astro, plus the names `ConsentEmbed` and `ConsentWidget` themselves (they may arrive
+ * through a barrel file) unless the file imports that name from some other component.
+ * Commented-out imports do not count.
  */
 function embedNames(frontmatter: string): Set<string> {
   const names = new Set<string>()
-  let defaultNameIsSomethingElse = false
+  const takenByOthers = new Set<string>()
   for (const [, name, specifier] of stripJsComments(frontmatter).matchAll(DEFAULT_IMPORT)) {
     if (EMBED_FILE.test(specifier!)) names.add(name!)
-    else if (name === 'ConsentEmbed') defaultNameIsSomethingElse = true
+    else if (COMPONENT_NAMES.includes(name!)) takenByOthers.add(name!)
   }
-  if (!defaultNameIsSomethingElse) names.add('ConsentEmbed')
+  for (const name of COMPONENT_NAMES) if (!takenByOthers.has(name)) names.add(name)
   return names
 }
 
@@ -185,7 +187,7 @@ function readTag(source: string, start: number): Tag {
 }
 
 /**
- * Literal `service` attributes of every live embed in an .astro source, whatever name the component
+ * Literal `service` attributes of every live <ConsentEmbed> or <ConsentWidget> in an .astro source, whatever name the component
  * was imported under. Expression values are skipped; the component's render-time check covers those.
  *
  * One pass over the template. In plain markup it reads tags. Inside a `{…}` expression it also
@@ -269,7 +271,7 @@ export function isInDir(file: string, dir: string): boolean {
 export function scanError(file: string, slug: string, allowed: string[]): string {
   const listed = allowed.join(', ') || 'none'
   return (
-    `[astro-consent] ${file}: <ConsentEmbed service="${slug}"> but "${slug}" is not listed in ` +
+    `[astro-consent] ${file}: <ConsentEmbed>/<ConsentWidget> service="${slug}" but "${slug}" is not listed in ` +
     `src/data/privacy.json (services: ${listed}). Add it there or remove the embed.`
   )
 }
