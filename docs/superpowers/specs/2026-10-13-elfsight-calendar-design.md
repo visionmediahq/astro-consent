@@ -1,6 +1,6 @@
 # Elfsight and Google Calendar: design
 
-Date: 2026-10-13. Status: approved design, not built. Issues: #24 (Elfsight), #19 (Google Calendar).
+Date: 2026-10-13. Status: spec approved 2026-10-13, not built. Issues: #24 (Elfsight), #19 (Google Calendar).
 Release: v1.1.0, one `CONSENT_VERSION` bump (1 → 2).
 
 ## Purpose
@@ -15,7 +15,7 @@ Out of scope: wiring the client sites (a rollout after the release) and the `det
 
 ## Step 0: browser probe (before any code)
 
-```
+```text
 open a site that has an Elfsight widget in a real browser, network panel recording
 record every host contacted from page load until the widget has rendered
   -> the hosts the page itself loads (script, widget API, assets) become `match`
@@ -29,7 +29,7 @@ write the results into this spec under "Probe results" before step 1
 
 ## Registry (`src/services.ts`)
 
-```
+```text
 ServiceSlug += 'google-calendar' | 'elfsight'
 
 'google-calendar': {
@@ -38,7 +38,7 @@ ServiceSlug += 'google-calendar' | 'elfsight'
   description_sv: <purpose: show a calendar from Google>,
 }
 'elfsight': {
-  name: 'Elfsight', vendor: 'Elfsight LLC' (confirm legal entity), category: 'external',
+  name: 'Elfsight', vendor: 'Elfsight, SL'   // contracting party per elfsight.com/terms-of-service, checked 2026-10-13, category: 'external',
   match: <hosts from the probe, e.g. 'elfsightcdn.com', 'elfsight.com'>,
   description_sv: <purpose: show a social media feed (e.g. Instagram) via Elfsight>,
 }
@@ -55,7 +55,7 @@ ServiceSlug += 'google-calendar' | 'elfsight'
 Click-to-load for services that load by `<script>` instead of an iframe. Generic, checked against
 the registry.
 
-```
+```text
 props:
   service: ServiceSlug
   script: string            // the provider's script URL, exactly as the provider gives it
@@ -85,7 +85,7 @@ render:
 
 ## DOM contract (CLAUDE.md)
 
-```
+```text
 [data-consent-embed=<slug>][data-script=<url>]? template[data-payload] [data-placeholder] [data-load] [data-remember] a[data-open]?
   + [data-active] once the payload is in
 ```
@@ -96,7 +96,7 @@ unchanged.
 
 ## `client.ts`
 
-```
+```text
 activate(el):
   template = el.querySelector('template[data-payload]'); if none return
   remove placeholder; append template content; remove template
@@ -123,7 +123,7 @@ loadScript(src):                 // once per URL per page
 
 ## `embed-url.ts`
 
-```
+```text
 deEmbed('https://calendar.google.com/calendar/embed?src=X&ctz=Europe/Stockholm')
   == same URL, unchanged          // the embed page works top-level (probe confirms)
 ```
@@ -132,7 +132,7 @@ No code change is expected: none of the Maps rules match `/calendar/embed`. A un
 
 ## Scan (`src/scan.ts`)
 
-```
+```text
 EMBED_FILE = /(?:^|\/)Consent(?:Embed|Widget)\.astro$/
 component names = default imports of either file, plus the bare names ConsentEmbed and ConsentWidget
   unless the file imports that name from somewhere else
@@ -147,7 +147,7 @@ the Elfsight sites: any hit on a site that doesn't use the component is a bug.
 
 ## Demo
 
-```
+```text
 demo/privacy.consent.json: services += google-calendar, elfsight
 demo/src/pages/widget.astro (new):
   <ConsentEmbed service="google-calendar" src="https://calendar.google.com/calendar/embed?src=…" title=…/>
@@ -161,7 +161,7 @@ The notice demo stays without these services.
 
 ## Tests (each written failing first)
 
-```
+```text
 unit:
   services: new slugs, categories, matchesRegistry on each probed host, services.json fresh
   consent-terms: new entry "2"
@@ -188,7 +188,7 @@ e2e (Playwright stubs the probed hosts; fake platform.js fills every .elfsight-a
 
 ## Rollout tool (separate PR, after the release)
 
-```
+```text
 detect/scripts.ts: remove [/elfsight/i, 'elfsight'] from BANNERS; report elfsight as a service
 wire: wrap <script src=".../platform.js"> + <div class="elfsight-app-…"> into <ConsentWidget>,
       add 'elfsight' to privacy.json; refuse (with a reason) any variant it doesn't recognise
@@ -199,7 +199,7 @@ Uses the real markup variants from the Elfsight pool sites; tests use fixtures u
 
 ## Release
 
-```
+```text
 README: ConsentWidget section (props, the no-script-in-slot rule, Elfsight example), registry table
 CHANGELOG: 1.1.0: google-calendar, elfsight, ConsentWidget; CONSENT_VERSION 2 re-asks every visitor
 before tag: STARTER_INSTALL=true and starter-install green on main
