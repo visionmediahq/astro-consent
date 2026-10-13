@@ -1,0 +1,48 @@
+---
+// Click-to-load for script widgets (Elfsight and the like). The slot sits inert in a <template>
+// until the visitor clicks "Visa" or has granted the service; client.ts then appends it and loads
+// `script` once per page. Never a <script> in the slot: it would run before consent, so the build
+// fails on one. On a prerendered page these checks fail the build; on an SSR page they fail the
+// request (500), like ConsentEmbed's own check.
+import '../styles/contrast.css'
+import config from 'virtual:astro-consent/config'
+import { scanError } from '../scan'
+import { type ServiceSlug } from '../services'
+import { widgetError } from '../widget'
+import EmbedPlaceholder from './EmbedPlaceholder.astro'
+
+interface Props {
+  service: ServiceSlug
+  /** The provider's script URL (absolute, https, belonging to `service`). */
+  script: string
+  title: string
+  /** Minimum height of the box before the widget loads, as CSS. */
+  minHeight?: string
+  id?: string
+}
+
+const { service, script, title, minHeight = '12rem', id } = Astro.props
+
+// Fallback for a non-literal `service`; literal ones are caught by the build-time scan.
+if (!config.services.includes(service)) {
+  throw new Error(scanError(Astro.url.pathname, service, config.services))
+}
+
+const markup = await Astro.slots.render('default')
+const error = widgetError(Astro.url.pathname, service, script, markup)
+if (error) throw new Error(error)
+
+// No per-instance id exists (`id` is optional), so the info element gets a random suffix.
+const infoId = `${id ?? 'consent-embed-' + crypto.randomUUID().slice(0, 8)}-info`
+---
+
+<div
+  id={id}
+  data-consent-embed={service}
+  data-script={script}
+  class="relative flex min-h-(--consent-min-h) flex-col rounded-box bg-base-200 text-base-content data-active:min-h-0 data-active:bg-transparent"
+  style={`--consent-min-h: ${minHeight}`}
+>
+  <template data-payload set:html={markup} />
+  <EmbedPlaceholder service={service} title={title} infoId={infoId} />
+</div>

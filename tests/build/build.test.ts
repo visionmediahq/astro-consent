@@ -46,7 +46,7 @@ describe('integration', () => {
     const config = JSON.parse(build.html('cfg/index.html').querySelector('#cfg')!.text)
     expect(config.consentVersion).toMatch(/^2:[0-9a-f]{6}$/)
     expect(config.site).toBe('demo.test')
-    expect(config.services).toEqual(['google-maps', 'google-analytics'])
+    expect(config.services).toEqual(['google-maps', 'google-analytics', 'google-calendar', 'elfsight'])
     expect(config.categories).toEqual(['necessary', 'external', 'statistics'])
   })
 
@@ -237,6 +237,47 @@ describe('build-time ConsentEmbed scan', () => {
   })
 })
 
+const WIDGET_SCRIPT = 'https://elfsightcdn.com/platform.js'
+const WIDGET_IMPORT = "import ConsentWidget from '@visionmediahq/astro-consent/components/ConsentWidget.astro'"
+
+function widgetPage(body: string): string {
+  return ['---', WIDGET_IMPORT, 'export const prerender = true', '---', '<html><head><title>t</title></head><body>', body, '</body></html>'].join('\n')
+}
+
+function widget(slot: string, script = WIDGET_SCRIPT): string {
+  return `<ConsentWidget service="elfsight" script="${script}" title="x"><div class="elfsight-app-x" data-elfsight-app-lazy></div>${slot}</ConsentWidget>`
+}
+
+describe('ConsentWidget', () => {
+  test('build fails on a widget whose service is not in privacy.json', TIMEOUT, () => {
+    const build = buildDemo('consent', (dir) => {
+      writePrivacy(dir, { services: ['google-maps'] })
+      // The demo's own /flode uses elfsight and google-calendar too; leave bad.astro the only offender.
+      rmSync(join(dir, 'src/pages/flode.astro'))
+      writeFileSync(join(dir, 'src/pages/bad.astro'), widgetPage(widget('')))
+    })
+    expect(build.code).not.toBe(0)
+    expect(build.output).toMatch(/bad\.astro/)
+    expect(build.output).toMatch(/elfsight/)
+  })
+
+  test('build fails on a script that does not belong to the service', TIMEOUT, () => {
+    const build = buildDemo('consent', (dir) =>
+      writeFileSync(join(dir, 'src/pages/bad.astro'), widgetPage(widget('', 'https://cdn.example.test/w.js'))),
+    )
+    expect(build.code).not.toBe(0)
+    expect(build.output).toMatch(/does not belong to elfsight/)
+  })
+
+  for (const tag of ['<script>console.log(1)</script>', `<script is:inline src="${WIDGET_SCRIPT}"></script>`]) {
+    test(`build fails on a <script> in the slot: ${tag}`, TIMEOUT, () => {
+      const build = buildDemo('consent', (dir) => writeFileSync(join(dir, 'src/pages/bad.astro'), widgetPage(widget(tag))))
+      expect(build.output).toMatch(/no <script> in the slot/)
+      expect(build.code).not.toBe(0)
+    })
+  }
+})
+
 describe('banner and footer markup', () => {
   let consentBuild: BuildResult
   let noticeBuild: BuildResult
@@ -275,12 +316,24 @@ describe('banner and footer markup', () => {
 
   test('service rows are rendered hidden for each configured service', () => {
     const banner = consentBuild.html('index.html').querySelector('[data-consent-banner]')!
-    for (const slug of ['google-maps', 'google-analytics']) {
+    for (const slug of ['google-maps', 'google-analytics', 'google-calendar', 'elfsight']) {
       const row = banner.querySelector(`[data-consent-service="${slug}"]`)!
       expect(row.hasAttribute('hidden')).toBe(true)
       expect(row.querySelector(`input[name="service:${slug}"]`)).not.toBeNull()
     }
     expect(banner.querySelector('[data-consent-category="external"] [data-consent-service="google-maps"]')).not.toBeNull()
+    expect(banner.querySelector('[data-consent-category="external"] [data-consent-service="elfsight"]')).not.toBeNull()
+  })
+
+  test('consent demo /flode: the widget payload is inert and nothing loads its script', () => {
+    const page = consentBuild.html('flode/index.html')
+    const widget = page.querySelector('#flode-a')!
+    expect(widget.getAttribute('data-consent-embed')).toBe('elfsight')
+    expect(widget.getAttribute('data-script')).toBe(WIDGET_SCRIPT)
+    expect(widget.querySelector('template[data-payload]')!.innerHTML).toContain('elfsight-app-demo-a')
+    expect(widget.querySelector('a[data-open]')).toBeNull()
+    const sources = page.querySelectorAll('script[src]').map((el) => el.getAttribute('src')!)
+    expect(sources.filter((src) => src.includes('elfsight'))).toEqual([])
   })
 
   test('notice banner markup has only OK', () => {

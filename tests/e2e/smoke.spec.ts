@@ -6,7 +6,7 @@ test('consent demo serves the banner element and installs the runtime', async ({
   await page.goto('/')
   await expect(banner(page)).toBeAttached()
   const services = await page.evaluate(() => window.__vmConsent?.config.services)
-  expect(services).toEqual(['google-maps', 'google-analytics'])
+  expect(services).toEqual(['google-maps', 'google-analytics', 'google-calendar', 'elfsight'])
 })
 
 test('notice demo serves the banner element and installs the runtime', async ({ page, context }) => {
