@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
-import { action, seed, stored, stub } from './helpers'
+import { action, countLoads, loads, seed, stored, stub } from './helpers'
 
 const OK = 'https://elfsightcdn.com/platform.js'
 const A = '#flode-a'
@@ -99,6 +99,7 @@ test('a one-off calendar Visa leaves the widgets alone', async ({ page, context 
 
 test('withdrawing everything removes the widgets and requests nothing after the reload', async ({ page, context }) => {
   const stubs = await stub(context)
+  await countLoads(page)
   await seed(page, '/flode', { choice: 'all', categories: ['necessary', 'external', 'statistics'] })
   await expect(page.locator('#kalender iframe')).toHaveCount(1)
   await expect(page.locator(`${A} [data-rendered]`)).toHaveCount(1)
@@ -106,15 +107,15 @@ test('withdrawing everything removes the widgets and requests nothing after the 
 
   await page.locator('[data-consent-open]').click()
   await action(page, 'back').click()
-  await action(page, 'none').click()
-  await page.waitForLoadState('networkidle')
-  await page.waitForURL('**/flode')
-  await expect(page.locator(`${A} [data-placeholder]`)).toBeVisible()
-  await expect(page.locator('#kalender [data-placeholder]')).toBeVisible()
   const before = stubs.registry.length
+  const n = await loads(page)
+  await action(page, 'none').click()
+  await expect.poll(() => loads(page)).toBe(n + 1)
   await page.waitForLoadState('networkidle')
   expect(stubs.registry.length).toBe(before)
   await expect(scriptTags(page)).toHaveCount(0)
+  await expect(page.locator(`${A} [data-placeholder]`)).toBeVisible()
+  await expect(page.locator('#kalender [data-placeholder]')).toBeVisible()
 })
 
 test('a record without elfsight leaves the widgets as placeholders', async ({ page, context }) => {
