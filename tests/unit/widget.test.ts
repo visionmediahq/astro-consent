@@ -37,3 +37,7 @@ test.each(['<script src="x"></script>', '<SCRIPT>1</SCRIPT>', '<script type="mod
 test('the message names the page and the service', () => {
   expect(widgetError('src/pages/kontakt.astro', 'elfsight', 'http://x', DIV)).toMatch(/src\/pages\/kontakt\.astro.*elfsight/)
 })
+
+test.each(['', '   ', '\n\t\n'])('an empty slot fails: %j', (markup) => {
+  expect(widgetError(F, 'elfsight', OK, markup)).toMatch(/empty slot/)
+})

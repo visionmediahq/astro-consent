@@ -2,8 +2,10 @@
 // any server runtime, so it imports only the registry.
 import { SERVICES, SERVICE_SLUGS, type ServiceSlug } from './services'
 
-// Unlike matchesRegistry, a script URL must be on the service's own host: a bare-host pattern
-// matches the hostname or a subdomain of it, never a substring of the path or a longer host.
+// Stricter than matchesRegistry for bare-host patterns: one matches the URL's hostname or a
+// subdomain of it, never a substring of the path or a longer host (a pattern ending in '.' matches
+// a hostname starting with it, or any label starting with it). A path pattern (containing '/') is
+// still a substring match on origin + path, as in matchesRegistry; the query is never looked at.
 function scriptOwner(url: URL): ServiceSlug | null {
   const host = url.hostname.toLowerCase()
   const full = (url.origin + url.pathname).toLowerCase()
@@ -15,8 +17,8 @@ function scriptOwner(url: URL): ServiceSlug | null {
 /**
  * Why a widget must not render, or null. `page` is `Astro.url.pathname`, as in scanError.
  * The script must be an absolute https URL that the registry attributes to `service` (judged on
- * origin + path, never the query), and the slot must hold no <script>: one there would run before
- * consent.
+ * origin + path, never the query), and the slot must hold markup (an empty one would activate into
+ * nothing) and no <script>: one there would run before consent.
  */
 export function widgetError(page: string, service: ServiceSlug, script: string, markup: string): string | null {
   const where = `[astro-consent] ${page}: <ConsentWidget service="${service}">`
@@ -30,6 +32,9 @@ export function widgetError(page: string, service: ServiceSlug, script: string, 
   const owner = scriptOwner(url)
   if (owner !== service) {
     return `${where}: script "${script}" does not belong to ${service} (it matches ${owner ?? 'no service'}).`
+  }
+  if (markup.trim() === '') {
+    return `${where}: empty slot. Put the provider's inert markup (the element its script fills) inside the component.`
   }
   if (/<script\b/i.test(markup)) {
     return `${where}: no <script> in the slot, it would run before consent. Pass the provider's script URL as the script prop.`

@@ -2,8 +2,8 @@
 // Click-to-load for script widgets (Elfsight and the like). The slot sits inert in a <template>
 // until the visitor clicks "Visa" or has granted the service; client.ts then appends it and loads
 // `script` once per page. Never a <script> in the slot: it would run before consent, so the build
-// fails on one. On a prerendered page these checks fail the build; on an SSR page they fail the
-// request (500), like ConsentEmbed's own check.
+// fails on one, and on an empty slot. On a prerendered page these checks fail the build; on an SSR
+// page they fail the request (500), like ConsentEmbed's own check.
 import '../styles/contrast.css'
 import config from 'virtual:astro-consent/config'
 import { scanError } from '../scan'
