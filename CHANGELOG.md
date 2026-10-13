@@ -5,8 +5,8 @@
 - New services `google-calendar` (ConsentEmbed; the open link is the embed URL) and `elfsight`
   (vendor Elfsight, SL).
 - New `<ConsentWidget>`: same placeholder, one-off "Visa" and remember as ConsentEmbed; the script
-  loads once per page. The build fails on an unlisted service, a foreign script host or a `<script>`
-  in the slot (on SSR pages the request fails with a 500).
+  loads once per page. The build fails on an unlisted service, a foreign script host, an empty slot
+  or a `<script>` in the slot (on SSR pages the request fails with a 500).
 - `CONSENT_VERSION` 2: every visitor on every site is asked again after the site's next install
   (#19, #24).
 

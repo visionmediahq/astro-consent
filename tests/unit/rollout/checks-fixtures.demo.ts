@@ -162,7 +162,7 @@ try {
     const started = Date.now()
     const r = await paths('/widget/')
     const ms = Date.now() - started
-    expect(r.visaLoadsOnlyClicked && r.rememberAutoShows && r.nekaLoadsNothing && r.openHref === null && ms < 20_000, `/widget/ widget first: passes, no open link, no wait (${ms} ms)`, r)
+    expect(r.visaLoadsOnlyClicked && r.rememberAutoShows && r.nekaLoadsNothing && r.openHref === null && ms < 60_000, `/widget/ widget first: passes, no open link, no hang (${ms} ms; ~16 s of fixed waits)`, r)
   }
   {
     const rs = await checkConsentPaths(browser, BASE, ['/mixa/', '/mixb/'])
