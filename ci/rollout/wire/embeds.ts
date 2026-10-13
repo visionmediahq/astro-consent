@@ -10,6 +10,9 @@
 // 24): an inline style's `filter` goes into a new scoped rule, and a scoped <style> rule that
 // targets the iframe gets a copy after it, under the wrapper, carrying only its `filter` and
 // `transition` declarations. The original rule stays as it is.
+// A Tailwind filter utility on the iframe (`grayscale`, `sepia`, `blur-sm`, …) goes on the wrapper as
+// `[&_iframe]:<utility>`, so it filters the loaded map and not the placeholder; one with a variant
+// (`hover:grayscale-0`) is a refusal.
 import { type AstroNode, attr, elements } from '../lib/astro-ast'
 import type { IframeInfo, Report } from '../types'
 import { eolOf, type Planner, refuseNeedsHuman } from './engine'
@@ -19,6 +22,7 @@ const FIXED_CLASS = /^h-(?:\d+(?:\.\d+)?|\[\d+(?:\.\d+)?(?:px|rem|em|vh)\])$/
 const FIXED_ATTR = /^\s*(\d+(?:\.\d+)?)(px|rem)?\s*$/
 const DEFINITE = /^(?:\d+(?:\.\d+)?(?:px|rem|em|vh|svh|dvh|lvh)|clamp\(.*\))$/i
 const CARRIED = new Set(['filter', 'transition'])
+const FILTER_UTILITY = /^!?-?(?:blur|brightness|contrast|drop-shadow|grayscale|hue-rotate|invert|saturate|sepia|filter)(?:-.+)?$/
 
 // ── A small CSS reader: rules and declarations with their offsets. Not a CSS parser. ──
 
@@ -232,8 +236,11 @@ interface Box {
 
 /** The wrapper's classes and whether the embed takes `aspect="auto"`, or the reason to refuse. */
 function boxOf(node: AstroNode, parent: AstroNode, rules: CssRule[]): Box | Error {
-  const classes = classList(node)
-  if (classes === null) return new Error('iframe class is an expression')
+  const written = classList(node)
+  if (written === null) return new Error('iframe class is an expression')
+  const varied = written.find((c) => c.includes(':') && FILTER_UTILITY.test(c.slice(c.lastIndexOf(':') + 1)))
+  if (varied) return new Error(`iframe has a filter class with a variant (${varied})`)
+  const classes = written.map((c) => (FILTER_UTILITY.test(c) ? `[&_iframe]:${c}` : c))
   const fixed = classes.find((c) => FIXED_CLASS.test(c))
   if (fixed) return { classes: ['grid', fixed, ...classes.filter((c) => c !== fixed)], aspect: true }
   // Ruling 31: an inline style height beats the height attribute, as in CSS.

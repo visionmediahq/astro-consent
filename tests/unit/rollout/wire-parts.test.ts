@@ -549,6 +549,30 @@ describe('wireEmbeds', () => {
     ).toEqual(["filter rule targets the iframe's class"])
   })
 
+  // A Tailwind filter utility on the iframe would grey the placeholder (and the Visa button) on the
+  // wrapper; it goes on the wrapper as `[&_iframe]:<utility>` so it reaches only the loaded map (abacum).
+  test("class 'w-full h-full grayscale' → wrapper '[&_iframe]:grayscale', not 'grayscale'", () => {
+    const text = embed(
+      `<div class="h-72">\n  <iframe class="w-full h-full grayscale" src="https://www.google.com/maps/embed?pb=!1" title="Karta"></iframe>\n</div>\n`,
+    )
+    expect(text).toContain('<div class="grid h-full w-full [&_iframe]:grayscale"><ConsentEmbed service="google-maps" src="https://www.google.com/maps/embed?pb=!1" title="Karta" aspect="auto" /></div>')
+  })
+
+  test.each([['sepia'], ['blur-sm'], ['brightness-90'], ['contrast-125'], ['saturate-50'], ['-hue-rotate-15'], ['invert'], ['grayscale-50'], ['drop-shadow-md']])(
+    'filter utility %s moves under [&_iframe]:',
+    (util) => {
+      expect(embed(`<iframe class="w-full ${util}" src="https://www.google.com/maps/embed?pb=!1" title="Karta"></iframe>\n`)).toContain(
+        `<div class="w-full [&_iframe]:${util}"><ConsentEmbed`,
+      )
+    },
+  )
+
+  test('a filter utility with a variant (hover:grayscale-0): refused', () => {
+    expect(
+      refused(`<iframe class="w-full grayscale hover:grayscale-0" src="https://www.google.com/maps/embed?pb=!1" title="Karta"></iframe>\n`),
+    ).toEqual(['iframe has a filter class with a variant (hover:grayscale-0)'])
+  })
+
   test('a scoped rule that targets the iframe through a child combinator: refused', () => {
     expect(
       refused(
