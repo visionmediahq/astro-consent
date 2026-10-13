@@ -39,7 +39,7 @@ implementer's to express in the surrounding code's idiom.
 ## Review Focus
 
 1. `<script>` in the `ConsentWidget` slot, both plain (Astro-processed) and `is:inline`: build
-   fails. → Task 5, build test.
+   fails on a prerendered page (on an SSR page the request fails; documented). → Task 5, build test.
 2. Script URL with another host in its query (`https://evil.test/x.js?u=elfsightcdn.com`):
    rejected, matching uses origin + path only. → Task 5, unit.
 3. Two widgets, same script, Visa on each in turn: one script tag, both render. → Task 6, e2e.
@@ -98,6 +98,8 @@ Already known (curl of `https://elfsightcdn.com/platform.js`, 2026-10-13): refer
   ```
   match(elfsight) = ['elfsightcdn.com', 'elfsight.com']
     + any other host the page itself requests for Elfsight, except Instagram/Meta CDNs
+  note: 'elfsight.com' as a bare host also makes detect report a plain elfsight.com link in site
+    text as a tracker; acceptable (detect fails toward a human), say so in the probe results
   if step 2 prints 0 or step 3 doesn't render:
     STOP, write the result into the spec, ask Jörgen   // spec's client / deEmbed sections change
   ```
@@ -112,8 +114,10 @@ Already known (curl of `https://elfsightcdn.com/platform.js`, 2026-10-13): refer
 
 ### Task 2: Registry rows, CONSENT_VERSION 2, Calendar open link
 
-**Files:** `src/services.ts`, `services.json`, `src/config.ts`, `tests/unit/consent-terms.json`;
-tests `tests/unit/services.test.ts`, `tests/unit/embed-url.test.ts`.
+**Files:** `src/services.ts`, `services.json`, `src/config.ts`, `tests/unit/consent-terms.json`,
+`ci/rollout/detect/scripts.ts`; tests `tests/unit/services.test.ts`, `tests/unit/embed-url.test.ts`,
+`tests/unit/store.test.ts`, `tests/unit/config.test.ts`, `tests/unit/scan.test.ts`,
+`tests/build/build.test.ts`, `tests/unit/rollout/detect-iframes.test.ts`, its snapshot.
 **Produces:** `ServiceSlug` gains `'google-calendar' | 'elfsight'`;
 `matchesRegistry('https://elfsightcdn.com/platform.js') == 'elfsight'`,
 `matchesRegistry('https://calendar.google.com/calendar/embed?src=x') == 'google-calendar'`.
@@ -150,9 +154,34 @@ tests `tests/unit/services.test.ts`, `tests/unit/embed-url.test.ts`.
   src/config.ts: CONSENT_VERSION = 2
   consent-terms.json += "2": H
   ```
-- [ ] **Step 6: Run** `npm run check && npm test`. Expect PASS. (`scanError`'s test uses
-  `'elfsight'` as an example slug; it tests the message, leave it.)
-- [ ] **Step 7: Commit** "feat: google-calendar and elfsight in the registry; CONSENT_VERSION 2 (#19, #24)".
+- [ ] **Step 6: Tests that used `'elfsight'` as the unknown slug.** It is a real slug now, so they
+  would pass for the wrong reason or fail:
+  ```
+  tests/unit/store.test.ts:79    services ['elfsight']  -> ['not-a-service']
+  tests/unit/config.test.ts:33   services ['elfsight']  -> ['not-a-service']
+  tests/build/build.test.ts:67   services ['elfsight']  -> ['not-a-service']
+  tests/build/build.test.ts:47   consentVersion /^1:/   -> /^2:/
+  tests/unit/scan.test.ts        scanError example slug 'elfsight' -> 'not-a-service'
+  ```
+- [ ] **Step 7: Registry-driven rollout detect.** `ci/rollout/detect/scripts.ts` builds
+  `HOST_PATTERNS` from every bare-host registry pattern, and `detect/iframes.ts` classifies iframes
+  with `matchesRegistry`. New rows therefore change detect output. Keep it deliberate and minimal
+  (the full Elfsight detect/wire change stays in the tool PR):
+  ```
+  scripts.ts: IFRAME_SERVICES = {'google-maps', 'google-calendar'}
+    line ~101: text match skips iframe tags for slug in IFRAME_SERVICES (today: google-maps only)
+    line ~105: parsed-URL check skips slug in IFRAME_SERVICES (today: google-maps only)
+  run npm test; expected, intended changes:
+    tests/unit/rollout/detect-iframes.test.ts:135  nhrk Calendar iframe service null -> 'google-calendar'
+    tests/unit/rollout/__snapshots__/detect.test.ts.snap  nhrk entry: iframe service 'google-calendar'
+      (update with vitest -u only after reading the diff: no other site's entry may change except
+       Elfsight sites gaining tracker 'elfsight' next to banner 'elfsight')
+  classification stays needs-human for both kinds of site (Calendar iframe: iframeReason;
+    Elfsight: existing banner) until the tool PR
+  ```
+  Record in the commit body: "detect now names google-calendar and elfsight; wiring them is the tool PR".
+- [ ] **Step 8: Run** `npm run check && npm test`. Expect PASS.
+- [ ] **Step 9: Commit** "feat: google-calendar and elfsight in the registry; CONSENT_VERSION 2 (#19, #24)".
 
 ---
 
@@ -256,10 +285,10 @@ fallback `sv.embed.info`. Renders `[data-placeholder]` with `[data-load]`, `[dat
 **Files:** create `src/widget.ts`, `src/components/ConsentWidget.astro`,
 `demo/src/pages/flode.astro`, `tests/unit/widget.test.ts`; modify `demo/privacy.consent.json`,
 `scripts/demo-copy.ts` (`EMBED_PAGES`), `tests/build/build.test.ts`,
-`tests/build/site-typecheck.test.ts`, `tests/e2e/smoke.spec.ts`.
+`tests/e2e/smoke.spec.ts`.
 **Consumes:** `matchesRegistry`, `ServiceSlug` (T2), `scanError` (T3), `EmbedPlaceholder` (T4).
 **Produces:**
-`widgetError(file: string, service: ServiceSlug, script: string, markup: string): string | null`;
+`widgetError(page: string, service: ServiceSlug, script: string, markup: string): string | null` (`page` = `Astro.url.pathname`);
 `<ConsentWidget service script title id? minHeight?>` →
 `div[data-consent-embed=<slug>][data-script=<url>] > template[data-payload] + [data-placeholder]`;
 demo `/flode` with `#kalender` (ConsentEmbed, google-calendar), `#flode-a`, `#flode-b`
@@ -282,8 +311,8 @@ demo `/flode` with `#kalender` (ConsentEmbed, google-calendar), `#flode-a`, `#fl
 - [ ] **Step 2: Run** → FAIL (module missing).
 - [ ] **Step 3: src/widget.ts** (node-free; imports only `services.ts`).
   ```
-  widgetError(file, service, script, markup):
-    where = '[astro-consent] <file>: <ConsentWidget service="<service>">'
+  widgetError(page, service, script, markup):     // page = Astro.url.pathname, like scanError
+    where = '[astro-consent] <page>: <ConsentWidget service="<service>">'
     url = parse script            else return where + ': script "<script>" is not an absolute URL.'
     if url.protocol != 'https:'   return where + ': script must use https:, got "<script>".'
     owner = matchesRegistry(url.origin + url.pathname)     // never the query
@@ -298,9 +327,11 @@ demo `/flode` with `#kalender` (ConsentEmbed, google-calendar), `#flode-a`, `#fl
     and loads `script` once on Visa or grant; never a <script> in the slot (build fails)
   import contrast.css, virtual config, scanError, widgetError, EmbedPlaceholder
   props: service, script, title, minHeight = '12rem', id?
-  if service not in config.services: throw scanError(Astro.url.pathname, service, config.services)
+  if service not in config.services: throw new Error(scanError(Astro.url.pathname, service, config.services))
   markup = await Astro.slots.render('default')
-  if (e = widgetError(Astro.url.pathname, service, script, markup)): throw e
+  if (e = widgetError(Astro.url.pathname, service, script, markup)): throw new Error(e)
+  header comment also states: on a prerendered page these checks fail the build; on an SSR page
+    they fail the request (500), like ConsentEmbed's own check
   infoId = (id or 'consent-embed-' + 8 random hex) + '-info'
   render:
     div#id[data-consent-embed=service][data-script=script]
@@ -328,13 +359,17 @@ demo `/flode` with `#kalender` (ConsentEmbed, google-calendar), `#flode-a`, `#fl
   test: widget script https://cdn.example.test/w.js                 -> build fails, /does not belong to elfsight/
   for tag in ['<script>console.log(1)</script>', '<script is:inline src="https://elfsightcdn.com/platform.js"></script>']:
     test: tag in the slot                                          -> build fails, /no <script> in the slot/
+  the /flode assertion goes INSIDE describe('banner and footer markup') (build.test.ts:240), which
+    owns consentBuild; do not move its beforeAll (that would rebuild for every describe)
   "service rows" test: all four slugs; elfsight row inside [data-consent-category="external"]
-  (if the shared consent build is scoped to another describe, move its beforeAll to file level)
-  site-typecheck: the fake site also imports ConsentWidget, following the file's existing import list
+  build.test.ts:49 expected demo services = the four above
+  (no site-typecheck change: that test type-checks client.ts with tsc, which cannot read .astro;
+   nothing type-checks components today; out of scope)
   ```
 - [ ] **Step 7: Run** `npm run check && npm test && npm run test:build`. Expect PASS.
   If the plain-`<script>` case passes the build (Astro hoisted it out of the rendered slot):
-  STOP and report; the no-script rule then needs a scan-time check.
+  STOP and report. Prepared fallback to propose: the scan (`findEmbedServices`' pass) also reports a
+  `<script` between `<ConsentWidget …>` and its closing tag, and the integration fails the build on it.
 - [ ] **Step 8: Commit** "feat: ConsentWidget, click-to-load for script widgets (#24)".
 
 ---
@@ -369,6 +404,10 @@ demo `/flode` with `#kalender` (ConsentEmbed, google-calendar), `#flode-a`, `#fl
   Acceptera alla: action 'all' -> #kalender iframe src =~ calendar.google.com; A and B rendered; script x1
   cross-tab:      tab P and tab O on /flode; P counts its own localStorage.setItem('vm_consent') calls;
                   O clicks 'all' -> P: A and B rendered; P's write count == 0
+  calendar one-off: click #kalender [data-load] -> #kalender iframe src =~ calendar.google.com; widgets untouched; stored() == null
+  withdraw:       seed /flode {choice 'all', categories all used}; reload -> calendar + widgets active;
+                  open settings, Neka (action 'none'); reload -> placeholders, no registry request
+                  after the reload, no script[src=OK]   (follow tests/e2e/withdraw.spec.ts' flow)
   stored without elfsight: seed /flode {choice 'custom', categories ['necessary'], services ['google-calendar']}
                   -> #kalender iframe x1; networkidle; #flode-a placeholder visible; no registry request contains 'elfsight'
   ```
@@ -444,7 +483,7 @@ demo `/flode` with `#kalender` (ConsentEmbed, google-calendar), `#flode-a`, `#fl
   commit "docs: ConsentWidget, 1.1.0 changelog"
   push feat/elfsight-calendar
   gh pr create  title "1.1.0: Elfsight and Google Calendar, ConsentWidget"
-                body: summary, test output, "Closes #19", "Closes #24 (detect/wire follows in a tool PR)"
+                body: summary, test output, "Closes #19", "Part of #24" (#24 closes with the detect/wire tool PR)
   STOP. Merge and tag are Jörgen's: starter-install green on main with STARTER_INSTALL=true,
   then git tag -a v1.1.0 and push. The detect/wire tool PR is planned separately.
   ```

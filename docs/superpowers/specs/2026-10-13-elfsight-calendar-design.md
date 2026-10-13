@@ -11,7 +11,15 @@ before a grant (with or without JavaScript), a one-off "Visa" activates only the
 and the build fails on a widget or embed whose service is not in `privacy.json`.
 
 Out of scope: wiring the client sites (a rollout after the release) and the `detect`/`wire` change
-(a separate tool PR, see "Rollout tool").
+(a separate tool PR, see "Rollout tool"). Exception, found in plan review: `detect` derives its
+patterns from the registry, so the new rows change its output. This release keeps that change
+minimal and deliberate (Calendar iframes are not counted as trackers, as for Maps) and updates the
+affected fixtures; it does not make `wire` handle either service.
+
+Limit: like `ConsentEmbed`'s check, `ConsentWidget`'s render-time checks fail the build on a
+prerendered page and the request (500) on an SSR page. `tests/build/site-typecheck.test.ts` does not
+cover components (tsc cannot read `.astro`), so the spec's "site-typecheck covers the new component"
+is dropped.
 
 ## Step 0: browser probe (before any code)
 
