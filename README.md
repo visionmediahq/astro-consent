@@ -115,7 +115,7 @@ add preconnect hints or static map images for the provider; they would contact i
 ### `<ConsentWidget>`
 
 Click-to-load for widgets that need a `<script>` (Elfsight). Same placeholder, one-off "Visa" and
-"Visa alltid" as `<ConsentEmbed>`; the script is requested only once the visitor activates the
+"Visa alltid innehåll från …" as `<ConsentEmbed>`; the script is requested only once the visitor activates the
 widget, and only once per page.
 
 ```astro
@@ -129,6 +129,7 @@ import ConsentWidget from '@visionmediahq/astro-consent/components/ConsentWidget
 
 - `script` must be `https:` on the service's own host, or the build fails.
 - Do not put a `<script>` in the slot (the build fails); pass its URL as `script`.
+- `id` is an optional element id.
 - `minHeight` (default `12rem`) sizes the placeholder only.
 - The checks fail the build on prerendered pages. On SSR pages they cannot, so the request fails with a 500.
 - Google Calendar is a `<ConsentEmbed>` (service `google-calendar`); its button reads "Visa Google Kalender".

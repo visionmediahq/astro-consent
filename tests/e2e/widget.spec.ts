@@ -17,7 +17,7 @@ test('before consent: placeholders only, nothing requested', async ({ page, cont
   await expect(page.locator(`${A} a[data-open]`)).toHaveCount(0)
   await expect(page.locator('#kalender a[data-open]')).toHaveAttribute(
     'href',
-    /calendar\.google\.com\/calendar\/embed\?src=/,
+    'https://calendar.google.com/calendar/embed?src=demo%40group.calendar.google.com&ctz=Europe%2FStockholm',
   )
 })
 

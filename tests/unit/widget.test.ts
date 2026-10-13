@@ -20,6 +20,13 @@ test('the script must belong to the widget service, judged without the query', (
   expect(widgetError(F, 'elfsight', 'https://evil.test/x.js?u=elfsightcdn.com', DIV)).toMatch(/no service/)
 })
 
+test('the script must be on the service\'s own host, not merely contain it', () => {
+  expect(widgetError(F, 'elfsight', 'https://elfsight.com.cdn.example/x.js', DIV)).toMatch(/no service|does not belong/)
+  expect(widgetError(F, 'elfsight', 'https://kund.se/vendor/elfsightcdn.com/platform.js', DIV)).toMatch(/no service|does not belong/)
+  expect(widgetError(F, 'elfsight', 'https://static.elfsight.com/platform/platform.js', DIV)).toBeNull()
+  expect(widgetError(F, 'elfsight', OK, DIV)).toBeNull()
+})
+
 test.each(['<script src="x"></script>', '<SCRIPT>1</SCRIPT>', '<script type="module" src="/_astro/a.js"></script>'])(
   'a <script> in the slot fails: %s',
   (markup) => {
