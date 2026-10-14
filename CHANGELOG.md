@@ -22,6 +22,9 @@ Not part of the package (`files` is unchanged) and not a release.
 - `merge` reads the last 50 Coolify deployments per app and stops before merging when an app that
   follows `main` serves a host that is not in the report's domains (it has no live baseline).
 - `detect` names google-calendar (iframe only, never a tracker) and elfsight; wiring them follows in a tool PR.
+- `verify` step 4 (consent-paths) checks "Visa alltid" per service: remembering S must activate S's
+  embeds on another page (or a reload when no other page has S) and leave other services inactive.
+  The one-off Visa check uses `[data-active]`, so it covers widgets. Maps-only sites behave as before.
 - CI: the `e2e` job runs `verify --demo demo/dist-consent` after the consent demo build.
 
 ## 1.0.2
