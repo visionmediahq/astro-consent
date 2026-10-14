@@ -2,6 +2,7 @@
 // line. The wire stage converts only `notice` and `consent`, so every doubt is a reason: an unknown
 // counts as a problem, never as "probably fine".
 import { servicesOf } from '../lib/report'
+import type { ServiceSlug } from '../../../src/services'
 import type { Classification, IframeInfo, Report } from '../types'
 
 /** Everything detect found, plus what classify needs that the report does not keep. */
@@ -12,6 +13,10 @@ export type Findings = Omit<Report, 'classification' | 'reasons' | 'services'> &
   multiFooterPages: { page: string; footers: number }[]
   /** Ruling 39: pages with their own <html> outside every layout. */
   ownHtmlPages: string[]
+  /** Services of package <ConsentWidget> elements already in the source. */
+  wired: ServiceSlug[]
+  /** detectWidgets' reasons, each naming its file. */
+  widgetReasons: string[]
 }
 
 /** The Astro majors the package's peerDependencies accept. */
@@ -80,7 +85,8 @@ export function classify(f: Findings): { classification: Classification; reasons
   }
   for (const t of f.trackers) add(`tracker ${t}: the batch wires notice and maps only`)
   for (const b of f.banners) add(`existing banner: ${b}`)
+  for (const r of f.widgetReasons) add(r)
 
   if (reasons.length > 0) return { classification: 'needs-human', reasons }
-  return { classification: servicesOf(f).length > 0 ? 'consent' : 'notice', reasons }
+  return { classification: servicesOf(f, f.wired).length > 0 ? 'consent' : 'notice', reasons }
 }

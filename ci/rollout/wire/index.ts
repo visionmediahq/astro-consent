@@ -26,6 +26,11 @@ export const COMMIT_MESSAGE = 'feat: samtyckesbanner (astro-consent)'
 export function planWire(files: SiteFiles, report: Report): WirePlan {
   const planner = new Planner(files)
   if (refuseNeedsHuman(planner, report)) return planner.result()
+  // Temporary: until wire learns widgets, wiring a widget site would leave its raw loader in place.
+  if (report.widgets.length > 0) {
+    planner.refuse('', 'widgets', 'Elfsight wiring lands in the next commit')
+    return planner.result()
+  }
   for (const part of [wireConfig, wireCss, wireLayout, wireLinks, wirePrivacy, wireEmbeds]) part(planner, report)
   return planner.result()
 }

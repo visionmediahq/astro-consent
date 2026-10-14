@@ -17,7 +17,7 @@ export type DetectedScripts = Pick<Report, 'trackers' | 'banners' | 'recaptcha' 
 
 const PACKAGE = '@visionmediahq/astro-consent'
 
-const BINARY = /\.(?:png|jpe?g|gif|webp|avif|ico|bmp|tiff?|svg|woff2?|ttf|otf|eot|pdf|mp[34]|webm|ogg|wav|mov|zip|gz)$/i
+export const BINARY = /\.(?:png|jpe?g|gif|webp|avif|ico|bmp|tiff?|svg|woff2?|ttf|otf|eot|pdf|mp[34]|webm|ogg|wav|mov|zip|gz)$/i
 
 /**
  * Maps patterns that ordinary links match too: a "Hitta hit" link, JSON-LD `hasMap`, an embed
@@ -28,6 +28,9 @@ const LINK_LIKE = new Set(['google.com/maps', 'maps.google.'])
 /** Google Calendar only ever loads as an iframe and has no tracker script: detectIframes is its only reporter. */
 const IFRAME_ONLY = new Set<ServiceSlug>(['google-calendar'])
 
+/** Elfsight loads through its platform script: detectWidgets is its only reporter (a widget, or a reason). */
+const WIDGET_ONLY = new Set<ServiceSlug>(['elfsight'])
+
 /**
  * Registry patterns that are a bare host (no path): safe to find anywhere in text. Path patterns
  * (`facebook.com/tr`) are only matched on parsed URLs, where a page link such as
@@ -35,7 +38,7 @@ const IFRAME_ONLY = new Set<ServiceSlug>(['google-calendar'])
  * `maps.gstatic.com`, `places.googleapis.com`) are kept: outside an iframe they are loads the batch
  * does not wire (a Static Maps image, the JavaScript API, its fonts and tiles).
  */
-const HOST_PATTERNS: [string, ServiceSlug][] = SERVICE_SLUGS.filter((slug) => !IFRAME_ONLY.has(slug)).flatMap((slug) =>
+const HOST_PATTERNS: [string, ServiceSlug][] = SERVICE_SLUGS.filter((slug) => !IFRAME_ONLY.has(slug) && !WIDGET_ONLY.has(slug)).flatMap((slug) =>
   SERVICES[slug].match.filter((p) => !p.includes('/') && !LINK_LIKE.has(p)).map((p): [string, ServiceSlug] => [p, slug]),
 )
 
@@ -60,7 +63,6 @@ const MAPS_PACKAGE = /^@googlemaps\/|google[-_]?maps/i
 
 const BANNERS: [RegExp, string][] = [
   [/cookiebot/i, 'cookiebot'],
-  [/elfsight/i, 'elfsight'],
   [/cookieyes/i, 'cookieyes'],
   [/cookieconsent/i, 'cookieconsent'],
   [/onetrust|cookielaw\.org/i, 'onetrust'],
@@ -105,7 +107,7 @@ function trackersInText(text: string): ServiceSlug[] {
   for (const [re, slug] of CALLS) if (re.test(text)) out.push(slug)
   for (const url of urlsIn(text)) {
     const slug = serviceOfUrl(url)
-    if (slug !== null && slug !== 'google-maps' && !IFRAME_ONLY.has(slug)) out.push(slug)
+    if (slug !== null && slug !== 'google-maps' && !IFRAME_ONLY.has(slug) && !WIDGET_ONLY.has(slug)) out.push(slug)
   }
   return out
 }
@@ -116,7 +118,7 @@ function trackersInScript(node: AstroNode, text: string): ServiceSlug[] {
   if (type?.kind === 'quoted' && /json/i.test(type.value)) return []
   const src = attr(node, 'src')
   const urls = [...(src && src.kind !== 'empty' ? [src.value, ...urlsIn(src.value)] : []), ...urlsIn(text.slice(node.start, node.end))]
-  return urls.flatMap((u) => serviceOfUrl(u) ?? [])
+  return urls.flatMap((u) => serviceOfUrl(u) ?? []).filter((slug) => !WIDGET_ONLY.has(slug))
 }
 
 function importedTrackers(specifiers: string[]): ServiceSlug[] {
@@ -126,7 +128,7 @@ function importedTrackers(specifiers: string[]): ServiceSlug[] {
   ])
 }
 
-function packageDeps(files: SiteFiles): string[] {
+export function packageDeps(files: SiteFiles): string[] {
   if (!files.exists('package.json')) return []
   try {
     const pkg = JSON.parse(files.read('package.json')) as Record<string, unknown>

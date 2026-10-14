@@ -6,12 +6,22 @@ import { classify, type Findings } from '../../../ci/rollout/detect/classify'
 import { detect } from '../../../ci/rollout/detect/index'
 import { detectScripts } from '../../../ci/rollout/detect/scripts'
 import { aliasedAstroImports } from '../../../ci/rollout/lib/site-imports'
-import { diskSite, fixtureSite } from '../../../ci/rollout/lib/site-files'
+import { diskSite, fixtureSite, globToRegExp, type SiteFiles } from '../../../ci/rollout/lib/site-files'
 import { normaliseReport, servicesOf } from '../../../ci/rollout/lib/report'
 import type { IframeInfo, WidgetInfo } from '../../../ci/rollout/types'
 
 const FIXTURES = join(import.meta.dirname, 'fixtures')
 const pilot = (site: string, side: 'before' | 'merged' = 'before') => fixtureSite(join(FIXTURES, site, side))
+
+/** `base` with `extra` files added (or replaced), in memory. */
+function withFiles(base: SiteFiles, extra: Record<string, string>): SiteFiles {
+  return {
+    root: base.root,
+    list: (glob) => [...new Set([...base.list(glob), ...Object.keys(extra).filter((p) => globToRegExp(glob).test(p))])].sort(),
+    read: (path) => extra[path] ?? base.read(path),
+    exists: (path) => path in extra || base.exists(path),
+  }
+}
 
 const dirs: string[] = []
 function inline(files: Record<string, string>) {
@@ -169,10 +179,17 @@ describe('detectScripts: Google Maps loads outside an iframe', () => {
 describe('detectScripts: banners, reCAPTCHA, already wired', () => {
   test.each([
     ['Cookiebot', '<script id="Cookiebot" src="https://consent.cookiebot.com/uc.js" data-cbid="x"></script>', 'cookiebot'],
-    ['Elfsight', '<script src="https://static.elfsight.com/platform/platform.js" async></script>', 'elfsight'],
     ['CookieYes', '<script src="https://cdn-cookieyes.com/client_data/abc/script.js"></script>', 'cookieyes'],
   ])('%s is an existing banner', (_name, tag, expected) => {
     expect(detectScripts(inline({ 'src/layouts/Base.astro': page(tag) })).banners).toEqual([expected])
+  })
+
+  test('an Elfsight loader is neither a banner nor a tracker', () => {
+    for (const src of ['https://static.elfsight.com/platform/platform.js', 'https://elfsightcdn.com/platform.js']) {
+      const r = detectScripts(inline({ 'src/layouts/Base.astro': page(`<script src="${src}" async></script><script is:inline>var u='${src}'</script>`) }))
+      expect(r.banners).toEqual([])
+      expect(r.trackers).toEqual([])
+    }
   })
 
   test('a home-made localStorage consent gate is an existing banner', () => {
@@ -313,6 +330,8 @@ function clean(over: Partial<Findings> = {}): Findings {
     aliasImports: [],
     multiFooterPages: [],
     ownHtmlPages: [],
+    wired: [],
+    widgetReasons: [],
     ...over,
   }
 }
@@ -436,6 +455,14 @@ describe('classify', () => {
     expect(classify(clean(over))).toEqual({ classification: 'needs-human', reasons: [reason] })
   })
 
+  test('widget reasons are listed as they are; wired services alone make the site consent', () => {
+    expect(classify(clean({ widgetReasons: ['elfsight: src/pages/x.astro: two elfsight scripts'] }))).toEqual({
+      classification: 'needs-human',
+      reasons: ['elfsight: src/pages/x.astro: two elfsight scripts'],
+    })
+    expect(classify(clean({ wired: ['elfsight'] }))).toEqual({ classification: 'consent', reasons: [] })
+  })
+
   test('a Maps iframe next to a needs-human reason is needs-human', () => {
     expect(classify(clean({ iframes: [frame({})], trackers: ['google-analytics'] })).classification).toBe('needs-human')
   })
@@ -465,6 +492,47 @@ describe('detect', () => {
     expect(r.domains).toEqual(['example.se'])
     expect(r.classification).toBe('needs-human')
     expect(r.reasons.filter((x) => x.startsWith('parse error in src/pages/broken.astro: '))).toHaveLength(1)
+  })
+
+  const FEED_PAGE =
+    "---\nimport Base from '../layouts/Base.astro'\n---\n<Base title=\"Flöde\">\n  <section>\n    <!-- Elfsight Instagram Feed | Flöde -->\n" +
+    '    <script src="https://elfsightcdn.com/platform.js" async></script>\n' +
+    '    <div class="elfsight-app-00000000-0000-0000-0000-000000000001" data-elfsight-app-lazy></div>\n  </section>\n</Base>\n'
+
+  test('an Elfsight widget makes a notice site consent, with no banner and no tracker', () => {
+    const r = detect(withFiles(pilot('munkforstradgardstjanst'), { 'src/pages/flode.astro': FEED_PAGE }), 'x', ['x.se'])
+    expect(r.banners).toEqual([])
+    expect(r.trackers).toEqual([])
+    expect(r.reasons).toEqual([])
+    expect(r.classification).toBe('consent')
+    expect(r.services).toEqual(['elfsight'])
+    expect(r.widgets.map((w) => [w.file, w.pages])).toEqual([['src/pages/flode.astro', ['src/pages/flode.astro']]])
+  })
+
+  test('a Cookiebot script beside the widget is still a banner', () => {
+    const cookiebot = '<script id="Cookiebot" src="https://consent.cookiebot.com/uc.js" data-cbid="x"></script>\n'
+    const r = detect(withFiles(pilot('munkforstradgardstjanst'), { 'src/pages/flode.astro': FEED_PAGE + cookiebot }), 'x', ['x.se'])
+    expect(r.banners).toEqual(['cookiebot'])
+    expect(r.classification).toBe('needs-human')
+    expect(r.reasons).toContain('existing banner: cookiebot')
+  })
+
+  test('an Elfsight reason makes the site needs-human', () => {
+    const r = detect(withFiles(pilot('munkforstradgardstjanst'), { 'src/pages/flode.astro': FEED_PAGE.replace(' async>', ' defer>') }), 'x', ['x.se'])
+    expect(r.classification).toBe('needs-human')
+    expect(r.reasons).toEqual(['elfsight: src/pages/flode.astro: script attribute defer not understood', 'elfsight: src/pages/flode.astro: elfsight outside a recognised widget'])
+  })
+
+  test('an already wired widget re-detects as consent', () => {
+    const wired =
+      "---\nimport Base from '../layouts/Base.astro'\nimport ConsentWidget from '@visionmediahq/astro-consent/components/ConsentWidget.astro'\n---\n" +
+      '<Base title="Flöde"><ConsentWidget service="elfsight" script="https://elfsightcdn.com/platform.js" title="Innehållet">' +
+      '<div class="elfsight-app-00000000-0000-0000-0000-000000000001" data-elfsight-app-lazy></div></ConsentWidget></Base>\n'
+    const r = detect(withFiles(pilot('munkforstradgardstjanst'), { 'src/pages/flode.astro': wired }), 'x', ['x.se'])
+    expect(r.reasons).toEqual([])
+    expect(r.widgets).toEqual([])
+    expect(r.classification).toBe('consent')
+    expect(r.services).toEqual(['elfsight'])
   })
 
   test.each([

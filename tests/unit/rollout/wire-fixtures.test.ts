@@ -130,6 +130,14 @@ describe('planWire on the pilot fixtures', () => {
     expect(plan).toEqual({ ok: false, refusals: [{ file: '', target: 'classification', reason: 'tracker gtm' }] })
   })
 
+  test('a report with widgets is refused until Elfsight wiring lands', () => {
+    const files = fixtureSite(join(FIXTURES, 'munkforstradgardstjanst', 'before'))
+    const report = detect(files, 'x', ['x.se'])
+    const widget = { file: 'src/pages/x.astro', start: 0, end: 1, service: 'elfsight' as const, script: 'https://elfsightcdn.com/platform.js', scriptAt: { start: 2, end: 3 }, pages: [] }
+    const plan = planWire(files, { ...report, classification: 'consent', services: ['elfsight'], widgets: [widget] })
+    expect(plan).toEqual({ ok: false, refusals: [{ file: '', target: 'widgets', reason: 'Elfsight wiring lands in the next commit' }] })
+  })
+
   test('the policy_url host is report.domains[0] (Ruling 3)', () => {
     const files = fixtureSite(join(FIXTURES, 'vasshallakatthotell', 'before'))
     const report = detect(files, 'vasshallakatthotell', ['www.example.se', 'example.se'])
