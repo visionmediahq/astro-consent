@@ -127,6 +127,10 @@ function create(): Runtime {
     el.dataset.active = ''
     active.add(el.dataset.consentEmbed as ServiceSlug)
     if (el.dataset.script) loadScript(el.dataset.script)
+    // Embeds in the payload were not in the document when applyGrants() looked (#28).
+    for (const inner of el.querySelectorAll<HTMLElement>('[data-consent-embed]:not([data-active])')) {
+      if (granted(inner.dataset.consentEmbed as ServiceSlug)) activate(inner)
+    }
   }
 
   /** Activates every embed the RECORD grants. A one-off "Visa" is never generalised to other embeds. */
