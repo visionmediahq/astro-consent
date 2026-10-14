@@ -303,6 +303,27 @@ npx tsx ci/rollout/run.ts help
 - Coolify is only read, with `COOLIFY_READ_TOKEN` and `COOLIFY_URL` from `~/sites/vision-books/.env`.
 - CI runs `verify --demo demo/dist-consent` after the consent demo build, which covers the browser
   checks with every registry and log host stubbed.
+- **Classification and services.** `detect` classifies a site `consent`, `notice` or `needs-human`
+  (older stored reports with `maps` still load as `consent`) and lists what it found in
+  `report.services` (maps, google-calendar, elfsight, trackers) and `report.widgets`. `wire` writes
+  `src/data/privacy.json` from `report.services`; an existing `privacy.json` that lacks one of them
+  is refused. Pool rows without `services` are re-detected, and `select` strata are
+  `consent`/`notice`.
+- **Elfsight.** Recognised only as one loader `<script>` (`https://elfsightcdn.com/platform.js` or
+  `https://static.elfsight.com/platform/platform.js`; other attributes only `async` and `is:inline`)
+  plus one or more empty `<div class="elfsight-app-<uuid>">` (other attribute only
+  `data-elfsight-app-lazy`) in the same `.astro` file. `wire` wraps each div in `<ConsentWidget
+  service="elfsight" script=… title="Innehållet">`, removes the site's loader script, and installs
+  `^1.1.1`. A `Content-Security-Policy` line in `public/_headers` is not a load and is left alone.
+- **Refused as `needs-human`.** Every other Elfsight occurrence: a second loader, an inline script,
+  an import or package, an env-built class name, a CSS rule, or a mention in any other file type. The tool
+  strips nothing it cannot prove is a plain widget, because a leftover loader would request Elfsight
+  before consent.
+- **Calendar: literal iframes only.** A Google Calendar `<iframe src="…">` with a literal URL is
+  wrapped in `<ConsentEmbed service="google-calendar">` like a map and no longer blocks a site. An
+  `src={…}` expression is not wired.
+- `pr` names each service from `privacy.json` in the PR body, with its "Visa <name>" step. `verify`
+  reads the filter from the first embed of the filtered service, and widget pages count as embed pages.
 - `ci/rollout/pool.ts` and `ci/rollout/select.ts` scan the site pool and draw the rollout batch;
   their output holds client data and is never committed.
 
