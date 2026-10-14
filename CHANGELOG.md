@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.1.1
 
 - A granted embed or widget inside another widget's slot now activates with it, on a grant or a
   one-off "Visa" on the outer one, instead of staying a placeholder until the next change (#28).
