@@ -381,7 +381,7 @@ describe('verify', () => {
     expect(result.steps.at(-1)).toMatchObject({ step: 4, pass: false })
   })
 
-  test('step 4: a maps site with no embed on any built page fails', async () => {
+  test('step 4: a consent site with no embed on any built page fails', async () => {
     const f = fake({ checks: { embedPages: async () => [] } })
     const result = await verify(siteDir(), report(), { deps: f.deps })
     expect(result.steps.at(-1)).toMatchObject({ step: 4, pass: false })

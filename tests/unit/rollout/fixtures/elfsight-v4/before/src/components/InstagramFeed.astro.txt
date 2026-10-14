@@ -13,7 +13,7 @@ const widgetId = import.meta.env.PUBLIC_ELFSIGHT_WIDGET_ID;
         <h2 class="text-4xl md:text-5xl mb-6">
           Text. <span style="color: var(--color-primary);">Text.</span>
         </h2>
-        <img src="/images/industrial-103-2.png" alt="" aria-hidden="true" class="mx-auto my-3" style="max-width: 250px" />
+        <img src="/images/feed.png" alt="" aria-hidden="true" class="mx-auto my-3" style="max-width: 250px" />
         <p class="text-xl text-gray-600 max-w-2xl mx-auto mb-8">
           Text.
         </p>

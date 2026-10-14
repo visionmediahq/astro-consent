@@ -411,7 +411,7 @@ export async function verify(dir: string, report: Report, opts: VerifyOptions = 
       lines.push(...lost.map((r) => `detect found an embed on ${r}, but the built page has no embed`))
       if (mapPages.length === 0) {
         const pass = report.classification !== 'consent' && lost.length === 0
-        return { pass, lines: [...lines, pass ? 'no map pages: nothing to check' : 'a maps site with no embed on any built page'] }
+        return { pass, lines: [...lines, pass ? 'no embed pages: nothing to check' : 'a consent site with no embed on any built page'] }
       }
       const r = consentPathLines(await (await getChecks()).consentPaths(branch!.url, mapPages, { expectFilter }))
       return { pass: r.pass && lost.length === 0, lines: [...lines, ...r.lines] }

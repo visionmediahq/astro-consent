@@ -37,7 +37,7 @@ const brief = {
 
     <ProductContent />
 
-    <!-- Elfsight prislista motviktare -->
+    <!-- Elfsight prislista -->
     <section class="py-12 bg-white">
       <div class="w-full max-w-[1600px] mx-auto px-4">
         <ConsentWidget service="elfsight" script="https://static.elfsight.com/platform/platform.js" title="Innehållet">
@@ -50,10 +50,10 @@ const brief = {
       <div class="container mx-auto px-4 text-center" data-animate>
         <p class="text-gray-500 mb-4">Text.</p>
         <a
-          href="/nytt-begagnat"
+          href="/sortiment"
           class="btn text-white border-0 btn-lg"
           style="background-color: var(--color-primary)"
-          onclick="window.umami?.track('cta_click', {label: 'Se lager'})"
+          onclick="window.umami?.track('cta_click', {label: 'Se mer'})"
         >
           Text.
         </a>

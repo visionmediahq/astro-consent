@@ -11,7 +11,7 @@ interface Props {
 const {
   pageUrl = 'https://www.facebook.com/example/',
   title = 'Direkt från vårt Facebook-flöde',
-  intro = 'Här ser du våra senaste inlägg — nya varor, öppettider och nyheter från butiken.',
+  intro = 'Följ oss i sociala medier.',
 } = Astro.props;
 ---
 

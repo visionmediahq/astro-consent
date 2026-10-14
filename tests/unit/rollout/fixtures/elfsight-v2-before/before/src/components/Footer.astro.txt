@@ -20,7 +20,7 @@ const navItems = [
       <!-- Brand -->
       <div class="footer-brand">
         <Image
-          src="/images/logo-light--png-0eaa1da7.webp"
+          src="/images/logo.webp"
           alt="Logotyp"
           width={2229}
           height={715}
