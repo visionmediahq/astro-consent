@@ -314,7 +314,7 @@ npx tsx ci/rollout/run.ts help
   plus one or more empty `<div class="elfsight-app-<uuid>">` (other attribute only
   `data-elfsight-app-lazy`) in the same `.astro` file. `wire` wraps each div in `<ConsentWidget
   service="elfsight" script=… title="Innehållet">`, removes the site's loader script, and installs
-  `^1.1.1`. A `Content-Security-Policy` line in `public/_headers` is not a load and is left alone.
+  `^1.1.2`. A `Content-Security-Policy` line in `public/_headers` is not a load and is left alone.
 - **Refused as `needs-human`.** Every other Elfsight occurrence: a second loader, an inline script,
   an import or package, an env-built class name, a CSS rule, or a mention in any other file under `src/`, `public/` or `astro.config.*` (plus package dependencies and imports). The tool
   strips nothing it cannot prove is a plain widget, because a leftover loader would request Elfsight

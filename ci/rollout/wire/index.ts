@@ -16,7 +16,7 @@ import { wirePrivacy } from './privacy'
 import { wireWidgets } from './widgets'
 
 export const BRANCH = 'consent-banner'
-export const INSTALL_SPEC = 'github:visionmediahq/astro-consent#semver:^1.1.1'
+export const INSTALL_SPEC = 'github:visionmediahq/astro-consent#semver:^1.1.2'
 export const COMMIT_MESSAGE = 'feat: samtyckesbanner (astro-consent)'
 
 /**

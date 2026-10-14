@@ -733,8 +733,8 @@ describe('wireWidgets', () => {
     expect(result).toEqual({ ok: true, edits: [], newFiles: [], skipped: [] })
   })
 
-  test('INSTALL_SPEC is ^1.1.1 (the first version with ConsentWidget nesting fixed)', () => {
-    expect(INSTALL_SPEC).toBe('github:visionmediahq/astro-consent#semver:^1.1.1')
+  test('INSTALL_SPEC is ^1.1.2 (the first version whose ConsentWidget works on Astro 6)', () => {
+    expect(INSTALL_SPEC).toBe('github:visionmediahq/astro-consent#semver:^1.1.2')
   })
 
   test.each([

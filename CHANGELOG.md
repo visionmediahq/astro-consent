@@ -41,7 +41,8 @@ Not part of the package (`files` is unchanged) and not a release.
   occurrence is a `needs-human` reason. Google Calendar iframes whose `src` resolves (a literal, a constant, a data file, call sites that agree) no longer block a site; a `.map()` or otherwise unresolved `src` is needs-human, 'unresolved iframe src' (#24).
 - `wire` wraps Elfsight divs in `<ConsentWidget service="elfsight">`, removes the loader script,
   writes `privacy.json` from `report.services` (an existing one missing a service is refused),
-  installs `^1.1.1`, and wraps resolvable Google Calendar iframes like maps (#24).
+  installs `^1.1.2` (1.1.0 and 1.1.1 render ConsentWidget wrongly on Astro 6), and wraps
+  resolvable Google Calendar iframes like maps (#24).
 - `pr` names each service in the PR body with its "Visa <name>" step. `verify` maps each route to the
   service of the first iframe on it with a CSS filter, measures the filter on the first embed of that
   service on the page (clicking it after the one-off check if it is not the first), and counts widget pages as embed pages.
