@@ -84,7 +84,7 @@ function siteDir(verifyResult: VerifyResult = PASS): string {
   const dir = mkdtempSync(join(tmpdir(), 'pr-'))
   dirs.push(dir)
   mkdirSync(join(dir, '.rollout/shots'), { recursive: true })
-  writeFileSync(join(dir, '.rollout/report.json'), JSON.stringify(report({ classification: 'maps' })))
+  writeFileSync(join(dir, '.rollout/report.json'), JSON.stringify(report({ classification: 'consent' })))
   writeFileSync(join(dir, '.rollout/verify.json'), JSON.stringify(verifyResult))
   writeFileSync(join(dir, '.rollout/shots/home-360-open.png'), 'png')
   writeFileSync(join(dir, '.rollout/shots/home-1280-open.png'), 'png')

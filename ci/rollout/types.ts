@@ -2,7 +2,7 @@
 // verify returns a VerifyResult, and the pool scan and selection work on PoolRow and Selection.
 import type { ServiceSlug } from '../../src/services'
 
-export type Classification = 'notice' | 'maps' | 'needs-human'
+export type Classification = 'consent' | 'notice' | 'needs-human'
 
 export type SrcKind = 'literal' | 'expression' | 'data-file' | 'unresolved'
 
@@ -30,6 +30,21 @@ export interface IframeInfo {
   classes: string | null
   height: string | null
   style: string | null
+}
+
+/** An Elfsight widget: the platform script and the `elfsight-app-<uuid>` div it fills. */
+export interface WidgetInfo {
+  file: string
+  /** The div, where wire splices. */
+  start: number
+  end: number
+  service: 'elfsight'
+  /** The loader URL of the recognised script. */
+  script: string
+  /** The script element, which wire removes. */
+  scriptAt: { start: number; end: number }
+  /** Pages that render this widget. */
+  pages: string[]
 }
 
 export interface FooterInfo {
@@ -64,6 +79,9 @@ export interface Report {
   recaptcha: boolean
   inventedMaps: string[]
   alreadyWired: string[]
+  /** Every service the site embeds, sorted: see `servicesOf`. */
+  services: ServiceSlug[]
+  widgets: WidgetInfo[]
   classification: Classification
   reasons: string[]
 }

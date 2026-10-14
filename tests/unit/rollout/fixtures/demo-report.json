@@ -49,6 +49,8 @@
   "recaptcha": false,
   "inventedMaps": [],
   "alreadyWired": [],
-  "classification": "maps",
+  "services": ["google-maps"],
+  "widgets": [],
+  "classification": "consent",
   "reasons": []
 }

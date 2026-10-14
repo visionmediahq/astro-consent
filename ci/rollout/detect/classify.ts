@@ -1,10 +1,11 @@
-// Classifies a site from what detect found: `notice`, `maps` or `needs-human` with one reason per
-// line. The wire stage converts only `notice` and `maps`, so every doubt is a reason: an unknown
+// Classifies a site from what detect found: `notice`, `consent` or `needs-human` with one reason per
+// line. The wire stage converts only `notice` and `consent`, so every doubt is a reason: an unknown
 // counts as a problem, never as "probably fine".
+import { servicesOf } from '../lib/report'
 import type { Classification, IframeInfo, Report } from '../types'
 
 /** Everything detect found, plus what classify needs that the report does not keep. */
-export type Findings = Omit<Report, 'classification' | 'reasons'> & {
+export type Findings = Omit<Report, 'classification' | 'reasons' | 'services'> & {
   /** From every detector; the same file may appear more than once. */
   parseErrors: { file: string; message: string }[]
   aliasImports: { file: string; specifier: string }[]
@@ -33,7 +34,7 @@ function iframeReason(frame: IframeInfo, domains: string[]): string | null {
   }
   const own = domains.some((d) => host === d.toLowerCase() || host === `www.${d.toLowerCase()}`)
   if (frame.service === null) return own ? null : `unregistered iframe host ${host}`
-  if (frame.service === 'google-maps') return null
+  if (frame.service === 'google-maps' || frame.service === 'google-calendar') return null
   return `iframe service ${frame.service} is not wired by this batch`
 }
 
@@ -81,6 +82,5 @@ export function classify(f: Findings): { classification: Classification; reasons
   for (const b of f.banners) add(`existing banner: ${b}`)
 
   if (reasons.length > 0) return { classification: 'needs-human', reasons }
-  const maps = f.iframes.some((i) => i.srcKind !== 'unresolved' && i.service === 'google-maps')
-  return { classification: maps ? 'maps' : 'notice', reasons }
+  return { classification: servicesOf(f).length > 0 ? 'consent' : 'notice', reasons }
 }

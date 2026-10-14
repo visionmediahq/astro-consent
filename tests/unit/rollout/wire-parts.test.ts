@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import { describe, expect, test } from 'vitest'
 import { detect } from '../../../ci/rollout/detect'
 import { detectIframes } from '../../../ci/rollout/detect/iframes'
+import { servicesOf } from '../../../ci/rollout/lib/report'
 import { detectStructure } from '../../../ci/rollout/detect/structure'
 import { fixtureSite, globToRegExp, type SiteFiles } from '../../../ci/rollout/lib/site-files'
 import { wireEmbeds } from '../../../ci/rollout/wire/embeds'
@@ -51,7 +52,9 @@ function reportFor(files: SiteFiles, over: Partial<Report> = {}): Report {
     recaptcha: false,
     inventedMaps: [],
     alreadyWired: [],
-    classification: f.iframes.some((i) => i.service === 'google-maps') ? 'maps' : 'notice',
+    services: servicesOf({ iframes: f.iframes, widgets: [] }),
+    widgets: [],
+    classification: f.iframes.some((i) => i.service === 'google-maps') ? 'consent' : 'notice',
     reasons: [],
     ...over,
   }

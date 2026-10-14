@@ -7,7 +7,8 @@ import { detect } from '../../../ci/rollout/detect/index'
 import { detectScripts } from '../../../ci/rollout/detect/scripts'
 import { aliasedAstroImports } from '../../../ci/rollout/lib/site-imports'
 import { diskSite, fixtureSite } from '../../../ci/rollout/lib/site-files'
-import type { IframeInfo } from '../../../ci/rollout/types'
+import { normaliseReport, servicesOf } from '../../../ci/rollout/lib/report'
+import type { IframeInfo, WidgetInfo } from '../../../ci/rollout/types'
 
 const FIXTURES = join(import.meta.dirname, 'fixtures')
 const pilot = (site: string, side: 'before' | 'merged' = 'before') => fixtureSite(join(FIXTURES, site, side))
@@ -307,6 +308,7 @@ function clean(over: Partial<Findings> = {}): Findings {
     recaptcha: false,
     inventedMaps: [],
     alreadyWired: [],
+    widgets: [],
     parseErrors: [],
     aliasImports: [],
     multiFooterPages: [],
@@ -320,16 +322,23 @@ describe('classify', () => {
     expect(classify(clean())).toEqual({ classification: 'notice', reasons: [] })
   })
 
-  test('a resolved Google Maps iframe makes the site maps', () => {
-    expect(classify(clean({ iframes: [frame({})] }))).toEqual({ classification: 'maps', reasons: [] })
+  test('a resolved Google Maps iframe makes the site consent', () => {
+    expect(classify(clean({ iframes: [frame({})] }))).toEqual({ classification: 'consent', reasons: [] })
     expect(classify(clean({ iframes: [frame({ srcKind: 'data-file', dataPath: 'src/data/k.json' })] }))).toEqual({
-      classification: 'maps',
+      classification: 'consent',
       reasons: [],
     })
   })
 
-  test('an invented map alone keeps the site maps with no reasons', () => {
-    expect(classify(clean({ iframes: [frame({})], inventedMaps: [MAPS_SRC] }))).toEqual({ classification: 'maps', reasons: [] })
+  test('a Google Calendar iframe makes the site consent', () => {
+    expect(classify(clean({ iframes: [frame({ service: 'google-calendar', host: 'calendar.google.com' })] }))).toEqual({
+      classification: 'consent',
+      reasons: [],
+    })
+  })
+
+  test('an invented map alone keeps the site consent with no reasons', () => {
+    expect(classify(clean({ iframes: [frame({})], inventedMaps: [MAPS_SRC] }))).toEqual({ classification: 'consent', reasons: [] })
   })
 
   test('reCAPTCHA and alreadyWired add no reasons', () => {
@@ -462,13 +471,46 @@ describe('detect', () => {
     ['munkforstradgardstjanst', 'notice'],
     ['nhrk', 'needs-human'],
     ['a-tak', 'needs-human'],
-    ['vasshallakatthotell', 'maps'],
-    ['aspomad', 'maps'],
-    ['domeijstapetserarverkstad', 'maps'],
-    ['traforadling', 'maps'],
+    ['vasshallakatthotell', 'consent'],
+    ['aspomad', 'consent'],
+    ['domeijstapetserarverkstad', 'consent'],
+    ['traforadling', 'consent'],
   ])('pilot %s: %s, matching the committed snapshot', (site, classification) => {
     const r = detect(pilot(site), site, [`${site}.se`])
     expect(r.classification).toBe(classification)
     expect(r).toMatchSnapshot()
+  })
+})
+
+describe('servicesOf and normaliseReport', () => {
+  const widget: WidgetInfo = {
+    file: 'src/pages/index.astro',
+    start: 0,
+    end: 10,
+    service: 'elfsight',
+    script: 'https://elfsightcdn.com/platform.js',
+    scriptAt: { start: 20, end: 30 },
+    pages: ['src/pages/index.astro'],
+  }
+
+  test('sorted and unique; unresolved and own iframes are left out', () => {
+    const iframes = [
+      frame({ service: 'google-maps' }),
+      frame({ service: 'google-calendar', host: 'calendar.google.com' }),
+      frame({ service: 'google-maps' }),
+      frame({ srcKind: 'unresolved', src: null, service: 'google-ads' }),
+      frame({ service: null, host: null }),
+    ]
+    expect(servicesOf({ iframes, widgets: [widget] })).toEqual(['elfsight', 'google-calendar', 'google-maps'])
+    expect(servicesOf({ iframes: [], widgets: [] }, ['google-ads', 'elfsight'])).toEqual(['elfsight', 'google-ads'])
+  })
+
+  test('an old stored report with maps loads as consent with services and widgets', () => {
+    const { services: _s, widgets: _w, ...rest } = detect(inline({}), 'x', ['x.se'])
+    const old = { ...rest, classification: 'maps', iframes: [frame({})] }
+    const r = normaliseReport(old)
+    expect(r.classification).toBe('consent')
+    expect(r.services).toEqual(['google-maps'])
+    expect(r.widgets).toEqual([])
   })
 })

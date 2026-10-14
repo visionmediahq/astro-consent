@@ -22,7 +22,7 @@ const row = (
 ): PoolRow => {
   if (o.report === null) return { repo, domains: [], report: null, error: 'boom' }
   const report = {
-    classification: o.classification ?? (o.maps ? 'maps' : 'notice'),
+    classification: o.classification ?? (o.maps ? 'consent' : 'notice'),
     iframes: o.maps ? [iframe('www.google.com')] : [],
     banners: o.banners ?? [],
     reasons: [],

@@ -2,6 +2,7 @@
 import type { Report } from '../types'
 import type { SiteFiles } from '../lib/site-files'
 import { aliasedAstroImports } from '../lib/site-imports'
+import { servicesOf } from '../lib/report'
 import { classify } from './classify'
 import { detectConfig } from './config'
 import { detectAstroMajor, detectCss } from './css'
@@ -32,6 +33,7 @@ export function detect(files: SiteFiles, site: string, domains: string[]): Repor
     recaptcha: scripts.recaptcha,
     inventedMaps: frames.inventedMaps,
     alreadyWired: scripts.alreadyWired,
+    widgets: [],
   }
   const { classification, reasons } = classify({
     ...findings,
@@ -40,5 +42,5 @@ export function detect(files: SiteFiles, site: string, domains: string[]): Repor
     multiFooterPages: structure.multiFooterPages,
     ownHtmlPages: structure.ownHtmlPages,
   })
-  return { ...findings, classification, reasons }
+  return { ...findings, services: servicesOf(findings), classification, reasons }
 }

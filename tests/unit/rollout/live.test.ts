@@ -27,7 +27,7 @@ function siteDir(
   const dir = mkdtempSync(join(tmpdir(), 'live-'))
   dirs.push(dir)
   mkdirSync(join(dir, '.rollout'), { recursive: true })
-  const report: Report = { ...DEMO, site: opts.site ?? 'nhrk', domains: opts.domains ?? ['nhrk.se'], classification: 'maps' }
+  const report: Report = { ...DEMO, site: opts.site ?? 'nhrk', domains: opts.domains ?? ['nhrk.se'], classification: 'consent' }
   writeFileSync(join(dir, '.rollout/report.json'), JSON.stringify(report))
   if (opts.baseline !== null) writeFileSync(join(dir, '.rollout/live-baseline.txt'), opts.baseline ?? '')
   if (opts.baseline !== null && opts.baselined !== null) {

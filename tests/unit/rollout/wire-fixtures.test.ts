@@ -402,7 +402,7 @@ describe('run.ts wire', () => {
     const tree = diskTree(dir)
     const { code, output } = runWire(dir, { dryRun: true })
     expect(code).toBe(0)
-    expect(output).toContain('site (aspomad.se): maps')
+    expect(output).toContain('site (aspomad.se): consent')
     expect(output).toMatch(/edits in \d+ files/)
     expect(output).toContain('--- a/src/layouts/Base.astro')
     expect(output).toContain('+++ b/src/layouts/Base.astro')
