@@ -7,8 +7,8 @@
 //   becomes `grid h-full` with `aspect="auto"`; an unknown parent height is a refusal (Ruling 25);
 // - otherwise the classes go on the wrapper as they are and the component keeps its own aspect.
 // A grid wrapper keeps the iframe's other classes (Ruling 30); a scoped rule for one of them that sets
-// another `display` or `height` would beat `grid` or the height utility and collapse the loaded map,
-// so it is a refusal.
+// a `display` other than grid/none or a height that is not definite would beat `grid` or the height
+// utility and collapse the loaded map, so it is a refusal.
 // A filter on the iframe is carried over to ConsentEmbed's iframe with `:global(iframe)` (Rulings 19,
 // 24): an inline style's `filter` goes into a new scoped rule, and a scoped <style> rule that
 // targets the iframe gets a copy after it, under the wrapper, carrying only its `filter` and
@@ -247,8 +247,12 @@ function boxOf(node: AstroNode, parent: AstroNode, rules: CssRule[]): Box | Erro
 /**
  * A grid wrapper sizes the embed with `grid` and its height utility; the classes it keeps from the
  * iframe (Ruling 30) can carry scoped rules, which are unlayered and so beat those utilities. A rule
- * for a kept class that sets another `display` or `height` collapses the loaded iframe
- * (salviablommor: `.contact-map { display: block }`, the map was 0px tall): refused.
+ * for a kept class that sets a `display` other than grid or none, or a height that is not definite
+ * (`auto`, a percentage other than h-full's 100%, …), collapses the loaded iframe (salviablommor:
+ * `.contact-map { display: block }`, the map was 0px tall): refused. A definite height still
+ * stretches the grid's embed and is wired. Pseudo-element rules and classes inside `:not()` do not
+ * style the wrapper. Misses (an attribute selector, `block-size`, `max-height`, global CSS) are left
+ * to verify step 4, which fails a loaded iframe under 100px.
  */
 function keptClassConflict(box: Box, rules: CssRule[]): Error | null {
   const [, height, ...kept] = box.classes
@@ -256,15 +260,17 @@ function keptClassConflict(box: Box, rules: CssRule[]): Error | null {
   for (const rule of rules) {
     for (const sel of splitTop(rule.selector, /,/)) {
       const compound = /([^\s>+~]+)$/.exec(sel.trim())?.[1] ?? ''
-      const classes = (compound.match(/\.[\w-]+/g) ?? []).map((c) => c.slice(1))
+      if (compound.includes('::')) continue
+      const classes = (compound.replace(/:not\([^)]*\)/g, '').match(/\.[\w-]+/g) ?? []).map((c) => c.slice(1))
       const c = own.find((k) => classes.includes(k))
       if (!c) continue
       for (const d of rule.decls) {
-        const value = d.value.trim()
-        if (d.prop === 'display' && value !== 'grid') {
+        const value = d.value.replace(/!\s*important\s*$/i, '').trim()
+        const lower = value.toLowerCase()
+        if (d.prop === 'display' && lower !== 'grid' && lower !== 'none') {
           return new Error(`scoped CSS for the iframe's class .${c} sets display: ${value}, which beats the wrapper's grid`)
         }
-        if (d.prop === 'height' && !(height === 'h-full' && value === '100%')) {
+        if (d.prop === 'height' && !DEFINITE.test(value) && !(height === 'h-full' && value === '100%')) {
           return new Error(`scoped CSS for the iframe's class .${c} sets height: ${value}, which beats the wrapper's ${height}`)
         }
       }

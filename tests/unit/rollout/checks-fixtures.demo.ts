@@ -81,6 +81,9 @@ const FIXTURES: Record<string, string> = {
   // Visa that loads an iframe the page then squashes to nothing (salviablommor: a scoped display:block
   // on the wrapper beat `grid`, so the loaded map was 0px tall).
   flat: embedPage(`add(el); el.querySelector('iframe').style.height = '0'`),
+  // The real mechanism: ConsentEmbed's iframe is absolute inset-0, so once the placeholder is gone an
+  // embed whose wrapper does not stretch it (display:block, aspect auto) has no height at all.
+  collapsed: embedPage(`add(el); el.style.position = 'relative'; el.querySelector('iframe').style.cssText = 'position:absolute;inset:0;width:100%;height:100%;border:0'; for (const c of [...el.children]) if (c.tagName !== 'IFRAME') c.hidden = true`),
   // Mixed services (maps, calendar, an Elfsight widget): Visa on a widget first, and Visa alltid
   // carrying one service over to a page that also has others.
   widget: mixed(widget + iframeEmbed('google-maps', MAPS)),
@@ -163,6 +166,10 @@ try {
   {
     const r = await paths('/flat/')
     expect(!r.visaLoadsOnlyClicked, '/flat/ Visa whose iframe is 0px tall fails', r)
+  }
+  {
+    const r = await paths('/collapsed/')
+    expect(!r.visaLoadsOnlyClicked && r.notes.some((n) => / \d+x0px/.test(n)), '/collapsed/ absolute iframe in an embed with no height fails', r)
   }
 
   {

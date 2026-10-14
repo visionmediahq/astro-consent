@@ -127,8 +127,9 @@ async function visaOnlyClicked(browser: Browser, base: string, path: string, stu
     const own = await first.locator('iframe').count()
     const total = await active(page).count()
     const filter = own && !widget ? await first.locator('iframe').first().evaluate((f) => getComputedStyle(f).filter) : 'none'
-    // The loaded iframe must be visible: a site rule can squash its box to nothing (salviablommor).
-    const size = own && !widget ? await first.locator('iframe').first().evaluate((f) => { const r = f.getBoundingClientRect(); return { w: Math.round(r.width), h: Math.round(r.height) } }) : null
+    // The loaded iframe's layout box must have a real size: a site rule can collapse it to nothing
+    // (salviablommor). offsetWidth/Height ignore transforms, so an entrance animation cannot shrink it.
+    const size = own && !widget ? await first.locator('iframe').first().evaluate((f) => ({ w: (f as HTMLElement).offsetWidth, h: (f as HTMLElement).offsetHeight })) : null
     const visible = size === null || (size.w >= MIN_SIDE && size.h >= MIN_SIDE)
     const foreign = hits.slice(before).filter((u) => matchesRegistry(u) !== service)
     const afterClick = hits.length
