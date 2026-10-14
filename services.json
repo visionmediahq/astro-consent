@@ -20,6 +20,15 @@
       ],
       "description_sv": "Kartor från Google."
     },
+    "google-calendar": {
+      "name": "Google Kalender",
+      "vendor": "Google Ireland Ltd",
+      "category": "external",
+      "match": [
+        "calendar.google.com"
+      ],
+      "description_sv": "Kalendrar från Google."
+    },
     "google-analytics": {
       "name": "Google Analytics",
       "vendor": "Google Ireland Ltd",
@@ -51,6 +60,16 @@
         "facebook.com/tr"
       ],
       "description_sv": "Annonsmätning från Meta (Facebook, Instagram)."
+    },
+    "elfsight": {
+      "name": "Elfsight",
+      "vendor": "Elfsight, SL",
+      "category": "external",
+      "match": [
+        "elfsightcdn.com",
+        "elfsight.com"
+      ],
+      "description_sv": "Flöden från sociala medier, till exempel Instagram, via Elfsight."
     }
   }
 }

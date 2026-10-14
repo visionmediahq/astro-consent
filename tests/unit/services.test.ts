@@ -36,6 +36,15 @@ test('matchesRegistry classifies known URLs', () => {
   expect(matchesRegistry('https://googleads.g.doubleclick.net/pagead/x')).toBe('google-ads')
   expect(matchesRegistry('https://connect.facebook.net/en_US/fbevents.js')).toBe('meta-pixel')
   expect(matchesRegistry('https://www.facebook.com/tr?id=1')).toBe('meta-pixel')
+  expect(matchesRegistry('https://calendar.google.com/calendar/embed?src=x&ctz=Europe%2FStockholm')).toBe('google-calendar')
+  expect(matchesRegistry('https://elfsightcdn.com/platform.js')).toBe('elfsight')
+  expect(matchesRegistry('https://core.service.elfsight.com/p/boot/?w=abc')).toBe('elfsight')
+  expect(matchesRegistry('https://apps.elfsight.com/p/platform.js')).toBe('elfsight')
+})
+
+test('matchesRegistry leaves Instagram and Facebook image hosts alone', () => {
+  expect(matchesRegistry('https://scontent.cdninstagram.com/v/t51/x.jpg')).toBeNull()
+  expect(matchesRegistry('https://scontent-arn2-1.xx.fbcdn.net/v/t51/x.jpg')).toBeNull()
 })
 
 test('matchesRegistry ignores fonts, recaptcha, umami, plain facebook links and first-party', () => {

@@ -76,7 +76,7 @@ test.describe('notice mode', () => {
 test.describe('consent mode', () => {
   test('no registry request before a choice on any demo page', async ({ page, context }) => {
     const stubs = await stub(context)
-    for (const path of ['/', '/karta', '/skript', '/ssr', '/utan-banner']) {
+    for (const path of ['/', '/karta', '/skript', '/ssr', '/flode', '/utan-banner']) {
       await page.goto(path)
       await page.waitForLoadState('networkidle')
       expect(stubs.registry, path).toEqual([])

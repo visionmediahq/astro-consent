@@ -6,8 +6,8 @@ import '../styles/contrast.css'
 import config from 'virtual:astro-consent/config'
 import { deEmbed } from '../embed-url'
 import { scanError } from '../scan'
-import { SERVICES, type ServiceSlug } from '../services'
-import sv from '../text/sv.json'
+import { type ServiceSlug } from '../services'
+import EmbedPlaceholder from './EmbedPlaceholder.astro'
 
 interface Props {
   service: ServiceSlug
@@ -28,12 +28,9 @@ if (!config.services.includes(service)) {
   throw new Error(scanError(Astro.url.pathname, service, config.services))
 }
 
-const { name } = SERVICES[service]
 // No per-instance id exists (`id` is optional), so the info element gets a random suffix.
 const infoId = `${id ?? 'consent-embed-' + crypto.randomUUID().slice(0, 8)}-info`
 const openHref = href ?? deEmbed(src)
-const fill = (text: string, vars: Record<string, string>): string =>
-  text.replace(/\{(\w+)\}/g, (match, key: string) => vars[key] ?? match)
 ---
 
 <div
@@ -51,27 +48,13 @@ const fill = (text: string, vars: Record<string, string>): string =>
       allowfullscreen
       class="absolute inset-0 h-full w-full rounded-box border-0"></iframe>
   </template>
-  {/* In normal flow, not absolute: on a narrow screen the box grows instead of clipping. */}
-  <div data-placeholder class="flex flex-1 flex-col justify-between gap-3 p-4">
-    <div class="text-sm" id={infoId}>
-      <slot name="placeholder">
-        <p>{fill(sv.embed.info, { title, name })}</p>
-      </slot>
-    </div>
-    <div class="flex flex-wrap items-center gap-3">
-      <button
-        type="button"
-        class="btn btn-primary btn-sm h-auto min-h-8 whitespace-normal"
-        data-load
-        aria-describedby={infoId}>{fill(sv.embed.show, { name })}</button
-      >
-      <label class="flex cursor-pointer items-center gap-2 text-xs">
-        <input type="checkbox" class="checkbox checkbox-sm" data-remember />
-        {fill(sv.embed.remember, { name })}
-      </label>
-      <a href={openHref} target="_blank" rel="noopener noreferrer" class="link text-xs" data-open>
-        {fill(sv.embed.open, { name })}
-      </a>
-    </div>
-  </div>
+  {
+    Astro.slots.has('placeholder') ? (
+      <EmbedPlaceholder service={service} title={title} infoId={infoId} openHref={openHref}>
+        <slot name="placeholder" />
+      </EmbedPlaceholder>
+    ) : (
+      <EmbedPlaceholder service={service} title={title} infoId={infoId} openHref={openHref} />
+    )
+  }
 </div>

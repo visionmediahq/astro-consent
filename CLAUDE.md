@@ -18,9 +18,10 @@ by Vision Media's Astro sites. Sites install it straight from this GitHub repo. 
 - **`client.ts` never writes `vm_consent` on page load or when adopting another tab's change.**
   Writes come only from the banner or an embed checkbox. This is what keeps cross-tab sync loop-free.
 - **Browser-safe imports.** `src/config.ts` uses `node:crypto` and zod: `client.ts`, `store.ts`,
-  `services.ts`, `embed-url.ts` and the components must not import from it at all. Shared types live
-  in the node-free `src/types.ts`. A site that imports the script API type-checks `client.ts` and
-  everything it imports as part of its own program (`tests/build/site-typecheck.test.ts` pins this).
+  `services.ts`, `embed-url.ts`, `widget.ts` and the components must not import from it at all.
+  Shared types live in the node-free `src/types.ts`. A site that imports the script API type-checks
+  `client.ts` and everything it imports as part of its own program
+  (`tests/build/site-typecheck.test.ts` pins this).
 - **Every visible string lives in `src/text/sv.json`.** No Swedish in components or `client.ts`.
   Raise `CONSENT_VERSION` in `src/config.ts` when the banner or category wording changes, or a service's category, vendor or purpose changes: every visitor is asked again. `tests/unit/consent-terms.test.ts` enforces this; add a new entry to `consent-terms.json`, never edit one.
 - **Neka is as visible and easy as Acceptera alla**: identical classes (`btn btn-primary btn-sm`),
@@ -43,8 +44,8 @@ by Vision Media's Astro sites. Sites install it straight from this GitHub repo. 
   [data-consent-category=<category>] input[name=<category>]
   [data-consent-service=<slug>][hidden] input[name="service:<slug>"]
 [data-privacy-links] [data-consent-open]
-[data-consent-embed=<slug>] template[data-payload] [data-placeholder] [data-load] [data-remember] a[data-open]
-  + [data-active] once the iframe is in
+[data-consent-embed=<slug>][data-script=<url>]? template[data-payload] [data-placeholder] [data-load] [data-remember] a[data-open]?
+  + [data-active] once the payload is in; a widget (data-script, no a[data-open]) also gets its script, once per URL
 ```
 
 ## Layout
@@ -56,7 +57,8 @@ by Vision Media's Astro sites. Sites install it straight from this GitHub repo. 
 | `src/store.ts` | Pure consent-record logic, unit-tested |
 | `src/integration.ts`, `src/scan.ts` | The Astro integration and the build-time embed scan |
 | `src/client.ts` | Browser runtime |
-| `src/components/`, `src/text/sv.json` | Markup and strings |
+| `src/widget.ts` | `<ConsentWidget>` render-time checks (script host, empty slot, no `<script>`), unit-tested |
+| `src/components/`, `src/text/sv.json` | Markup and strings: `ConsentBanner`, `ConsentEmbed` (iframes), `ConsentWidget` (script widgets), `EmbedPlaceholder` (shared by both), `PrivacyLinks` |
 | `demo/` | Demo site the tests build in two modes (`privacy.consent.json`, `privacy.notice.json`) |
 | `scripts/` | `demo-copy`, `build-demo`, `pack-install`, `gen-services` |
 | `ci/wire-starter.ts` | Applies the site wiring to an astro-starter checkout (CI and rollout tool) |

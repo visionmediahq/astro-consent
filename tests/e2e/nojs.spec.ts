@@ -18,3 +18,16 @@ test('without JavaScript: banner stays hidden, placeholders and open links rende
   expect(stubs.registry).toEqual([])
   await context.close()
 })
+
+test('without JavaScript: /flode shows placeholders, no widget is rendered, nothing is requested', async ({ browser }) => {
+  const context = await browser.newContext({ javaScriptEnabled: false, baseURL: 'http://localhost:4321' })
+  const stubs = await stub(context)
+  const page = await context.newPage()
+  await page.goto('/flode')
+  await page.waitForLoadState('networkidle')
+  await expect(page.locator('#flode-a [data-placeholder]')).toBeVisible()
+  await expect(page.locator('#kalender [data-placeholder]')).toBeVisible()
+  await expect(page.locator('[class*="elfsight-app-"]')).toHaveCount(0)
+  expect(stubs.registry).toEqual([])
+  await context.close()
+})

@@ -351,7 +351,7 @@ exports[`detect > pilot nhrk: needs-human, matching the committed snapshot 1`] =
       "file": "src/pages/kalendrar.astro",
       "height": "700",
       "host": "calendar.google.com",
-      "service": null,
+      "service": "google-calendar",
       "src": null,
       "srcKind": "unresolved",
       "start": 3072,

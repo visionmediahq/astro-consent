@@ -1,0 +1,49 @@
+---
+// The "Visa" placeholder shared by ConsentEmbed and ConsentWidget. Rendered inside the box; the
+// default slot replaces the info text.
+import { SERVICES, type ServiceSlug } from '../services'
+import sv from '../text/sv.json'
+
+interface Props {
+  service: ServiceSlug
+  title: string
+  /** Id of the info element, referenced by the button's aria-describedby. */
+  infoId: string
+  /** When set, a link to open the content at the provider is rendered. */
+  openHref?: string
+}
+
+const { service, title, infoId, openHref } = Astro.props
+
+const { name } = SERVICES[service]
+const fill = (text: string, vars: Record<string, string>): string =>
+  text.replace(/\{(\w+)\}/g, (match, key: string) => vars[key] ?? match)
+---
+
+{/* In normal flow, not absolute: on a narrow screen the box grows instead of clipping. */}
+<div data-placeholder class="flex flex-1 flex-col justify-between gap-3 p-4">
+  <div class="text-sm" id={infoId}>
+    <slot>
+      <p>{fill(sv.embed.info, { title, name })}</p>
+    </slot>
+  </div>
+  <div class="flex flex-wrap items-center gap-3">
+    <button
+      type="button"
+      class="btn btn-primary btn-sm h-auto min-h-8 whitespace-normal"
+      data-load
+      aria-describedby={infoId}>{fill(sv.embed.show, { name })}</button
+    >
+    <label class="flex cursor-pointer items-center gap-2 text-xs">
+      <input type="checkbox" class="checkbox checkbox-sm" data-remember />
+      {fill(sv.embed.remember, { name })}
+    </label>
+    {
+      openHref && (
+        <a href={openHref} target="_blank" rel="noopener noreferrer" class="link text-xs" data-open>
+          {fill(sv.embed.open, { name })}
+        </a>
+      )
+    }
+  </div>
+</div>

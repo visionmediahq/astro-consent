@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.1.0
+
+- New services `google-calendar` (ConsentEmbed; the open link is the embed URL) and `elfsight`
+  (vendor Elfsight, SL).
+- New `<ConsentWidget>`: same placeholder, one-off "Visa" and remember as ConsentEmbed; the script
+  loads once per page. The build fails on an unlisted service, a foreign script host, an empty slot
+  or a `<script>` in the slot (on SSR pages the request fails with a 500).
+- `CONSENT_VERSION` 2: every visitor on every site is asked again after the site's next install
+  (#19, #24).
+
 ## Unreleased: repo tool
 
 Not part of the package (`files` is unchanged) and not a release.
@@ -11,6 +21,10 @@ Not part of the package (`files` is unchanged) and not a release.
   when the install changed paths outside the plan, `package.json` and `package-lock.json`.
 - `merge` reads the last 50 Coolify deployments per app and stops before merging when an app that
   follows `main` serves a host that is not in the report's domains (it has no live baseline).
+- `detect` names google-calendar (iframe only, never a tracker) and elfsight; wiring them follows in a tool PR.
+- `verify` step 4 (consent-paths) checks "Visa alltid" per service: remembering S must activate S's
+  embeds on another page (or a reload when no other page has S) and leave other services inactive.
+  The one-off Visa check uses `[data-active]`, so it covers widgets. Maps-only sites behave as before.
 - CI: the `e2e` job runs `verify --demo demo/dist-consent` after the consent demo build.
 
 ## 1.0.2

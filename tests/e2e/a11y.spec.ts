@@ -33,6 +33,13 @@ test('embed placeholder has no axe violations', async ({ page, context }) => {
   expect(results.violations).toEqual([])
 })
 
+test('widget placeholders have no axe violations', async ({ page, context }) => {
+  await stub(context)
+  await page.goto('/flode')
+  const results = await new AxeBuilder({ page }).include('[data-consent-embed]').analyze()
+  expect(results.violations).toEqual([])
+})
+
 test('privacy links in the dark footer have no axe violations', async ({ page, context }) => {
   await stub(context)
   await page.goto('/')

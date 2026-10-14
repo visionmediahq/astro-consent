@@ -1,7 +1,7 @@
 export const CATEGORIES = ['necessary', 'external', 'statistics', 'marketing'] as const
 
 export type Category = (typeof CATEGORIES)[number]
-export type ServiceSlug = 'google-maps' | 'google-analytics' | 'google-ads' | 'meta-pixel'
+export type ServiceSlug = 'google-maps' | 'google-calendar' | 'google-analytics' | 'google-ads' | 'meta-pixel' | 'elfsight'
 export type Target = Category | ServiceSlug
 
 export interface Service {
@@ -20,6 +20,14 @@ export const SERVICES: Record<ServiceSlug, Service> = {
     category: 'external',
     match: ['google.com/maps', 'maps.google.', 'maps.googleapis.com', 'maps.gstatic.com', 'places.googleapis.com'],
     description_sv: 'Kartor från Google.',
+  },
+  'google-calendar': {
+    // Registry name is Swedish (shown in the banner and placeholder); the slug stays English.
+    name: 'Google Kalender',
+    vendor: 'Google Ireland Ltd',
+    category: 'external',
+    match: ['calendar.google.com'],
+    description_sv: 'Kalendrar från Google.',
   },
   'google-analytics': {
     name: 'Google Analytics',
@@ -41,6 +49,13 @@ export const SERVICES: Record<ServiceSlug, Service> = {
     category: 'marketing',
     match: ['connect.facebook.net', 'facebook.com/tr'],
     description_sv: 'Annonsmätning från Meta (Facebook, Instagram).',
+  },
+  elfsight: {
+    name: 'Elfsight',
+    vendor: 'Elfsight, SL',
+    category: 'external',
+    match: ['elfsightcdn.com', 'elfsight.com'],
+    description_sv: 'Flöden från sociala medier, till exempel Instagram, via Elfsight.',
   },
 }
 

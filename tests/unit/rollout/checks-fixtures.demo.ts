@@ -12,6 +12,8 @@ import { checkConsentPaths } from '../../../ci/rollout/checks/consent-paths'
 import { checkRequests } from '../../../ci/rollout/checks/requests'
 
 const MAPS = 'https://www.google.com/maps/embed?pb=fixture'
+const CAL = 'https://calendar.google.com/calendar/embed?src=fixture'
+const ELFSIGHT = 'https://elfsightcdn.com/platform.js'
 const GTAG = 'https://www.googletagmanager.com/gtag/js?id=G-FIXTURE'
 const PIXEL = 'https://connect.facebook.net/en_US/fbevents.js'
 
@@ -30,6 +32,32 @@ const embedPage = (onLoad: string, onStart = '') =>
     ${onStart}
     for (const b of document.querySelectorAll('[data-load]')) b.onclick = (e) => { const el = e.target.closest('[data-consent-embed]'); ${onLoad} }
   </script>`)
+
+// A fake client for mixed services: iframe embeds and a script widget (no iframe, no open link).
+// "Visa alltid" stores the service; on start every embed of a stored service activates.
+// `greedy` activates every embed instead: remembering one service must not grant the others.
+const mixed = (embedsHtml: string, greedy = false) =>
+  page(`${banner()}${embedsHtml}
+  <script>
+    const src = { 'google-maps': '${MAPS}', 'google-calendar': '${CAL}' }
+    const add = (el) => {
+      const s = el.dataset.consentEmbed
+      if (s === 'elfsight') { const sc = document.createElement('script'); sc.src = '${ELFSIGHT}'; document.head.appendChild(sc) }
+      else { const f = document.createElement('iframe'); f.src = src[s]; el.appendChild(f) }
+      el.setAttribute('data-active', '')
+    }
+    document.querySelector('[data-consent-action=none]').onclick = () => { document.querySelector('[data-consent-banner]').hidden = true }
+    const kept = JSON.parse(localStorage.getItem('kept') || '[]')
+    if (kept.length) { document.querySelector('[data-consent-banner]').hidden = true; for (const el of document.querySelectorAll('[data-consent-embed]')) if (${greedy ? 'true' : 'kept.includes(el.dataset.consentEmbed)'}) add(el) }
+    for (const b of document.querySelectorAll('[data-load]')) b.onclick = (e) => {
+      const el = e.target.closest('[data-consent-embed]')
+      if (el.querySelector('[data-remember]').checked) localStorage.setItem('kept', JSON.stringify([...kept, el.dataset.consentEmbed]))
+      add(el)
+    }
+  </script>`)
+const iframeEmbed = (service: string, href: string) =>
+  `<div data-consent-embed="${service}"><button data-load>Visa</button><input type="checkbox" data-remember><a data-open href="${href}">Öppna</a></div>`
+const widget = `<div data-consent-embed="elfsight" data-script="${ELFSIGHT}"><template data-payload><div class="elfsight-app-x"></div></template><button data-load>Visa</button><input type="checkbox" data-remember></div>`
 
 const LATE = `${banner()}<div style="height:10000px;position:relative"><div id="s" style="position:absolute;top:3000px;height:10px"></div></div>
     <script>new IntersectionObserver((es, o) => { if (es.some((e) => e.isIntersecting)) { o.disconnect(); const s = document.createElement('script'); s.src = '${GTAG}'; document.head.appendChild(s) } }).observe(document.getElementById('s'))</script>`
@@ -50,6 +78,13 @@ const FIXTURES: Record<string, string> = {
   sticky: embedPage(`add(el); localStorage.setItem('sticky', '1')`, `if (localStorage.getItem('sticky')) document.querySelectorAll('[data-consent-embed]').forEach(add)`),
   other: embedPage(`add(el); const s = document.createElement('script'); s.src = '${PIXEL}'; document.head.appendChild(s)`),
   oneoff: embedPage(`add(el)`),
+  // Mixed services (maps, calendar, an Elfsight widget): Visa on a widget first, and Visa alltid
+  // carrying one service over to a page that also has others.
+  widget: mixed(widget + iframeEmbed('google-maps', MAPS)),
+  mixa: mixed(iframeEmbed('google-maps', MAPS) + iframeEmbed('google-calendar', CAL) + widget),
+  mixb: mixed(iframeEmbed('google-calendar', CAL) + widget + iframeEmbed('google-maps', MAPS) + iframeEmbed('google-maps', MAPS)),
+  greedya: mixed(iframeEmbed('google-maps', MAPS) + iframeEmbed('google-calendar', CAL), true),
+  greedyb: mixed(iframeEmbed('google-calendar', CAL) + iframeEmbed('google-maps', MAPS), true),
   // Item 7: a button inside its (too wide) container but outside the viewport; a page that scrolls sideways.
   offbtn: page(`<section data-consent-banner style="position:absolute;top:0;left:0;width:1000px;background:#fff"><button data-consent-action="none" style="margin-left:900px">Neka</button></section>`),
   wide: page(`${banner()}<div style="width:2000px;height:10px"></div>`),
@@ -121,6 +156,21 @@ try {
   {
     const r = await paths('/other/')
     expect(!r.visaLoadsOnlyClicked, '/other/ Visa that loads another service fails', r)
+  }
+
+  {
+    const started = Date.now()
+    const r = await paths('/widget/')
+    const ms = Date.now() - started
+    expect(r.visaLoadsOnlyClicked && r.rememberAutoShows && r.nekaLoadsNothing && r.openHref === null && ms < 60_000, `/widget/ widget first: passes, no open link, no hang (${ms} ms; ~16 s of fixed waits)`, r)
+  }
+  {
+    const rs = await checkConsentPaths(browser, BASE, ['/mixa/', '/mixb/'])
+    expect(rs.every((r) => r.visaLoadsOnlyClicked && r.rememberAutoShows && r.nekaLoadsNothing), '/mixa/ /mixb/ Visa alltid loads its own service only', rs)
+  }
+  {
+    const rs = await checkConsentPaths(browser, BASE, ['/greedya/', '/greedyb/'])
+    expect(rs.every((r) => !r.rememberAutoShows), '/greedya/ /greedyb/ Visa alltid that loads other services fails', rs)
   }
 
   {
