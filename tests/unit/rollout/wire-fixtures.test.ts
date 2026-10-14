@@ -199,7 +199,7 @@ const expectedTree = (site: string): Map<string, string> => treeOf(join(FIXTURES
 describe('applyWire', () => {
   test('constants: the branch, the install spec and the commit message (spec C2, global constraints)', () => {
     expect(BRANCH).toBe('consent-banner')
-    expect(INSTALL_SPEC).toBe('github:visionmediahq/astro-consent#semver:^1.1.1')
+    expect(INSTALL_SPEC).toBe('github:visionmediahq/astro-consent#semver:^1.1.2')
     expect(COMMIT_MESSAGE).toBe('feat: samtyckesbanner (astro-consent)')
   })
 
