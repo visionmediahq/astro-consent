@@ -10,7 +10,7 @@ import type { RequestResult } from '../../../ci/rollout/checks/requests'
 import { dockerCheck } from '../../../ci/rollout/docker'
 import { startPreview } from '../../../ci/rollout/preview'
 import type { Report } from '../../../ci/rollout/types'
-import { type Checks, type Exec, mapRoutes, ORIGIN, type VerifyDeps, verify } from '../../../ci/rollout/verify'
+import { type Checks, embedRoutes, type Exec, filterRoutes, ORIGIN, type VerifyDeps, verify } from '../../../ci/rollout/verify'
 
 const PKG = '@visionmediahq/astro-consent'
 const DEMO_REPORT = JSON.parse(readFileSync(join(import.meta.dirname, 'fixtures/demo-report.json'), 'utf8')) as Report
@@ -90,8 +90,8 @@ function fake(
   }
   const ok = (path: string): RequestResult => ({ path, banner: true, banners: 1, blocked: [], errors: [], known: [], ok: true })
   const checks: Checks = {
-    pages: async () => (called.add('pages'), ['/', '/karta', '/finns-inte-x']),
-    embedPages: async () => (called.add('embedPages'), ['/karta']),
+    pages: async () => (called.add('pages'), ['/', '/karta', '/karta-efter-widget', '/finns-inte-x']),
+    embedPages: async () => (called.add('embedPages'), ['/karta', '/karta-efter-widget']),
     requests: async (base, paths) => {
       called.add(`requests ${base}`)
       return base.includes(':4398')
@@ -365,7 +365,7 @@ describe('verify', () => {
 
   test('step 4 asserts the filter only where the report has one, and fails when it was lost', async () => {
     const dir = siteDir()
-    const asked: (boolean | undefined)[] = []
+    const asked: (string | null | undefined)[] = []
     const f = fake({
       checks: {
         consentPaths: async (_b, paths, opts) =>
@@ -375,9 +375,9 @@ describe('verify', () => {
           }),
       },
     })
-    const withFilter = report({ iframes: DEMO_REPORT.iframes.map((i) => ({ ...i, classes: 'w-full grayscale' })) })
-    const result = await verify(dir, withFilter, { deps: f.deps })
-    expect(asked).toEqual([true])
+    // The demo report: /karta's maps have no filter, /karta-efter-widget's map has `grayscale`.
+    const result = await verify(dir, report(), { deps: f.deps })
+    expect(asked).toEqual([null, 'google-maps'])
     expect(result.steps.at(-1)).toMatchObject({ step: 4, pass: false })
   })
 
@@ -513,8 +513,8 @@ describe('verify', () => {
             expected.push([path, opts.expectBanner!(path)])
             return { path, banner: true, banners: 1, blocked: [], errors: [], known: [], ok: true }
           }),
-        pages: async () => ['/', '/karta', '/utan-banner', '/finns-inte-x'],
-        embedPages: async () => ['/karta', '/utan-banner/'],
+        pages: async () => ['/', '/karta', '/karta-efter-widget', '/utan-banner', '/finns-inte-x'],
+        embedPages: async () => ['/karta', '/karta-efter-widget', '/utan-banner/'],
         consentPaths: async (_b, paths) => {
           consentPages.push(...paths)
           return paths.map((path) => ({ path, visaLoadsOnlyClicked: true, rememberAutoShows: true, nekaLoadsNothing: true, filterKept: null, filter: 'none', openHref: null, notes: [] }))
@@ -537,13 +537,14 @@ describe('verify', () => {
     expect(expected).toEqual([
       ['/', true],
       ['/karta', true],
+      ['/karta-efter-widget', true],
       ['/utan-banner', false],
       ['/finns-inte-x', false],
     ])
     expect(existsSync(join(out, 'verify.json'))).toBe(true)
     expect(JSON.parse(readFileSync(join(out, 'verify.json'), 'utf8')).sha).toBeNull()
     // Step 4 clicks the banner: the bannerless page is left out.
-    expect(consentPages).toEqual(['/karta'])
+    expect(consentPages).toEqual(['/karta', '/karta-efter-widget'])
   })
 })
 
@@ -661,9 +662,11 @@ describe('verify: final review fixes', () => {
   })
 })
 
-describe('mapRoutes', () => {
+describe('embedRoutes', () => {
+  const iframe = DEMO_REPORT.iframes[0]!
+  const widget = { file: 'src/pages/om.astro', start: 0, end: 0, service: 'elfsight', script: 'https://elfsightcdn.com/platform.js', scriptAt: { start: 0, end: 0 }, pages: ['src/pages/om.astro'] } as const
+
   test('page files, layouts through their pages, and call sites; dynamic routes are left out', () => {
-    const iframe = DEMO_REPORT.iframes[0]!
     const r = report({
       layouts: [{ file: 'src/layouts/Map.astro', pages: ['src/pages/hitta/index.astro'], footerRef: null }],
       iframes: [
@@ -671,8 +674,38 @@ describe('mapRoutes', () => {
         { ...iframe, file: 'src/layouts/Map.astro' },
         { ...iframe, file: 'src/components/M.astro', callSites: [{ file: 'src/pages/om.astro', src: 'x' }, { file: 'src/pages/[slug].astro', src: 'y' }] },
       ],
+      widgets: [],
     })
-    expect([...mapRoutes(r)].sort()).toEqual(['/hitta', '/kontakt', '/om'])
+    expect([...embedRoutes(r)].sort()).toEqual(['/hitta', '/kontakt', '/om'])
+  })
+
+  test('a widget on a page adds that page', () => {
+    expect([...embedRoutes(report({ iframes: [], widgets: [{ ...widget, pages: ['src/pages/om.astro'] }] }))]).toEqual(['/om'])
+  })
+
+  test('a widget in a component adds the routes of the pages that render it', () => {
+    const r = report({
+      iframes: [],
+      widgets: [{ ...widget, file: 'src/components/Flode.astro', pages: ['src/pages/index.astro', 'src/pages/blogg/index.astro', 'src/pages/[slug].astro'] }],
+    })
+    expect([...embedRoutes(r)].sort()).toEqual(['/', '/blogg'])
+  })
+})
+
+describe('filterRoutes', () => {
+  test('route -> service of the filtered iframe (the demo: google-maps on /karta-efter-widget)', () => {
+    expect(filterRoutes(DEMO_REPORT)).toEqual(new Map([['/karta-efter-widget', 'google-maps']]))
+  })
+
+  test('an inline style filter and a calendar: each route names its own service; no filter, no route', () => {
+    const iframe = DEMO_REPORT.iframes[0]!
+    const r = report({
+      iframes: [
+        { ...iframe, file: 'src/pages/kalender.astro', service: 'google-calendar', classes: null, style: 'border:0; filter: grayscale(1)' },
+        { ...iframe, file: 'src/pages/karta.astro', classes: 'w-full', style: null },
+      ],
+    })
+    expect(filterRoutes(r)).toEqual(new Map([['/kalender', 'google-calendar']]))
   })
 })
 

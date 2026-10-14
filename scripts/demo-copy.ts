@@ -9,7 +9,7 @@ export const REPO_ROOT = fileURLToPath(new URL('..', import.meta.url)).replace(/
 export const DEMO_DIR = join(REPO_ROOT, 'demo')
 
 /** Pages with a <ConsentEmbed> or <ConsentWidget>. A site with no services has no embeds, so notice mode drops them. */
-export const EMBED_PAGES = ['src/pages/karta.astro', 'src/pages/ssr.astro', 'src/pages/utan-banner.astro', 'src/pages/flode.astro', 'src/pages/nastlad.astro']
+export const EMBED_PAGES = ['src/pages/karta.astro', 'src/pages/ssr.astro', 'src/pages/utan-banner.astro', 'src/pages/flode.astro', 'src/pages/nastlad.astro', 'src/pages/karta-efter-widget.astro']
 
 const REPO_SOURCE_LINE = '@source "../../../src";'
 const SKIP = new Set(['node_modules', '.astro', 'package-lock.json', 'data'])

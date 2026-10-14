@@ -2,7 +2,7 @@
 // carries over), filter.ts (a CSS filter survives the wiring) and openlink.ts (the embed's "Öppna i"
 // link). Buttons are found through the DOM contract, not their Swedish labels.
 import type { Browser, Page } from '@playwright/test'
-import { matchesRegistry } from '../../../src/services'
+import { matchesRegistry, type ServiceSlug } from '../../../src/services'
 import { bannerState, freshPage, open, recordBlocked } from './requests'
 
 export interface ConsentPathResult {
@@ -22,11 +22,15 @@ export interface ConsentPathResult {
   /** After Neka: no registry request, no iframe, banner closed. */
   nekaLoadsNothing: boolean
   /**
-   * The loaded iframe keeps a CSS filter (filter.ts). null when the caller did not say a filter is
-   * expected (`expectFilter`): not asserted, and never to be read as a pass.
+   * The loaded iframe of the filtered service keeps a CSS filter (filter.ts). null when the caller
+   * did not say a filter is expected (`expectFilter`), or the page has no embed of that service: not
+   * asserted, and never to be read as a pass.
    */
   filterKept: boolean | null
-  /** The loaded iframe's computed filter, for the evidence. */
+  /**
+   * The computed filter of the iframe read for `filterKept`: the first embed's, or the first embed of
+   * the filtered service's when the first embed is of another service. For the evidence.
+   */
   filter: string
   /** The first embed's "Öppna i" link, for the evidence (openlink.ts opened it; we don't). null for a widget, which has none. */
   openHref: string | null
@@ -74,7 +78,24 @@ async function decline(page: Page, notes: string[], what: string): Promise<boole
   return true
 }
 
-async function visaOnlyClicked(browser: Browser, base: string, path: string, stub: boolean, notes: string[]) {
+/** Loads the first embed of `service` with a one-off Visa and returns its iframe's computed filter, or null when the page has none. */
+async function filterOf(page: Page, service: ServiceSlug): Promise<string | null> {
+  const embed = page.locator(`[data-consent-embed="${service}"]`).first()
+  if (!(await embed.count())) return null
+  await embed.scrollIntoViewIfNeeded()
+  await embed.locator('[data-load]').click()
+  await page.mouse.move(0, 0)
+  await page.waitForTimeout(1000)
+  const iframe = embed.locator('iframe').first()
+  return (await iframe.count()) ? await iframe.evaluate((f) => getComputedStyle(f).filter) : 'none'
+}
+
+/**
+ * The one-off Visa check on the first embed, then (only after its reload measurement, so it never
+ * touches what that check asserts) the filter reading for `filterService` when the first embed is of
+ * another service.
+ */
+async function visaOnlyClicked(browser: Browser, base: string, path: string, stub: boolean, notes: string[], filterService: ServiceSlug | null) {
   const { context, page } = await freshPage(browser, stub)
   try {
     const hits = recordBlocked(page)
@@ -83,7 +104,8 @@ async function visaOnlyClicked(browser: Browser, base: string, path: string, stu
     const count = await embeds(page).count()
     if (count === 0) {
       notes.push('visa: no [data-consent-embed] on the page')
-      return { ok: false, filter: 'none', openHref: null }
+      if (filterService) notes.push(`filter: no ${filterService} embed on the page`)
+      return { ok: false, filter: 'none', openHref: null, filterKept: null }
     }
     const first = embeds(page).first()
     const service = await first.getAttribute('data-consent-embed')
@@ -115,7 +137,14 @@ async function visaOnlyClicked(browser: Browser, base: string, path: string, stu
           `other services=${JSON.stringify(foreign.slice(0, 3))}; after reload active+iframes=${reloaded} blocked=${afterReload}`,
       )
     }
-    return { ok, filter, openHref }
+    if (!filterService) return { ok, filter, openHref, filterKept: null }
+    if (service === filterService) return { ok, filter, openHref, filterKept: filter !== 'none' }
+    const other = await filterOf(page, filterService)
+    if (other === null) {
+      notes.push(`filter: no ${filterService} embed on the page`)
+      return { ok, filter, openHref, filterKept: null }
+    }
+    return { ok, filter: other, openHref, filterKept: other !== 'none' }
   } finally {
     await context.close()
   }
@@ -186,24 +215,25 @@ async function nekaNothing(browser: Browser, base: string, path: string, stub: b
 }
 
 /**
- * Runs the three consent paths on each map page, each in a fresh context. `stub` (default true)
+ * Runs the three consent paths on each embed page, each in a fresh context. `stub` (default true)
  * fulfils registry requests locally, so clicking "Visa" never reaches Google; pass false on live
- * runs. `expectFilter(path)` says whether the site's map had a CSS filter that wire carried over.
+ * runs. `expectFilter(path)` names the service whose iframe had a CSS filter that wire carried over
+ * (null: none expected).
  */
 export async function checkConsentPaths(
   browser: Browser,
   base: string,
   mapPaths: string[],
-  opts: { stub?: boolean; expectFilter?: (path: string) => boolean } = {},
+  opts: { stub?: boolean; expectFilter?: (path: string) => ServiceSlug | null } = {},
 ): Promise<ConsentPathResult[]> {
   const stub = opts.stub ?? true
   const results: ConsentPathResult[] = []
   for (const [i, path] of mapPaths.entries()) {
     const notes: string[] = []
-    const visa = await visaOnlyClicked(browser, base, path, stub, notes)
+    const visa = await visaOnlyClicked(browser, base, path, stub, notes, opts.expectFilter?.(path) ?? null)
     const rememberAutoShows = await rememberCarries(browser, base, path, rememberCandidates(mapPaths, i), stub, notes)
     const nekaLoadsNothing = await nekaNothing(browser, base, path, stub, notes)
-    const filterKept = opts.expectFilter?.(path) ? visa.filter !== 'none' : null
+    const filterKept = visa.filterKept
     if (filterKept === false) notes.push('filter: expected a CSS filter on the loaded iframe, got none')
     results.push({
       path,

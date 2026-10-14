@@ -63,6 +63,22 @@ try {
     fail(r.visaLoadsOnlyClicked && r.rememberAutoShows && r.nekaLoadsNothing, `${r.path} consent paths`)
     fail(r.filterKept === null, `${r.path} filter not asserted without expectFilter`)
   }
+  for (const r of await checkConsentPaths(browser, BASE, ['/karta'], { expectFilter: () => null })) {
+    console.log(' ', JSON.stringify(r))
+    fail(r.filterKept === null, `${r.path} filter not asserted when expectFilter says null`)
+  }
+  // A widget, then an unfiltered calendar, above a filtered map: the one-off Visa still sees exactly
+  // the widget active, and the filter is read from the map, clicked after the reload.
+  for (const r of await checkConsentPaths(browser, BASE, ['/karta-efter-widget'], { expectFilter: () => 'google-maps' })) {
+    console.log(' ', JSON.stringify(r))
+    fail(r.visaLoadsOnlyClicked && r.rememberAutoShows && r.nekaLoadsNothing, `${r.path} consent paths`)
+    fail(r.filterKept === true && r.filter !== 'none', `${r.path} filter read from the google-maps embed`)
+  }
+  for (const r of await checkConsentPaths(browser, BASE, ['/flode'], { expectFilter: () => 'google-maps' })) {
+    console.log(' ', JSON.stringify(r))
+    fail(r.visaLoadsOnlyClicked, `${r.path} one-off Visa`)
+    fail(r.filterKept === null && r.notes.includes('filter: no google-maps embed on the page'), `${r.path} no google-maps embed: filter not asserted, noted`)
+  }
 
   console.log('checkClip:')
   const clip = await checkClip(browser, BASE, ['/karta'])

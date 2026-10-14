@@ -7,7 +7,7 @@
   "layouts": [
     {
       "file": "src/layouts/Base.astro",
-      "pages": ["src/pages/index.astro", "src/pages/karta.astro", "src/pages/skript.astro", "src/pages/ssr.astro"],
+      "pages": ["src/pages/index.astro", "src/pages/karta.astro", "src/pages/skript.astro", "src/pages/ssr.astro", "src/pages/karta-efter-widget.astro"],
       "footerRef": null
     }
   ],
@@ -40,6 +40,19 @@
       "service": "google-maps",
       "title": "Karta två",
       "classes": null,
+      "height": null,
+      "style": null
+    },
+    {
+      "file": "src/pages/karta-efter-widget.astro",
+      "start": 0,
+      "end": 0,
+      "srcKind": "literal",
+      "src": "https://www.google.com/maps/embed?pb=demo-gra",
+      "host": "www.google.com",
+      "service": "google-maps",
+      "title": "Grå karta",
+      "classes": "grayscale",
       "height": null,
       "style": null
     }
