@@ -334,6 +334,9 @@ describe('banner and footer markup', () => {
     expect(widget.getAttribute('data-script')).toBe(WIDGET_SCRIPT)
     expect(widget.querySelector('template[data-payload]')!.innerHTML).toContain('elfsight-app-demo-a')
     expect(widget.querySelector('a[data-open]')).toBeNull()
+    // The placeholder is live markup after the template, never inside it (Astro 6 left a self-closed template open).
+    expect(widget.querySelector('template[data-payload] [data-load]')).toBeNull()
+    expect(widget.querySelector(':scope > [data-placeholder] [data-load]')).not.toBeNull()
     const sources = page.querySelectorAll('script[src]').map((el) => el.getAttribute('src')!)
     expect(sources.filter((src) => src.includes('elfsight'))).toEqual([])
   })

@@ -1,7 +1,12 @@
 # Changelog
 
-## Unreleased
+## 1.1.2
 
+- Fix: on Astro 6, `<ConsentWidget>` rendered its placeholder inside the inert `<template>`, so the
+  page showed an empty box with no "Visa" button (the self-closed `<template … />` was left open;
+  Astro 7 closed it). The template is now closed explicitly. Found by the rollout tool's `verify` on
+  the first Elfsight site; `test:pack` now asserts on both Astro majors that the "Visa" button is
+  live markup outside the template. `CONSENT_VERSION` is unchanged: no visitor is asked again.
 - Test: pack-install proves the no-`<script>` slot check on Astro 6 and 7 (#27).
 
 ## 1.1.1
