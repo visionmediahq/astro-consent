@@ -5,7 +5,7 @@
 //                          [--limit N] [--only <repo>]...
 //
 // $WORK defaults to ~/sites/consent-rollout. pool.json holds client data: it is never committed.
-// The scan is resumable: rows already in pool.json with a report are skipped; rows that ended in
+// The scan is resumable: rows already in pool.json with a report that lists `services` are skipped; rows that ended in
 // an error are scanned again.
 import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
@@ -14,6 +14,7 @@ import { dirname, join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { listApps, type App } from './coolify'
 import { detect } from './detect/index'
+import { classificationLine } from './lib/report'
 import { diskSite } from './lib/site-files'
 import type { PoolRow, Report } from './types'
 
@@ -169,7 +170,8 @@ export async function scanPool(
   opts: { limit?: number } = {},
 ): Promise<PoolFile> {
   const file: PoolFile = { rows: [...existing.rows], unmatched: existing.unmatched }
-  const done = new Set(file.rows.filter((r) => !r.error).map((r) => r.repo))
+  // A report stored before `services` existed is detected again.
+  const done = new Set(file.rows.filter((r) => !r.error && r.report !== null && Array.isArray(r.report.services)).map((r) => r.repo))
   let scanned = 0
   for (const { repo, domains } of targets) {
     if (done.has(repo)) continue
@@ -187,7 +189,7 @@ export async function scanPool(
     }
     file.rows = [...file.rows.filter((r) => r.repo !== repo), row].sort(byRepo)
     deps.save(file)
-    deps.log?.(`${repo}: ${row.error ? `error: ${row.error}` : row.report!.classification}`)
+    deps.log?.(`${repo}: ${row.error ? `error: ${row.error}` : classificationLine(row.report!)}`)
   }
   file.rows.sort(byRepo)
   return file

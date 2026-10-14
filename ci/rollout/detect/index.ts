@@ -2,12 +2,14 @@
 import type { Report } from '../types'
 import type { SiteFiles } from '../lib/site-files'
 import { aliasedAstroImports } from '../lib/site-imports'
+import { servicesOf } from '../lib/report'
 import { classify } from './classify'
 import { detectConfig } from './config'
 import { detectAstroMajor, detectCss } from './css'
 import { detectIframes } from './iframes'
 import { detectScripts } from './scripts'
 import { detectStructure } from './structure'
+import { detectWidgets } from './widgets'
 
 /** `domains` are the site's own domains: stored in the report and used to tell own iframes apart. */
 export function detect(files: SiteFiles, site: string, domains: string[]): Report {
@@ -15,6 +17,7 @@ export function detect(files: SiteFiles, site: string, domains: string[]): Repor
   const structure = detectStructure(files)
   const frames = detectIframes(files, domains)
   const scripts = detectScripts(files)
+  const widgets = detectWidgets(files, structure.layouts)
 
   const findings = {
     site,
@@ -32,13 +35,16 @@ export function detect(files: SiteFiles, site: string, domains: string[]): Repor
     recaptcha: scripts.recaptcha,
     inventedMaps: frames.inventedMaps,
     alreadyWired: scripts.alreadyWired,
+    widgets: widgets.widgets,
   }
   const { classification, reasons } = classify({
     ...findings,
-    parseErrors: [...structure.parseErrors, ...frames.parseErrors, ...scripts.parseErrors],
+    parseErrors: [...structure.parseErrors, ...frames.parseErrors, ...scripts.parseErrors, ...widgets.parseErrors],
     aliasImports: aliasedAstroImports(files),
     multiFooterPages: structure.multiFooterPages,
     ownHtmlPages: structure.ownHtmlPages,
+    wired: widgets.wired,
+    widgetReasons: widgets.reasons,
   })
-  return { ...findings, classification, reasons }
+  return { ...findings, services: servicesOf(findings, widgets.wired), classification, reasons }
 }

@@ -1,0 +1,114 @@
+---
+import { Image } from 'astro:assets';
+import { Phone, Mail, MapPin } from '@lucide/astro';
+import { client } from '../config/client';
+---
+
+<footer class="bg-neutral pt-16 pb-8" style="color: var(--color-base-content)">
+  <div class="container">
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-12 mb-12">
+      <!-- Company Info -->
+      <div>
+        <Image
+          src="/images/logo.webp"
+          alt="Logotyp"
+          width={180}
+          height={64}
+          class="h-12 w-auto mb-6"
+        />
+        <p class="text-gray-600 mb-4">
+          Text.
+        </p>
+      </div>
+
+      <!-- Quick Links -->
+      <div>
+        <h3 class="text-lg font-bold mb-4" style="color: var(--color-base-content)">Text.</h3>
+        <ul class="space-y-2">
+          <li><a href="/" class="text-gray-600 hover:text-[var(--color-primary)] transition-colors" onclick="umami.track('footer_link', {item: 'Hem'})">Text.</a></li>
+          <li><a href="/takbyten/" class="text-gray-600 hover:text-[var(--color-primary)] transition-colors" onclick="umami.track('footer_link', {item: 'Takbyten'})">Text.</a></li>
+          <li><a href="/platarbeten/" class="text-gray-600 hover:text-[var(--color-primary)] transition-colors" onclick="umami.track('footer_link', {item: 'Plåtarbeten'})">Text.</a></li>
+          <li><a href="/nyheter/" class="text-gray-600 hover:text-[var(--color-primary)] transition-colors" onclick="umami.track('footer_link', {item: 'Nyheter'})">Text.</a></li>
+          <li><a href="/om-oss/" class="text-gray-600 hover:text-[var(--color-primary)] transition-colors" onclick="umami.track('footer_link', {item: 'Om oss'})">Text.</a></li>
+          <li><a href="/kontakt/" class="text-gray-600 hover:text-[var(--color-primary)] transition-colors" onclick="umami.track('footer_link', {item: 'Kontakt'})">Text.</a></li>
+        </ul>
+      </div>
+
+      <!-- Contact -->
+      <div>
+        <h3 class="text-lg font-bold mb-4" style="color: var(--color-base-content)">Text.</h3>
+        <ul class="space-y-3">
+          <li>
+            <a 
+              href={client.phone.href}
+              class="flex items-start gap-3 text-gray-400 hover:text-[var(--color-primary)] transition-colors"
+              onclick="umami.track('phone_click')"
+            >
+              <Phone size={20} class="mt-1 flex-shrink-0" />
+              <span>{client.phone.display}</span>
+            </a>
+          </li>
+          <li>
+            <a 
+              href={`mailto:${client.email}`}
+              class="flex items-start gap-3 text-gray-400 hover:text-[var(--color-primary)] transition-colors"
+              onclick="umami.track('email_click')"
+            >
+              <Mail size={20} class="mt-1 flex-shrink-0" />
+              <span class="uppercase">Text.</span>
+            </a>
+          </li>
+          <li class="flex items-start gap-3 text-gray-600">
+            <MapPin size={20} class="mt-1 flex-shrink-0" />
+            <span>{client.address.street}<br />{client.address.postalCode} {client.address.city}</span>
+          </li>
+        </ul>
+      </div>
+
+      <!-- Certifications -->
+      <div>
+        <h3 class="text-lg font-bold mb-4" style="color: var(--color-base-content)">Text.</h3>
+        <div class="grid grid-cols-2 gap-4">
+          <Image
+            src="/images/badge-1.webp"
+            alt="Utmärkelse 1"
+            width={120}
+            height={80}
+            class="w-full h-auto"
+          />
+          <Image
+            src="/images/badge-2.webp"
+            alt="Utmärkelse 2"
+            width={120}
+            height={80}
+            class="w-full h-auto"
+          />
+          <Image
+            src="/images/badge-3.webp"
+            alt="Partner"
+            width={120}
+            height={80}
+            class="w-full h-auto"
+          />
+        </div>
+      </div>
+    </div>
+
+    <!-- Bottom Bar -->
+    <div class="pt-8 border-t border-gray-300">
+      <div class="flex flex-col md:flex-row justify-between items-center gap-4">
+        <p class="text-gray-600 text-sm">
+          Text. {new Date().getFullYear()} Text.
+        </p>
+        <div class="flex gap-6">
+          <a href={client.social.facebook} target="_blank" rel="noopener noreferrer" class="text-gray-600 hover:text-[var(--color-primary)] transition-colors" onclick="umami.track('social_click', {platform: 'facebook'})">
+            Text.
+          </a>
+          <a href={client.social.instagram} target="_blank" rel="noopener noreferrer" class="text-gray-600 hover:text-[var(--color-primary)] transition-colors" onclick="umami.track('social_click', {platform: 'instagram'})">
+            Text.
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+</footer>

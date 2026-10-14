@@ -1,0 +1,81 @@
+---
+import ConsentWidget from '@visionmediahq/astro-consent/components/ConsentWidget.astro'
+---
+
+<section style="background-color: var(--color-background)">
+
+  <div class="container mx-auto px-6 pt-16 md:pt-20 pb-10" data-animate>
+    <div class="flex items-end justify-between">
+      <div>
+        <p class="text-xs font-semibold uppercase tracking-[0.25em] mb-3" style="color: var(--color-secondary)">Text.</p>
+        <h2 class="text-4xl md:text-5xl font-bold">Text.</h2>
+      </div>
+      <a
+        href="https://www.instagram.com/example"
+        target="_blank"
+        rel="noopener noreferrer"
+        class="ig-btn hidden sm:inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-widest"
+        onclick="typeof umami !== 'undefined' && window.umami?.track('cta_click', {label: 'Följ oss på Instagram'})"
+      >
+        Text.
+      </a>
+    </div>
+  </div>
+
+  <!-- Full-bleed Elfsight widget -->
+  <div class="w-full pb-16 md:pb-20">
+    <ConsentWidget service="elfsight" script="https://elfsightcdn.com/platform.js" title="Innehållet">
+    <div class="elfsight-app-00000000-0000-0000-0000-000000000001" data-elfsight-app-lazy></div>
+    </ConsentWidget>
+  </div>
+
+  <div class="text-center pb-12 sm:hidden" data-animate>
+    <a
+      href="https://www.instagram.com/example"
+      target="_blank"
+      rel="noopener noreferrer"
+      class="ig-btn inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-widest"
+      onclick="typeof umami !== 'undefined' && window.umami?.track('cta_click', {label: 'Följ oss på Instagram'})"
+    >
+      Text.
+    </a>
+  </div>
+
+</section>
+
+<style>
+  .ig-btn {
+    border: 1px solid var(--color-primary);
+    color: var(--color-primary);
+    background: transparent;
+    padding: 0.5rem 1rem;
+    transition: background-color 0.2s, color 0.2s;
+  }
+  .ig-btn:hover {
+    background-color: var(--color-primary);
+    color: white;
+  }
+
+  :global(.eapps-instagram-feed-posts-grid-load-more),
+  :global(.eapps-instagram-feed-posts-grid-load-more-button),
+  :global(.eapps-instagram-feed-posts-grid-load-more-text) {
+    border-radius: 0 !important;
+  }
+
+  :global(.eapps-instagram-feed-posts-grid-load-more-text) {
+    border: 1px solid var(--color-primary) !important;
+    color: white !important;
+    background: var(--color-primary) !important;
+    border-radius: 0 !important;
+    font-family: 'Montserrat', sans-serif !important;
+    font-size: 0.75rem !important;
+    font-weight: 500 !important;
+    letter-spacing: 0.1em !important;
+    text-transform: uppercase !important;
+    transition: background-color 0.2s, color 0.2s !important;
+  }
+  :global(.eapps-instagram-feed-posts-grid-load-more-text:hover) {
+    background-color: var(--color-primary) !important;
+    color: white !important;
+  }
+</style>

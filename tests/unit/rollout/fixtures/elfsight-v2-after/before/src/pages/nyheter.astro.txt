@@ -1,0 +1,30 @@
+---
+import Base from '../layouts/Base.astro';
+import Header from '../components/Header.astro';
+import Footer from '../components/Footer.astro';
+import PageHero from '../components/PageHero.astro';
+import NyheterSocial from '../components/NyheterSocial.astro';
+import FacebookFeed from '../components/FacebookFeed.astro';
+
+export const prerender = true;
+---
+
+<Base
+  title="Text."
+  description="Text."
+  canonical="https://elfsight-v2-after.se/nyheter/"
+  ogImage="/og-image.jpg"
+>
+  <Header />
+  <main>
+    <PageHero
+      subtitle="Text."
+      title="Text."
+      imageSrc="/images/hero.webp"
+      imageAlt="Text."
+    />
+    <NyheterSocial />
+    <FacebookFeed />
+  </main>
+  <Footer />
+</Base>

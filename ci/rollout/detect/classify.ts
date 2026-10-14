@@ -1,16 +1,22 @@
-// Classifies a site from what detect found: `notice`, `maps` or `needs-human` with one reason per
-// line. The wire stage converts only `notice` and `maps`, so every doubt is a reason: an unknown
+// Classifies a site from what detect found: `notice`, `consent` or `needs-human` with one reason per
+// line. The wire stage converts only `notice` and `consent`, so every doubt is a reason: an unknown
 // counts as a problem, never as "probably fine".
+import { servicesOf } from '../lib/report'
+import type { ServiceSlug } from '../../../src/services'
 import type { Classification, IframeInfo, Report } from '../types'
 
 /** Everything detect found, plus what classify needs that the report does not keep. */
-export type Findings = Omit<Report, 'classification' | 'reasons'> & {
+export type Findings = Omit<Report, 'classification' | 'reasons' | 'services'> & {
   /** From every detector; the same file may appear more than once. */
   parseErrors: { file: string; message: string }[]
   aliasImports: { file: string; specifier: string }[]
   multiFooterPages: { page: string; footers: number }[]
   /** Ruling 39: pages with their own <html> outside every layout. */
   ownHtmlPages: string[]
+  /** Services of package <ConsentWidget> elements already in the source. */
+  wired: ServiceSlug[]
+  /** detectWidgets' reasons, each naming its file. */
+  widgetReasons: string[]
 }
 
 /** The Astro majors the package's peerDependencies accept. */
@@ -33,7 +39,7 @@ function iframeReason(frame: IframeInfo, domains: string[]): string | null {
   }
   const own = domains.some((d) => host === d.toLowerCase() || host === `www.${d.toLowerCase()}`)
   if (frame.service === null) return own ? null : `unregistered iframe host ${host}`
-  if (frame.service === 'google-maps') return null
+  if (frame.service === 'google-maps' || frame.service === 'google-calendar') return null
   return `iframe service ${frame.service} is not wired by this batch`
 }
 
@@ -77,10 +83,10 @@ export function classify(f: Findings): { classification: Classification; reasons
     const r = iframeReason(frame, f.domains)
     if (r !== null) add(r)
   }
-  for (const t of f.trackers) add(`tracker ${t}: the batch wires notice and maps only`)
+  for (const t of f.trackers) add(`tracker ${t}: the batch wires notice and consent only`)
   for (const b of f.banners) add(`existing banner: ${b}`)
+  for (const r of f.widgetReasons) add(r)
 
   if (reasons.length > 0) return { classification: 'needs-human', reasons }
-  const maps = f.iframes.some((i) => i.srcKind !== 'unresolved' && i.service === 'google-maps')
-  return { classification: maps ? 'maps' : 'notice', reasons }
+  return { classification: servicesOf(f, f.wired).length > 0 ? 'consent' : 'notice', reasons }
 }

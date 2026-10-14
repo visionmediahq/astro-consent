@@ -2,6 +2,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, test } from 'vitest'
+import type { ServiceSlug } from '../../../src/services'
 import { openPr, originRepo, renderBody, templateKind, TEMPLATE_PATH, TITLE } from '../../../ci/rollout/pr'
 import type { Report, VerifyResult } from '../../../ci/rollout/types'
 
@@ -19,26 +20,46 @@ const PASS: VerifyResult = {
     evidence: 'SECRET-EVIDENCE-TEXT',
   })),
 }
-const render = (over: { classification?: 'maps' | 'notice' } = {}, issues: string[] = [], screenshots: { file: string; url: string }[] = []) =>
-  renderBody(template, { kind: over.classification ?? 'maps', verify: PASS, issues, domain: 'kund.se', screenshots })
+const render = (
+  over: { classification?: 'consent' | 'notice'; services?: ServiceSlug[] } = {},
+  issues: string[] = [],
+  screenshots: { file: string; url: string }[] = [],
+) => renderBody(template, { kind: over.classification ?? 'consent', services: over.services ?? ['google-maps'], verify: PASS, issues, domain: 'kund.se', screenshots })
 
 describe('renderBody', () => {
   test('has the four sections; nothing addressed to the client (clients already know the banner is coming)', () => {
-    for (const classification of ['notice', 'maps'] as const) {
+    for (const classification of ['notice', 'consent'] as const) {
       const body = render({ classification })
       for (const h of ['Vad ändras', 'Så testar du', 'Relaterade ärenden', 'Kontroller']) expect(body).toMatch(new RegExp(`^## ${h}$`, 'm'))
       expect(body).not.toMatch(/Till kunden|kunden/i)
     }
   })
 
-  test('notice and maps wording differ; maps mentions the maps and "Visa Google Maps"', () => {
-    const notice = render({ classification: 'notice' })
-    const maps = render({ classification: 'maps' })
-    expect(maps).toContain('Visa Google Maps')
-    expect(maps).toMatch(/kartorna/i)
+  test('notice and consent wording differ; consent names the service and "Visa Google Maps"', () => {
+    const notice = render({ classification: 'notice', services: [] })
+    const consent = render({ classification: 'consent' })
+    expect(consent).toContain('Google Maps')
+    expect(consent).toContain('Visa Google Maps')
+    expect(consent).toContain('Visa alltid innehåll från Google Maps')
+    expect(consent).toContain('platshållarna')
     expect(notice).not.toContain('Visa Google Maps')
-    expect(notice).not.toMatch(/kartorna/i)
-    expect(notice).not.toBe(maps)
+    expect(notice).not.toBe(consent)
+  })
+
+  test('consent names each service, one numbered step each, in registry order', () => {
+    const body = render({ services: ['google-maps', 'elfsight'] })
+    expect(body).toContain('Google Maps och Elfsight')
+    expect(body).toContain('`google-maps`, `elfsight`')
+    expect(body).toMatch(/^3\. .*Visa Google Maps/m)
+    expect(body).toMatch(/^4\. .*Visa Elfsight[\s\S]*Visa alltid innehåll från Elfsight/m)
+    expect(body).toMatch(/^5\. .*Cookie-inställningar/m)
+    const only = render({ services: ['elfsight'] })
+    expect(only).toContain('Visa Elfsight')
+    expect(only).toContain('Visa alltid innehåll från Elfsight')
+    expect(only).not.toContain('Google Maps')
+    expect(render({ services: ['google-calendar'] })).toContain('Visa Google Kalender')
+    expect(body).not.toMatch(/\b1\.0\b/)
+    expect(body).not.toContain('{{#maps}}')
   })
 
   test('issues are listed as links, none gives "Inga"', () => {
@@ -48,7 +69,7 @@ describe('renderBody', () => {
   })
 
   test('no placeholder or conditional marker is left', () => {
-    for (const classification of ['notice', 'maps'] as const) {
+    for (const classification of ['notice', 'consent'] as const) {
       const body = render({ classification }, ['https://x/1'], [{ file: 'a.png', url: 'https://x/a.png' }])
       expect(body).not.toMatch(/\{\{|\}\}/)
     }
@@ -63,11 +84,11 @@ describe('renderBody', () => {
   })
 
   test('a failed verify is refused', () => {
-    expect(() => renderBody(template, { kind: 'maps', verify: { ...PASS, pass: false }, issues: [], domain: 'kund.se' })).toThrow(/verify/)
+    expect(() => renderBody(template, { kind: 'consent', services: ['google-maps'], verify: { ...PASS, pass: false }, issues: [], domain: 'kund.se' })).toThrow(/verify/)
   })
 
   test('finding 7: the merge line matches the process: the tool merges after the live check', () => {
-    for (const classification of ['notice', 'maps'] as const) {
+    for (const classification of ['notice', 'consent'] as const) {
       const body = render({ classification })
       expect(body).toContain('**Mergas efter verifiering och livekontroll.**')
       expect(body).not.toContain('Mergas av tekniker')
@@ -84,7 +105,7 @@ function siteDir(verifyResult: VerifyResult = PASS): string {
   const dir = mkdtempSync(join(tmpdir(), 'pr-'))
   dirs.push(dir)
   mkdirSync(join(dir, '.rollout/shots'), { recursive: true })
-  writeFileSync(join(dir, '.rollout/report.json'), JSON.stringify(report({ classification: 'maps' })))
+  writeFileSync(join(dir, '.rollout/report.json'), JSON.stringify(report({ classification: 'consent' })))
   writeFileSync(join(dir, '.rollout/verify.json'), JSON.stringify(verifyResult))
   writeFileSync(join(dir, '.rollout/shots/home-360-open.png'), 'png')
   writeFileSync(join(dir, '.rollout/shots/home-1280-open.png'), 'png')
@@ -253,6 +274,15 @@ describe('openPr', () => {
     }
   })
 
+  test('a branch privacy.json listing elfsight and google-maps names both in the PR body', async () => {
+    const dir = siteDir()
+    await openPr(dir, opts(fake({ 'git show HEAD:src/data/privacy.json': { code: 0, out: '{"services":["elfsight","google-maps"]}' } })))
+    const body = readFileSync(join(dir, '.rollout/pr-body.md'), 'utf8')
+    expect(body).toContain('Google Maps och Elfsight')
+    expect(body).toContain('Visa Elfsight')
+    expect(body).not.toMatch(/\{\{/)
+  })
+
   test('finding 4: a maps report but a branch privacy.json without google-maps gets the notice text', async () => {
     const dir = siteDir()
     await openPr(dir, opts(fake({ 'git show HEAD:src/data/privacy.json': { code: 0, out: '{"services":[]}' } })))
@@ -275,10 +305,12 @@ describe('openPr', () => {
     expect(f.calls.some((c) => c.startsWith('gh pr create'))).toBe(false)
   })
 
-  test('templateKind: google-maps listed → maps, else notice', () => {
-    expect(templateKind('{"services":["google-maps","youtube"]}')).toBe('maps')
-    expect(templateKind('{"services":["youtube"]}')).toBe('notice')
-    expect(templateKind('{}')).toBe('notice')
+  test('templateKind: services listed → consent with them in registry order, none → notice', () => {
+    expect(templateKind('{"services":["google-maps"]}')).toEqual({ kind: 'consent', services: ['google-maps'] })
+    expect(templateKind('{"services":["elfsight","google-maps"]}')).toEqual({ kind: 'consent', services: ['google-maps', 'elfsight'] })
+    expect(templateKind('{"services":[]}')).toEqual({ kind: 'notice', services: [] })
+    expect(templateKind('{}')).toEqual({ kind: 'notice', services: [] })
+    expect(() => templateKind('{"services":["google-maps","youtube"]}')).toThrow('unknown service youtube in privacy.json')
     expect(() => templateKind('[]')).toThrow(/privacy\.json/)
   })
 

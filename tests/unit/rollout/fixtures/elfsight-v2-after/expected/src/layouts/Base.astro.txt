@@ -1,0 +1,173 @@
+---
+import SEO from '../components/SEO.astro'
+import SchemaOrg from '../components/SchemaOrg.astro'
+import VisionFooter from '../components/VisionFooter.astro'
+import ClosedNotice from '../components/ClosedNotice.astro'
+import '../styles/global.css'
+import ConsentBanner from '@visionmediahq/astro-consent/components/ConsentBanner.astro'
+
+interface Address {
+  streetAddress: string
+  addressLocality: string
+  postalCode: string
+  addressCountry: string
+}
+
+interface SchemaProps {
+  name: string
+  url: string
+  telephone?: string
+  email?: string
+  address?: Address
+  openingHours?: string[]
+  description?: string
+  image?: string
+}
+
+interface Props {
+  // SEO — required on every page
+  title: string
+  description: string
+  canonical: string
+  ogImage?: string
+  ogType?: string
+  // LocalBusiness schema — omit on pages without business context (e.g. 404)
+  schema?: SchemaProps
+}
+
+const { title, description, canonical, ogImage, ogType, schema } = Astro.props
+
+const umamiScriptUrl = import.meta.env.UMAMI_SCRIPT_URL
+const umamiWebsiteId = import.meta.env.UMAMI_WEBSITE_ID
+const glitchtipDsn = import.meta.env.PUBLIC_GLITCHTIP_DSN
+---
+
+<!doctype html>
+<html lang="sv">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="/favicon-32.png" type="image/png" sizes="32x32" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Open+Sans:ital,wght@0,400;0,600;0,700;1,400&family=Oswald:wght@300;400;500;600&family=Roboto+Slab:wght@700;900&family=Yellowtail&display=swap" rel="stylesheet" />
+
+    <SEO
+      title={title}
+      description={description}
+      canonical={canonical}
+      ogImage={ogImage}
+      ogType={ogType}
+    />
+
+    {schema && (
+      <SchemaOrg
+        name={schema.name}
+        url={schema.url}
+        telephone={schema.telephone}
+        email={schema.email}
+        address={schema.address}
+        openingHours={schema.openingHours}
+        description={schema.description}
+        image={schema.image}
+      />
+    )}
+
+    <!-- GlitchTip error tracking — active when PUBLIC_GLITCHTIP_DSN is set -->
+    {glitchtipDsn && (
+      <>
+        <script
+          is:inline
+          src="https://cdn.jsdelivr.net/npm/@sentry/browser@8/build/bundle.min.js"
+          crossorigin="anonymous"
+        ></script>
+        <script is:inline define:vars={{ glitchtipDsn }}>
+          if (typeof Sentry !== 'undefined') {
+            Sentry.init({ dsn: glitchtipDsn, tracesSampleRate: 0.1 })
+          }
+        </script>
+      </>
+    )}
+
+    <!-- Umami analytics — active when both UMAMI_SCRIPT_URL and UMAMI_WEBSITE_ID are set -->
+    {umamiScriptUrl && umamiWebsiteId && (
+      <script
+        is:inline
+        async
+        src={umamiScriptUrl}
+        data-website-id={umamiWebsiteId}
+      ></script>
+    )}
+
+    <!-- Client theme tokens — overridden per client in index.astro -->
+    <style is:global>
+      :root {
+        --color-primary: var(--client-primary, #570df8);
+        /* Text-safe variant of the brand colour. The primary red reads 4.42:1 on
+           the warm section background — just under WCAG AA's 4.5:1 — so link and
+           label text uses this deeper tone while fills and icons keep --color-primary. */
+        --color-primary-strong: var(--client-primary-strong, var(--client-primary, #570df8));
+        --color-secondary: var(--client-secondary, #f000b8);
+        --color-accent: var(--client-accent, #37cdbe);
+        --color-base-100: var(--client-bg, #ffffff);
+        --color-base-content: var(--client-text, #1f2937);
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+          animation-duration: 0.01ms !important;
+          animation-iteration-count: 1 !important;
+          transition-duration: 0.01ms !important;
+          scroll-behavior: auto !important;
+        }
+      }
+    
+      /* client colors injected by builder.py */
+      :root {
+        --client-primary:        #e01f02;
+        --client-primary-strong: #c41a02;
+        --client-secondary: #d6541a;
+        --client-bg:        #ffffff;
+        --client-text:      #666666;
+      }
+    </style>
+  </head>
+  <body class="bg-base-100 text-base-content">
+    <slot />
+    <ConsentBanner />
+    <VisionFooter />
+    <ClosedNotice />
+
+    <!-- Global scroll-triggered entrance animations for [data-animate] elements -->
+    <script>
+      const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+
+      if (!prefersReducedMotion) {
+        const observer = new IntersectionObserver(
+          (entries) => {
+            entries.forEach((entry) => {
+              if (entry.isIntersecting) {
+                entry.target.classList.add('is-visible')
+                observer.unobserve(entry.target)
+              }
+            })
+          },
+          { threshold: 0.1 }
+        )
+
+        document.querySelectorAll('[data-animate]').forEach((el) => {
+          const delay = el.getAttribute('data-animate-delay')
+          if (delay) (el as HTMLElement).style.setProperty('--delay', `${delay}s`)
+          observer.observe(el)
+        })
+      } else {
+        document.querySelectorAll('[data-animate]').forEach((el) => {
+          el.classList.add('is-visible')
+        })
+      }
+    </script>
+  </body>
+</html>

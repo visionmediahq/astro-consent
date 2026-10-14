@@ -18,12 +18,13 @@ const iframe = (host: string, srcKind: IframeInfo['srcKind'] = 'literal'): Ifram
 
 const row = (
   repo: string,
-  o: { maps?: boolean; banners?: string[]; classification?: Report['classification']; report?: null } = {},
+  o: { maps?: boolean; widget?: boolean; unresolved?: boolean; banners?: string[]; classification?: Report['classification']; report?: null } = {},
 ): PoolRow => {
   if (o.report === null) return { repo, domains: [], report: null, error: 'boom' }
   const report = {
-    classification: o.classification ?? (o.maps ? 'maps' : 'notice'),
-    iframes: o.maps ? [iframe('www.google.com')] : [],
+    classification: o.classification ?? (o.maps ? 'consent' : 'notice'),
+    iframes: o.maps ? [iframe('www.google.com', o.unresolved ? 'unresolved' : 'literal')] : [],
+    widgets: o.widget ? [{ service: 'elfsight' }] : [],
     banners: o.banners ?? [],
     reasons: [],
   } as unknown as Report
@@ -50,9 +51,15 @@ describe('fisherYates', () => {
 })
 
 describe('strata', () => {
-  it('puts a needs-human row with a maps iframe in maps', () => {
+  it('puts a row with widgets only in consent', () => {
+    expect(strata([row('w', { widget: true })]).consent.map((x) => x.repo)).toEqual(['w'])
+  })
+  it('puts a row with an unresolved maps iframe in consent', () => {
+    expect(strata([row('u', { maps: true, unresolved: true })]).consent.map((x) => x.repo)).toEqual(['u'])
+  })
+  it('puts a needs-human row with a maps iframe in consent', () => {
     const r = row('a', { maps: true, classification: 'needs-human' })
-    expect(strata([r]).maps.map((x) => x.repo)).toEqual(['a'])
+    expect(strata([r]).consent.map((x) => x.repo)).toEqual(['a'])
   })
   it('puts a GA-only site in notice', () => {
     expect(strata([row('b')]).notice.map((x) => x.repo)).toEqual(['b'])
@@ -63,19 +70,22 @@ describe('strata', () => {
       row('d', { maps: true, banners: ['elfsight'] }),
       row('e', { report: null }),
     ]
-    expect(strata(rows)).toEqual({ maps: [], notice: [] })
+    expect(strata(rows)).toEqual({ consent: [], notice: [] })
   })
 })
 
 describe('slots', () => {
+  it('gives ties to consent', () => {
+    expect(slots({ consent: 1, notice: 1 }, 3)).toEqual({ consent: 2, notice: 1 })
+  })
   it('uses largest remainder', () => {
-    expect(slots({ maps: 40, notice: 140 })).toEqual({ maps: 3, notice: 12 })
+    expect(slots({ consent: 40, notice: 140 })).toEqual({ consent: 3, notice: 12 })
   })
   it('gives a tiny stratum no minimum', () => {
-    expect(slots({ maps: 1, notice: 179 })).toEqual({ maps: 0, notice: 15 })
+    expect(slots({ consent: 1, notice: 179 })).toEqual({ consent: 0, notice: 15 })
   })
   it('handles an empty pool', () => {
-    expect(slots({ maps: 0, notice: 0 })).toEqual({ maps: 0, notice: 0 })
+    expect(slots({ consent: 0, notice: 0 })).toEqual({ consent: 0, notice: 0 })
   })
 })
 
@@ -83,7 +93,7 @@ describe('drawOrder', () => {
   const maps = many('m', 20, true)
   const notice = many('n', 30, false)
   it('is independent of the other stratum', () => {
-    expect(drawOrder([...maps, ...notice], 20261006).maps).toEqual(drawOrder(maps, 20261006).maps)
+    expect(drawOrder([...maps, ...notice], 20261006).consent).toEqual(drawOrder(maps, 20261006).consent)
   })
   it('does not depend on input order', () => {
     const a = drawOrder([...maps, ...notice], 20261006)
@@ -92,7 +102,7 @@ describe('drawOrder', () => {
   })
   it('lists each drawable repo once and skips banner rows', () => {
     const out = drawOrder([...maps, ...notice, row('x', { banners: ['cookiebot'] })], 20261006)
-    expect([...out.maps].sort()).toEqual(maps.map((r) => r.repo))
+    expect([...out.consent].sort()).toEqual(maps.map((r) => r.repo))
     expect([...out.notice].sort()).toEqual(notice.map((r) => r.repo))
   })
 })

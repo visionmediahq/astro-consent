@@ -252,9 +252,10 @@ describe('ConsentWidget', () => {
   test('build fails on a widget whose service is not in privacy.json', TIMEOUT, () => {
     const build = buildDemo('consent', (dir) => {
       writePrivacy(dir, { services: ['google-maps'] })
-      // The demo's own /flode and /nastlad use elfsight and google-calendar too; leave bad.astro the only offender.
+      // The demo's own /flode, /nastlad and /karta-efter-widget use elfsight and google-calendar too; leave bad.astro the only offender.
       rmSync(join(dir, 'src/pages/flode.astro'))
       rmSync(join(dir, 'src/pages/nastlad.astro'))
+      rmSync(join(dir, 'src/pages/karta-efter-widget.astro'))
       writeFileSync(join(dir, 'src/pages/bad.astro'), widgetPage(widget('')))
     })
     expect(build.code).not.toBe(0)

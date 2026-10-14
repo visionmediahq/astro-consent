@@ -1,0 +1,36 @@
+---
+import Base from '../layouts/Base.astro';
+import Hero from '../components/Hero.astro';
+import InstagramFeed from '../components/InstagramFeed.astro';
+import NavigationCards from '../components/NavigationCards.astro';
+import FoodImagery from '../components/FoodImagery.astro';
+import TestimonialsGrid from '../components/TestimonialsGrid.astro';
+import ClosingMessage from '../components/ClosingMessage.astro';
+import ActivitiesSection from '../components/ActivitiesSection.astro';
+import SchemaOrg from '../components/SchemaOrg.astro';
+import { businessSchema } from '../data/contact';
+
+---
+
+<Base
+  title="Text."
+  description="Text."
+  canonical="https://elfsight-v1.se/"
+  ogImage="/images/og.webp"
+>
+  <SchemaOrg
+    {...businessSchema}
+    description="Text."
+    image="/images/og.webp"
+  />
+  
+  <main id="main-content">
+    <Hero />
+    <ActivitiesSection />
+    <InstagramFeed />
+    <NavigationCards />
+    <FoodImagery />
+    <TestimonialsGrid />
+    <ClosingMessage />
+  </main>
+</Base>

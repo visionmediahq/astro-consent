@@ -1,0 +1,123 @@
+---
+import { Phone, Mail, MapPin } from '@lucide/astro';
+import { Image } from 'astro:assets';
+
+interface Props {
+  logo?: string;
+}
+
+const { logo = 'logo.png' } = Astro.props;
+
+const currentYear = new Date().getFullYear();
+---
+
+<footer class="bg-[#1a1a2e] text-white pt-16 pb-8">
+  <div class="container mx-auto px-4">
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-12 mb-12">
+      <!-- Company Info -->
+      <div data-animate>
+        <Image 
+          src={`/images/${logo}`}
+          alt="Logotyp"
+          width={1235}
+          height={94}
+          loading="lazy"
+          class="w-[200px] max-w-full h-auto mb-6"
+        />
+        <p class="text-gray-400 leading-relaxed mb-6">
+          Text.
+        </p>
+      </div>
+
+      <!-- Quick Links -->
+      <div data-animate style="--delay: 0.1s">
+        <h3 class="text-lg font-bold mb-6 text-white">Text.</h3>
+        <ul class="space-y-3">
+          <li><a href="/nytt-begagnat" class="text-gray-400 hover:text-[var(--color-primary)] transition-colors">Text.</a></li>
+          <li><a href="/uthyrning" class="text-gray-400 hover:text-[var(--color-primary)] transition-colors">Text.</a></li>
+          <li><a href="/leasing" class="text-gray-400 hover:text-[var(--color-primary)] transition-colors">Text.</a></li>
+          <li><a href="/batterier-tillbehor" class="text-gray-400 hover:text-[var(--color-primary)] transition-colors">Text.</a></li>
+          <li><a href="/om-oss" class="text-gray-400 hover:text-[var(--color-primary)] transition-colors">Text.</a></li>
+          <li><a href="/kontakt" class="text-gray-400 hover:text-[var(--color-primary)] transition-colors">Text.</a></li>
+        </ul>
+      </div>
+
+      <!-- Brands -->
+      <div data-animate style="--delay: 0.2s">
+        <h3 class="text-lg font-bold mb-6 text-white">Text.</h3>
+        <ul class="space-y-3">
+          <li><a href="/marke-a" class="text-gray-400 hover:text-[var(--color-primary)] transition-colors">Text.</a></li>
+          <li><a href="/truckar" class="text-gray-400 hover:text-[var(--color-primary)] transition-colors">Text.</a></li>
+          <li><a href="/marke-b" class="text-gray-400 hover:text-[var(--color-primary)] transition-colors">Text.</a></li>
+          <li><a href="/prislista" class="text-gray-400 hover:text-[var(--color-primary)] transition-colors">Text.</a></li>
+          <li><a href="/marke-c" class="text-gray-400 hover:text-[var(--color-primary)] transition-colors">Text.</a></li>
+        </ul>
+      </div>
+
+      <!-- Contact Info -->
+      <div data-animate style="--delay: 0.3s">
+        <h3 class="text-lg font-bold mb-6 text-white">Text.</h3>
+        <ul class="space-y-4">
+          <li class="flex items-start gap-3">
+            <MapPin size={20} class="flex-shrink-0 mt-1" style="color: rgba(255,255,255,0.35)" />
+            <span class="text-gray-400">Text.<br>Text.</span>
+          </li>
+          <li class="flex items-start gap-3">
+            <svg class="w-5 h-5 flex-shrink-0 mt-0.5" style="color: rgba(255,255,255,0.35)" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            <span class="text-gray-400">Text.</span>
+          </li>
+          <li>
+            <a
+              href="tel:000-0000001"
+              class="flex items-center gap-3 text-gray-400 hover:text-[var(--color-primary)] transition-colors"
+              onclick="window.umami?.track('phone_click')"
+            >
+              <Phone size={20} style="color: rgba(255,255,255,0.35)" />
+              <span>Text.</span>
+            </a>
+          </li>
+          <li>
+            <a
+              href="tel:000-0000002"
+              class="flex items-center gap-3 text-gray-400 hover:text-[var(--color-primary)] transition-colors"
+              onclick="window.umami?.track('phone_click')"
+            >
+              <Phone size={20} style="color: rgba(255,255,255,0.35)" />
+              <span>Text.</span>
+            </a>
+          </li>
+          <li>
+            <a
+              href="tel:000-0000003"
+              class="flex items-center gap-3 text-gray-400 hover:text-[var(--color-primary)] transition-colors"
+              onclick="window.umami?.track('phone_click')"
+            >
+              <Phone size={20} style="color: rgba(255,255,255,0.35)" />
+              <span>Text.</span>
+            </a>
+          </li>
+          <li>
+            <a
+              href="mailto:placeholder@example.invalid"
+              class="flex items-center gap-3 text-gray-400 hover:text-[var(--color-primary)] transition-colors"
+              onclick="window.umami?.track('email_click')"
+            >
+              <Mail size={20} style="color: rgba(255,255,255,0.35)" />
+              <span>Text.</span>
+            </a>
+          </li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Bottom bar -->
+    <div class="pt-8 border-t border-gray-800">
+      <div class="flex flex-col md:flex-row justify-between items-center gap-4 text-sm text-gray-400">
+        <p>Text. {currentYear} Text.</p>
+        <p>
+          Text. <a href="https://visionmedia.nu" target="_blank" rel="noopener" class="hover:text-[var(--color-primary)] transition-colors">Text.</a>
+        </p>
+      </div>
+    </div>
+  </div>
+</footer>

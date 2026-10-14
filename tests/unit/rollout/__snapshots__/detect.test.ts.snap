@@ -81,12 +81,14 @@ exports[`detect > pilot a-tak: needs-human, matching the committed snapshot 1`] 
     "existing banner: home-made gate: localStorage 'maps-consent' in src/components/KontaktMap.astro",
   ],
   "recaptcha": true,
+  "services": [],
   "site": "a-tak",
   "trackers": [],
+  "widgets": [],
 }
 `;
 
-exports[`detect > pilot aspomad: maps, matching the committed snapshot 1`] = `
+exports[`detect > pilot aspomad: consent, matching the committed snapshot 1`] = `
 {
   "alreadyWired": [],
   "astro": {
@@ -94,7 +96,7 @@ exports[`detect > pilot aspomad: maps, matching the committed snapshot 1`] = `
     "output": "server",
   },
   "banners": [],
-  "classification": "maps",
+  "classification": "consent",
   "config": {
     "hasIntegrations": false,
     "hasTailwindVite": true,
@@ -160,12 +162,16 @@ exports[`detect > pilot aspomad: maps, matching the committed snapshot 1`] = `
   "policyPage": null,
   "reasons": [],
   "recaptcha": false,
+  "services": [
+    "google-maps",
+  ],
   "site": "aspomad",
   "trackers": [],
+  "widgets": [],
 }
 `;
 
-exports[`detect > pilot domeijstapetserarverkstad: maps, matching the committed snapshot 1`] = `
+exports[`detect > pilot domeijstapetserarverkstad: consent, matching the committed snapshot 1`] = `
 {
   "alreadyWired": [],
   "astro": {
@@ -173,7 +179,7 @@ exports[`detect > pilot domeijstapetserarverkstad: maps, matching the committed 
     "output": "server",
   },
   "banners": [],
-  "classification": "maps",
+  "classification": "consent",
   "config": {
     "hasIntegrations": true,
     "hasTailwindVite": true,
@@ -234,8 +240,12 @@ exports[`detect > pilot domeijstapetserarverkstad: maps, matching the committed 
   "policyPage": null,
   "reasons": [],
   "recaptcha": false,
+  "services": [
+    "google-maps",
+  ],
   "site": "domeijstapetserarverkstad",
   "trackers": [],
+  "widgets": [],
 }
 `;
 
@@ -298,8 +308,10 @@ exports[`detect > pilot munkforstradgardstjanst: notice, matching the committed 
   "policyPage": null,
   "reasons": [],
   "recaptcha": false,
+  "services": [],
   "site": "munkforstradgardstjanst",
   "trackers": [],
+  "widgets": [],
 }
 `;
 
@@ -379,12 +391,14 @@ exports[`detect > pilot nhrk: needs-human, matching the committed snapshot 1`] =
     "unresolved iframe src in src/pages/kalendrar.astro",
   ],
   "recaptcha": false,
+  "services": [],
   "site": "nhrk",
   "trackers": [],
+  "widgets": [],
 }
 `;
 
-exports[`detect > pilot traforadling: maps, matching the committed snapshot 1`] = `
+exports[`detect > pilot traforadling: consent, matching the committed snapshot 1`] = `
 {
   "alreadyWired": [],
   "astro": {
@@ -392,7 +406,7 @@ exports[`detect > pilot traforadling: maps, matching the committed snapshot 1`] 
     "output": "server",
   },
   "banners": [],
-  "classification": "maps",
+  "classification": "consent",
   "config": {
     "hasIntegrations": true,
     "hasTailwindVite": true,
@@ -483,12 +497,16 @@ exports[`detect > pilot traforadling: maps, matching the committed snapshot 1`] 
   "policyPage": null,
   "reasons": [],
   "recaptcha": true,
+  "services": [
+    "google-maps",
+  ],
   "site": "traforadling",
   "trackers": [],
+  "widgets": [],
 }
 `;
 
-exports[`detect > pilot vasshallakatthotell: maps, matching the committed snapshot 1`] = `
+exports[`detect > pilot vasshallakatthotell: consent, matching the committed snapshot 1`] = `
 {
   "alreadyWired": [],
   "astro": {
@@ -496,7 +514,7 @@ exports[`detect > pilot vasshallakatthotell: maps, matching the committed snapsh
     "output": "server",
   },
   "banners": [],
-  "classification": "maps",
+  "classification": "consent",
   "config": {
     "hasIntegrations": true,
     "hasTailwindVite": true,
@@ -563,7 +581,11 @@ exports[`detect > pilot vasshallakatthotell: maps, matching the committed snapsh
   "policyPage": "/gdpr",
   "reasons": [],
   "recaptcha": true,
+  "services": [
+    "google-maps",
+  ],
   "site": "vasshallakatthotell",
   "trackers": [],
+  "widgets": [],
 }
 `;

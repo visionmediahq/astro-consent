@@ -1,0 +1,72 @@
+---
+import Base from '../layouts/Base.astro';
+import Header from '../components/Header.astro';
+import Footer from '../components/Footer.astro';
+import PageHero from '../components/PageHero.astro';
+import Breadcrumb from '../components/Breadcrumb.astro';
+import ProductContent from '../components/ProductContent.astro';
+
+const brief = {
+  client: {
+    name: "Firma AB",
+    domain: "elfsight-v3.se",
+    contact: {
+      phone: "000-000000",
+      email: "placeholder@example.invalid"
+    }
+  }
+};
+---
+
+<Base
+  title="Text."
+  description="Text."
+  canonical="https://elfsight-v3.se/prislista/"
+  ogImage="/images/og.webp"
+>
+  <Header />
+
+  <Breadcrumb items={[{ label: 'Text.' }]} />
+
+  <main id="main-content">
+    <PageHero
+      title="Text."
+      subtitle="Text."
+    />
+
+    <ProductContent />
+
+    <!-- Elfsight prislista -->
+    <section class="py-12 bg-white">
+      <div class="w-full max-w-[1600px] mx-auto px-4">
+        <script src="https://static.elfsight.com/platform/platform.js" async is:inline></script>
+        <div class="elfsight-app-00000000-0000-0000-0000-000000000004" data-elfsight-app-lazy></div>
+      </div>
+    </section>
+
+    <section class="py-10 bg-gray-50 border-t border-gray-100">
+      <div class="container mx-auto px-4 text-center" data-animate>
+        <p class="text-gray-500 mb-4">Text.</p>
+        <a
+          href="/sortiment"
+          class="btn text-white border-0 btn-lg"
+          style="background-color: var(--color-primary)"
+          onclick="window.umami?.track('cta_click', {label: 'Se mer'})"
+        >
+          Text.
+        </a>
+      </div>
+    </section>
+  </main>
+
+  <Footer />
+</Base>
+
+<style is:global>
+  :root {
+    --client-primary: #403fdb;
+    --client-secondary: #1e1b4b;
+    --client-bg: #ffffff;
+    --client-text: #222222;
+  }
+</style>

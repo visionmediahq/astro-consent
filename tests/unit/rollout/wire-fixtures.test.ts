@@ -61,13 +61,14 @@ function refusedReasons(site: string): string[] {
     .map((l) => l.slice(2).trim())
 }
 
-/** Targets that exist only while there is an iframe to convert; the expected/ tree has none. */
-const embedTarget = (t: string): boolean => t.startsWith('embed') || t.startsWith('ConsentEmbed import')
+/** Targets that exist only while there is an iframe or a widget to convert; the expected/ tree has none. */
+const embedTarget = (t: string): boolean =>
+  t.startsWith('embed') || t.startsWith('ConsentEmbed import') || t.startsWith('widget') || t.startsWith('ConsentWidget import')
 
 describe('planWire on the pilot fixtures', () => {
-  test('the fixture set: 5 wired, 2 refused', () => {
-    expect(WIRED).toHaveLength(5)
-    expect(NEEDS_HUMAN).toEqual(['a-tak', 'nhrk'])
+  test('the fixture set: 10 wired, 3 refused', () => {
+    expect(WIRED).toHaveLength(10)
+    expect(NEEDS_HUMAN).toEqual(['a-tak', 'elfsight-v4', 'nhrk'])
   })
 
   test.each(NEEDS_HUMAN)('%s: needs-human, refused whole with exactly the REFUSED.md reasons', (site) => {
@@ -198,7 +199,7 @@ const expectedTree = (site: string): Map<string, string> => treeOf(join(FIXTURES
 describe('applyWire', () => {
   test('constants: the branch, the install spec and the commit message (spec C2, global constraints)', () => {
     expect(BRANCH).toBe('consent-banner')
-    expect(INSTALL_SPEC).toBe('github:visionmediahq/astro-consent#semver:^1.0.2')
+    expect(INSTALL_SPEC).toBe('github:visionmediahq/astro-consent#semver:^1.1.1')
     expect(COMMIT_MESSAGE).toBe('feat: samtyckesbanner (astro-consent)')
   })
 
@@ -402,7 +403,7 @@ describe('run.ts wire', () => {
     const tree = diskTree(dir)
     const { code, output } = runWire(dir, { dryRun: true })
     expect(code).toBe(0)
-    expect(output).toContain('site (aspomad.se): maps')
+    expect(output).toContain('site (aspomad.se): consent')
     expect(output).toMatch(/edits in \d+ files/)
     expect(output).toContain('--- a/src/layouts/Base.astro')
     expect(output).toContain('+++ b/src/layouts/Base.astro')

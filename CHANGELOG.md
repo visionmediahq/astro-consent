@@ -30,7 +30,16 @@ Not part of the package (`files` is unchanged) and not a release.
   when the install changed paths outside the plan, `package.json` and `package-lock.json`.
 - `merge` reads the last 50 Coolify deployments per app and stops before merging when an app that
   follows `main` serves a host that is not in the report's domains (it has no live baseline).
-- `detect` names google-calendar (iframe only, never a tracker) and elfsight; wiring them follows in a tool PR.
+- `detect` classifies `consent`, `notice` or `needs-human` (was `maps`; stored reports with `maps`
+  still load) and records `services` and `widgets`. Elfsight is a service, recognised as one loader
+  script plus empty `elfsight-app-<uuid>` divs in the same `.astro` file; every other Elfsight
+  occurrence is a `needs-human` reason. Google Calendar iframes whose `src` resolves (a literal, a constant, a data file, call sites that agree) no longer block a site; a `.map()` or otherwise unresolved `src` is needs-human, 'unresolved iframe src' (#24).
+- `wire` wraps Elfsight divs in `<ConsentWidget service="elfsight">`, removes the loader script,
+  writes `privacy.json` from `report.services` (an existing one missing a service is refused),
+  installs `^1.1.1`, and wraps resolvable Google Calendar iframes like maps (#24).
+- `pr` names each service in the PR body with its "Visa <name>" step. `verify` maps each route to the
+  service of the first iframe on it with a CSS filter, measures the filter on the first embed of that
+  service on the page (clicking it after the one-off check if it is not the first), and counts widget pages as embed pages.
 - `verify` step 4 (consent-paths) checks "Visa alltid" per service: remembering S must activate S's
   embeds on another page (or a reload when no other page has S) and leave other services inactive.
   The one-off Visa check uses `[data-active]`, so it covers widgets. Maps-only sites behave as before.

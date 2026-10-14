@@ -15,6 +15,7 @@ import { type App, appsFor, type Deployment, followsMain, lastDeployed, listApps
 import { type Exec, exec as realExec, tail } from './lib/exec'
 import { APPS_FILE, BASELINE_FILE, BASELINE_HOSTS_FILE, type LiveResult, live as realLive, type RecordedApps } from './live'
 import { originRepo } from './pr'
+import { normaliseReport } from './lib/report'
 import type { Report, VerifyResult } from './types'
 import { verify as realVerify } from './verify'
 import { BRANCH } from './wire/index'
@@ -56,7 +57,7 @@ export async function merge(dir: string, pr: number | string, opts: { deps?: Par
   try {
     const reportPath = join(root, '.rollout/report.json')
     if (!existsSync(reportPath)) return stop(`${reportPath} not found: run detect first`)
-    const report = JSON.parse(readFileSync(reportPath, 'utf8')) as Report
+    const report = normaliseReport(JSON.parse(readFileSync(reportPath, 'utf8')))
     if (!existsSync(join(root, BASELINE_FILE))) return stop(`${BASELINE_FILE} not found: run the live baseline before the merge`)
     const hostsPath = join(root, BASELINE_HOSTS_FILE)
     if (!existsSync(hostsPath)) return stop(`${BASELINE_HOSTS_FILE} not found: rerun \`live <dir> baseline\`, which records the hosts it baselined`)

@@ -28,6 +28,7 @@ import { checkRequests, formatRequests, type RequestResult } from './checks/requ
 import { type App, appsFor, type Deployment, type DeployStatus, followsMain, listApps, listDeployments, waitDeployed } from './coolify'
 import { type Exec, exec as realExec, tail } from './lib/exec'
 import { originRepo } from './pr'
+import { normaliseReport } from './lib/report'
 import type { Report } from './types'
 import { embedPagesByFetch } from './verify'
 
@@ -215,7 +216,7 @@ export async function live(
   }
   const reportPath = join(root, '.rollout/report.json')
   if (!existsSync(reportPath)) throw new Error(`${reportPath} not found: run detect first`)
-  const report = readJson<Report>(reportPath)
+  const report = normaliseReport(readJson<unknown>(reportPath))
   const repo = `visionmediahq/${report.site}`
   let checks: LiveChecks | null = null
   const getChecks = async () => (checks ??= await deps.checks())

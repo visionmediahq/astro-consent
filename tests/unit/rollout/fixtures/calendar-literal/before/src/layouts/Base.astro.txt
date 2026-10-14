@@ -1,0 +1,177 @@
+---
+import Header from '../components/Header.astro';
+import Footer from '../components/Footer.astro';
+import SEO from '../components/SEO.astro'
+import SchemaOrg from '../components/SchemaOrg.astro'
+import VisionFooter from '../components/VisionFooter.astro'
+import MobileCTABar from '../components/MobileCTABar.astro'
+import '../styles/global.css'
+
+interface Address {
+  streetAddress: string
+  addressLocality: string
+  postalCode: string
+  addressCountry: string
+}
+
+interface SchemaProps {
+  name: string
+  url: string
+  telephone?: string
+  email?: string
+  address?: Address
+  openingHours?: string[]
+  description?: string
+  image?: string
+}
+
+interface Props {
+  // SEO — required on every page
+  title: string
+  description: string
+  canonical: string
+  ogImage?: string
+  ogType?: string
+  // LocalBusiness schema — omit on pages without business context (e.g. 404)
+  schema?: SchemaProps
+}
+
+const { title, description, canonical, ogImage, ogType, schema } = Astro.props
+
+const umamiScriptUrl = import.meta.env.UMAMI_SCRIPT_URL
+const umamiWebsiteId = import.meta.env.UMAMI_WEBSITE_ID
+const glitchtipDsn = import.meta.env.PUBLIC_GLITCHTIP_DSN
+---
+
+<!doctype html>
+<html lang="sv">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="/favicon.webp" type="image/webp" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Forum&family=Montserrat:ital,wght@0,300;0,400;0,600;0,700;1,400&display=swap" />
+
+    <SEO
+      title={title}
+      description={description}
+      canonical={canonical}
+      ogImage={ogImage}
+      ogType={ogType}
+    />
+
+    {schema && (
+      <SchemaOrg
+        name={schema.name}
+        url={schema.url}
+        telephone={schema.telephone}
+        email={schema.email}
+        address={schema.address}
+        openingHours={schema.openingHours}
+        description={schema.description}
+        image={schema.image}
+      />
+    )}
+
+    <!-- GlitchTip error tracking — active when PUBLIC_GLITCHTIP_DSN is set -->
+    {glitchtipDsn && (
+      <>
+        <script
+          is:inline
+          src="https://cdn.jsdelivr.net/npm/@sentry/browser@8/build/bundle.min.js"
+          crossorigin="anonymous"
+        ></script>
+        <script is:inline define:vars={{ glitchtipDsn }}>
+          if (typeof Sentry !== 'undefined') {
+            Sentry.init({ dsn: glitchtipDsn, tracesSampleRate: 0.1 })
+          }
+        </script>
+      </>
+    )}
+
+    <!-- Umami analytics — active when both UMAMI_SCRIPT_URL and UMAMI_WEBSITE_ID are set -->
+    {umamiScriptUrl && umamiWebsiteId && (
+      <script
+        is:inline
+        async
+        src={umamiScriptUrl}
+        data-website-id={umamiWebsiteId}
+      ></script>
+    )}
+    <!-- Client theme tokens -->
+    <style is:global>
+      :root {
+        --color-primary: #7a4f33;
+        --color-secondary: #804c2b;
+        --color-background: #fdf6ef;
+        --color-text: #5c4a3a;
+        --color-surface: #f0e4d4;
+        --color-border: #d6c4b0;
+        --color-vegan-bg: #e6efe0;
+        --color-vegan-text: #3a6b2e;
+        --color-panel: #DBD0C0;
+        --color-star: #e8a838;
+      }
+
+      /* Body is unlayered so it beats DaisyUI utility classes */
+      body {
+        font-family: 'Montserrat', sans-serif;
+        color: var(--color-text);
+        background-color: var(--color-background);
+      }
+
+      /* Headings in @layer base so Tailwind utilities (text-white etc.) can properly override */
+      @layer base {
+        h1, h2, h3, h4, h5, h6 {
+          font-family: 'Forum', serif;
+          color: var(--color-primary);
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+          animation-duration: 0.01ms !important;
+          animation-iteration-count: 1 !important;
+          transition-duration: 0.01ms !important;
+          scroll-behavior: auto !important;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    
+    <a
+      href="#main-content"
+      class="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-[200] focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:rounded-sm"
+      style="background-color: var(--color-primary); color: white"
+    >Hoppa till innehåll</a>
+    <Header />
+    <slot />
+    <Footer />
+    <MobileCTABar />
+    <VisionFooter />
+
+    <!-- Global scroll-triggered entrance animations for [data-animate] elements -->
+    <script>
+      import { animate, inView } from 'motion'
+
+      const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+
+      if (!prefersReducedMotion) {
+        inView('[data-animate]', (element) => {
+          const delay = parseFloat((element as HTMLElement).dataset.animateDelay ?? '0')
+          animate(
+            element,
+            { opacity: [0, 1], y: [20, 0] },
+            { duration: 0.5, delay, easing: [0.22, 0.03, 0.26, 1] }
+          )
+        })
+      }
+    </script>
+  </body>
+</html>

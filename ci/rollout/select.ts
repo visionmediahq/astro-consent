@@ -7,11 +7,12 @@
 // filled. pool.json holds client data and is never committed.
 import { readFileSync } from 'node:fs'
 import { pathToFileURL } from 'node:url'
+import { normaliseReport } from './lib/report'
 import type { PoolRow } from './types'
 
 export const SEED = 20261006
 
-export type Stratum = 'maps' | 'notice'
+export type Stratum = 'consent' | 'notice'
 
 export function mulberry32(seed: number): () => number {
   let a = seed
@@ -37,42 +38,42 @@ export function fisherYates<T>(xs: readonly T[], rng: () => number): T[] {
 }
 
 /**
- * Drawable rows split into strata. `maps` is any Google Maps iframe, whatever its srcKind or the
- * row's classification; `notice` is the rest. Rows with no report (scan errors) and rows with an
- * existing banner are not drawable.
+ * Drawable rows split into strata. `consent` is any iframe with a registered service (whatever its
+ * srcKind or the row's classification) or any widget; `notice` is the rest. Rows with no report
+ * (scan errors) and rows with an existing banner are not drawable.
  */
-export function strata(rows: readonly PoolRow[]): { maps: PoolRow[]; notice: PoolRow[] } {
-  const out: { maps: PoolRow[]; notice: PoolRow[] } = { maps: [], notice: [] }
+export function strata(rows: readonly PoolRow[]): { consent: PoolRow[]; notice: PoolRow[] } {
+  const out: { consent: PoolRow[]; notice: PoolRow[] } = { consent: [], notice: [] }
   for (const row of rows) {
     const report = row.report
     if (!report || report.banners.length > 0) continue
-    const isMaps = report.iframes.some((f) => f.service === 'google-maps')
-    out[isMaps ? 'maps' : 'notice'].push(row)
+    const isConsent = report.iframes.some((f) => f.service !== null) || report.widgets.length > 0
+    out[isConsent ? 'consent' : 'notice'].push(row)
   }
   return out
 }
 
-/** Largest remainder; ties go to maps. No minimum per stratum. */
-export function slots(sizes: { maps: number; notice: number }, total = 15): { maps: number; notice: number } {
-  const all = sizes.maps + sizes.notice
-  if (all === 0) return { maps: 0, notice: 0 }
-  const exact = { maps: (sizes.maps * total) / all, notice: (sizes.notice * total) / all }
-  const out = { maps: Math.floor(exact.maps), notice: Math.floor(exact.notice) }
-  let left = total - out.maps - out.notice
+/** Largest remainder; ties go to consent. No minimum per stratum. */
+export function slots(sizes: { consent: number; notice: number }, total = 15): { consent: number; notice: number } {
+  const all = sizes.consent + sizes.notice
+  if (all === 0) return { consent: 0, notice: 0 }
+  const exact = { consent: (sizes.consent * total) / all, notice: (sizes.notice * total) / all }
+  const out = { consent: Math.floor(exact.consent), notice: Math.floor(exact.notice) }
+  let left = total - out.consent - out.notice
   const order: Stratum[] =
-    exact.maps - out.maps >= exact.notice - out.notice ? ['maps', 'notice'] : ['notice', 'maps']
+    exact.consent - out.consent >= exact.notice - out.notice ? ['consent', 'notice'] : ['notice', 'consent']
   for (let i = 0; left > 0; i++, left--) out[order[i % 2]!]++
   return out
 }
 
 const byRepo = (a: PoolRow, b: PoolRow): number => (a.repo < b.repo ? -1 : a.repo > b.repo ? 1 : 0)
 
-/** Shuffled repo names per stratum: `mulberry32(seed + i)`, i = 0 for maps and 1 for notice. */
-export function drawOrder(rows: readonly PoolRow[], seed: number): { maps: string[]; notice: string[] } {
+/** Shuffled repo names per stratum: `mulberry32(seed + i)`, i = 0 for consent and 1 for notice. */
+export function drawOrder(rows: readonly PoolRow[], seed: number): { consent: string[]; notice: string[] } {
   const s = strata(rows)
   const order = (list: PoolRow[], i: number): string[] =>
     fisherYates([...list].sort(byRepo), mulberry32(seed + i)).map((r) => r.repo)
-  return { maps: order(s.maps, 0), notice: order(s.notice, 1) }
+  return { consent: order(s.consent, 0), notice: order(s.notice, 1) }
 }
 
 function main(argv: string[]): void {
@@ -84,11 +85,11 @@ function main(argv: string[]): void {
     else throw new Error(`unknown argument ${argv[i]}`)
   }
   if (!pool) throw new Error('usage: select.ts --pool <pool.json> [--total 15]')
-  const rows = (JSON.parse(readFileSync(pool, 'utf8')) as { rows: PoolRow[] }).rows
+  const rows = (JSON.parse(readFileSync(pool, 'utf8')) as { rows: PoolRow[] }).rows.map((r) => (r.report ? { ...r, report: normaliseReport(r.report) } : r))
   const order = drawOrder(rows, SEED)
-  const n = slots({ maps: order.maps.length, notice: order.notice.length }, total)
+  const n = slots({ consent: order.consent.length, notice: order.notice.length }, total)
   const lines = [`seed ${SEED}, ${rows.length} rows`]
-  for (const k of ['maps', 'notice'] as const) {
+  for (const k of ['consent', 'notice'] as const) {
     lines.push('', `${k}: size ${order[k].length}, slots ${n[k]}`, ...order[k].map((r, i) => `  ${i + 1}. ${r}`))
   }
   const errors = rows.filter((r) => !r.report).map((r) => r.repo)

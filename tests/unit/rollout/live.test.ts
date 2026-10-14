@@ -22,13 +22,14 @@ afterEach(() => {
 })
 
 function siteDir(
-  opts: { baseline?: string | null; apps?: RecordedApps | null; verify?: VerifyResult; site?: string; domains?: string[]; baselined?: string[] | null } = {},
+  opts: { baseline?: string | null; apps?: RecordedApps | null; verify?: VerifyResult; site?: string; domains?: string[]; baselined?: string[] | null; oldReport?: boolean } = {},
 ): string {
   const dir = mkdtempSync(join(tmpdir(), 'live-'))
   dirs.push(dir)
   mkdirSync(join(dir, '.rollout'), { recursive: true })
-  const report: Report = { ...DEMO, site: opts.site ?? 'nhrk', domains: opts.domains ?? ['nhrk.se'], classification: 'maps' }
-  writeFileSync(join(dir, '.rollout/report.json'), JSON.stringify(report))
+  const report: Report = { ...DEMO, site: opts.site ?? 'nhrk', domains: opts.domains ?? ['nhrk.se'], classification: 'consent' }
+  const { services: _s, widgets: _w, ...old } = report
+  writeFileSync(join(dir, '.rollout/report.json'), JSON.stringify(opts.oldReport ? { ...old, classification: 'maps' } : report))
   if (opts.baseline !== null) writeFileSync(join(dir, '.rollout/live-baseline.txt'), opts.baseline ?? '')
   if (opts.baseline !== null && opts.baselined !== null) {
     writeFileSync(join(dir, '.rollout/live-baseline-hosts.json'), JSON.stringify({ hosts: opts.baselined ?? report.domains }))
@@ -153,6 +154,13 @@ describe('baseline encoding', () => {
 })
 
 describe('live baseline', () => {
+  test('a report stored before services and widgets (classification maps) is read without error', async () => {
+    const dir = siteDir({ baseline: null, domains: ['nhrk.se'], oldReport: true })
+    const { checks } = fakeChecks([(base, p) => p.map((x) => req(x, { banner: false, ok: false, errors: [`Failed to load ${base}/a.js`] }))])
+    const r = await live(dir, 'baseline', undefined, { deps: deps({ checks }).deps })
+    expect(r.status).toBe('red')
+  })
+
   test('writes the console baseline and returns red when the live site has no banner', async () => {
     const dir = siteDir({ baseline: null, domains: ['nhrk.se'] })
     const { checks, calls } = fakeChecks([(base, p) => p.map((x) => req(x, { banner: false, banners: 0, ok: false, errors: [`Failed to load ${base}/a.js`] }))])
@@ -378,7 +386,7 @@ function mergeDeps(exec: Exec, head: { sha: string }) {
         if (cmd === 'gh' && args[1] === 'merge') order.push('gh pr merge')
         return exec(cmd, args, cwd)
       },
-      verify: async () => {
+      verify: async (_dir?: string, _report?: Report) => {
         order.push('verify')
         head.sha = 'f'.repeat(40)
         return VERIFIED(head.sha)
@@ -391,6 +399,19 @@ function mergeDeps(exec: Exec, head: { sha: string }) {
 }
 
 describe('merge', () => {
+  test('a report stored before services and widgets (classification maps) is read as consent', async () => {
+    const head = { sha: HEAD }
+    const dir = siteDir({ verify: VERIFIED(HEAD), apps: null, oldReport: true })
+    const g = mergeExec({ moved: true, head })
+    const m = mergeDeps(g.exec, head)
+    const seen: Report[] = []
+    const verify = m.deps.verify
+    m.deps.verify = async (...args: Parameters<typeof verify>) => (seen.push(args[1] as Report), verify())
+    const r = await merge(dir, 7, { deps: m.deps })
+    expect(r.status).toBe('done')
+    expect(seen.map((x) => [x.classification, x.services, x.widgets])).toEqual([['consent', ['google-maps'], []]])
+  })
+
   test('CASE main moved before merge → rebase and re-verify run before gh pr merge', async () => {
     const head = { sha: HEAD }
     const dir = siteDir({ verify: VERIFIED(HEAD), apps: null })

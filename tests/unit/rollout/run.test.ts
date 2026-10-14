@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 import { afterEach, describe, expect, test, vi } from 'vitest'
-import { main, parseDetectArgs, parseLiveArgs, parseMergeArgs, parseVerifyArgs, runDetect, USAGE } from '../../../ci/rollout/run'
+import { main, parseDetectArgs, parseLiveArgs, parseMergeArgs, parseVerifyArgs, runDetect, runWire, summary, USAGE } from '../../../ci/rollout/run'
 import type { Report } from '../../../ci/rollout/types'
 
 const dirs: string[] = []
@@ -164,5 +164,24 @@ describe('the CLI (Task 23)', () => {
     const r = await run(['detect', dir, '--domain', 'a.se'])
     expect(r.code).toBe(1)
     expect(r.err).toMatch(/not a git checkout/)
+  })
+})
+
+describe('stored reports', () => {
+  test('a report with classification maps and no services or widgets plans as it did', () => {
+    const dir = site()
+    const report = runDetect(dir, ['a.se'])
+    const write = (r: object) => writeFileSync(join(dir, '.rollout/report.json'), JSON.stringify(r))
+    write({ ...report, classification: 'consent' })
+    const fresh = runWire(dir, { dryRun: true })
+    const { services: _s, widgets: _w, ...old } = report
+    write({ ...old, classification: 'maps' })
+    expect(runWire(dir, { dryRun: true })).toEqual(fresh)
+  })
+
+  test('the summary names the services after the classification', () => {
+    const report = { site: 'k', domains: ['k.se'], classification: 'consent', services: ['elfsight', 'google-maps'], astro: { major: 6, output: 'static' }, config: { path: 'astro.config.mjs' }, iframes: [], footers: [], policyPage: null, trackers: [], banners: [], reasons: [] } as unknown as Report
+    expect(summary(report).split('\n')[0]).toBe('k (k.se): consent (elfsight, google-maps)')
+    expect(summary({ ...report, classification: 'notice', services: [] }).split('\n')[0]).toBe('k (k.se): notice')
   })
 })

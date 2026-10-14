@@ -303,6 +303,28 @@ npx tsx ci/rollout/run.ts help
 - Coolify is only read, with `COOLIFY_READ_TOKEN` and `COOLIFY_URL` from `~/sites/vision-books/.env`.
 - CI runs `verify --demo demo/dist-consent` after the consent demo build, which covers the browser
   checks with every registry and log host stubbed.
+- **Classification and services.** `detect` classifies a site `consent`, `notice` or `needs-human`
+  (older stored reports with `maps` still load as `consent`) and lists what it found in
+  `report.services` (resolved iframe services such as maps and google-calendar, and elfsight; never trackers, which are a needs-human reason, though a registry service the batch does not wire may appear while the site is needs-human) and `report.widgets`. `wire` writes
+  `src/data/privacy.json` from `report.services`; an existing `privacy.json` that lacks one of them
+  is refused. Pool rows without `services` are re-detected, and `select` strata are
+  `consent`/`notice`.
+- **Elfsight.** Recognised only as one loader `<script>` (`https://elfsightcdn.com/platform.js` or
+  `https://static.elfsight.com/platform/platform.js`; other attributes only `async` and `is:inline`)
+  plus one or more empty `<div class="elfsight-app-<uuid>">` (other attribute only
+  `data-elfsight-app-lazy`) in the same `.astro` file. `wire` wraps each div in `<ConsentWidget
+  service="elfsight" script=… title="Innehållet">`, removes the site's loader script, and installs
+  `^1.1.1`. A `Content-Security-Policy` line in `public/_headers` is not a load and is left alone.
+- **Refused as `needs-human`.** Every other Elfsight occurrence: a second loader, an inline script,
+  an import or package, an env-built class name, a CSS rule, or a mention in any other file under `src/`, `public/` or `astro.config.*` (plus package dependencies and imports). The tool
+  strips nothing it cannot prove is a plain widget, because a leftover loader would request Elfsight
+  before consent.
+- **Calendar iframes.** Google Calendar iframes whose `src` resolves (a literal, a constant, a data
+  file, call sites that agree) are wrapped in `<ConsentEmbed service="google-calendar">` like maps;
+  a `.map()` or otherwise unresolved `src` sends the site to a human (needs-human, 'unresolved
+  iframe src').
+- `pr` names each service from `privacy.json` in the PR body, with its "Visa <name>" step. `verify`
+  maps each route to the service of the first iframe on it that has a CSS filter, consent-paths measures the filter on the first embed of that service on the page (clicking it after the one-off check when it is not the first embed), and widget pages count as embed pages.
 - `ci/rollout/pool.ts` and `ci/rollout/select.ts` scan the site pool and draw the rollout batch;
   their output holds client data and is never committed.
 

@@ -77,7 +77,7 @@ Already known (curl of `https://elfsightcdn.com/platform.js`, 2026-10-13): refer
 - [ ] **Step 1: Hosts.**
   ```
   load the claude-in-chrome skill
-  open the live site of a notice-mode Elfsight site from #24 (e.g. roingegarden) in a new tab
+  open the live site of a notice-mode Elfsight site from #24 (one of the #24 sites) in a new tab
   scroll the widget into view (lazy mode); wait until the feed renders
   hosts = distinct hosts from read_network_requests
   ```

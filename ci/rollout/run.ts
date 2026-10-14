@@ -18,6 +18,7 @@ import { pathToFileURL } from 'node:url'
 import { createTwoFilesPatch, FILE_HEADERS_ONLY } from 'diff'
 import { detect } from './detect/index'
 import { diskSite } from './lib/site-files'
+import { classificationLine, normaliseReport } from './lib/report'
 import type { Report } from './types'
 import { formatLive, live } from './live'
 import { merge } from './merge'
@@ -109,7 +110,7 @@ export function runDetect(dir: string, domains: string[]): Report {
 
 export function summary(report: Report): string {
   const lines = [
-    `${report.site} (${report.domains.join(', ')}): ${report.classification}`,
+    `${report.site} (${report.domains.join(', ')}): ${classificationLine(report)}`,
     `  astro ${report.astro.major} ${report.astro.output}, config ${report.config.path}`,
     `  iframes ${report.iframes.length}, footers ${report.footers.length}, policy page ${report.policyPage ?? 'none'}`,
   ]
@@ -135,7 +136,7 @@ export function parseWireArgs(args: string[]): { dir: string; dryRun: boolean } 
 function readReport(root: string): Report {
   const path = join(root, '.rollout/report.json')
   if (!existsSync(path)) throw new Error(`${path} not found: run detect first`)
-  return JSON.parse(readFileSync(path, 'utf8')) as Report
+  return normaliseReport(JSON.parse(readFileSync(path, 'utf8')))
 }
 
 /**
@@ -202,7 +203,7 @@ async function mainVerify(rest: string[]): Promise<number> {
   }
   try {
     const dir = resolve(args.dir)
-    const report = args.demo ? (JSON.parse(readFileSync(DEMO_REPORT, 'utf8')) as Report) : readReport(dir)
+    const report = args.demo ? normaliseReport(JSON.parse(readFileSync(DEMO_REPORT, 'utf8'))) : readReport(dir)
     const out = args.demo ? mkdtempSync(join(tmpdir(), 'rollout-verify-demo-')) : join(dir, '.rollout')
     const result = await verify(dir, report, { demo: args.demo, out })
     for (const step of result.steps) {

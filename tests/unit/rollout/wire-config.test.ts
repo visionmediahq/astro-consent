@@ -41,6 +41,8 @@ function report(over: { config?: Partial<Report['config']>; css?: Partial<Report
     recaptcha: false,
     inventedMaps: [],
     alreadyWired: [],
+    services: [],
+    widgets: [],
     classification: 'notice',
     reasons: [],
   }

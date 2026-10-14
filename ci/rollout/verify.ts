@@ -37,6 +37,7 @@ import { type Exec, exec as realExec, tail } from './lib/exec'
 import { diffLock, diffPackageJson } from './lib/lockfile'
 import { type Preview, startPreview } from './preview'
 import type { Report, StepResult, VerifyResult } from './types'
+import type { ServiceSlug } from '../../src/services'
 import { BRANCH } from './wire/index'
 
 export type { Exec } from './lib/exec'
@@ -53,7 +54,7 @@ export interface Checks {
   /** The paths among `paths` whose HTML holds a ConsentEmbed. */
   embedPages(base: string, paths: string[]): Promise<string[]>
   requests(base: string, paths: string[], opts: { baseline?: Set<string>; expectBanner?: (path: string) => boolean }): Promise<RequestResult[]>
-  consentPaths(base: string, mapPaths: string[], opts: { expectFilter?: (path: string) => boolean }): Promise<ConsentPathResult[]>
+  consentPaths(base: string, mapPaths: string[], opts: { expectFilter?: (path: string) => ServiceSlug | null }): Promise<ConsentPathResult[]>
   clip(base: string, paths: string[]): Promise<ClipResult[]>
   /** Computed scrollbar and background styles on html and body of `/`, compared with main in step 5. */
   rootStyles(base: string): Promise<RootStyles>
@@ -145,24 +146,31 @@ function pagesOf(report: Report, file: string): string[] {
   return report.layouts.find((l) => l.file === file)?.pages ?? []
 }
 
-/** Routes of iframes detect found that sit on a page, a layout or a component call site. */
-function iframeRoutes(report: Report, keep: (i: Report['iframes'][number]) => boolean): Set<string> {
-  const routes = new Set<string>()
-  for (const iframe of report.iframes.filter(keep)) {
-    const files = [iframe.file, ...(iframe.callSites ?? []).map((c) => c.file)].flatMap((f) => pagesOf(report, f))
-    for (const file of files) if (isRoute(file) && !file.includes('[')) routes.add(norm(routeOf(file)))
-  }
-  return routes
-}
+/** Routes of the page files among `files` (dynamic routes left out). */
+const routesOf = (files: string[]): string[] => files.filter((f) => isRoute(f) && !f.includes('[')).map((f) => norm(routeOf(f)))
 
-/** The routes of the pages detect knows have a map (dynamic routes left out). */
-export const mapRoutes = (report: Report): Set<string> => iframeRoutes(report, () => true)
+/** Routes of an iframe detect found on a page, a layout or a component call site. */
+const iframeRoutes = (report: Report, iframe: Report['iframes'][number]): string[] =>
+  routesOf([iframe.file, ...(iframe.callSites ?? []).map((c) => c.file)].flatMap((f) => pagesOf(report, f)))
+
+/** The routes of the pages detect knows have an embed: an iframe, or a widget's pages (dynamic routes left out). */
+export const embedRoutes = (report: Report): Set<string> =>
+  new Set([...report.iframes.flatMap((i) => iframeRoutes(report, i)), ...routesOf(report.widgets.flatMap((w) => w.pages))])
 
 const FILTER_CLASS = /(?:^|\s)!?(?:grayscale|sepia|invert|blur|brightness-|contrast-|hue-rotate-|saturate-|drop-shadow)/
 
-/** Routes whose map had a CSS filter detect could see (inline style or a Tailwind filter class). */
-const filterRoutes = (report: Report): Set<string> =>
-  iframeRoutes(report, (i) => /(?:^|;)\s*filter\s*:/.test(i.style ?? '') || FILTER_CLASS.test(i.classes ?? ''))
+/**
+ * Route -> service of the iframe there that had a CSS filter detect could see (inline style or a
+ * Tailwind filter class). The first such iframe in the report wins a route.
+ */
+export function filterRoutes(report: Report): Map<string, ServiceSlug> {
+  const routes = new Map<string, ServiceSlug>()
+  for (const iframe of report.iframes) {
+    if (!iframe.service || !(/(?:^|;)\s*filter\s*:/.test(iframe.style ?? '') || FILTER_CLASS.test(iframe.classes ?? ''))) continue
+    for (const route of iframeRoutes(report, iframe)) if (!routes.has(route)) routes.set(route, iframe.service)
+  }
+  return routes
+}
 
 /** `name@version` for astro, vite and @tailwindcss/vite anywhere in `npm ls --json` output. */
 export function lsVersions(json: string): string[] {
@@ -280,9 +288,9 @@ export async function verify(dir: string, report: Report, opts: VerifyOptions = 
   }
 
   const ssr = demo || report.astro.output === 'server'
-  const known = mapRoutes(report)
+  const known = embedRoutes(report)
   const filters = filterRoutes(report)
-  const expectFilter = filters.size ? (p: string) => filters.has(norm(p)) : undefined
+  const expectFilter = filters.size ? (p: string) => filters.get(norm(p)) ?? null : undefined
   // CMS admin shells (src/pages/admin/, or Decap's public/admin/ copied to dist/admin/) never get the banner.
   const expectBanner = demo ? (p: string) => norm(p) !== '/utan-banner' && !p.startsWith(MISSING_PREFIX) : (p: string) => !isCmsAdminRoute(p)
   const previews: Preview[] = []
@@ -400,10 +408,10 @@ export async function verify(dir: string, report: Report, opts: VerifyOptions = 
       const lines = [`pages with an embed: ${mapPages.join(' ') || '(none)'}`]
       const withEmbed = new Set(mapPages.map(norm))
       const lost = [...known].filter((r) => !withEmbed.has(r))
-      lines.push(...lost.map((r) => `detect found a map on ${r}, but the built page has no embed`))
+      lines.push(...lost.map((r) => `detect found an embed on ${r}, but the built page has no embed`))
       if (mapPages.length === 0) {
-        const pass = report.classification !== 'maps' && lost.length === 0
-        return { pass, lines: [...lines, pass ? 'no map pages: nothing to check' : 'a maps site with no embed on any built page'] }
+        const pass = report.classification !== 'consent' && lost.length === 0
+        return { pass, lines: [...lines, pass ? 'no embed pages: nothing to check' : 'a consent site with no embed on any built page'] }
       }
       const r = consentPathLines(await (await getChecks()).consentPaths(branch!.url, mapPages, { expectFilter }))
       return { pass: r.pass && lost.length === 0, lines: [...lines, ...r.lines] }

@@ -126,7 +126,7 @@ describe('poolRepos', () => {
 })
 
 describe('scanPool', () => {
-  const report = (site: string, domains: string[]) => ({ site, domains, classification: 'notice' }) as unknown as Report
+  const report = (site: string, domains: string[]) => ({ site, domains, classification: 'notice', services: [] }) as unknown as Report
 
   function fakes(failOn: string[] = []) {
     const events: string[] = []
@@ -194,6 +194,24 @@ describe('scanPool', () => {
     const out = await scanPool(targets, { rows: [prior], unmatched: [] }, f.deps)
     expect(f.events.filter((e) => e.startsWith('clone'))).toEqual(['clone a', 'clone c'])
     expect(out.rows.map((r) => r.repo)).toEqual(['a', 'b', 'c'])
+  })
+
+  test('a row whose report predates services is detected again', async () => {
+    const f = fakes()
+    const { services: _s, ...old } = report('b', ['b.se'])
+    const prior = { repo: 'b', domains: ['b.se'], report: old as unknown as Report }
+    const out = await scanPool(targets, { rows: [prior], unmatched: [] }, f.deps)
+    expect(f.events.filter((e) => e.startsWith('clone'))).toEqual(['clone a', 'clone b', 'clone c'])
+    expect(out.rows).toHaveLength(3)
+  })
+
+  test('the log line names the services of a consent row', async () => {
+    const f = fakes()
+    const lines: string[] = []
+    f.deps.detect = (_d: string, r: string, domains: string[]) =>
+      ({ ...report(r, domains), classification: 'consent', services: ['elfsight', 'google-maps'] }) as unknown as Report
+    await scanPool([targets[0]!], { rows: [], unmatched: [] }, { ...f.deps, log: (l: string) => lines.push(l) })
+    expect(lines).toEqual(['a: consent (elfsight, google-maps)'])
   })
 
   test('a row that ended in an error is scanned again on resume', async () => {

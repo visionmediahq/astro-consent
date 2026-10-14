@@ -13,9 +13,10 @@ import { applyEdits, Planner, refuseNeedsHuman } from './engine'
 import { wireLayout } from './layout'
 import { wireLinks } from './links'
 import { wirePrivacy } from './privacy'
+import { wireWidgets } from './widgets'
 
 export const BRANCH = 'consent-banner'
-export const INSTALL_SPEC = 'github:visionmediahq/astro-consent#semver:^1.0.2'
+export const INSTALL_SPEC = 'github:visionmediahq/astro-consent#semver:^1.1.1'
 export const COMMIT_MESSAGE = 'feat: samtyckesbanner (astro-consent)'
 
 /**
@@ -26,7 +27,7 @@ export const COMMIT_MESSAGE = 'feat: samtyckesbanner (astro-consent)'
 export function planWire(files: SiteFiles, report: Report): WirePlan {
   const planner = new Planner(files)
   if (refuseNeedsHuman(planner, report)) return planner.result()
-  for (const part of [wireConfig, wireCss, wireLayout, wireLinks, wirePrivacy, wireEmbeds]) part(planner, report)
+  for (const part of [wireConfig, wireCss, wireLayout, wireLinks, wirePrivacy, wireEmbeds, wireWidgets]) part(planner, report)
   return planner.result()
 }
 
