@@ -43,6 +43,6 @@ const infoId = `${id ?? 'consent-embed-' + crypto.randomUUID().slice(0, 8)}-info
   class="relative flex min-h-(--consent-min-h) flex-col rounded-box bg-base-200 text-base-content data-active:min-h-0 data-active:bg-transparent"
   style={`--consent-min-h: ${minHeight}`}
 >
-  <template data-payload set:html={markup} />
+  <template data-payload set:html={markup}></template>
   <EmbedPlaceholder service={service} title={title} infoId={infoId} />
 </div>

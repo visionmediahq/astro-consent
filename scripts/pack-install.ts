@@ -77,6 +77,14 @@ try {
 
   const index = readFileSync(join(dir, 'dist/client/index.html'), 'utf8')
   assert(index.includes('data-consent-banner'), 'built index.html has no data-consent-banner')
+  // The widget's placeholder must be live markup, outside its inert <template>: Astro 6 leaves a
+  // self-closed <template … /> open and swallows what follows, so the page shows no "Visa" button.
+  const flode = readFileSync(join(dir, 'dist/client/flode/index.html'), 'utf8')
+  const payloads = [...flode.matchAll(/<template data-payload[^>]*>([\s\S]*?)<\/template>/g)]
+  assert(payloads.length >= 2, `flode/index.html has ${payloads.length} data-payload templates, expected the two widgets' (and the calendar's)`)
+  for (const [, inner] of payloads) assert(!/data-(?:load|placeholder)/.test(inner), 'a widget placeholder is inside its <template data-payload>: the template was not closed')
+  const liveLoads = flode.replace(/<template[\s\S]*?<\/template>/g, '').match(/data-load/g)?.length ?? 0
+  assert(liveLoads >= 3, `flode/index.html has ${liveLoads} live "Visa" buttons, expected 3`)
   const assetDir = join(dir, 'dist/client/_astro')
   const allCss = readdirSync(assetDir).filter((file) => file.endsWith('.css')).map((file) => readFileSync(join(assetDir, file), 'utf8')).join('\n')
   assert(allCss.includes('card-actions'), 'built CSS has no card-actions — Tailwind did not scan the package in node_modules')
