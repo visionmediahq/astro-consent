@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- A granted embed or widget inside another widget's slot now activates with it, on a grant or a
+  one-off "Visa" on the outer one, instead of staying a placeholder until the next change (#28).
+
 ## 1.1.0
 
 - New services `google-calendar` (ConsentEmbed; the open link is the embed URL) and `elfsight`
