@@ -30,3 +30,8 @@ export function normaliseReport(raw: unknown): Report {
     services: r.services ?? servicesOf({ iframes: r.iframes, widgets }),
   }
 }
+
+/** `consent (elfsight, google-maps)`: the classification, with the services when there are any. */
+export function classificationLine(r: Pick<Report, 'classification' | 'services'>): string {
+  return r.services.length > 0 ? `${r.classification} (${r.services.join(', ')})` : r.classification
+}

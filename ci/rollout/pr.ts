@@ -7,6 +7,7 @@
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { type Exec, exec as realExec, tail } from './lib/exec'
+import { normaliseReport } from './lib/report'
 import type { Report, VerifyResult } from './types'
 import { ORIGIN, verify as realVerify } from './verify'
 import { BRANCH } from './wire/index'
@@ -99,7 +100,7 @@ export async function openPr(dir: string, opts: PrOptions): Promise<PrResult> {
   const exec = opts.exec ?? realExec
   const root = resolve(dir)
   const git = (...args: string[]) => exec('git', args, root)
-  const report = readJson<Report>(join(root, '.rollout/report.json'), 'run detect first')
+  const report = normaliseReport(readJson<unknown>(join(root, '.rollout/report.json'), 'run detect first'))
 
   const head = (await git('rev-parse', '--abbrev-ref', 'HEAD')).out.trim()
   if (head !== BRANCH) throw new Error(`pr runs on branch ${BRANCH}; ${root} is on ${head || '(unknown)'}`)
