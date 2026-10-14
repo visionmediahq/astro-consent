@@ -623,7 +623,7 @@ describe('wireEmbeds', () => {
 
   test('needs-human report → the whole plan refused with report.reasons', () => {
     const site = memSite({ [MAP]: `<iframe src="https://www.google.com/maps/embed?pb=!1" title="Karta"></iframe>\n` })
-    const reasons = ['unresolved iframe src in src/pages/kalendrar.astro', 'tracker gtm: the batch wires notice and maps only']
+    const reasons = ['unresolved iframe src in src/pages/kalendrar.astro', 'tracker gtm: the batch wires notice and consent only']
     const result = plan([wireLayout, wireLinks, wirePrivacy, wireEmbeds], site, reportFor(site, { classification: 'needs-human', reasons }))
     expect(result.ok).toBe(false)
     expect(refusals(result)).toEqual(expect.arrayContaining(reasons))

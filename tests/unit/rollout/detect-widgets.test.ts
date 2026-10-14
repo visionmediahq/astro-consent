@@ -206,6 +206,10 @@ describe('detectWidgets: every occurrence is accounted for', () => {
     expect(reasonsOf({ [PAGE]: V1, [file]: text })).toEqual([OUTSIDE(file)])
   })
 
+  test('a NUL byte in a non-binary file does not hide an occurrence', () => {
+    expect(reasonsOf({ [PAGE]: V1, 'public/x.html': `a\u0000b ${CDN}\n` })).toEqual([OUTSIDE('public/x.html')])
+  })
+
   test('a loader in a set:html string', () => {
     const text = `<Fragment set:html={'<script src="${CDN}"></script>'} />\n`
     expect(reasonsOf({ [PAGE]: text })).toEqual([OUTSIDE(PAGE)])

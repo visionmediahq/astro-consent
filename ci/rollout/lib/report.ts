@@ -5,7 +5,7 @@ import type { Report } from '../types'
 
 /**
  * The services a site embeds, sorted and unique: resolved iframes with a registered service, the
- * widgets' service, and any already wired (read from privacy.json). Unresolved iframes only hint at
+ * widgets' service, and any already wired (the package `<ConsentWidget>` elements detect found). Unresolved iframes only hint at
  * a service and decide nothing.
  */
 export function servicesOf(r: Pick<Report, 'iframes' | 'widgets'>, wired: ServiceSlug[] = []): ServiceSlug[] {

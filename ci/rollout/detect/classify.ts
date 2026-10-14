@@ -83,7 +83,7 @@ export function classify(f: Findings): { classification: Classification; reasons
     const r = iframeReason(frame, f.domains)
     if (r !== null) add(r)
   }
-  for (const t of f.trackers) add(`tracker ${t}: the batch wires notice and maps only`)
+  for (const t of f.trackers) add(`tracker ${t}: the batch wires notice and consent only`)
   for (const b of f.banners) add(`existing banner: ${b}`)
   for (const r of f.widgetReasons) add(r)
 

@@ -403,7 +403,7 @@ describe('classify', () => {
       'iframe service google-analytics is not wired by this batch',
     ],
     ['existing banner', { banners: ['cookiebot'] }, 'existing banner: cookiebot'],
-    ['GA present', { trackers: ['google-analytics'] }, 'tracker google-analytics: the batch wires notice and maps only'],
+    ['GA present', { trackers: ['google-analytics'] }, 'tracker google-analytics: the batch wires notice and consent only'],
     ['tailwind 3', { css: { entry: 'src/styles/global.css', tailwindMajor: 3, daisyuiMajor: 5, primaries: [] } }, 'tailwind 3: @source needs Tailwind 4'],
     ['daisyui 4', { css: { entry: 'src/styles/global.css', tailwindMajor: 4, daisyuiMajor: 4, primaries: [] } }, 'daisyui 4: the components need daisyUI 5'],
     [

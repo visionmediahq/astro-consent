@@ -129,7 +129,7 @@ export interface PoolRow {
 
 export interface Selection {
   repo: string
-  stratum: 'maps' | 'notice'
+  stratum: 'consent' | 'notice'
   how: 'random' | 'variety'
   rank?: number
   gap?: string

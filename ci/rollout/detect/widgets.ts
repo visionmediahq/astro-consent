@@ -108,7 +108,6 @@ function divProblems(found: Found, text: string): string[] {
   return out
 }
 
-
 /** Sweeps `text` for Elfsight occurrences outside `skip`; true when one is found. */
 function strayOccurrence(text: string, skip: Span[]): boolean {
   for (const re of [new RegExp(ELFSIGHT, 'gi'), new RegExp(APP, 'g')]) {
@@ -245,7 +244,6 @@ export function detectWidgets(files: SiteFiles, layouts: Report['layouts']): Det
     .sort()
   for (const file of swept) {
     const text = files.read(file)
-    if (text.includes('\u0000')) continue
     const skip = skipped.get(file) ?? (file === 'public/_headers' ? cspLines(text) : [])
     if (strayOccurrence(text, skip)) add(`elfsight: ${file}: elfsight outside a recognised widget`)
   }
