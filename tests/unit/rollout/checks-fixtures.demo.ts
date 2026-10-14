@@ -78,6 +78,9 @@ const FIXTURES: Record<string, string> = {
   sticky: embedPage(`add(el); localStorage.setItem('sticky', '1')`, `if (localStorage.getItem('sticky')) document.querySelectorAll('[data-consent-embed]').forEach(add)`),
   other: embedPage(`add(el); const s = document.createElement('script'); s.src = '${PIXEL}'; document.head.appendChild(s)`),
   oneoff: embedPage(`add(el)`),
+  // Visa that loads an iframe the page then squashes to nothing (salviablommor: a scoped display:block
+  // on the wrapper beat `grid`, so the loaded map was 0px tall).
+  flat: embedPage(`add(el); el.querySelector('iframe').style.height = '0'`),
   // Mixed services (maps, calendar, an Elfsight widget): Visa on a widget first, and Visa alltid
   // carrying one service over to a page that also has others.
   widget: mixed(widget + iframeEmbed('google-maps', MAPS)),
@@ -156,6 +159,10 @@ try {
   {
     const r = await paths('/other/')
     expect(!r.visaLoadsOnlyClicked, '/other/ Visa that loads another service fails', r)
+  }
+  {
+    const r = await paths('/flat/')
+    expect(!r.visaLoadsOnlyClicked, '/flat/ Visa whose iframe is 0px tall fails', r)
   }
 
   {

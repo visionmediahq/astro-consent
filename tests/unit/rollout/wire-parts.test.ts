@@ -551,6 +551,23 @@ describe('wireEmbeds', () => {
     ])
   })
 
+  test("scoped CSS for a class the wrapper keeps sets display or another height: refused (salviablommor: the map was 0px tall)", () => {
+    const wrap = `<div class="karta">\n  <iframe class="contact-map" src="https://www.google.com/maps/embed?pb=!1" height="100%" title="Karta"></iframe>\n</div>\n`
+    expect(refused(`${wrap}<style>\n  .karta { min-height: 500px; }\n  .contact-map {\n    width: 100%;\n    height: 100%;\n    display: block;\n  }\n</style>\n`)).toEqual([
+      "scoped CSS for the iframe's class .contact-map sets display: block, which beats the wrapper's grid",
+    ])
+    expect(
+      refused(`<iframe class="map rounded" src="https://www.google.com/maps/embed?pb=!1" height="450" title="Karta"></iframe>\n<style>\n  section .map:hover { height: 300px }\n</style>\n`),
+    ).toEqual(["scoped CSS for the iframe's class .map sets height: 300px, which beats the wrapper's h-[450px]"])
+  })
+
+  test('scoped CSS for a kept class that agrees with the wrapper (display: grid, height: 100% on h-full, other properties) is wired', () => {
+    const text = embed(
+      `<div class="karta">\n  <iframe class="contact-map" src="https://www.google.com/maps/embed?pb=!1" height="100%" title="Karta"></iframe>\n</div>\n<style>\n  .karta { min-height: 500px; }\n  .contact-map { height: 100%; display: grid; border-radius: 8px; }\n  .contact-mapx, .other .contact-map-wrap { display: block; }\n</style>\n`,
+    )
+    expect(text).toContain('<div class="grid h-full contact-map"><ConsentEmbed')
+  })
+
   test('fills a parent of unknown height: refused', () => {
     expect(refused(`<div class="karta">\n  <iframe src="https://www.google.com/maps/embed?pb=!1" height="100%" title="Karta"></iframe>\n</div>\n`)).toEqual([
       'map fills a parent of unknown height',
