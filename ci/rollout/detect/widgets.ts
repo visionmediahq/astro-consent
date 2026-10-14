@@ -41,6 +41,12 @@ const CSP_LINE = /^\s*Content-Security-Policy(?:-Report-Only)?\s*:/i
 
 type Span = { start: number; end: number }
 
+/**
+ * A comment a browser closes where the parser does: not `<!-->` or `<!--->` (closed at once) and no
+ * `--!>` inside (also a close). Any other comment is swept like markup.
+ */
+const isPlainComment = (raw: string): boolean => /^<!--(?!-?>)[\s\S]*-->$/.test(raw) && !raw.includes('--!>')
+
 interface Found {
   node: AstroNode
   inExpression: boolean
@@ -181,7 +187,8 @@ export function detectWidgets(files: SiteFiles, layouts: Report['layouts']): Det
     const divs: Found[] = []
     const walk = (n: AstroNode, inExpression: boolean): void => {
       if (n.type === 'comment') {
-        skip.push(n)
+        // Only a comment the browser also reads to its `-->` hides what is inside it.
+        if (isPlainComment(p.text.slice(n.start, n.end))) skip.push(n)
         return
       }
       if (n.type === 'component' && widgetNames.has(n.name ?? '')) {

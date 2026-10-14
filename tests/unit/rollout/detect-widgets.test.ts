@@ -216,6 +216,14 @@ describe('detectWidgets: every occurrence is accounted for', () => {
   })
 
   test.each([
+    ['<!-->', `<main>\n<!--> ${SCRIPT} -->\n</main>\n`],
+    ['<!--->', `<main>\n<!---> ${SCRIPT} -->\n</main>\n`],
+    ['--!>', `<main>\n<!--x--!> ${SCRIPT} -->\n</main>\n`],
+  ])('a comment the browser closes early (%s) hides nothing', (_kind, text) => {
+    expect(reasonsOf({ [PAGE]: text })).toContain(OUTSIDE(PAGE))
+  })
+
+  test.each([
     ['//', `// ${CDN}\nexport {}\n`],
     ['/* */', `/* <div class="elfsight-app-${ID}"></div> */\nexport {}\n`],
   ])('a snippet inside a %s comment in a .ts file is a reason', (_kind, text) => {
