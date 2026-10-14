@@ -8,6 +8,8 @@ import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { type Exec, exec as realExec, tail } from './lib/exec'
 import { normaliseReport } from './lib/report'
+import { SERVICES, type ServiceSlug } from '../../src/services'
+import sv from '../../src/text/sv.json'
 import type { Report, VerifyResult } from './types'
 import { ORIGIN, verify as realVerify } from './verify'
 import { BRANCH } from './wire/index'
@@ -17,7 +19,9 @@ export const TEMPLATE_PATH = join(import.meta.dirname, 'pr-body.sv.md')
 
 export interface BodyInput {
   /** Which template block: from the branch's privacy.json (`templateKind`), not the classification. */
-  kind: 'maps' | 'notice'
+  kind: 'consent' | 'notice'
+  /** The services of the consent block, in registry order; empty for notice. */
+  services: ServiceSlug[]
   verify: VerifyResult
   /** Issue URLs. */
   issues: string[]
@@ -26,19 +30,40 @@ export interface BodyInput {
   screenshots?: { file: string; url: string }[]
 }
 
-/** Fills `{{name}}` values and `{{#maps}}…{{/maps}}` / `{{#notice}}…{{/notice}}` blocks. */
+// Fills the placeholder texts exactly as src/components/EmbedPlaceholder.astro does.
+const fill = (text: string, vars: Record<string, string>): string => text.replace(/\{(\w+)\}/g, (match, key: string) => vars[key] ?? match)
+
+const list = (items: string[]): string => (items.length < 2 ? items.join('') : `${items.slice(0, -1).join(', ')} och ${items[items.length - 1]}`)
+
+/** Numbered test steps 2.. of the consent block: Neka, one step per service, then "Cookie-inställningar". */
+function consentSteps(services: ServiceSlug[]): string {
+  const steps = [
+    'Klicka "Neka" och gå till en sida med externt innehåll: bara platshållare visas, inget innehåll laddas.',
+    ...services.map((slug) => {
+      const { name } = SERVICES[slug]
+      return `Klicka "${fill(sv.embed.show, { name })}": innehållet laddas. Kryssa "${fill(sv.embed.remember, { name })}" så laddas det direkt framöver.`
+    }),
+    'Klicka "Cookie-inställningar" i sidfoten: bannern öppnas igen.',
+  ]
+  return steps.map((t, i) => `${i + 2}. ${t}`).join('\n')
+}
+
+/** Fills `{{name}}` values and `{{#consent}}…{{/consent}}` / `{{#notice}}…{{/notice}}` blocks. */
 export function renderBody(template: string, input: BodyInput): string {
-  const { kind, verify, issues, domain } = input
+  const { kind, services, verify, issues, domain } = input
   if (!verify.pass) throw new Error('verify did not pass: no PR body')
   const values: Record<string, string> = {
     domain,
+    serviceNames: list(services.map((slug) => SERVICES[slug].name)),
+    serviceSlugs: services.map((slug) => `\`${slug}\``).join(', '),
+    consentSteps: consentSteps(services),
     files: (input.files?.length ? input.files : ['(se diffen)']).map((f) => `- \`${f}\``).join('\n'),
     steps: verify.steps.map((s) => `- ${s.skipped ? 'hoppades över' : s.pass ? 'ok' : 'FEL'}: ${s.step}. ${s.name}`).join('\n'),
     screenshots: input.screenshots?.length ? input.screenshots.map((s) => `- [${s.file}](${s.url})`).join('\n') : 'Inga.',
     issues: issues.length ? issues.map((i) => `- ${i}`).join('\n') : 'Inga',
   }
   const out = template
-    .replace(/\{\{#(maps|notice)\}\}([\s\S]*?)\{\{\/\1\}\}/g, (_, name: string, text: string) => (name === kind ? text : ''))
+    .replace(/\{\{#(consent|notice)\}\}([\s\S]*?)\{\{\/\1\}\}/g, (_, name: string, text: string) => (name === kind ? text : ''))
     .replace(/\{\{(\w+)\}\}/g, (m, name: string) => values[name] ?? m)
   const left = out.match(/\{\{[^}]*\}\}/)
   if (left) throw new Error(`unfilled placeholder ${left[0]} in the PR body template`)
@@ -64,10 +89,11 @@ export interface PrResult {
 }
 
 /**
- * Ruling 40: the template block for the branch's src/data/privacy.json text: `maps` when its
- * services list google-maps, else `notice`. A hand-wired needs-human site gets its PR this way.
+ * Ruling 40: the template block for the branch's src/data/privacy.json text: `consent` with its
+ * services (registry order) when it lists any, else `notice`. A hand-wired needs-human site gets
+ * its PR this way. A slug the registry does not know is refused.
  */
-export function templateKind(privacyJson: string): 'maps' | 'notice' {
+export function templateKind(privacyJson: string): { kind: 'consent' | 'notice'; services: ServiceSlug[] } {
   let json: unknown
   try {
     json = JSON.parse(privacyJson)
@@ -75,8 +101,11 @@ export function templateKind(privacyJson: string): 'maps' | 'notice' {
     throw new Error(`src/data/privacy.json on the branch is not JSON: ${(e as Error).message}`)
   }
   if (typeof json !== 'object' || json === null || Array.isArray(json)) throw new Error('src/data/privacy.json on the branch is not an object')
-  const services = (json as { services?: unknown }).services
-  return Array.isArray(services) && services.includes('google-maps') ? 'maps' : 'notice'
+  const listed = (json as { services?: unknown }).services
+  const slugs = Array.isArray(listed) ? listed : []
+  for (const slug of slugs) if (typeof slug !== 'string' || !Object.hasOwn(SERVICES, slug)) throw new Error(`unknown service ${String(slug)} in privacy.json`)
+  const services = (Object.keys(SERVICES) as ServiceSlug[]).filter((slug) => slugs.includes(slug))
+  return { kind: services.length ? 'consent' : 'notice', services }
 }
 
 /** 'visionmediahq/<repo>' from the origin URL; throws for any other remote. */
@@ -138,7 +167,7 @@ export async function openPr(dir: string, opts: PrOptions): Promise<PrResult> {
 
   const privacy = await git('show', 'HEAD:src/data/privacy.json')
   if (privacy.code !== 0) throw new Error(`src/data/privacy.json is not on the branch: wire the site first\n${tail(privacy.out)}`)
-  const kind = templateKind(privacy.out)
+  const { kind, services } = templateKind(privacy.out)
 
   const existing = await exec('gh', ['pr', 'list', '-R', repo, '--head', BRANCH, '--state', 'open', '--json', 'url,title'], root)
   if (existing.code !== 0) throw new Error(`gh pr list failed:\n${tail(existing.out)}`)
@@ -151,6 +180,7 @@ export async function openPr(dir: string, opts: PrOptions): Promise<PrResult> {
   const changed = (await git('diff', '--name-only', 'origin/main...HEAD')).out.split('\n').filter(Boolean)
   const body = renderBody(readFileSync(TEMPLATE_PATH, 'utf8'), {
     kind,
+    services,
     verify: result,
     issues: opts.issues ?? [],
     domain: opts.domain ?? report.domains[0] ?? report.site,
