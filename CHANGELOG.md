@@ -49,6 +49,10 @@ Not part of the package (`files` is unchanged) and not a release.
 - `verify` step 4 (consent-paths) checks "Visa alltid" per service: remembering S must activate S's
   embeds on another page (or a reload when no other page has S) and leave other services inactive.
   The one-off Visa check uses `[data-active]`, so it covers widgets. Maps-only sites behave as before.
+- `verify` step 4 (and `live`, which runs the same check) also fails a one-off "Visa" whose loaded
+  iframe's layout box is under 100 px wide or tall; widgets are not measured. `wire` refuses a map
+  whose grid wrapper keeps a class with a scoped rule setting a `display` other than grid/none or a
+  height that is not definite (salviablommor: `display: block` left the loaded map 0px tall).
 - CI: the `e2e` job runs `verify --demo demo/dist-consent` after the consent demo build.
 
 ## 1.0.2

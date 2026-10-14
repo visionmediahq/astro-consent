@@ -8,9 +8,9 @@ import { bannerState, freshPage, open, recordBlocked } from './requests'
 export interface ConsentPathResult {
   path: string
   /**
-   * After Neka, clicking "Visa" on the first embed loads that embed's iframe and no other, every
-   * registry request after the click belongs to that embed's service, and after a reload no embed
-   * is loaded (the grant was one-off).
+   * After Neka, clicking "Visa" on the first embed loads that embed's iframe and no other, at least
+   * MIN_SIDE px wide and tall; every registry request after the click belongs to that embed's
+   * service, and after a reload no embed is loaded (the grant was one-off).
    */
   visaLoadsOnlyClicked: boolean
   /**
@@ -39,6 +39,9 @@ export interface ConsentPathResult {
 
 const embeds = (page: Page) => page.locator('[data-consent-embed]')
 const iframes = (page: Page) => page.locator('[data-consent-embed] iframe')
+/** The smallest width and height a loaded iframe may have, in CSS px. */
+const MIN_SIDE = 100
+
 /** Activated embeds: an iframe embed or a script widget (which has no iframe of its own). */
 const active = (page: Page) => page.locator('[data-consent-embed][data-active]')
 
@@ -124,16 +127,20 @@ async function visaOnlyClicked(browser: Browser, base: string, path: string, stu
     const own = await first.locator('iframe').count()
     const total = await active(page).count()
     const filter = own && !widget ? await first.locator('iframe').first().evaluate((f) => getComputedStyle(f).filter) : 'none'
+    // The loaded iframe's layout box must have a real size: a site rule can collapse it to nothing
+    // (salviablommor). offsetWidth/Height ignore transforms, so an entrance animation cannot shrink it.
+    const size = own && !widget ? await first.locator('iframe').first().evaluate((f) => ({ w: (f as HTMLElement).offsetWidth, h: (f as HTMLElement).offsetHeight })) : null
+    const visible = size === null || (size.w >= MIN_SIDE && size.h >= MIN_SIDE)
     const foreign = hits.slice(before).filter((u) => matchesRegistry(u) !== service)
     const afterClick = hits.length
     // One-off: a reload must show no embed and request nothing from the registry.
     await open(page, base, path)
     const reloaded = (await active(page).count()) + (await iframes(page).count())
     const afterReload = hits.length - afterClick
-    const ok = declined && before === 0 && clicked && (widget || own === 1) && total === 1 && foreign.length === 0 && reloaded === 0 && afterReload === 0
+    const ok = declined && before === 0 && clicked && (widget || own === 1) && total === 1 && foreign.length === 0 && reloaded === 0 && afterReload === 0 && visible
     if (!ok) {
       notes.push(
-        `visa: before click blocked=${before}; clicked ${service} data-active=${clicked} iframe=${own}, active on page=${total} of ${count} embeds; ` +
+        `visa: before click blocked=${before}; clicked ${service} data-active=${clicked} iframe=${own}${size ? ` ${size.w}x${size.h}px` : ''}, active on page=${total} of ${count} embeds; ` +
           `other services=${JSON.stringify(foreign.slice(0, 3))}; after reload active+iframes=${reloaded} blocked=${afterReload}`,
       )
     }
