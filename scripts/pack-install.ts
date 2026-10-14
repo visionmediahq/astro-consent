@@ -1,8 +1,9 @@
 // Proves the package works from a real node_modules: npm pack → install the tarball into a copy of
-// the demo with a given Astro version → build → assert the banner and its CSS are there.
+// the demo with a given Astro version → build → assert the banner and its CSS are there → build
+// once more per form of <script> in a <ConsentWidget> slot and assert that build fails (#27).
 // Usage: npm run test:pack -- <astro version> <@astrojs/node version>
 import { execFileSync, spawnSync } from 'node:child_process'
-import { existsSync, lstatSync, readFileSync, readdirSync, rmSync } from 'node:fs'
+import { existsSync, lstatSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { REPO_ROOT, copyDemo } from './demo-copy'
 
@@ -23,6 +24,23 @@ function assert(condition: unknown, message: string): asserts condition {
 function run(command: string, args: string[], cwd: string): void {
   const result = spawnSync(command, args, { cwd, stdio: 'inherit', env: { ...process.env, ASTRO_TELEMETRY_DISABLED: '1' } })
   assert(result.status === 0, `\`${command} ${args.join(' ')}\` failed with exit code ${result.status}`)
+}
+
+// The slot check (src/widget.ts) runs on the output of Astro.slots.render. Where a version of
+// Astro puts a slot's <script> is its own business, so each version must prove the build fails.
+const WIDGET_SLOT_SCRIPTS = ['<script>console.log(1)</script>', '<script is:inline src="https://elfsightcdn.com/platform.js"></script>']
+const SLOT_ERROR = 'no <script> in the slot'
+
+function widgetPage(slot: string): string {
+  return [
+    '---',
+    "import ConsentWidget from '@visionmediahq/astro-consent/components/ConsentWidget.astro'",
+    'export const prerender = true',
+    '---',
+    '<html><head><title>t</title></head><body>',
+    `<ConsentWidget service="elfsight" script="https://elfsightcdn.com/platform.js" title="x"><div class="elfsight-app-x" data-elfsight-app-lazy></div>${slot}</ConsentWidget>`,
+    '</body></html>',
+  ].join('\n')
 }
 
 try {
@@ -72,6 +90,19 @@ try {
     assert(!(name in (installedPkg.scripts ?? {})), `package.json must not have a "${name}" script`)
   }
   assert(!('workspaces' in installedPkg), 'package.json must not have workspaces')
+
+  // Only in this temp copy, after the demo build passed: the demo itself never has a bad page.
+  const badPage = join(dir, 'src/pages/widget-script.astro')
+  for (const tag of WIDGET_SLOT_SCRIPTS) {
+    writeFileSync(badPage, widgetPage(tag))
+    const build = spawnSync('npx', ['astro', 'build'], { cwd: dir, encoding: 'utf8', env: { ...process.env, ASTRO_TELEMETRY_DISABLED: '1' } })
+    const output = `${build.stdout}${build.stderr}`
+    if (build.status === 0 || !output.includes(SLOT_ERROR)) console.error(output)
+    assert(build.status !== 0, `build with ${tag} in a ConsentWidget slot must fail, but it passed`)
+    assert(output.includes(SLOT_ERROR), `build with ${tag} in a ConsentWidget slot failed without "${SLOT_ERROR}"`)
+    console.log(`✓ build fails on ${tag} in a ConsentWidget slot`)
+  }
+  rmSync(badPage)
 
   console.log(`✓ pack-install astro@${astroVersion} @astrojs/node@${adapterVersion}`)
 } catch (error) {

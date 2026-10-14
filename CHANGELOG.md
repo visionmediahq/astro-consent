@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Test: pack-install proves the no-`<script>` slot check on Astro 6 and 7 (#27).
+
 ## 1.1.1
 
 - A granted embed or widget inside another widget's slot now activates with it, on a grant or a
