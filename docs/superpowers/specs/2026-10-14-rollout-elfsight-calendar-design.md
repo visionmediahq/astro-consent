@@ -193,6 +193,22 @@ probe (before code), real browser, one page with the V3 div:
   -> doesn't: wire writes https://elfsightcdn.com/platform.js instead (probe that it renders the
      same div); neither renders -> V3 is refused
 record the result here
+```
+
+Probe result (2026-10-14, Chromium 1200x900, headless, real Elfsight hosts; the page was served from
+a made-up https origin, the loader script was appended to `<head>` with `async` after `load`, as
+`loadScript` does; the widget div had `data-elfsight-app-lazy`):
+
+| Loader | First div gets children | Second div added afterwards |
+|---|---|---|
+| `https://static.elfsight.com/platform/platform.js` | renders (about 1.0 s) | renders (about 1.8 s) |
+| `https://elfsightcdn.com/platform.js` | renders (about 0.8 s) | renders (about 1.5 s) |
+
+Outcome: the static loader renders, so `wire` keeps the URL as written for V3, and both loaders
+stay in `LOADERS`. A second widget div added after the loader has run also renders, so the
+"exactly one widget div per file" fallback is not needed.
+
+```text
 fallbacks: static loader dropped -> V3 is refused ("loader … not recognised");
            second div does not render -> a file must have exactly one widget div (two -> reason)
 ```
