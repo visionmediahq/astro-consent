@@ -1,0 +1,24 @@
+---
+import Base from '../layouts/Base.astro';
+---
+
+<Base
+  title="Text."
+  description="Text."
+  canonical="https://calendar-literal.se/kalender/"
+>
+  <main id="main-content">
+    <section class="container mx-auto px-6 py-16">
+      <h1 class="text-4xl font-bold mb-8">Text.</h1>
+      <iframe
+        src="https://calendar.google.com/calendar/embed?src=x%40group.calendar.google.com&ctz=Europe%2FStockholm"
+        title="Kalender"
+        width="100%"
+        height="600"
+        style="border:0"
+        frameborder="0"
+        scrolling="no"
+      ></iframe>
+    </section>
+  </main>
+</Base>

@@ -1,0 +1,67 @@
+---
+import ConsentWidget from '@visionmediahq/astro-consent/components/ConsentWidget.astro'
+---
+
+<!-- Elfsight Instagram Feed | Firma -->
+
+<section class="insta-section" data-animate aria-label="Följ oss på Instagram">
+  <div class="insta-inner">
+
+    <div class="insta-header">
+      <span class="eyebrow">Text.</span>
+      <h2 class="insta-heading">Text.</h2>
+      <p class="insta-body">
+        Text.
+      </p>
+    </div>
+
+    <div class="insta-feed">
+      <ConsentWidget service="elfsight" script="https://elfsightcdn.com/platform.js" title="Innehållet">
+      <div class="elfsight-app-00000000-0000-0000-0000-000000000002" data-elfsight-app-lazy></div>
+      </ConsentWidget>
+    </div>
+
+  </div>
+</section>
+
+<style>
+  .insta-section {
+    background: var(--paper-2, oklch(96% 0.01 80));
+    padding: clamp(3.5rem, 6vw, 5rem) clamp(1.5rem, 5vw, 4rem);
+    border-top: 1px solid var(--border-c, oklch(88% 0.012 80));
+    border-bottom: 1px solid var(--border-c, oklch(88% 0.012 80));
+  }
+
+  .insta-inner {
+    max-width: 1280px;
+    margin-inline: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 2.5rem;
+  }
+
+  .insta-header {
+    display: block;
+  }
+
+  .insta-heading {
+    font-size: clamp(1.8rem, 3.5vw, 2.75rem);
+    font-weight: 800;
+    color: var(--color-base-content);
+    line-height: 1.1;
+    text-transform: uppercase;
+    margin-bottom: 0.75rem;
+  }
+
+  .insta-body {
+    font-size: 0.95rem;
+    color: var(--muted, oklch(52% 0.012 65));
+    line-height: 1.6;
+    max-width: 380px;
+  }
+
+  .insta-feed {
+    width: 100%;
+  }
+
+</style>

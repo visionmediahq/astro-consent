@@ -1,0 +1,64 @@
+---
+import { ExternalLink } from '@lucide/astro';
+import ConsentWidget from '@visionmediahq/astro-consent/components/ConsentWidget.astro';
+
+interface Props {
+  /** Facebook page URL linked below the feed */
+  pageUrl?: string;
+  title?: string;
+  intro?: string;
+}
+
+const {
+  pageUrl = 'https://www.facebook.com/example/',
+  title = 'Direkt från vårt Facebook-flöde',
+  intro = 'Här ser du våra senaste inlägg — nya varor, öppettider och nyheter från butiken.',
+} = Astro.props;
+---
+
+<section class="py-16 md:py-24 bg-warm-off">
+  <div class="max-w-6xl mx-auto px-4">
+
+    <div class="text-center mb-10" data-animate>
+      <h2
+        class="text-2xl md:text-3xl text-gray-900 mb-2"
+        style="font-family: 'Open Sans', sans-serif; font-weight: 700;"
+      >
+        {title}
+      </h2>
+      <p
+        class="text-gray-500 max-w-md mx-auto"
+        style="font-family: 'Oswald', sans-serif; font-weight: 300;"
+      >
+        {intro}
+      </p>
+    </div>
+
+    <div class="w-full" data-animate data-animate-delay="0.05">
+      <!-- Elfsight Facebook Feed -->
+      <ConsentWidget service="elfsight" script="https://elfsightcdn.com/platform.js" title="Innehållet">
+      <div
+        class="elfsight-app-00000000-0000-0000-0000-000000000003"
+        data-elfsight-app-lazy
+      >
+      </div>
+      </ConsentWidget>
+    </div>
+
+    <p class="text-center mt-6">
+      <a
+        href={pageUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        class="inline-flex items-center gap-1.5 text-sm font-semibold transition-opacity hover:opacity-80"
+        style="color: #0b5ed7; font-family: 'Open Sans', sans-serif;"
+        onclick="window.umami?.track('nav_click', {item: 'facebook feed'})"
+      >
+        Text.
+        <ExternalLink size={14} />
+      </a>
+    </p>
+
+  </div>
+</section>
+

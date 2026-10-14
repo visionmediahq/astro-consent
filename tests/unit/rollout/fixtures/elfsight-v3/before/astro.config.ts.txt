@@ -1,0 +1,24 @@
+import { defineConfig } from 'astro/config'
+import node from '@astrojs/node'
+import tailwindcss from '@tailwindcss/vite'
+
+// https://astro.build/config
+export default defineConfig({
+  // process.env är mer pålitligt än import.meta.env vid build i Coolify.
+  // Fallback-dummy så att lokal dev inte kraschar när SITE_URL saknas.
+  site: process.env.SITE_URL ?? 'https://example.com',
+
+  output: 'server',
+
+  security: {
+    checkOrigin: false,
+  },
+
+  adapter: node({
+    mode: 'standalone',
+  }),
+
+  vite: {
+    plugins: [tailwindcss()],
+  },
+})

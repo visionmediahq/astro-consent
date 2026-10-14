@@ -1,0 +1,44 @@
+import { defineConfig } from 'astro/config'
+import node from '@astrojs/node'
+import sitemap from '@astrojs/sitemap'
+import tailwindcss from '@tailwindcss/vite'
+import consent from '@visionmediahq/astro-consent'
+
+// https://astro.build/config
+export default defineConfig({
+  // Required for sitemap URL generation and absolute og:image URLs.
+  // Hardcoded per client: astro.config is evaluated before .env is loaded, so
+  // import.meta.env.SITE_URL is always undefined here and the fallback silently
+  // leaked example.com into sitemap-0.xml and every og:image. process.env only
+  // works if the Docker build declares a matching ARG — it does not.
+  site: 'https://elfsight-v2-after.se',
+
+  output: 'server',
+
+  // /erbjudanden showed a decade-old product gallery; removed at the client's
+  // request. Keep the old URL alive for anything still linking to it.
+  redirects: {
+    '/erbjudanden': '/',
+  },
+
+  security: {
+    checkOrigin: false,
+  },
+
+  adapter: node({
+    mode: 'standalone',
+  }),
+
+  integrations: [
+    // In SSR mode pages are not auto-discovered.
+    // Builder agent should either:
+    //   a) add page URLs to the customPages array below, or
+    //   b) mark individual pages with `export const prerender = true`
+    sitemap(),
+    consent(),
+  ],
+
+  vite: {
+    plugins: [tailwindcss()],
+  },
+})

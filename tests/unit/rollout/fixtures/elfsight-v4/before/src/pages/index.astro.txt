@@ -1,0 +1,23 @@
+---
+import Base from '../layouts/Base.astro';
+import Hero from '../components/Hero.astro';
+import Services from '../components/Services.astro';
+import InstagramFeed from '../components/InstagramFeed.astro';
+import ContactCTA from '../components/ContactCTA.astro';
+
+export const prerender = true;
+---
+
+<Base
+  title="Text."
+  description="Text."
+  canonical="https://elfsight-v4.se/"
+  ogImage="/images/og.webp"
+>
+  <Hero />
+  <Services />
+
+  <InstagramFeed />
+
+  <ContactCTA />
+</Base>

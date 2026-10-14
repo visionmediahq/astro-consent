@@ -1,0 +1,31 @@
+---
+import Base from '../layouts/Base.astro';
+import Header from '../components/Header.astro';
+import Footer from '../components/Footer.astro';
+import HomeHero from '../components/HomeHero.astro';
+import HomeIntro from '../components/HomeIntro.astro';
+import HomeAboutTeaser from '../components/HomeAboutTeaser.astro';
+import HomeContact from '../components/HomeContact.astro';
+import NyheterSocial from '../components/NyheterSocial.astro';
+import FacebookFeed from '../components/FacebookFeed.astro';
+
+export const prerender = true;
+---
+
+<Base
+  title="Text."
+  description="Text."
+  canonical="https://elfsight-v2-after.se/"
+  ogImage="/og-image.jpg"
+>
+  <Header />
+  <main>
+    <HomeHero />
+    <HomeIntro />
+    <NyheterSocial />
+    <FacebookFeed />
+    <HomeAboutTeaser />
+    <HomeContact />
+  </main>
+  <Footer />
+</Base>

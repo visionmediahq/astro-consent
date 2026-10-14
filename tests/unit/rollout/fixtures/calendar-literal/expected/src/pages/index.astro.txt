@@ -1,0 +1,14 @@
+---
+import Base from '../layouts/Base.astro';
+import Hero from '../components/Hero.astro';
+---
+
+<Base
+  title="Text."
+  description="Text."
+  canonical="https://calendar-literal.se/"
+>
+  <main id="main-content">
+    <Hero />
+  </main>
+</Base>

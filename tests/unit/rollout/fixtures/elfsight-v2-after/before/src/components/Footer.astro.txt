@@ -1,0 +1,128 @@
+---
+import { MapPin, Phone, Mail } from '@lucide/astro';
+---
+
+<footer class="bg-warm-dark text-white/50">
+  <div class="max-w-6xl mx-auto px-6 pt-14 pb-8">
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-10 mb-12">
+
+      <!-- Brand — 2 cols -->
+      <div class="md:col-span-2">
+        <p class="text-[22px] font-bold tracking-tight mb-3 leading-tight" style="font-family: 'Open Sans', sans-serif;">
+          <span style="color: var(--color-primary);">Text.</span><span class="text-white"> Text.</span>
+        </p>
+        <p class="text-[13px] text-white/50 leading-relaxed mb-6 max-w-xs">
+          Text.
+        </p>
+        <div class="flex items-center gap-2">
+          <a
+            href="https://www.facebook.com/example/"
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="Firma på Facebook"
+            class="w-9 h-9 rounded-md flex items-center justify-center bg-white/5 hover:bg-white/10 transition-colors text-white/50 hover:text-white/80"
+            onclick="window.umami?.track('nav_click', {item: 'footer-facebook'})"
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/>
+            </svg>
+          </a>
+          <a
+            href="https://www.instagram.com/example/"
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="Firma på Instagram"
+            class="w-9 h-9 rounded-md flex items-center justify-center bg-white/5 hover:bg-white/10 transition-colors text-white/50 hover:text-white/80"
+            onclick="window.umami?.track('nav_click', {item: 'footer-instagram'})"
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <rect x="2" y="2" width="20" height="20" rx="5" ry="5"/>
+              <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/>
+              <line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/>
+            </svg>
+          </a>
+        </div>
+      </div>
+
+      <!-- Opening hours -->
+      <div>
+        <!-- h2, not h3: /galleri has no content-level h2, so an h3 here skipped
+             a level straight from the hero h1 and failed axe's heading-order. -->
+        <h2 class="text-[10px] font-semibold uppercase tracking-[0.2em] text-white/55 mb-5">Text.</h2>
+        <ul class="space-y-2.5">
+          <li class="flex justify-between gap-4">
+            <span class="text-[13px] text-white/50">Text.</span>
+            <span class="text-[13px] text-white/70 tabular-nums font-medium">Text.</span>
+          </li>
+          <li class="flex justify-between gap-4">
+            <span class="text-[13px] text-white/50">Text.</span>
+            <span class="text-[13px] text-white/70 tabular-nums font-medium">Text.</span>
+          </li>
+          <li class="flex justify-between gap-4">
+            <span class="text-[13px] text-white/50">Text.</span>
+            <span class="text-[13px] text-white/70 tabular-nums font-medium">Text.</span>
+          </li>
+        </ul>
+        <p class="text-[12px] text-white/50 mt-4 leading-relaxed">
+          Text.
+        </p>
+      </div>
+
+      <!-- Contact -->
+      <div>
+        <h2 class="text-[10px] font-semibold uppercase tracking-[0.2em] text-white/55 mb-5">Text.</h2>
+        <ul class="space-y-3">
+          <li>
+            <a
+              href="https://maps.google.com/?q=Gatan+1+000+00+Orten"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="flex items-start gap-2.5 text-[13px] text-white/50 hover:text-white/80 transition-colors group"
+              aria-label="Visa adressen på Google Maps"
+            >
+              <MapPin size={13} class="mt-0.5 shrink-0" aria-hidden="true" />
+              <span>Text.<br />Text.</span>
+            </a>
+          </li>
+          <li>
+            <a
+              href="tel:000000000"
+              class="flex items-center gap-2.5 text-[13px] text-white/50 hover:text-white/80 transition-colors"
+              onclick="window.umami?.track('phone_click')"
+            >
+              <Phone size={13} class="shrink-0" aria-hidden="true" />
+              Text.
+            </a>
+          </li>
+          <li>
+            <a
+              href="mailto:placeholder@example.invalid"
+              class="flex items-center gap-2.5 text-[13px] text-white/50 hover:text-white/80 transition-colors"
+              onclick="window.umami?.track('email_click')"
+            >
+              <Mail size={13} class="shrink-0" aria-hidden="true" />
+              Text.
+            </a>
+          </li>
+        </ul>
+      </div>
+
+    </div>
+
+    <!-- Bottom bar -->
+    <div class="border-t border-white/5 pt-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+      <p class="text-[12px] text-white/50">
+        Text. {new Date().getFullYear()} Text.
+      </p>
+      <nav aria-label="Sidfotslänkar">
+        <ul class="flex flex-wrap gap-5">
+          <li><a href="/" class="text-[12px] text-white/50 hover:text-white/60 transition-colors" onclick="window.umami?.track('nav_click', {item: 'footer-start'})">Text.</a></li>
+          <li><a href="/om-oss/" class="text-[12px] text-white/50 hover:text-white/60 transition-colors" onclick="window.umami?.track('nav_click', {item: 'footer-om-oss'})">Text.</a></li>
+          <li><a href="/tjanster/" class="text-[12px] text-white/50 hover:text-white/60 transition-colors" onclick="window.umami?.track('nav_click', {item: 'footer-tjanster'})">Text.</a></li>
+          <li><a href="/galleri/" class="text-[12px] text-white/50 hover:text-white/60 transition-colors" onclick="window.umami?.track('nav_click', {item: 'footer-galleri'})">Text.</a></li>
+          <li><a href="/kontakt/" class="text-[12px] text-white/50 hover:text-white/60 transition-colors" onclick="window.umami?.track('nav_click', {item: 'footer-kontakt'})">Text.</a></li>
+        </ul>
+      </nav>
+    </div>
+  </div>
+</footer>

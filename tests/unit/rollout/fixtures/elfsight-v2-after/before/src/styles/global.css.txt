@@ -1,0 +1,148 @@
+@import "tailwindcss";
+@plugin "daisyui";
+
+/* =============================================
+   CSS Custom Properties — warm palette
+   ============================================= */
+:root {
+  --warm-dark: #1a1714;
+  --warm-off: #f7f5f2;
+  --section-py: clamp(3.5rem, 8vw, 6rem);
+}
+
+/* =============================================
+   Base resets
+   ============================================= */
+html {
+  scroll-behavior: smooth;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+/* =============================================
+   Typography — Open Sans (headings) + Oswald (body)
+   ============================================= */
+h1, h2, h3, h4, h5, h6 {
+  font-family: 'Open Sans', system-ui, sans-serif;
+  font-weight: 700;
+}
+
+body {
+  font-family: 'Oswald', system-ui, sans-serif;
+  font-weight: 300;
+  font-size: 1.0625rem;
+  line-height: 1.75;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* =============================================
+   Selection color
+   ============================================= */
+::selection {
+  background-color: var(--color-primary);
+  color: #ffffff;
+}
+
+/* =============================================
+   Scrollbar styling
+   ============================================= */
+::-webkit-scrollbar {
+  width: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-primary);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-secondary);
+}
+
+/* =============================================
+   data-animate — CSS-driven scroll entrance
+   Delay is driven by --delay CSS var (set inline).
+   ============================================= */
+[data-animate] {
+  opacity: 0;
+  transform: translateY(20px);
+  transition:
+    opacity 0.55s ease var(--delay, 0s),
+    transform 0.55s ease var(--delay, 0s);
+}
+
+[data-animate].is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-animate] {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+}
+
+/* =============================================
+   Warm palette utilities
+   ============================================= */
+.bg-warm-dark { background-color: var(--warm-dark); }
+.bg-warm-off  { background-color: var(--warm-off); }
+.text-warm-dark { color: var(--warm-dark); }
+
+/* =============================================
+   Global focus indicator — WCAG 2.4.7
+   Applies to all keyboard-focusable elements.
+   Remove per-element focus:outline-none.
+   ============================================= */
+*:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* =============================================
+   Section label — small uppercase eyebrow text
+   ============================================= */
+.section-label {
+  font-family: 'Open Sans', system-ui, sans-serif;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--color-primary);
+}
+
+/* =============================================
+   Display number — Oswald semibold for stats
+   ============================================= */
+.display-number {
+  font-family: 'Oswald', system-ui, sans-serif;
+  font-weight: 600;
+}
+
+/* =============================================
+   Prose Oswald — body text blocks
+   ============================================= */
+.prose-oswald p,
+.prose-oswald li {
+  font-family: 'Oswald', system-ui, sans-serif;
+  font-weight: 300;
+  font-size: 1.0625rem;
+  line-height: 1.75;
+}
+
+/* =============================================
+   Print styles
+   ============================================= */
+@media print {
+  header, footer, nav {
+    display: none;
+  }
+  main {
+    padding: 0;
+  }
+}

@@ -6,7 +6,7 @@ import { importsOf, parseModule } from '../lib/ts-ast'
 import { PACKAGE } from './config'
 import { type EditMode, eolOf, type Hit, type Planner } from './engine'
 
-export type PackageComponent = 'ConsentBanner' | 'PrivacyLinks' | 'ConsentEmbed'
+export type PackageComponent = 'ConsentBanner' | 'PrivacyLinks' | 'ConsentEmbed' | 'ConsentWidget'
 
 export const componentPath = (name: PackageComponent): string => `${PACKAGE}/components/${name}.astro`
 
@@ -43,7 +43,7 @@ export function spliceTarget(
 }
 
 /** Only whitespace between the start of its line and `pos`. */
-const startsLine = (text: string, pos: number): boolean => /^[ \t]*$/.test(text.slice(text.lastIndexOf('\n', pos - 1) + 1, pos))
+export const startsLine = (text: string, pos: number): boolean => /^[ \t]*$/.test(text.slice(text.lastIndexOf('\n', pos - 1) + 1, pos))
 
 /** Parses an .astro file; a parse error becomes the target's refusal (the engine catches it). */
 export function parseFile(planner: Planner, file: string): { text: string; tree: ReturnType<typeof parseAstro> } {

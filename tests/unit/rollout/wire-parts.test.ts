@@ -7,16 +7,29 @@ import { servicesOf } from '../../../ci/rollout/lib/report'
 import { detectStructure } from '../../../ci/rollout/detect/structure'
 import { fixtureSite, globToRegExp, type SiteFiles } from '../../../ci/rollout/lib/site-files'
 import { wireEmbeds } from '../../../ci/rollout/wire/embeds'
+import { INSTALL_SPEC } from '../../../ci/rollout/wire/index'
 import { applyEdits, Planner } from '../../../ci/rollout/wire/engine'
 import { wireLayout } from '../../../ci/rollout/wire/layout'
 import { wireLinks } from '../../../ci/rollout/wire/links'
 import { wirePrivacy } from '../../../ci/rollout/wire/privacy'
+import { wireWidgets } from '../../../ci/rollout/wire/widgets'
 import type { Report, WirePlan } from '../../../ci/rollout/types'
 
 type Part = (p: Planner, r: Report) => void
 
 const FIXTURES = join(import.meta.dirname, 'fixtures')
-const WIRED = ['aspomad', 'domeijstapetserarverkstad', 'munkforstradgardstjanst', 'traforadling', 'vasshallakatthotell']
+const WIRED = [
+  'aspomad',
+  'calendar-literal',
+  'domeijstapetserarverkstad',
+  'elfsight-v1',
+  'elfsight-v2-after',
+  'elfsight-v2-before',
+  'elfsight-v3',
+  'munkforstradgardstjanst',
+  'traforadling',
+  'vasshallakatthotell',
+]
 const expectedText = (site: string, path: string) => readFileSync(join(FIXTURES, site, 'expected', `${path}.txt`), 'utf8')
 
 function memSite(files: Record<string, string>): SiteFiles {
@@ -439,6 +452,25 @@ describe('wirePrivacy', () => {
     expect(privacy({}, { 'src/data/privacy.json': '{"services":[]}' })).toEqual({ ok: true, edits: [], newFiles: [], skipped: ['privacy.json'] })
   })
 
+  test('the services are report.services: widgets and calendars included', () => {
+    const result = privacy({ services: ['elfsight', 'google-calendar', 'google-maps'] })
+    expect(result.ok && JSON.parse(result.newFiles[0]!.text)).toEqual({ services: ['elfsight', 'google-calendar', 'google-maps'] })
+  })
+
+  test('an existing privacy.json that lists every service: skipped', () => {
+    const existing = { 'src/data/privacy.json': '{"services":["google-maps","elfsight"]}' }
+    expect(privacy({ services: ['elfsight', 'google-maps'] }, existing)).toEqual({ ok: true, edits: [], newFiles: [], skipped: ['privacy.json'] })
+  })
+
+  test('an existing privacy.json without elfsight: refused (the build would fail on it)', () => {
+    const existing = { 'src/data/privacy.json': '{"services":["google-maps"]}' }
+    expect(refusals(privacy({ services: ['elfsight', 'google-maps'] }, existing))).toEqual(['privacy.json exists without elfsight'])
+  })
+
+  test('an existing privacy.json that is not JSON: refused', () => {
+    expect(refusals(privacy({ services: ['elfsight'] }, { 'src/data/privacy.json': '{"services":' }))).toEqual(['privacy.json exists and is not valid JSON'])
+  })
+
   test.each(WIRED)('%s: privacy.json comes out as expected/', (site) => {
     const { result } = fixturePlan(site)
     expect(result.ok && result.newFiles).toEqual([{ path: 'src/data/privacy.json', text: expectedText(site, 'src/data/privacy.json') }])
@@ -609,6 +641,110 @@ describe('wireEmbeds', () => {
     ['vasshallakatthotell', 'src/components/ContactSection.astro'],
   ])('%s: the map component comes out as expected/ (scoped-style rewrites included)', (site, path) => {
     const { files, result } = fixturePlan(site)
+    expect(after(result, files, path)).toBe(expectedText(site, path))
+  })
+})
+
+describe('wireWidgets', () => {
+  const SCRIPT = '<script is:inline src="https://elfsightcdn.com/platform.js" async></script>'
+  const div = (n: number): string => `<div class="elfsight-app-00000000-0000-0000-0000-00000000000${n}" data-elfsight-app-lazy></div>`
+  const IMPORT = "import ConsentWidget from '@visionmediahq/astro-consent/components/ConsentWidget.astro'"
+  const open = (script = 'https://elfsightcdn.com/platform.js'): string => `<ConsentWidget service="elfsight" script="${script}" title="Innehållet">`
+
+  /** detect's widgets over `files` (the bare site has no layout or config: its other reasons are dropped), then wireWidgets alone. */
+  const widgets = (files: Record<string, string>, over: (r: Report) => Partial<Report> = () => ({})): { site: SiteFiles; result: WirePlan } => {
+    const site = memSite(files)
+    const report: Report = { ...detect(site, 'x', ['x.se']), classification: 'consent', reasons: [] }
+    return { site, result: plan([wireWidgets], site, { ...report, ...over(report) }) }
+  }
+
+  test('two divs and one script in a file: two wrappers, the script line removed once, one import', () => {
+    const path = 'src/pages/index.astro'
+    const { site, result } = widgets({ [path]: `<section>\n  ${SCRIPT}\n  ${div(1)}\n  <p>Text.</p>\n  ${div(2)}\n</section>\n` })
+    expect(result.ok && result.edits.map((e) => e.target)).toEqual([
+      `ConsentWidget import (${path})`,
+      `widget (${path}:3)`,
+      `widget (${path}:5)`,
+      `widget script (${path})`,
+    ])
+    expect(after(result, site, path)).toBe(
+      `---\n${IMPORT}\n---\n<section>\n  ${open()}\n  ${div(1)}\n  </ConsentWidget>\n  <p>Text.</p>\n  ${open()}\n  ${div(2)}\n  </ConsentWidget>\n</section>\n`,
+    )
+  })
+
+  test('the same widget id in two files, each with its script (Review Focus 2): both wired', () => {
+    const a = 'src/components/News.astro'
+    const b = 'src/pages/nyheter.astro'
+    const { site, result } = widgets({ [a]: `${SCRIPT}\n${div(1)}\n`, [b]: `<main>\n  ${SCRIPT}\n  ${div(1)}\n</main>\n` })
+    expect(after(result, site, a)).toBe(`---\n${IMPORT}\n---\n${open()}\n${div(1)}\n</ConsentWidget>\n`)
+    expect(after(result, site, b)).toBe(`---\n${IMPORT}\n---\n<main>\n  ${open()}\n  ${div(1)}\n  </ConsentWidget>\n</main>\n`)
+  })
+
+  test('the loader URL is kept as written (V3, Task 0 probe)', () => {
+    const path = 'src/pages/index.astro'
+    const old = 'https://static.elfsight.com/platform/platform.js'
+    const { site, result } = widgets({ [path]: `<script src="${old}" async is:inline></script>\n${div(1)}\n` })
+    expect(after(result, site, path)).toBe(`---\n${IMPORT}\n---\n${open(old)}\n${div(1)}\n</ConsentWidget>\n`)
+  })
+
+  test('a multi-line div keeps its lines; the tags take its indent; the comment before the script stays', () => {
+    const path = 'src/components/Feed.astro'
+    const multi = `<div\n        class="elfsight-app-00000000-0000-0000-0000-000000000001"\n        data-elfsight-app-lazy\n      >\n      </div>`
+    const { site, result } = widgets({ [path]: `---\nimport X from './X.astro';\n---\n<section>\n    <div>\n      ${multi}\n    </div>\n</section>\n\n<!-- Elfsight -->\n${SCRIPT}\n` })
+    expect(after(result, site, path)).toBe(
+      `---\nimport X from './X.astro';\n${IMPORT};\n---\n<section>\n    <div>\n      ${open()}\n      ${multi}\n      </ConsentWidget>\n    </div>\n</section>\n\n<!-- Elfsight -->\n`,
+    )
+  })
+
+  test('a script that shares its line with other markup: only the element goes', () => {
+    const path = 'src/pages/index.astro'
+    const { site, result } = widgets({ [path]: `<p>Text.</p>${SCRIPT}\n${div(1)}\n` })
+    expect(after(result, site, path)).toBe(`---\n${IMPORT}\n---\n<p>Text.</p>\n${open()}\n${div(1)}\n</ConsentWidget>\n`)
+  })
+
+  test('CRLF files keep CRLF', () => {
+    const path = 'src/pages/index.astro'
+    const { site, result } = widgets({ [path]: `<main>\r\n  ${SCRIPT}\r\n  ${div(1)}\r\n</main>\r\n` })
+    expect(after(result, site, path)).toBe(`---\r\n${IMPORT}\r\n---\r\n<main>\r\n  ${open()}\r\n  ${div(1)}\r\n  </ConsentWidget>\r\n</main>\r\n`)
+  })
+
+  test('a div that does not start its line: refused (its wrapper would have no line of its own)', () => {
+    const path = 'src/pages/index.astro'
+    const { result } = widgets({ [path]: `${SCRIPT}\n<p>Text.</p>${div(1)}\n` })
+    expect(refusals(result)).toEqual(['widget div does not start its line'])
+  })
+
+  test('a div offset that does not match: refused', () => {
+    const path = 'src/pages/index.astro'
+    const { result } = widgets({ [path]: `${SCRIPT}\n${div(1)}\n` }, (r) => ({ widgets: r.widgets.map((w) => ({ ...w, start: w.start + 1 })) }))
+    const start = SCRIPT.length + 2
+    expect(refusals(result)).toEqual([`widget div at offset ${start} not found`])
+  })
+
+  test('a script offset that does not match: refused', () => {
+    const path = 'src/pages/index.astro'
+    const { result } = widgets({ [path]: `${SCRIPT}\n${div(1)}\n` }, (r) => ({ widgets: r.widgets.map((w) => ({ ...w, scriptAt: { start: 1, end: w.scriptAt.end } })) }))
+    expect(refusals(result)).toEqual(['widget script at offset 1 not found'])
+  })
+
+  test('a package ConsentWidget already in the file (wired by hand): nothing to plan', () => {
+    const path = 'src/pages/index.astro'
+    const { result } = widgets({ [path]: `---\n${IMPORT}\n---\n${open()}\n${div(1)}\n</ConsentWidget>\n` })
+    expect(result).toEqual({ ok: true, edits: [], newFiles: [], skipped: [] })
+  })
+
+  test('INSTALL_SPEC is ^1.1.1 (the first version with ConsentWidget nesting fixed)', () => {
+    expect(INSTALL_SPEC).toBe('github:visionmediahq/astro-consent#semver:^1.1.1')
+  })
+
+  test.each([
+    ['elfsight-v1', 'src/components/InstagramFeed.astro'],
+    ['elfsight-v2-before', 'src/components/InstagramSection.astro'],
+    ['elfsight-v2-after', 'src/components/FacebookFeed.astro'],
+    ['elfsight-v3', 'src/pages/prislista.astro'],
+  ])('%s: the widget file comes out as expected/', (site, path) => {
+    const files = fixtureSite(join(FIXTURES, site, 'before'))
+    const result = plan([wireWidgets], files, detect(files, site, [`${site}.se`]))
     expect(after(result, files, path)).toBe(expectedText(site, path))
   })
 })

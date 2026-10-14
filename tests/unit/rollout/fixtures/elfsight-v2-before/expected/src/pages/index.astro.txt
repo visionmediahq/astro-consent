@@ -1,0 +1,29 @@
+---
+import Base from '../layouts/Base.astro';
+import Header from '../components/Header.astro';
+import Footer from '../components/Footer.astro';
+import Hero from '../components/Hero.astro';
+import AboutSection from '../components/AboutSection.astro';
+import ServicesSection from '../components/ServicesSection.astro';
+import InstagramSection from '../components/InstagramSection.astro';
+import CtaBanner from '../components/CtaBanner.astro';
+
+export const prerender = true;
+---
+
+<Base
+  title="Text."
+  description="Text."
+  canonical="https://elfsight-v2-before.se/"
+  ogImage="/og-image.jpg"
+>
+  <Header />
+  <main id="main-content">
+    <Hero />
+    <AboutSection />
+    <ServicesSection />
+    <InstagramSection />
+    <CtaBanner />
+  </main>
+  <Footer />
+</Base>

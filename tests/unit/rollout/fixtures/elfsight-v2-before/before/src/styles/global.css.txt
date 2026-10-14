@@ -1,0 +1,145 @@
+@import "tailwindcss";
+@plugin "daisyui";
+
+/* ── Typography ── */
+h1, h2, h3, h4, h5, h6 {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: 0.01em;
+}
+
+body {
+  font-family: 'Cabin', system-ui, sans-serif;
+  font-size: 1rem;
+  line-height: 1.65;
+}
+
+/* ── Design Tokens ── */
+:root {
+  --ink:         oklch(15% 0.015 60);
+  --ink-2:       oklch(28% 0.015 62);
+  --paper:       oklch(99% 0.008 80);
+  --paper-2:     oklch(96% 0.01 80);
+  --muted:       oklch(52% 0.012 65);
+  --border-c:    oklch(88% 0.012 80);
+  --primary-dk:  oklch(58% 0.18 65);
+  /* Darker golden: accessible on light backgrounds (6.88:1 on white) */
+  --color-eyebrow: oklch(46% 0.15 65);
+}
+
+/* ── Base resets ── */
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ── Skip link ── */
+.skip-link {
+  position: absolute;
+  top: -100%;
+  left: 1rem;
+  z-index: 10000;
+  background: var(--color-primary);
+  color: var(--ink);
+  font-family: 'Cabin', system-ui, sans-serif;
+  font-weight: 700;
+  font-size: 0.875rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  text-decoration: none;
+  padding: 0.75rem 1.5rem;
+  transition: top 0.15s;
+}
+
+.skip-link:focus {
+  top: 1rem;
+}
+
+/* ── Focus visible ── */
+:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 3px;
+}
+
+/* Override focus on dark surfaces */
+.services-section :focus-visible,
+.site-footer :focus-visible {
+  outline-color: var(--paper);
+}
+
+/* ── Selection ── */
+::selection {
+  background-color: var(--color-primary);
+  color: #fff;
+}
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--paper-2); }
+::-webkit-scrollbar-thumb { background: var(--border-c); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+
+/* ── Animate on scroll ── */
+[data-animate] {
+  opacity: 0;
+  transform: translateY(20px);
+  transition:
+    opacity 0.55s cubic-bezier(0.22, 0.03, 0.26, 1) calc(var(--delay, 0s)),
+    transform 0.55s cubic-bezier(0.22, 0.03, 0.26, 1) calc(var(--delay, 0s));
+}
+
+[data-animate].is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* ── Eyebrow label ──
+   Uses --color-eyebrow for accessible contrast on light backgrounds (6.88:1 on white).
+   Dark-section eyebrows define their own color directly. ── */
+.eyebrow {
+  display: block;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--color-eyebrow);
+  font-family: 'Cabin', system-ui, sans-serif;
+  margin-bottom: 0.85rem;
+}
+
+/* ── Section wrapper ── */
+.section-wrap {
+  max-width: 1280px;
+  margin-inline: auto;
+  padding-inline: clamp(1.5rem, 5vw, 4rem);
+}
+
+/* ── Primary utilities ── */
+.text-primary { color: var(--color-primary); }
+.bg-primary   { background-color: var(--color-primary); }
+
+/* ── Button base ── */
+.btn-primary {
+  background-color: var(--color-primary);
+  border-color: var(--color-primary);
+  color: var(--ink);
+  font-family: 'Cabin', system-ui, sans-serif;
+  font-weight: 700;
+  font-size: 0.8rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  border-radius: 0;
+  padding: 0.85rem 2rem;
+  transition: background-color 0.2s, transform 0.15s;
+}
+
+.btn-primary:hover {
+  background-color: var(--primary-dk);
+  border-color: var(--primary-dk);
+  transform: translateY(-1px);
+}

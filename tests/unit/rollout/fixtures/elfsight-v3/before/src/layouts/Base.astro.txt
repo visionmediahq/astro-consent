@@ -1,0 +1,170 @@
+---
+import SEO from '../components/SEO.astro'
+import SchemaOrg from '../components/SchemaOrg.astro'
+import VisionFooter from '../components/VisionFooter.astro'
+import '../styles/global.css'
+
+interface Address {
+  streetAddress: string
+  addressLocality: string
+  postalCode: string
+  addressCountry: string
+}
+
+interface SchemaProps {
+  name: string
+  url: string
+  telephone?: string
+  email?: string
+  address?: Address
+  openingHours?: string[]
+  description?: string
+  image?: string
+}
+
+interface Props {
+  // SEO — required on every page
+  title: string
+  description: string
+  canonical: string
+  ogImage?: string
+  ogType?: string
+  // LocalBusiness schema — omit on pages without business context (e.g. 404)
+  schema?: SchemaProps
+}
+
+const { title, description, canonical, ogImage, ogType, schema } = Astro.props
+
+const umamiScriptUrl = import.meta.env.UMAMI_SCRIPT_URL
+const umamiWebsiteId = import.meta.env.UMAMI_WEBSITE_ID
+const glitchtipDsn = import.meta.env.PUBLIC_GLITCHTIP_DSN
+---
+
+<!doctype html>
+<html lang="sv">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="icon" href="/favicon.png" type="image/png" />
+
+    <!-- Typography: Barlow SemiCondensed (headings) + Mulish (body) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@600;700;800&family=Mulish:wght@400;500;600&display=swap" />
+
+    <SEO
+      title={title}
+      description={description}
+      canonical={canonical}
+      ogImage={ogImage}
+      ogType={ogType}
+    />
+
+    {schema && (
+      <SchemaOrg
+        name={schema.name}
+        url={schema.url}
+        telephone={schema.telephone}
+        email={schema.email}
+        address={schema.address}
+        openingHours={schema.openingHours}
+        description={schema.description}
+        image={schema.image}
+      />
+    )}
+
+    <!-- GlitchTip error tracking — active when PUBLIC_GLITCHTIP_DSN is set -->
+    {glitchtipDsn && (
+      <>
+        <script
+          is:inline
+          src="https://cdn.jsdelivr.net/npm/@sentry/browser@8/build/bundle.min.js"
+          crossorigin="anonymous"
+        ></script>
+        <script is:inline define:vars={{ glitchtipDsn }}>
+          if (typeof Sentry !== 'undefined') {
+            Sentry.init({ dsn: glitchtipDsn, tracesSampleRate: 0.1 })
+          }
+        </script>
+      </>
+    )}
+
+    <!-- Umami analytics — active when both UMAMI_SCRIPT_URL and UMAMI_WEBSITE_ID are set -->
+    {umamiScriptUrl && umamiWebsiteId && (
+      <script
+        is:inline
+        async
+        src={umamiScriptUrl}
+        data-website-id={umamiWebsiteId}
+      ></script>
+    )}
+
+    <!-- Client theme tokens — overridden per client in index.astro -->
+    <style is:global>
+      :root {
+        --color-primary: var(--client-primary, #570df8);
+        --color-secondary: var(--client-secondary, #f000b8);
+        --color-accent: var(--client-accent, #37cdbe);
+        --color-base-100: var(--client-bg, #ffffff);
+        --color-base-content: var(--client-text, #1f2937);
+        --color-text: var(--client-text, #374151);
+      }
+
+      body {
+        font-family: 'Mulish', system-ui, sans-serif;
+      }
+
+      h1, h2, h3, h4, h5, h6 {
+        font-family: 'Barlow Semi Condensed', system-ui, sans-serif;
+        font-weight: 700;
+        letter-spacing: -0.01em;
+      }
+
+      @keyframes scroll-hint {
+        0%, 100% { transform: translateY(0); opacity: 0.7; }
+        50% { transform: translateY(6px); opacity: 1; }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+          animation-duration: 0.01ms !important;
+          animation-iteration-count: 1 !important;
+          transition-duration: 0.01ms !important;
+          scroll-behavior: auto !important;
+        }
+      }
+    </style>
+  </head>
+  <body class="bg-base-100 text-base-content">
+    <a
+      href="#main-content"
+      class="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-[100] focus:px-4 focus:py-2 focus:rounded focus:text-white focus:text-sm focus:font-semibold"
+      style="background-color: var(--color-primary)"
+    >Hoppa till innehållet</a>
+    <slot />
+    <VisionFooter />
+
+    <!-- Global scroll-triggered entrance animations for [data-animate] elements -->
+    <script>
+      import { animate, inView } from 'motion'
+
+      const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+
+      if (!prefersReducedMotion) {
+        inView('[data-animate]', (element) => {
+          const el = element as HTMLElement
+          const delayAttr = el.dataset.animateDelay
+          const delayCss = getComputedStyle(el).getPropertyValue('--delay').trim()
+          const delay = parseFloat(delayAttr ?? delayCss ?? '0')
+          animate(
+            el,
+            { opacity: [0, 1], y: [20, 0] },
+            { duration: 0.5, delay, easing: [0.22, 0.03, 0.26, 1] }
+          )
+        })
+      }
+    </script>
+  </body>
+</html>
