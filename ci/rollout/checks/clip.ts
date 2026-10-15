@@ -25,9 +25,10 @@ export interface ClipResult {
    */
   covered: boolean
   /**
-   * An embed button an ancestor with `overflow: hidden` or `clip` cuts off, wholly or in part
-   * (lbfastigheter, #43: a map parent 300px tall on phones hid "Visa" below its edge). An ancestor
-   * that scrolls is not counted: the visitor can scroll to the button.
+   * An embed button, or the rest of its row ("Visa alltid", the open link), that an ancestor with
+   * `overflow: hidden` or `clip` cuts off, wholly or in part, on the axis it hides (lbfastigheter,
+   * #43: a map parent 300px tall on phones hid "Visa" below its edge). An axis that scrolls is not
+   * counted: the visitor can scroll to the button.
    */
   cut: boolean
   clipped: boolean
@@ -62,11 +63,23 @@ const MEASURE = `(() => {
         return !hit || !b.contains(hit)
       }),
       cut: !!b.closest('[data-consent-embed]') && (() => {
+        // The button and the rest of its row: "Visa alltid" and the open link can wrap below it.
+        const embed = b.closest('[data-consent-embed]')
+        const parts = [b, embed.querySelector('[data-remember]')?.closest('label'), embed.querySelector('a[data-open]')]
+          .filter((el) => el && el.offsetParent)
+          .map((el) => el.getBoundingClientRect())
+        const hides = (o) => o === 'hidden' || o === 'clip'
         for (let a = b.parentElement; a && a !== document.documentElement; a = a.parentElement) {
           const s = getComputedStyle(a)
-          if (![s.overflowX, s.overflowY].some((o) => o === 'hidden' || o === 'clip')) continue
+          // Per axis: overflow-x: hidden makes overflow-y auto, which scrolls.
+          const x = hides(s.overflowX)
+          const y = hides(s.overflowY)
+          if (!x && !y) continue
           const r = a.getBoundingClientRect()
-          if (bb.top < r.top - 1 || bb.bottom > r.bottom + 1 || bb.left < r.left - 1 || bb.right > r.right + 1) return true
+          for (const p of parts) {
+            if (y && (p.top < r.top - 1 || p.bottom > r.bottom + 1)) return true
+            if (x && (p.left < r.left - 1 || p.right > r.right + 1)) return true
+          }
         }
         return false
       })(),

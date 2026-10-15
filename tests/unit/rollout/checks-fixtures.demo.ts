@@ -100,6 +100,10 @@ const FIXTURES: Record<string, string> = {
   // buttons off below its edge; the same placeholder in a tall enough box (or one that scrolls) is fine.
   cutoff: page(`<style>.m{height:450px;overflow:hidden}@media (max-width:640px){.m{height:300px}}</style>${cutPlaceholder('m')}`),
   cutok: page(`<style>.m{height:450px;overflow:hidden}.s{height:200px;overflow:auto}</style>${cutPlaceholder('m')}${cutPlaceholder('s')}`),
+  // body { overflow-x: hidden } (computed overflow-y: auto) with the embed below the fold: it scrolls.
+  cutokx: page(`<style>html,body{height:100%}body{overflow-x:hidden}</style><div style="height:900px"></div>${cutPlaceholder('m')}`),
+  // The button fits, but the row's "Visa alltid" and "Öppna" wrap below the box's edge.
+  cutrow: page(`<style>.m{height:300px;overflow:hidden}</style><div class="m"><div data-consent-embed="google-maps"><p style="height:270px;margin:0">Google Maps</p><button data-load>Visa</button><br><label><input type="checkbox" data-remember> Visa alltid</label><br><a data-open href="${MAPS}">Öppna</a></div></div>`),
 }
 
 const dir = mkdtempSync(join(tmpdir(), 'checks-fixtures-'))
@@ -207,8 +211,12 @@ try {
     expect(rows.every((r) => r.width !== 1280 || !r.clipped), '/cutoff/ at 1280px is not clipped', rows)
   }
   {
-    const rows = await checkClip(browser, BASE, ['/cutok/'], [360])
-    expect(rows.every((r) => !r.clipped), '/cutok/ a tall enough box, or one that scrolls, is not clipped', rows)
+    const rows = await checkClip(browser, BASE, ['/cutrow/'], [360])
+    expect(rows.some((r) => r.button === 'Visa' && r.cut), '/cutrow/ the Visa row cut off below the button', rows)
+  }
+  {
+    const rows = await checkClip(browser, BASE, ['/cutok/', '/cutokx/'], [360])
+    expect(rows.every((r) => !r.clipped), '/cutok/ /cutokx/ a tall enough box, or one that scrolls (overflow-x:hidden body included), is not clipped', rows)
   }
 } finally {
   await browser.close()
