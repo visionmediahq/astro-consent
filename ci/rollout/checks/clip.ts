@@ -1,5 +1,6 @@
 // Clipped buttons (spec C3 step 5), ported from the pilot kit's clip.ts. The pilot checked the
-// embed's "Visa" at 320/360/375 px; this checks every visible banner and embed button, plus 1280.
+// embed's "Visa" at 320/360/375 px; this checks every visible banner and embed button, plus 1280,
+// and that no overflow:hidden ancestor cuts an embed button off.
 import type { Browser } from '@playwright/test'
 import { freshPage, gotoPage } from './requests'
 
@@ -23,6 +24,12 @@ export interface ClipResult {
    * button. Embed buttons are not hit-tested, as they can sit below the fold.
    */
   covered: boolean
+  /**
+   * An embed button an ancestor with `overflow: hidden` or `clip` cuts off, wholly or in part
+   * (lbfastigheter, #43: a map parent 300px tall on phones hid "Visa" below its edge). An ancestor
+   * that scrolls is not counted: the visitor can scroll to the button.
+   */
+  cut: boolean
   clipped: boolean
 }
 
@@ -36,6 +43,7 @@ const MEASURE = `(() => {
     over: document.documentElement.scrollWidth > innerWidth,
     out: false,
     covered: false,
+    cut: false,
   }]
   const buttons = document.querySelectorAll('[data-consent-banner] button, [data-consent-embed] button')
   for (const b of buttons) {
@@ -53,6 +61,15 @@ const MEASURE = `(() => {
         const hit = document.elementFromPoint(bb.left + bb.width * fx, bb.top + bb.height * fy)
         return !hit || !b.contains(hit)
       }),
+      cut: !!b.closest('[data-consent-embed]') && (() => {
+        for (let a = b.parentElement; a && a !== document.documentElement; a = a.parentElement) {
+          const s = getComputedStyle(a)
+          if (![s.overflowX, s.overflowY].some((o) => o === 'hidden' || o === 'clip')) continue
+          const r = a.getBoundingClientRect()
+          if (bb.top < r.top - 1 || bb.bottom > r.bottom + 1 || bb.left < r.left - 1 || bb.right > r.right + 1) return true
+        }
+        return false
+      })(),
     })
   }
   return rows
@@ -77,7 +94,7 @@ export async function checkClip(
         await gotoPage(page, base + path)
         await page.waitForTimeout(300)
         const rows = (await page.evaluate(MEASURE)) as Omit<ClipResult, 'path' | 'width' | 'clipped'>[]
-        for (const r of rows) results.push({ path, width, ...r, clipped: r.over || r.out || r.covered })
+        for (const r of rows) results.push({ path, width, ...r, clipped: r.over || r.out || r.covered || r.cut })
       } finally {
         await context.close()
       }
