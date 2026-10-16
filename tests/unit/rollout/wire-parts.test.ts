@@ -529,11 +529,133 @@ describe('wireEmbeds', () => {
     expect(
       embed(`<div style="height: 24rem">\n  <iframe src="https://www.google.com/maps/embed?pb=!1" height="100%" title="Karta"></iframe>\n</div>\n`),
     ).toContain('<div class="grid h-full"><ConsentEmbed')
+  })
+
+  // A percentage height against a parent with only a min-height resolves to auto: `grid h-full`
+  // alone shrinks to the placeholder (120px where the site had 500px), so the min-height goes on
+  // the wrapper (fbop, pdlmotor, bellevueconditori and ramsmora were wired by hand like this).
+  test('fills a parent that only has a min-height → the wrapper carries it as min-h-*', () => {
     expect(
       embed(
         `<div class="karta">\n  <iframe src="https://www.google.com/maps/embed?pb=!1" height="100%" title="Karta"></iframe>\n</div>\n<style>\n  .karta { min-height: 30vh; }\n</style>\n`,
       ),
-    ).toContain('<div class="grid h-full"><ConsentEmbed')
+    ).toContain('<div class="grid h-full min-h-[30vh]"><ConsentEmbed')
+    // fbop: h-full on the parent is not a definite height; its min-h-[500px] is.
+    expect(
+      embed(`<div class="h-full min-h-[500px] rounded-lg">\n  <iframe src="https://www.google.com/maps/embed?pb=!1" width="100%" height="100%" title="Karta"></iframe>\n</div>\n`),
+    ).toContain('  <div class="grid h-full min-h-[500px]"><ConsentEmbed service="google-maps" src="https://www.google.com/maps/embed?pb=!1" title="Karta" aspect="auto" /></div>\n')
+    // Responsive min-h classes go along as written; an inline min-height too.
+    expect(
+      embed(`<div class="min-h-80 lg:min-h-[480px]">\n  <iframe class="w-full h-full" src="https://www.google.com/maps/embed?pb=!1" title="Karta"></iframe>\n</div>\n`),
+    ).toContain('<div class="grid h-full min-h-80 lg:min-h-[480px] w-full"><ConsentEmbed')
+    expect(
+      embed(`<div style="min-height: 22rem">\n  <iframe src="https://www.google.com/maps/embed?pb=!1" height="100%" title="Karta"></iframe>\n</div>\n`),
+    ).toContain('<div class="grid h-full min-h-[22rem]"><ConsentEmbed')
+  })
+
+  test('min-h-0, a zero min-height or only a variant min-h is no height: refused as before (review of #44)', () => {
+    const map = `<iframe class="w-full h-full" src="https://www.google.com/maps/embed?pb=!1" title="Karta"></iframe>`
+    expect(refused(`<div class="flex-1 min-h-0">\n  ${map}\n</div>\n`)).toEqual(['map fills a parent of unknown height'])
+    expect(refused(`<div class="min-h-[0px]">\n  ${map}\n</div>\n`)).toEqual(['map fills a parent of unknown height'])
+    expect(refused(`<div class="md:min-h-[500px]">\n  ${map}\n</div>\n`)).toEqual(['map fills a parent of unknown height'])
+    expect(refused(`<div style="min-height: 0">\n  ${map}\n</div>\n`)).toEqual(['map fills a parent of unknown height'])
+    // height: 0 with padding (the aspect-ratio hack) is no definite height either.
+    expect(
+      refused(`<div class="r">\n  <iframe src="https://www.google.com/maps/embed?pb=!1" height="100%" title="Karta"></iframe>\n</div>\n<style>\n  .r { padding-bottom: 56.25%; height: 0px; }\n</style>\n`),
+    ).toEqual(['map fills a parent of unknown height'])
+  })
+
+  test("the iframe's own inline min-height goes on the wrapper (pdlmotor, bellevueconditori, ramsmora)", () => {
+    // pdlmotor: parent min-h-[360px], iframe style min-height: 360px: one min-h, the iframe's.
+    expect(
+      embed(
+        `<div class="lg:col-span-3 min-h-[360px]">\n  <iframe src="https://www.google.com/maps/embed?pb=!1" width="100%" height="100%" style="border: 0; min-height: 360px; display: block;" title="Karta"></iframe>\n</div>\n`,
+      ),
+    ).toContain('<div class="grid h-full min-h-[360px]"><ConsentEmbed')
+    // ramsmora: the parent is h-full (unknown); the iframe's min-height makes the box definite.
+    expect(
+      embed(`<div class="h-full">\n  <iframe src="https://www.google.com/maps/embed?pb=!1" height="100%" style="border:0; min-height: 500px;" title="Karta"></iframe>\n</div>\n`),
+    ).toContain('<div class="grid h-full min-h-[500px]"><ConsentEmbed')
+    // A parent of definite height keeps the iframe's min-height as well.
+    expect(
+      embed(`<div class="h-96">\n  <iframe src="https://www.google.com/maps/embed?pb=!1" height="100%" style="min-height:20rem" title="Karta"></iframe>\n</div>\n`),
+    ).toContain('<div class="grid h-full min-h-[20rem]"><ConsentEmbed')
+  })
+
+  test("a parent min-height: the rule outside @media counts; two that disagree are refused", () => {
+    // A smaller min-height on phones only makes the parent grow around the wrapper: nothing clips.
+    expect(
+      embed(
+        `<div class="karta">\n  <iframe src="https://www.google.com/maps/embed?pb=!1" height="100%" title="Karta"></iframe>\n</div>\n<style>\n  .karta { min-height: 500px; }\n  @media (max-width: 640px) { .karta { min-height: 300px; } }\n</style>\n`,
+      ),
+    ).toContain('<div class="grid h-full min-h-[500px]"><ConsentEmbed')
+    expect(
+      refused(
+        `<div class="karta">\n  <iframe src="https://www.google.com/maps/embed?pb=!1" height="100%" title="Karta"></iframe>\n</div>\n<style>\n  .karta { min-height: 500px; }\n  .karta { min-height: 30rem; }\n</style>\n`,
+      ),
+    ).toEqual(["the map's parent sets different min-heights (500px, 30rem)"])
+  })
+
+  // #43: a stylesheet rule beats the presentational height attribute (and a Tailwind utility,
+  // which is layered), so `.box iframe { height: 100% }` makes the iframe fill its parent.
+  test('scoped CSS height on the iframe beats its height attribute (#43, lbfastigheter)', () => {
+    const lb = `<div class="kontakt-map__embed">\n  <iframe src="https://www.google.com/maps/embed?pb=!1" width="100%" height="450" style="border:0;" title="Karta"></iframe>\n</div>\n<style>\n  .kontakt-map__embed { height: 450px; overflow: hidden; }\n  .kontakt-map__embed iframe { width: 100%; height: 100%; display: block; }\n  @media (max-width: 640px) { .kontakt-map__embed { height: 300px; } }\n</style>\n`
+    expect(embed(lb)).toContain('  <div class="grid h-full"><ConsentEmbed service="google-maps" src="https://www.google.com/maps/embed?pb=!1" title="Karta" aspect="auto" /></div>\n')
+    // A fixed value: the rule's, not the attribute's; also through `>` and for a bare `iframe`.
+    expect(
+      embed(`<div class="box">\n  <iframe class="h-[450px]" src="https://www.google.com/maps/embed?pb=!1" height="450" title="Karta"></iframe>\n</div>\n<style>\n  .box > iframe { height: 380px !important; }\n</style>\n`),
+    ).toContain('<div class="grid h-[380px]"><ConsentEmbed')
+    expect(
+      embed(`<section>\n  <iframe src="https://www.google.com/maps/embed?pb=!1" height="450" title="Karta"></iframe>\n</section>\n<style>\n  iframe { height: 25rem; }\n</style>\n`),
+    ).toContain('<div class="grid h-[25rem]"><ConsentEmbed')
+    // Rules inside @media set the height on some screens only: the base height stays (bruksgarden:
+    // height="400", 260px on phones; restaurangharnet: 460px, 260px on phones). Verify step 5
+    // measures the phone widths.
+    expect(
+      embed(`<section>\n  <div>\n    <iframe src="https://www.google.com/maps/embed?pb=!1" height="400" title="Karta"></iframe>\n  </div>\n</section>\n<style>\n  @media (max-width: 640px) {\n    section iframe { height: 260px; }\n  }\n</style>\n`),
+    ).toContain('<div class="grid h-[400px]"><ConsentEmbed')
+    expect(
+      embed(`<div class="wrap">\n  <iframe src="https://www.google.com/maps/embed?pb=!1" title="Karta"></iframe>\n</div>\n<style>\n  .wrap iframe { height: 460px; }\n  @media (max-width: 639px) { .wrap iframe { height: 260px; } }\n</style>\n`),
+    ).toContain('<div class="grid h-[460px]"><ConsentEmbed')
+    // An inline style still beats the rule; a rule for another element's iframes does not apply.
+    expect(
+      embed(`<div class="box">\n  <iframe src="https://www.google.com/maps/embed?pb=!1" style="height:400px" title="Karta"></iframe>\n</div>\n<style>\n  .box iframe { height: 100%; }\n</style>\n`),
+    ).toContain('<div class="grid h-[400px]"><ConsentEmbed')
+    expect(
+      embed(`<div class="box">\n  <iframe src="https://www.google.com/maps/embed?pb=!1" height="450" title="Karta"></iframe>\n</div>\n<style>\n  .video iframe { height: 100%; }\n  .box iframe { border: 0; }\n</style>\n`),
+    ).toContain('<div class="grid h-[450px]"><ConsentEmbed')
+  })
+
+  test('scoped CSS height on the iframe that wire cannot follow: refused (#43)', () => {
+    const map = `<div class="box">\n  <iframe src="https://www.google.com/maps/embed?pb=!1" height="450" title="Karta"></iframe>\n</div>\n`
+    expect(refused(`${map}<style>\n  .box iframe { height: auto; }\n</style>\n`)).toEqual(["scoped CSS sets the map iframe's height: auto"])
+    expect(refused(`${map}<style>\n  .box iframe { height: 420px; }\n  section > .box > iframe { height: 300px; }\n</style>\n`)).toEqual([
+      "scoped CSS sets the map iframe's height to different values (420px, 300px)",
+    ])
+    // Astro scopes every compound to the component, so `.kontakt iframe` matches only through an
+    // ancestor in this file: here the grandparent, so the map fills a parent of unknown height.
+    expect(
+      refused(`<section class="kontakt">\n  <div>\n    <iframe src="https://www.google.com/maps/embed?pb=!1" height="450" title="Karta"></iframe>\n  </div>\n</section>\n<style>\n  .kontakt iframe { height: 100%; }\n</style>\n`),
+    ).toEqual(['map fills a parent of unknown height'])
+    // A selector that only ends in the letters "iframe" is not an iframe rule (review of #44).
+    expect(embed(`<div class="map-">\n  <iframe id="map-iframe" class="map-iframe" src="https://www.google.com/maps/embed?pb=!1" height="450" title="Karta"></iframe>\n</div>\n<style>\n  #map-iframe { border: 0; height: 450px; }\n</style>\n`)).toContain(
+      '<div class="grid h-[450px] map-iframe"><ConsentEmbed',
+    )
+    // :global(iframe) or an iframe compound with more than the element name: unsure, so refused.
+    expect(refused(`${map}<style>\n  .box :global(iframe) { height: 100%; }\n</style>\n`)).toEqual([
+      "scoped CSS '.box :global(iframe)' sets an iframe height and wire cannot tell if it is this map's",
+    ])
+    expect(refused(`${map}<style>\n  .box iframe[src] { height: 100%; }\n</style>\n`)).toEqual([
+      "scoped CSS '.box iframe[src]' sets an iframe height and wire cannot tell if it is this map's",
+    ])
+    // A variant height class on the iframe lost to the rule; on the wrapper it would win: refused.
+    expect(
+      refused(`<div class="box">\n  <iframe class="md:h-96" src="https://www.google.com/maps/embed?pb=!1" height="450" title="Karta"></iframe>\n</div>\n<style>\n  .box iframe { height: 300px; }\n</style>\n`),
+    ).toEqual(["iframe has a height class with a variant (md:h-96) that scoped CSS overrides"])
+    // An ancestor compound wire cannot match (a pseudo-class, an id): unsure, so refused.
+    expect(refused(`${map}<style>\n  .box:hover iframe { height: 100%; }\n</style>\n`)).toEqual([
+      "scoped CSS '.box:hover iframe' sets an iframe height and wire cannot tell if it is this map's",
+    ])
   })
 
   test('inline style sizing (Ruling 31): height:100% fills a sized parent; height: <n>px is fixed', () => {
@@ -568,7 +690,7 @@ describe('wireEmbeds', () => {
     const text = embed(
       `<div class="karta">\n  <iframe class="contact-map" src="https://www.google.com/maps/embed?pb=!1" height="100%" title="Karta"></iframe>\n</div>\n<style>\n  .karta { min-height: 500px; }\n  .contact-map { height: 100%; display: grid; border-radius: 8px; }\n  .contact-mapx, .other .contact-map-wrap { display: block; }\n</style>\n`,
     )
-    expect(text).toContain('<div class="grid h-full contact-map"><ConsentEmbed')
+    expect(text).toContain('<div class="grid h-full min-h-[500px] contact-map"><ConsentEmbed')
     // A definite height still stretches the grid's embed; display: none hides it as before; a
     // pseudo-element or :not() rule does not style the wrapper itself; case and !important agree.
     const fixed = embed(

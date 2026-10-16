@@ -5,6 +5,11 @@
 //   becomes `grid <height>` on the wrapper, with `aspect="auto"`;
 // - an iframe that fills its parent (`height="100%"` or `h-full`) inside a parent of definite height
 //   becomes `grid h-full` with `aspect="auto"`; an unknown parent height is a refusal (Ruling 25);
+//   a parent with only a min-height (`min-h-*` classes, or a CSS `min-height`) is not a definite
+//   height: `h-full` would resolve to auto there and shrink to the placeholder, so the wrapper carries
+//   the min-height (`grid h-full min-h-[500px]`). The iframe's own inline min-height goes along too;
+// - a scoped rule that sets the iframe's height (`.box iframe { height: 100% }`) beats its height
+//   attribute and a layered Tailwind height, as in CSS (#43); an inline style still beats the rule;
 // - otherwise the classes go on the wrapper as they are and the component keeps its own aspect.
 // A grid wrapper keeps the iframe's other classes (Ruling 30); a scoped rule for one of them that sets
 // a `display` other than grid/none or a height that is not definite would beat `grid` or the height
@@ -45,6 +50,8 @@ export interface CssRule {
   body: string
   bodyStart: number
   decls: CssDecl[]
+  /** Inside an at-rule (`@media`, `@supports`, …): applies on some screens only. */
+  media: boolean
 }
 
 /** Offset of the end of a comment or string starting at `i`, or -1 if none starts there. */
@@ -125,6 +132,7 @@ export function cssRules(css: string, offset = 0): CssRule[] {
           body,
           bodyStart: offset + block.bodyStart,
           decls: declarations(body, offset + block.bodyStart),
+          media: stack.some((b) => b.prelude.startsWith('@')),
         })
       }
       preludeStart = i + 1
@@ -219,17 +227,119 @@ function scopedStyles(text: string, root: AstroNode): { start: number; end: numb
     })
 }
 
-/** The parent has a definite height (Ruling 25): a fixed h- class, an inline height, or a scoped CSS height for one of its classes. */
+const unimportant = (v: string): string => v.replace(/!\s*important\s*$/i, '').trim()
+
+/** A definite length that is not zero (`height: 0` with padding is the aspect-ratio hack). */
+const sized = (v: string): boolean => DEFINITE.test(v) && !/^0+(?:\.0+)?[a-z]*$/i.test(v)
+
+/** Scoped rules for exactly one of the element's classes (`.karta`), as Ruling 25 reads them. */
+const ownRules = (el: AstroNode, rules: CssRule[]): CssRule[] => {
+  const classes = classList(el) ?? []
+  return rules.filter((r) => splitTop(r.selector, /,/).some((s) => classes.some((c) => s.trim() === `.${c}`)))
+}
+
+/**
+ * The parent has a definite height (Ruling 25): a fixed h- class, an inline height, or a scoped CSS
+ * height for one of its classes. A min-height is not one: a percentage height against it is auto.
+ */
 function definiteHeight(parent: AstroNode, rules: CssRule[]): boolean {
   if (parent.type !== 'element') return false
-  const classes = classList(parent) ?? []
-  if (classes.some((c) => FIXED_CLASS.test(c))) return true
-  const isHeight = (d: CssDecl): boolean => (d.prop === 'height' || d.prop === 'min-height') && DEFINITE.test(d.value)
+  if ((classList(parent) ?? []).some((c) => FIXED_CLASS.test(c))) return true
+  const isHeight = (d: CssDecl): boolean => d.prop === 'height' && sized(unimportant(d.value))
   const style = attr(parent, 'style')
   if (style?.kind === 'quoted' && declarations(style.value).some(isHeight)) return true
-  return rules.some(
-    (r) => splitTop(r.selector, /,/).some((s) => classes.some((c) => s.trim() === `.${c}`)) && r.decls.some(isHeight),
-  )
+  return ownRules(parent, rules).some((r) => r.decls.some(isHeight))
+}
+
+const MIN_H_CLASS = /^(?:[\w-]+:)*min-h-(?:\d+(?:\.\d+)?|\[[^\]\s]+\]|screen|svh|dvh|lvh)$/
+
+/** A definite CSS length as a Tailwind arbitrary value (spaces become `_`). */
+const arbitrary = (value: string): string => `min-h-[${value.replace(/\s+/g, '_')}]`
+
+/**
+ * The min-h classes the wrapper carries from the iframe's inline min-height, else (when the parent's
+ * height is not definite) from the parent: its min-h classes as written, its inline min-height, or
+ * the one min-height its scoped rules outside an at-rule set (a smaller one on phones only makes the
+ * parent grow around the wrapper). Rules that disagree are a refusal.
+ */
+function minHeightOf(node: AstroNode, parent: AstroNode, rules: CssRule[], definite: boolean): string[] | Error {
+  const inline = (el: AstroNode): string | undefined => {
+    const style = attr(el, 'style')
+    const v = style?.kind === 'quoted' ? declarations(style.value).findLast((d) => d.prop === 'min-height')?.value : undefined
+    return v !== undefined && sized(unimportant(v)) ? unimportant(v) : undefined
+  }
+  const own = inline(node)
+  if (own !== undefined) return [arbitrary(own)]
+  if (definite || parent.type !== 'element') return []
+  // A zero min-h (`flex-1 min-h-0`) gives no height; one with a variant only gives it on some
+  // screens: at least one plain, non-zero min-h is needed, then the variants go along.
+  const classes = (classList(parent) ?? []).filter((c) => MIN_H_CLASS.test(c) && !/min-h-(?:0|\[0+(?:\.0+)?[a-z]*\])$/.test(c))
+  if (classes.some((c) => !c.includes(':'))) return classes
+  const style = inline(parent)
+  if (style !== undefined) return [arbitrary(style)]
+  const values = [
+    ...new Set(ownRules(parent, rules).filter((r) => !r.media).flatMap((r) => r.decls.filter((d) => d.prop === 'min-height').map((d) => unimportant(d.value)))),
+  ]
+  if (values.length > 1) return new Error(`the map's parent sets different min-heights (${values.join(', ')})`)
+  return values.length === 1 && sized(values[0]!) ? [arbitrary(values[0]!)] : []
+}
+
+/** `root` and the ancestors of `node` under it, outermost first: the last one is its parent. */
+function ancestorsOf(root: AstroNode, node: AstroNode): AstroNode[] {
+  const path: AstroNode[] = []
+  const visit = (n: AstroNode): boolean => {
+    for (const c of n.children) {
+      if (c === node) return true
+      path.push(c)
+      if (visit(c)) return true
+      path.pop()
+    }
+    return false
+  }
+  visit(root)
+  return [root, ...path]
+}
+
+/**
+ * The height a scoped rule gives the iframe (#43): rules whose last compound is a bare `iframe`, with
+ * no ancestor, or with one whose last compound is classes (and an optional element name) found on
+ * the parent (`>`) or on an ancestor in this file: Astro scopes every compound to the component.
+ * Rules inside an at-rule set the height on some screens only and are left to verify step 5, which
+ * measures phones.
+ * Undefined when none sets a height; an Error when they disagree or wire cannot tell if one applies.
+ */
+function scopedIframeHeight(ancestors: AstroNode[], rules: CssRule[]): string | undefined | Error {
+  const values: string[] = []
+  const has = (el: AstroNode, type: string | undefined, classes: string[]): boolean =>
+    el.type === 'element' && (type === undefined || el.name === type) && classes.every((c) => (classList(el) ?? []).includes(c))
+  for (const rule of rules) {
+    const height = rule.media ? undefined : rule.decls.findLast((d) => d.prop === 'height')
+    if (!height) continue
+    for (const part of splitTop(rule.selector, /,/)) {
+      const m = /^(?:(.*?)(\s*>\s*|\s+))?iframe$/s.exec(part.trim())
+      if (!m) {
+        // `:global(iframe)`, `iframe[src]`, `iframe:hover`: an iframe rule wire does not follow.
+        if (IFRAME_WORD.test(part)) return new Error(`scoped CSS '${part.trim()}' sets an iframe height and wire cannot tell if it is this map's`)
+        continue
+      }
+      const ancestor = (m[1] ?? '').trim()
+      let applies = ancestor === ''
+      if (!applies) {
+        const last = /([^\s>+~]+)$/.exec(ancestor)?.[1] ?? ''
+        const compound = /^([a-zA-Z][\w-]*)?((?:\.[\w-]+)*)$/.exec(last)
+        if (!compound || /[+~]/.test(ancestor)) {
+          return new Error(`scoped CSS '${part.trim()}' sets an iframe height and wire cannot tell if it is this map's`)
+        }
+        const classes = (compound[2]!.match(/\.[\w-]+/g) ?? []).map((c) => c.slice(1))
+        const scope = (m[2] ?? '').trim() === '>' ? ancestors.slice(-1) : ancestors
+        applies = scope.some((el) => has(el, compound[1], classes))
+      }
+      if (applies) values.push(unimportant(height.value))
+    }
+  }
+  const unique = [...new Set(values)]
+  if (unique.length > 1) return new Error(`scoped CSS sets the map iframe's height to different values (${unique.join(', ')})`)
+  return unique[0]
 }
 
 interface Box {
@@ -238,8 +348,8 @@ interface Box {
 }
 
 /** The wrapper's classes and whether the embed takes `aspect="auto"`, or the reason to refuse. */
-function boxOf(node: AstroNode, parent: AstroNode, rules: CssRule[]): Box | Error {
-  const box = sizedBox(node, parent, rules)
+function boxOf(node: AstroNode, ancestors: AstroNode[], rules: CssRule[]): Box | Error {
+  const box = sizedBox(node, ancestors, rules)
   if (box instanceof Error || !box.aspect) return box
   return keptClassConflict(box, rules) ?? box
 }
@@ -279,27 +389,43 @@ function keptClassConflict(box: Box, rules: CssRule[]): Error | null {
   return null
 }
 
-function sizedBox(node: AstroNode, parent: AstroNode, rules: CssRule[]): Box | Error {
+function sizedBox(node: AstroNode, ancestors: AstroNode[], rules: CssRule[]): Box | Error {
+  const parent = ancestors.at(-1)!
   const written = classList(node)
   if (written === null) return new Error('iframe class is an expression')
   const varied = written.find((c) => c.includes(':') && FILTER_UTILITY.test(c.slice(c.lastIndexOf(':') + 1)))
   if (varied) return new Error(`iframe has a filter class with a variant (${varied})`)
   const classes = written.map((c) => (FILTER_UTILITY.test(c) ? `[&_iframe]:${c}` : c))
-  const fixed = classes.find((c) => FIXED_CLASS.test(c))
-  if (fixed) return { classes: ['grid', fixed, ...classes.filter((c) => c !== fixed)], aspect: true }
   // Ruling 31: an inline style height beats the height attribute, as in CSS.
   const style = attr(node, 'style')
   const inlineHeight = style?.kind === 'quoted' ? declarations(style.value).findLast((d) => d.prop === 'height')?.value.trim() : undefined
+  // #43: so does a scoped rule, which also beats a (layered) Tailwind height class.
+  const ruled = inlineHeight === undefined ? scopedIframeHeight(ancestors, rules) : undefined
+  if (ruled instanceof Error) return ruled
+  const ruledFixed = ruled !== undefined ? /^(\d+(?:\.\d+)?)(px|rem|vh)$/i.exec(ruled) : null
+  if (ruled !== undefined && ruled !== '100%' && !ruledFixed) return new Error(`scoped CSS sets the map iframe's height: ${ruled}`)
+  const isHeight = (c: string): boolean => FIXED_CLASS.test(c) || c === 'h-full'
+  const variantHeight = ruled !== undefined ? classes.find((c) => c.includes(':') && /^(?:h-|size-)/.test(c.slice(c.lastIndexOf(':') + 1))) : undefined
+  if (variantHeight) return new Error(`iframe has a height class with a variant (${variantHeight}) that scoped CSS overrides`)
+  if (ruledFixed) {
+    return { classes: ['grid', `h-[${ruledFixed[1]}${ruledFixed[2]!.toLowerCase()}]`, ...classes.filter((c) => !isHeight(c))], aspect: true }
+  }
+  const fixed = ruled === undefined ? classes.find((c) => FIXED_CLASS.test(c)) : undefined
+  if (fixed) return { classes: ['grid', fixed, ...classes.filter((c) => c !== fixed)], aspect: true }
   const inlineFixed = inlineHeight !== undefined ? /^(\d+(?:\.\d+)?)(px|rem|vh)$/i.exec(inlineHeight) : null
   if (inlineFixed) return { classes: ['grid', `h-[${inlineFixed[1]}${inlineFixed[2]!.toLowerCase()}]`, ...classes], aspect: true }
   const height = attr(node, 'height')
   const fills =
+    ruled === '100%' ||
     classes.includes('h-full') ||
     inlineHeight === '100%' ||
     (inlineHeight === undefined && height?.kind === 'quoted' && height.value.trim() === '100%')
   if (fills) {
-    if (!definiteHeight(parent, rules)) return new Error('map fills a parent of unknown height')
-    return { classes: ['grid', 'h-full', ...classes.filter((c) => c !== 'h-full')], aspect: true }
+    const definite = definiteHeight(parent, rules)
+    const min = minHeightOf(node, parent, rules, definite)
+    if (min instanceof Error) return min
+    if (!definite && min.length === 0) return new Error('map fills a parent of unknown height')
+    return { classes: ['grid', 'h-full', ...min, ...classes.filter((c) => !isHeight(c))], aspect: true }
   }
   const n = inlineHeight !== undefined ? null : height?.kind === 'quoted' ? FIXED_ATTR.exec(height.value) : height?.kind === 'expression' ? /^\s*(\d+)()\s*$/.exec(height.value) : null
   if (n) return { classes: ['grid', `h-[${n[1]}${n[2] || 'px'}]`, ...classes], aspect: true }
@@ -384,7 +510,7 @@ function wireFile(planner: Planner, file: string, frames: IframeInfo[]): void {
         planner.refuse(file, target, 'iframe has no title')
         continue
       }
-      const box = boxOf(hit.node, hit.parent, rules)
+      const box = boxOf(hit.node, ancestorsOf(tree.root, hit.node), rules)
       if (box instanceof Error) {
         planner.refuse(file, target, box.message)
         continue

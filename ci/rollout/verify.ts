@@ -10,7 +10,8 @@
 //                 logs no console error main didn't; a registry request on a page detect didn't
 //                 know is a detect miss
 //   4 consent-paths  Visa / Visa alltid / Neka on every page with an embed
-//   5 clip        no banner or embed button clipped, no banner button covered, no page wider than
+//   5 clip        no banner or embed button clipped or cut off by an overflow:hidden ancestor, no
+//                 banner button covered, no page wider than
 //                 on main, at 320/360/375/1280 px
 //   6 contrast    every banner button and PrivacyLinks row ≥ 4.5:1 and determinate (Ruling 20)
 //   7 screenshots banner and map placeholders at 360 and 1280 px
@@ -443,7 +444,7 @@ export async function verify(dir: string, report: Report, opts: VerifyOptions = 
       for (const r of rows) {
         const onMain = r.kind === 'page' && r.clipped ? mainW.get(`${r.path} ${r.width}`) : undefined
         if (onMain !== undefined && onMain >= r.w) r.clipped = false
-        const why = `${r.over ? ' (text overflows)' : ''}${r.out ? ' (sticks out)' : ''}${r.covered ? ' (covered by another element)' : ''}`
+        const why = `${r.over ? ' (text overflows)' : ''}${r.out ? ' (sticks out)' : ''}${r.covered ? ' (covered by another element)' : ''}${r.cut ? ' (cut off by an overflow:hidden ancestor)' : ''}`
         const main = onMain === undefined ? '' : r.clipped ? ` (main ${onMain}px)` : ` (main ${onMain}px too: not the banner)`
         lines.push(`${r.path} ${r.width}px ${r.kind} "${r.button}" ${r.w}px in ${r.boxW}px ${r.clipped ? `CLIPPED${why}` : 'ok'}${main}`)
       }

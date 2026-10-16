@@ -113,7 +113,7 @@ function fake(
     ),
     clip: async (_base, paths) => (
       called.add('clip'),
-      paths.map((path): ClipResult => ({ path, width: 320, kind: 'button', button: 'Neka', w: 80, boxW: 300, over: false, out: false, covered: false, clipped: false }))
+      paths.map((path): ClipResult => ({ path, width: 320, kind: 'button', button: 'Neka', w: 80, boxW: 300, over: false, out: false, covered: false, cut: false, clipped: false }))
     ),
     rootStyles: async () => (called.add('rootStyles'), { 'html scrollbar-color': 'auto', 'html background-color': 'rgb(255, 255, 255)' }),
     contrast: async (_base, paths) => (
@@ -199,7 +199,7 @@ describe('verify', () => {
 
   test('a failing step 5 stops before contrast, screenshots and docker', async () => {
     const dir = siteDir()
-    const clipped: ClipResult = { path: '/', width: 320, kind: 'button', button: 'Acceptera alla', w: 140, boxW: 120, over: false, out: true, covered: false, clipped: true }
+    const clipped: ClipResult = { path: '/', width: 320, kind: 'button', button: 'Acceptera alla', w: 140, boxW: 120, over: false, out: true, covered: false, cut: false, clipped: true }
     const f = fake({ checks: { clip: async () => [clipped] } })
     const result = await verify(dir, report(), { deps: f.deps })
     expect(result.steps.at(-1)).toMatchObject({ step: 5, pass: false })
@@ -211,11 +211,20 @@ describe('verify', () => {
 
   test('step 5: a covered banner button fails and says so (aspokarlsson)', async () => {
     const dir = siteDir()
-    const covered: ClipResult = { path: '/', width: 360, kind: 'button', button: 'OK', w: 44, boxW: 326, over: false, out: false, covered: true, clipped: true }
+    const covered: ClipResult = { path: '/', width: 360, kind: 'button', button: 'OK', w: 44, boxW: 326, over: false, out: false, covered: true, cut: false, clipped: true }
     const f = fake({ checks: { clip: async () => [covered] } })
     const result = await verify(dir, report(), { deps: f.deps })
     expect(result.steps.at(-1)).toMatchObject({ step: 5, pass: false })
     expect(evidence(dir, '5-clip.txt')).toContain('/ 360px button "OK" 44px in 326px CLIPPED (covered by another element)')
+  })
+
+  test('step 5: an embed button cut off by an overflow:hidden ancestor fails and says so (#43, lbfastigheter)', async () => {
+    const dir = siteDir()
+    const cut: ClipResult = { path: '/kontakt/', width: 360, kind: 'button', button: 'Visa Google Maps', w: 150, boxW: 326, over: false, out: false, covered: false, cut: true, clipped: true }
+    const f = fake({ checks: { clip: async () => [cut] } })
+    const result = await verify(dir, report(), { deps: f.deps })
+    expect(result.steps.at(-1)).toMatchObject({ step: 5, pass: false })
+    expect(evidence(dir, '5-clip.txt')).toContain('/kontakt/ 360px button "Visa Google Maps" 150px in 326px CLIPPED (cut off by an overflow:hidden ancestor)')
   })
 
   describe('step 5: the root styles are compared with main (faluridklubb: daisyUI restyled the scrollbar)', () => {
@@ -241,7 +250,7 @@ describe('verify', () => {
   describe('step 5: a page that scrolls sideways is compared with main (antonicommunications)', () => {
     const row = (path: string, kind: 'page' | 'button', w: number, boxW: number): ClipResult => {
       const over = kind === 'page' && w > boxW
-      return { path, width: 320, kind, button: kind === 'page' ? '(page)' : 'OK', w, boxW, over, out: false, covered: false, clipped: over }
+      return { path, width: 320, kind, button: kind === 'page' ? '(page)' : 'OK', w, boxW, over, out: false, covered: false, cut: false, clipped: over }
     }
     const clipAt = (mainW: number) => async (base: string) =>
       base.includes(':4398') ? [row('/', 'page', mainW, 320)] : [row('/', 'page', 351, 320), row('/', 'button', 44, 286)]
