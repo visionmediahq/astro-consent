@@ -170,8 +170,7 @@ export function runWire(dir: string, opts: { dryRun: boolean }): { code: number;
     )
     return { code: 0, output: `${lines.join('\n')}\n\n${diff.join('')}` }
   }
-  applyWire(root, plan, { commit: true })
-  lines.push(`committed on ${BRANCH}`)
+  lines.push(...applyWire(root, plan, { commit: true }), `committed on ${BRANCH}`)
   return { code: 0, output: `${lines.join('\n')}\n` }
 }
 

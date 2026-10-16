@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, test } from 'vitest'
-import { ALLOWLIST, diffLock, diffPackageJson, majorOf } from '../../../ci/rollout/lib/lockfile'
+import { ALLOWLIST, diffLock, diffPackageJson, keepPrunedOrphans, majorOf } from '../../../ci/rollout/lib/lockfile'
 
 const FIXTURES = join(import.meta.dirname, 'fixtures')
 const lock = (site: string, side: 'before' | 'merged'): string =>
@@ -276,5 +276,31 @@ describe('diffPackageJson', () => {
     expect(diffPackageJson(before, withPkg({ daisyui: '^4.12.0' }), PKG)).toEqual([expect.stringContaining('dependencies.daisyui')])
     const onMain = JSON.stringify({ ...JSON.parse(before), dependencies: { ...JSON.parse(before).dependencies, daisyui: '^5.0.0' } })
     expect(diffPackageJson(onMain, withPkg({ daisyui: '^5.7.47' }), PKG)).toEqual([expect.stringContaining('dependencies.daisyui')])
+  })
+})
+
+describe('keepPrunedOrphans: what it never puts back', () => {
+  const esbuild = { version: '0.28.2', optional: true }
+  const lock = (packages: Record<string, unknown>, lockfileVersion = 3) => JSON.stringify({ name: 's', lockfileVersion, packages }, null, 2) + '\n'
+  const main = lock({ '': { dependencies: { vite: '^8' } }, 'node_modules/vite': { version: '8.0.0', peerDependencies: { esbuild: '*' }, peerDependenciesMeta: { esbuild: { optional: true } } }, 'node_modules/esbuild': esbuild })
+
+  test('control: an orphan main had and the install pruned comes back', () => {
+    const installed = lock({ '': { dependencies: { vite: '^8' } }, 'node_modules/vite': { version: '8.0.0' } })
+    expect(keepPrunedOrphans(main, installed)?.kept).toEqual(['esbuild 0.28.2'])
+  })
+
+  test('not when the new lockfile requires that package itself (npm placed its own copy elsewhere)', () => {
+    const installed = lock({
+      '': { dependencies: { vite: '^8', x: '^1' } },
+      'node_modules/vite': { version: '8.0.0' },
+      'node_modules/x': { version: '1.0.0', dependencies: { esbuild: '^0.29' } },
+      'node_modules/x/node_modules/esbuild': { version: '0.29.0' },
+    })
+    expect(keepPrunedOrphans(main, installed)).toBeNull()
+  })
+
+  test('not for a lockfile other than version 3 (v2 keeps a legacy dependencies map too)', () => {
+    const v2 = (p: Record<string, unknown>) => lock(p, 2)
+    expect(keepPrunedOrphans(v2(JSON.parse(main).packages), v2({ '': { dependencies: { vite: '^8' } }, 'node_modules/vite': { version: '8.0.0' } }))).toBeNull()
   })
 })

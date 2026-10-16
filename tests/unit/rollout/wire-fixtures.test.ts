@@ -10,6 +10,7 @@ import { detect } from '../../../ci/rollout/detect'
 import { fixtureSite, type SiteFiles } from '../../../ci/rollout/lib/site-files'
 import { parseWireArgs, runDetect, runWire } from '../../../ci/rollout/run'
 import type { Report, WirePlan } from '../../../ci/rollout/types'
+import { diffLock } from '../../../ci/rollout/lib/lockfile'
 import { applyEdits } from '../../../ci/rollout/wire/engine'
 import { applyWire, BRANCH, COMMIT_MESSAGE, INSTALL_SPEC, planWire } from '../../../ci/rollout/wire/index'
 
@@ -177,12 +178,13 @@ function diskTree(dir: string): Map<string, string> {
 }
 
 /** A clone of a bare origin whose main holds the fixture's before/ tree, as the rollout clones a site. */
-function checkout(site: string): string {
+function checkout(site: string, over: Record<string, string> = {}): string {
   const origin = temp('wire-origin-')
   git(origin, 'init', '-q', '--bare', '-b', 'main')
   const seed = temp('wire-seed-')
   git(seed, 'init', '-q', '-b', 'main')
   writeTree(seed, treeOf(join(FIXTURES, site, 'before')))
+  writeTree(seed, new Map(Object.entries(over)))
   git(seed, 'add', '-A')
   git(seed, '-c', 'user.name=t', '-c', 'user.email=t@example.se', 'commit', '-q', '-m', 'site')
   git(seed, 'push', '-q', origin, 'main')
@@ -371,6 +373,113 @@ describe('applyWire', () => {
     })
     expect(git(dir, 'log', '-1', '--format=%s')).toBe(COMMIT_MESSAGE)
     expect(git(dir, 'show', '--name-only', '--format=', 'HEAD').split('\n')).toEqual(expect.arrayContaining(['package.json', 'package-lock.json']))
+  })
+
+  // trippolo and midvatten (2026-10-16): main's lockfile still had esbuild and its @esbuild/*
+  // builds, marked optional, that nothing depends on since vite 8 (esbuild is only an optional peer
+  // of vite). npm install prunes them, and verify step 1 rightly refuses 27 unexplained removals.
+  describe('orphan lockfile entries npm prunes', () => {
+    const PKG = '@visionmediahq/astro-consent'
+    const pkgEntry = (version: string, extra: Record<string, unknown> = {}) => ({
+      version,
+      resolved: `https://registry.npmjs.org/x/-/x-${version}.tgz`,
+      integrity: `sha512-${version}`,
+      ...extra,
+    })
+    type Packages = Record<string, Record<string, unknown>>
+    const npmOrder = (packages: Packages): Packages => Object.fromEntries(Object.entries(packages).sort(([a], [b]) => a.localeCompare(b, 'en')))
+    // The fixture is Astro 6, whose astro entry depends on esbuild; Astro 7 does not.
+    const fixturePackages = Object.fromEntries(
+      Object.entries(
+        (JSON.parse(readFileSync(join(FIXTURES, 'munkforstradgardstjanst', 'before', 'package-lock.json.txt'), 'utf8')) as { packages: Packages }).packages,
+      ).map(([k, v]) => {
+        const deps = { ...((v['dependencies'] as Record<string, string> | undefined) ?? {}) }
+        delete deps['esbuild']
+        return [k, v['dependencies'] ? { ...v, dependencies: deps } : v]
+      }),
+    ) as Packages
+    /** The fixture's lockfile with a root entry, esbuild and one platform build, and vite 8. */
+    const mainPackages = (vite: Record<string, unknown> = {}, esbuild: Record<string, unknown> = { optional: true }): Packages => npmOrder({
+      ...fixturePackages,
+      '': { name: 'site', version: '0.0.1', dependencies: { astro: '^6.4.8' } },
+      'node_modules/@esbuild/darwin-arm64': pkgEntry('0.28.2', { cpu: ['arm64'], license: 'MIT', optional: true, os: ['darwin'], engines: { node: '>=18' } }),
+      'node_modules/esbuild': pkgEntry('0.28.2', {
+        hasInstallScript: true,
+        license: 'MIT',
+        ...esbuild,
+        bin: { esbuild: 'bin/esbuild' },
+        optionalDependencies: { '@esbuild/darwin-arm64': '0.28.2' },
+      }),
+      'node_modules/vite': pkgEntry('8.0.3', {
+        peerDependencies: { esbuild: '^0.27.0 || ^0.28.0' },
+        peerDependenciesMeta: { esbuild: { optional: true } },
+        ...vite,
+      }),
+    })
+    const lockText = (packages: Packages): string =>
+      `${JSON.stringify({ name: 'site', version: '0.0.1', lockfileVersion: 3, requires: true, packages }, null, 2)}\n`
+    const ORPHANS = ['node_modules/@esbuild/darwin-arm64', 'node_modules/esbuild']
+    const OWN = pkgEntry('1.1.2', { license: 'MIT' })
+
+    /** `packages` after npm installs astro-consent and drops `drop`. */
+    function installed(packages: Packages, drop: string[]): Packages {
+      const out: Packages = {}
+      for (const [k, v] of Object.entries(packages)) if (!drop.includes(k)) out[k] = v
+      out[''] = { ...out['']!, dependencies: { [PKG]: INSTALL_SPEC, ...(out['']!['dependencies'] as Record<string, string>) } }
+      out[`node_modules/${PKG}`] = OWN
+      return npmOrder(out)
+    }
+    const fakeInstall = (drop: string[]) => (d: string) => {
+      const lock = JSON.parse(readFileSync(join(d, 'package-lock.json'), 'utf8')) as { packages: Packages }
+      writeFileSync(join(d, 'package-lock.json'), lockText(installed(lock.packages, drop)))
+    }
+
+    function wire(main: Packages, install: (d: string) => void): { notes: string[]; branch: string } {
+      const dir = checkout('munkforstradgardstjanst', { 'package-lock.json': lockText(main) })
+      const plan = planWire(fixtureSite(join(FIXTURES, 'munkforstradgardstjanst', 'before')), runDetect(dir, ['munkforstradgardstjanst.se']))
+      const notes = applyWire(dir, plan, { commit: true, install })
+      return { notes, branch: execFileSync('git', ['show', 'HEAD:package-lock.json'], { cwd: dir, encoding: 'utf8' }) }
+    }
+
+    test('optional entries nothing in main requires are put back byte for byte, in npm order', () => {
+      const main = mainPackages()
+      const { notes, branch } = wire(main, fakeInstall(ORPHANS))
+      expect(branch).toBe(lockText(installed(main, [])))
+      const packages = (JSON.parse(branch) as { packages: Packages }).packages
+      for (const k of ORPHANS) expect(JSON.stringify(packages[k])).toBe(JSON.stringify(main[k]))
+      expect(diffLock(lockText(main), branch, PKG).unknown).toEqual([])
+      expect(notes).toEqual(['lockfile: kept 2 entries npm pruned that main had and nothing requires (@esbuild/darwin-arm64 0.28.2, esbuild 0.28.2)'])
+    })
+
+    test('a removed entry something still depends on is not put back, nor what only it requires: verify step 1 sees both', () => {
+      const main = mainPackages({ dependencies: { esbuild: '^0.28.0' } })
+      const { notes, branch } = wire(main, fakeInstall(ORPHANS))
+      const packages = (JSON.parse(branch) as { packages: Packages }).packages
+      for (const k of ORPHANS) expect(packages[k]).toBeUndefined()
+      expect(notes).toEqual([])
+      expect(diffLock(lockText(main), branch, PKG).unknown).toEqual(['node_modules/@esbuild/darwin-arm64: removed 0.28.2', 'node_modules/esbuild: removed 0.28.2'])
+    })
+
+    test('a removed entry that is not optional is not put back, nor what only it requires', () => {
+      const main = mainPackages({}, {})
+      const { notes, branch } = wire(main, fakeInstall(ORPHANS))
+      const packages = (JSON.parse(branch) as { packages: Packages }).packages
+      for (const k of ORPHANS) expect(packages[k]).toBeUndefined()
+      expect(notes).toEqual([])
+      expect(diffLock(lockText(main), branch, PKG).unknown).toEqual(['node_modules/@esbuild/darwin-arm64: removed 0.28.2', 'node_modules/esbuild: removed 0.28.2'])
+    })
+
+    test('nothing removed: the lockfile is exactly what npm wrote', () => {
+      let written = ''
+      const { notes, branch } = wire(mainPackages(), (d) => {
+        fakeInstall([])(d)
+        // Formatting wire would change if it rewrote the file.
+        written = readFileSync(join(d, 'package-lock.json'), 'utf8').replaceAll('  ', '\t')
+        writeFileSync(join(d, 'package-lock.json'), written)
+      })
+      expect(branch).toBe(written)
+      expect(notes).toEqual([])
+    })
   })
 
   test('a new file that already exists on disk: refused before anything is written', () => {

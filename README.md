@@ -251,6 +251,11 @@ npx tsx ci/rollout/run.ts help
   says how to retry: `git reset --hard && git clean -fd && git switch main && git branch -D
   consent-banner`, or re-clone. It also refuses to commit when anything besides the planned files,
   `package.json` and `package-lock.json` changed.
+- After its `npm install`, `wire` puts back the lockfile entries npm pruned that main had and
+  nothing requires: marked `optional` (or `devOptional`) on main, and nothing outside them lists
+  them as a dependency or a non-optional peer (vite 8 sites still had esbuild 0.28.2 and its
+  `@esbuild/*` builds, which vite lists only as an optional peer). It prints what it kept. Any
+  other removal is left to `verify` step 1, which refuses it.
 - `verify` checks the working tree but records the result for `HEAD`, so it refuses uncommitted
   or untracked files: commit, then rerun. If its own `npm ci` or build leaves files behind, it
   fails a final `clean` step: add them to the site's `.gitignore` on the branch. It never pushes over a `consent-banner` on GitHub that it
