@@ -306,8 +306,8 @@ npx tsx ci/rollout/run.ts help
   expansion. After a passing `live post-merge` (which `merge` runs), the tool deletes the clone's
   `node_modules` and `dist`; a stop keeps them for the next verify.
 - Docker I/O errors (`input/output error`, `unable to lease content`): free disk first, then restart
-  Docker fully (`killall com.docker.backend; open -a Docker`, or Quit Docker Desktop and start it
-  again). No image or volume purge is needed. If a pull still fails, `docker pull` the base image by
+  Docker fully (`docker desktop restart`, or quit Docker Desktop from its menu and start it again).
+  No image or volume purge is needed. If a pull still fails, `docker pull` the base image by
   hand once, then rerun verify.
 - `verify` step 8 builds the site's Dockerfile with `--build-arg SITE_URL=https://<first domain>`,
   as Coolify passes it: a Dockerfile with `ENV SITE_URL=$SITE_URL` otherwise builds with an empty one.

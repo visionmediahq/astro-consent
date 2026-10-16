@@ -222,8 +222,9 @@ const STEPS = ['lockfile', 'build', 'requests', 'consent-paths', 'clip', 'contra
 
 /**
  * Runs C3 on the checkout `dir` (on branch consent-banner) for `report`. Pushes the branch first
- * (step 8 clones from GitHub), then runs steps 1–8 and stops at the first failure. Throws only when
- * `dir` is not on consent-banner.
+ * (step 8 clones from GitHub), then runs steps 1–8 and stops at the first failure. Throws, before
+ * any step, when the disk has less free space than `minFreeGb` (#23), when `dir` is not on
+ * consent-banner, or when a stray `<dir>-main` is not one of its worktrees.
  */
 export async function verify(dir: string, report: Report, opts: VerifyOptions = {}): Promise<VerifyResult> {
   const deps: VerifyDeps = { ...realDeps(), ...opts.deps }
@@ -238,7 +239,7 @@ export async function verify(dir: string, report: Report, opts: VerifyOptions = 
     const free = deps.freeBytes(root) / 1e9
     if (free < need) {
       throw new Error(
-        `${free.toFixed(1)} GB free on the disk holding ${root}, verify needs ${need} GB: delete node_modules and dist in site clones that are merged (live post-merge does this after a pass), then rerun; ROLLOUT_MIN_FREE_GB changes the threshold`,
+        `${(Math.floor(free * 10) / 10).toFixed(1)} GB free on the disk holding ${root}, verify needs ${need} GB: delete node_modules and dist in site clones that are merged (live post-merge does this after a pass), then rerun; ROLLOUT_MIN_FREE_GB changes the threshold`,
       )
     }
   }

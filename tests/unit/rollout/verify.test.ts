@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { createServer, type Server } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, test } from 'vitest'
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import type { ClipResult } from '../../../ci/rollout/checks/clip'
 import type { EmbedBox } from '../../../ci/rollout/checks/embed-size'
 import type { ConsentPathResult } from '../../../ci/rollout/checks/consent-paths'
@@ -154,6 +154,10 @@ function fake(
 }
 
 const evidence = (dir: string, file: string) => readFileSync(join(dir, '.rollout/evidence', file), 'utf8')
+
+// The disk guard reads ROLLOUT_MIN_FREE_GB; a value set in the shell must not change these tests.
+beforeEach(() => void vi.stubEnv('ROLLOUT_MIN_FREE_GB', ''))
+afterEach(() => void vi.unstubAllEnvs())
 
 describe('verify', () => {
   describe('free disk (#23: Docker I/O errors at 2.5 GB free)', () => {

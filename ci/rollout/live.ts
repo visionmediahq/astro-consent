@@ -15,7 +15,7 @@
 //               waited-for apps: banner shown (not on CMS admin pages) and zero registry requests (DOM included) on every
 //               page, no console error that is not in the baseline, the consent paths on pages with
 //               an embed, every contrast row ok. A failing domain is checked again after 30 s; a
-//               second failure is a STOP.
+//               second failure is a STOP. A pass deletes the clone's node_modules and dist (#23).
 //
 // The result goes to .rollout/live-<mode>.json.
 import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
