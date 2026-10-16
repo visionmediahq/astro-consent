@@ -15,10 +15,10 @@
 //               waited-for apps: banner shown (not on CMS admin pages) and zero registry requests (DOM included) on every
 //               page, no console error that is not in the baseline, the consent paths on pages with
 //               an embed, every contrast row ok. A failing domain is checked again after 30 s; a
-//               second failure is a STOP.
+//               second failure is a STOP. A pass deletes the clone's node_modules and dist (#23).
 //
 // The result goes to .rollout/live-<mode>.json.
-import { existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import type { Browser } from '@playwright/test'
 import { type ConsentPathResult, checkConsentPaths } from './checks/consent-paths'
@@ -308,6 +308,11 @@ export async function live(
       failed = again
     }
     if (failed.length) return done({ reason: `live check failed twice, 30 s apart: ${failed.join(', ')}` })
+    // #23: the site is live and checked; its clone's install and build only take disk now (verify
+    // runs npm ci again if the clone is ever used). A stop keeps them for the next verify.
+    const removed = ['node_modules', 'dist'].filter((d) => existsSync(join(root, d)))
+    for (const d of removed) rmSync(join(root, d), { recursive: true, force: true })
+    if (removed.length) result.lines.push(`cleanup: removed ${removed.join(', ')} (npm ci restores them)`)
     return done({ status: 'pass' })
   } catch (e) {
     return done({ reason: (e as Error).message })

@@ -24,7 +24,7 @@
 //
 // Demo mode (`demo: true`, CI/self-test): `dir` is a built demo dist (demo/dist-consent); no git,
 // no npm, no Docker, no network. Steps 1, 2 and 8 are skipped and step 3 has no main side.
-import { existsSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, realpathSync, rmSync, statfsSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import type { Browser } from '@playwright/test'
 import { type ClipResult, checkClip } from './checks/clip'
@@ -75,10 +75,14 @@ export interface VerifyDeps {
   checks: () => Promise<Checks>
   /** `buildArgs`: what Coolify passes as build variables (SITE_URL from the site's first domain). */
   docker: (repoUrl: string, branch: string, run: (url: string) => Promise<boolean>, buildArgs?: Record<string, string>) => Promise<{ pass: boolean; log: string }>
+  /** Bytes free to an unprivileged user on the file system holding `dir`. */
+  freeBytes: (dir: string) => number
 }
 
 export interface VerifyOptions {
   deps?: Partial<VerifyDeps>
+  /** Free disk verify needs before it starts, GB (#23). Default ROLLOUT_MIN_FREE_GB, else 15. */
+  minFreeGb?: number
   /** CI/self-test mode: `dir` is a built demo dist dir. */
   demo?: boolean
   /** Where evidence and verify.json go; default `<dir>/.rollout`. */
@@ -145,7 +149,21 @@ const realDeps = (): VerifyDeps => ({
   preview: startPreview,
   checks: async () => browserChecks(),
   docker: (url, branch, run, buildArgs) => dockerCheck(url, branch, run, {}, buildArgs),
+  freeBytes: (dir) => {
+    const s = statfsSync(dir)
+    return s.bavail * s.bsize
+  },
 })
+
+/** Free disk verify needs, GB: two npm ci, two builds and a Docker image fit with room to spare (#23). */
+export const MIN_FREE_GB = 15
+
+/** The threshold: the option, else ROLLOUT_MIN_FREE_GB, else MIN_FREE_GB. */
+export function minFreeGb(option?: number, env: string | undefined = process.env['ROLLOUT_MIN_FREE_GB']): number {
+  if (option !== undefined) return option
+  const n = env === undefined || env === '' ? NaN : Number(env)
+  return Number.isFinite(n) && n >= 0 ? n : MIN_FREE_GB
+}
 
 /** Page files that render `file`: itself if it is a route, else the pages of a layout it is. */
 function pagesOf(report: Report, file: string): string[] {
@@ -204,8 +222,9 @@ const STEPS = ['lockfile', 'build', 'requests', 'consent-paths', 'clip', 'contra
 
 /**
  * Runs C3 on the checkout `dir` (on branch consent-banner) for `report`. Pushes the branch first
- * (step 8 clones from GitHub), then runs steps 1–8 and stops at the first failure. Throws only when
- * `dir` is not on consent-banner.
+ * (step 8 clones from GitHub), then runs steps 1–8 and stops at the first failure. Throws, before
+ * any step, when the disk has less free space than `minFreeGb` (#23), when `dir` is not on
+ * consent-banner, or when a stray `<dir>-main` is not one of its worktrees.
  */
 export async function verify(dir: string, report: Report, opts: VerifyOptions = {}): Promise<VerifyResult> {
   const deps: VerifyDeps = { ...realDeps(), ...opts.deps }
@@ -213,6 +232,17 @@ export async function verify(dir: string, report: Report, opts: VerifyOptions = 
   const root = resolve(dir)
   const demo = opts.demo === true
   const out = opts.out ?? join(root, '.rollout')
+  // #23: Docker failed with I/O errors twice in the expansion at 2.5 GB free. Stop before touching
+  // anything. The demo builds no site, and CI runners have less than 15 GB to spare.
+  if (!demo) {
+    const need = minFreeGb(opts.minFreeGb)
+    const free = deps.freeBytes(root) / 1e9
+    if (free < need) {
+      throw new Error(
+        `${(Math.floor(free * 10) / 10).toFixed(1)} GB free on the disk holding ${root}, verify needs ${need} GB: delete node_modules and dist in site clones that are merged (live post-merge does this after a pass), then rerun; ROLLOUT_MIN_FREE_GB changes the threshold`,
+      )
+    }
+  }
   const evidenceDir = join(out, 'evidence')
   // Evidence and screenshots from an earlier run must not pass for this one's.
   rmSync(evidenceDir, { recursive: true, force: true })

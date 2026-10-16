@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { createServer, type Server } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, test } from 'vitest'
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import type { ClipResult } from '../../../ci/rollout/checks/clip'
 import type { EmbedBox } from '../../../ci/rollout/checks/embed-size'
 import type { ConsentPathResult } from '../../../ci/rollout/checks/consent-paths'
@@ -11,7 +11,7 @@ import type { RequestResult } from '../../../ci/rollout/checks/requests'
 import { dockerCheck } from '../../../ci/rollout/docker'
 import { startPreview } from '../../../ci/rollout/preview'
 import type { Report } from '../../../ci/rollout/types'
-import { type Checks, embedRoutes, type Exec, filterRoutes, ORIGIN, type VerifyDeps, verify } from '../../../ci/rollout/verify'
+import { type Checks, embedRoutes, type Exec, filterRoutes, MIN_FREE_GB, minFreeGb, ORIGIN, type VerifyDeps, verify } from '../../../ci/rollout/verify'
 
 const PKG = '@visionmediahq/astro-consent'
 const DEMO_REPORT = JSON.parse(readFileSync(join(import.meta.dirname, 'fixtures/demo-report.json'), 'utf8')) as Report
@@ -142,6 +142,7 @@ function fake(
       return { url: `http://127.0.0.1:${port}`, stop: async () => void calls.push(`stop ${port}`) }
     },
     checks: async () => checks,
+    freeBytes: () => 100e9,
     docker:
       opts.docker ??
       (async (_url, _branch, run) => {
@@ -154,7 +155,48 @@ function fake(
 
 const evidence = (dir: string, file: string) => readFileSync(join(dir, '.rollout/evidence', file), 'utf8')
 
+// The disk guard reads ROLLOUT_MIN_FREE_GB; a value set in the shell must not change these tests.
+beforeEach(() => void vi.stubEnv('ROLLOUT_MIN_FREE_GB', ''))
+afterEach(() => void vi.unstubAllEnvs())
+
 describe('verify', () => {
+  describe('free disk (#23: Docker I/O errors at 2.5 GB free)', () => {
+    test('under 15 GB free: stops before any step, says how much is free and what to delete', async () => {
+      const dir = siteDir()
+      const f = fake()
+      f.deps.freeBytes = () => 10.4e9
+      await expect(verify(dir, report(), { deps: f.deps })).rejects.toThrow(/10\.4 GB free on .*, verify needs 15 GB.*node_modules/s)
+      expect(f.calls.some((c) => c.startsWith('npm') || c.startsWith('git push'))).toBe(false)
+      expect(existsSync(join(dir, '.rollout/verify.json'))).toBe(false)
+    })
+
+    test('at or over the threshold: runs; the threshold is configurable', async () => {
+      const dir = siteDir()
+      const f = fake()
+      f.deps.freeBytes = () => 10.4e9
+      expect((await verify(dir, report(), { deps: f.deps, minFreeGb: 5 })).pass).toBe(true)
+      f.deps.freeBytes = () => 15e9
+      expect((await verify(siteDir(), report(), { deps: f.deps })).pass).toBe(true)
+    })
+
+    test('the threshold: the option, else ROLLOUT_MIN_FREE_GB, else 15; junk in the variable is ignored', () => {
+      expect(minFreeGb(5, '20')).toBe(5)
+      expect(minFreeGb(undefined, '20')).toBe(20)
+      expect(minFreeGb(undefined, '0')).toBe(0)
+      for (const junk of [undefined, '', 'lots', '-3']) expect(minFreeGb(undefined, junk)).toBe(MIN_FREE_GB)
+      expect(MIN_FREE_GB).toBe(15)
+    })
+
+    test('reads the free space of the site dir', async () => {
+      const dir = siteDir()
+      const seen: string[] = []
+      const f = fake()
+      f.deps.freeBytes = (d) => (seen.push(d), 100e9)
+      await verify(dir, report(), { deps: f.deps })
+      expect(seen).toEqual([dir])
+    })
+  })
+
   test('all eight steps pass; pushes consent-banner and nothing else; the main worktree is removed', async () => {
     const dir = siteDir()
     const f = fake()

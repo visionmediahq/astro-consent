@@ -305,6 +305,25 @@ describe('live post-merge', () => {
     expect(d.sleeps).toEqual([30_000])
   })
 
+  test('a pass deletes the clone\'s node_modules and dist and says so (#23)', async () => {
+    const dir = siteDir({ apps: { head: MAIN, apps: [app('web', ['nhrk.se'], true)] } })
+    for (const d of ['node_modules/x', 'dist/client']) mkdirSync(join(dir, d), { recursive: true })
+    const { checks } = fakeChecks()
+    const r = await live(dir, 'post-merge', SHA, { deps: deps({ checks }).deps })
+    expect(r.status).toBe('pass')
+    expect(existsSync(join(dir, 'node_modules'))).toBe(false)
+    expect(existsSync(join(dir, 'dist'))).toBe(false)
+    expect(existsSync(join(dir, '.rollout/report.json'))).toBe(true)
+    expect(r.lines).toContain('cleanup: removed node_modules, dist (npm ci restores them)')
+  })
+
+  test('a pass with nothing to delete says nothing about cleanup', async () => {
+    const dir = siteDir({ apps: { head: MAIN, apps: [app('web', ['nhrk.se'], true)] } })
+    const r = await live(dir, 'post-merge', SHA, { deps: deps({ checks: fakeChecks().checks }).deps })
+    expect(r.status).toBe('pass')
+    expect(r.lines.some((l) => l.startsWith('cleanup:'))).toBe(false)
+  })
+
   test('CASE check fails twice → stop with a reason', async () => {
     const dir = siteDir({ apps: { head: MAIN, apps: [app('web', ['nhrk.se'], true)] } })
     const { checks } = fakeChecks([(_, p) => p.map((x) => req(x, { blocked: ['https://maps.google.com/x'], ok: false }))])
@@ -313,6 +332,14 @@ describe('live post-merge', () => {
     expect(r.status).toBe('stop')
     expect(r.reason).toMatch(/nhrk\.se/)
     expect(d.sleeps).toEqual([30_000])
+  })
+
+  test('a stop keeps node_modules and dist: the site may need another verify (#23)', async () => {
+    const dir = siteDir({ apps: { head: MAIN, apps: [app('web', ['nhrk.se'], true)] } })
+    mkdirSync(join(dir, 'node_modules/x'), { recursive: true })
+    const { checks } = fakeChecks([(_, p) => p.map((x) => req(x, { blocked: ['https://maps.google.com/x'], ok: false }))])
+    expect((await live(dir, 'post-merge', SHA, { deps: deps({ checks }).deps })).status).toBe('stop')
+    expect(existsSync(join(dir, 'node_modules'))).toBe(true)
   })
 
   test('a failing contrast row or consent path fails the check too', async () => {
