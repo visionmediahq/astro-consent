@@ -247,3 +247,59 @@ export function diffPackageJson(before: string, after: string, pkgName: string):
   }
   return out
 }
+
+/** The names a package requires: its dependency maps, and a peer only when its meta is not optional. */
+function requiredNames(e: Entry): string[] {
+  const names = ['dependencies', 'optionalDependencies', 'devDependencies'].flatMap((m) => Object.keys(depsOf(e, m)))
+  const meta = (e['peerDependenciesMeta'] as Record<string, { optional?: unknown } | undefined> | undefined) ?? {}
+  for (const n of Object.keys(depsOf(e, 'peerDependencies'))) if (meta[n]?.optional !== true) names.push(n)
+  return names
+}
+
+/** The order npm writes `packages` in. */
+const npmCompare = (a: string, b: string): number => a.localeCompare(b, 'en')
+
+/**
+ * Puts back the `packages` entries `npm install` pruned that main had and nothing requires: each is
+ * marked `optional` (or `devOptional`) on main, and no package on main outside that set names it in
+ * `dependencies`, `optionalDependencies`, `devDependencies` or a non-optional peer, so a package and
+ * the platform builds only it requires go together. Vite 8 sites still had esbuild 0.28.2 and its 26
+ * @esbuild/* builds on main, which vite lists only as an optional peer (trippolo, midvatten): `npm ci`
+ * with them kept installs main's tree. Any other removal is left for verify step 1.
+ *
+ * Returns the new lockfile text (in the file's own indent and line ending, the kept entries' values
+ * exactly main's, slotted into npm's key order) and `name version` of each kept entry, or null when
+ * nothing is kept: then the file stays exactly as npm wrote it.
+ */
+export function keepPrunedOrphans(main: string, installed: string): { text: string; kept: string[] } | null {
+  const a = toLock(main).packages
+  const lock = toLock(installed)
+  const b = lock.packages
+  if (!a || !b) return null
+  const orphans = new Set(Object.keys(a).filter((k) => k !== '' && !b[k] && (a[k]!['optional'] === true || a[k]!['devOptional'] === true)))
+  // Drop every candidate something outside the set requires, until the set holds still.
+  for (let changed = true; changed && orphans.size > 0; ) {
+    changed = false
+    const required = new Set(Object.entries(a).flatMap(([k, e]) => (orphans.has(k) ? [] : requiredNames(e))))
+    for (const k of orphans) {
+      if (required.has(nameOfKey(k))) {
+        orphans.delete(k)
+        changed = true
+      }
+    }
+  }
+  if (orphans.size === 0) return null
+
+  // Each kept entry goes before the first key npm sorts after it; npm's own keys keep their order.
+  const sorted = [...orphans].sort(npmCompare)
+  const keys = Object.keys(b)
+  for (const k of sorted) {
+    const at = keys.findIndex((x) => x !== '' && npmCompare(k, x) < 0)
+    keys.splice(at < 0 ? keys.length : at, 0, k)
+  }
+  lock.packages = Object.fromEntries(keys.map((k) => [k, b[k] ?? a[k]!]))
+  const indent = /^[{[]\r?\n([ \t]+)/.exec(installed)?.[1] ?? '  '
+  const eol = installed.includes('\r\n') ? '\r\n' : '\n'
+  const text = `${JSON.stringify(lock, null, indent)}\n`.replace(/\n/g, eol)
+  return { text, kept: sorted.map((k) => `${nameOfKey(k)} ${String(a[k]!['version'])}`) }
+}

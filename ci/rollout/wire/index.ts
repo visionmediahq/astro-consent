@@ -4,6 +4,7 @@
 import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
+import { keepPrunedOrphans } from '../lib/lockfile'
 import type { SiteFiles } from '../lib/site-files'
 import type { Report, WirePlan } from '../types'
 import { wireConfig } from './config'
@@ -97,9 +98,11 @@ export interface ApplyOptions {
 /**
  * Writes `plan` into the checkout at `dir`. Every check and every new file text is worked out
  * before the first write, so a refusal leaves the checkout as it was. Throws with the reason.
+ * Returns lines for the output: what wire did to the install's result (keepOrphans).
  */
-export function applyWire(dir: string, plan: WirePlan, opts: ApplyOptions): void {
+export function applyWire(dir: string, plan: WirePlan, opts: ApplyOptions): string[] {
   const root = resolve(dir)
+  const notes: string[] = []
   if (!plan.ok) throw new Error(`wire refused, nothing written:\n${refusalLines(plan).join('\n')}`)
   const files = planFiles((path) => readFileSync(join(root, path), 'utf8'), plan)
   for (const f of files) {
@@ -145,6 +148,7 @@ export function applyWire(dir: string, plan: WirePlan, opts: ApplyOptions): void
 
     if (opts.commit) {
       ;(opts.install ?? npmInstall)(root)
+      notes.push(...keepOrphans(root))
       // Ruling 32: commit only what the plan wrote and what the install may change.
       const allowed = new Set([...files.map((f) => f.path), ...INSTALL_PATHS])
       const extra = changedPaths(root).filter((p) => !allowed.has(p)).sort()
@@ -156,4 +160,20 @@ export function applyWire(dir: string, plan: WirePlan, opts: ApplyOptions): void
     if (!opts.commit) throw e
     throw new Error(`${(e as Error).message}\n${RECOVERY}`)
   }
+  return notes
+}
+
+/**
+ * After the install: puts back the lockfile entries npm pruned that origin/main had and nothing
+ * requires (lib/lockfile keepPrunedOrphans), so the lockfile differs from main only by the package.
+ */
+function keepOrphans(root: string): string[] {
+  const path = join(root, 'package-lock.json')
+  if (!existsSync(path) || !gitOk(root, 'cat-file', '-e', 'origin/main:package-lock.json')) return []
+  const main = execFileSync('git', ['show', 'origin/main:package-lock.json'], { cwd: root, encoding: 'utf8', maxBuffer: 256 * 1024 * 1024 })
+  const result = keepPrunedOrphans(main, readFileSync(path, 'utf8'))
+  if (!result) return []
+  writeFileSync(path, result.text)
+  const shown = result.kept.length > 4 ? [...result.kept.slice(0, 3), `and ${result.kept.length - 3} more`] : result.kept
+  return [`lockfile: kept ${result.kept.length} entries npm pruned that main had and nothing requires (${shown.join(', ')})`]
 }
