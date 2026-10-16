@@ -17,6 +17,20 @@ export interface DockerDeps {
 /** `git@github.com:org/name.git` or `https://github.com/org/name` → `name`. */
 export const repoName = (url: string): string => url.replace(/\.git$/, '').replace(/\/+$/, '').split(/[/:]/).at(-1) ?? 'site'
 
+/**
+ * The image tag for a repo name: `rollout-` plus the name made a valid Docker path component
+ * (lowercase; anything outside [a-z0-9] runs collapsed to one separator; none at the ends).
+ * `Vildmarkscamp` → `rollout-vildmarkscamp`: Docker refuses uppercase repository names.
+ */
+export function imageTag(repo: string): string {
+  const name = repo
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]/g, '-')
+    .replace(/[._-]{2,}/g, '-')
+    .replace(/^[._-]+|[._-]+$/g, '')
+  return `rollout-${name || 'site'}`
+}
+
 /** The Dockerfile's first `EXPOSE <port>`, 80 when there is none (as dk.sh). */
 export function exposedPort(dockerfile: string): number {
   const m = /^\s*EXPOSE\s+(\d+)/im.exec(dockerfile)
@@ -45,7 +59,7 @@ export async function dockerCheck(
     return { pass: false, log: `Docker is not running (docker info failed): start Docker Desktop and rerun verify.\n${tail(info.out, 5)}` }
   }
   const repo = repoName(repoUrl)
-  const image = `rollout-${repo}`
+  const image = imageTag(repo)
   const tmp = mkdtempSync(join(tmpdir(), `rollout-docker-${repo}-`))
   const clone = join(tmp, repo)
   let container: string | null = null
