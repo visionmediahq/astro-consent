@@ -6,7 +6,8 @@
 //
 // $WORK defaults to ~/sites/consent-rollout. pool.json holds client data: it is never committed.
 // The scan is resumable: rows already in pool.json with a report that lists `services` are skipped; rows that ended in
-// an error are scanned again. --rescan detects every row again: a site can change after its scan.
+// an error are scanned again. --rescan detects every row again: a site can change after its scan. Each
+// row is saved as it is done, but an interrupted --rescan starts over from the first repo.
 import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
@@ -285,7 +286,8 @@ async function main(argv: string[]): Promise<number> {
   const apps = await listApps()
   console.log(`${listed.length} repos, ${candidates.length} candidates, ${statsDomains.length} stats labels, ${apps.length} Coolify apps`)
 
-  const orgRepos: OrgRepo[] = candidates.map((r) => ({ ...r, astro: scanned.has(r.name) || isAstroRepo(r.name) }))
+  // A repo already scanned is known to be Astro, unless --rescan asks again (a site can drop it).
+  const orgRepos: OrgRepo[] = candidates.map((r) => ({ ...r, astro: (!args.rescan && scanned.has(r.name)) || isAstroRepo(r.name) }))
   const plan = planPool({ orgRepos, statsDomains, exclusions, apps })
   // With --only, the unmatched list covers only the named repos; keep what a full run found.
   const unmatched = args.only.length

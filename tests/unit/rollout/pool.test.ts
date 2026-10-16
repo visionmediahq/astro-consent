@@ -226,10 +226,12 @@ describe('scanPool', () => {
 
   test('rescan detects every row again, even ones already scanned (#39: sites change after their scan)', async () => {
     const f = fakes()
-    const prior = { repo: 'b', domains: ['b.se'], report: report('b', ['b.se']) }
+    const prior = { repo: 'b', domains: ['b.se'], report: { ...report('b', ['b.se']), classification: 'needs-human' } as Report }
     const out = await scanPool(targets, { rows: [prior], unmatched: [] }, f.deps, { rescan: true })
     expect(f.events.filter((e) => e.startsWith('clone'))).toEqual(['clone a', 'clone b', 'clone c'])
     expect(out.rows.map((r) => r.repo)).toEqual(['a', 'b', 'c'])
+    // b's old report is replaced by the fresh one, not kept beside it.
+    expect(out.rows.find((r) => r.repo === 'b')!.report!.classification).toBe(report('b', ['b.se']).classification)
   })
 
   test('limit stops after N newly scanned repos', async () => {

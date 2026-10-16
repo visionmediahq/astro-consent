@@ -76,7 +76,7 @@ export function loadPoolRows(text: string): PoolRow[] {
   const stale = rows.filter((r) => r.report && !Array.isArray((r.report as Partial<Report>).services)).map((r) => r.repo)
   if (stale.length) {
     throw new Error(
-      `${stale.length} row${stale.length === 1 ? '' : 's'} in pool.json ${stale.length === 1 ? 'was' : 'were'} scanned before Report.services and may be drawn wrongly: ${stale.join(', ')}. Run the pool scan first (tsx ci/rollout/pool.ts), which detects them again`,
+      `${stale.length} row${stale.length === 1 ? '' : 's'} in pool.json ${stale.length === 1 ? 'was' : 'were'} scanned before Report.services and may be drawn wrongly: ${stale.join(', ')}. Run the pool scan first (tsx ci/rollout/pool.ts), which detects them again; a repo no longer in the pool (archived, excluded, no domain) is never scanned again, so delete its row by hand`,
     )
   }
   return rows.map((r) => (r.report ? { ...r, report: normaliseReport(r.report) } : r))
