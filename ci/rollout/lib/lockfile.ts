@@ -272,11 +272,17 @@ const npmCompare = (a: string, b: string): number => a.localeCompare(b, 'en')
  * nothing is kept: then the file stays exactly as npm wrote it.
  */
 export function keepPrunedOrphans(main: string, installed: string): { text: string; kept: string[] } | null {
-  const a = toLock(main).packages
   const lock = toLock(installed)
+  // Version 2 also keeps a legacy `dependencies` map this does not touch: leave it to verify.
+  if (toLock(main).lockfileVersion !== 3 || lock.lockfileVersion !== 3) return null
+  const a = toLock(main).packages
   const b = lock.packages
   if (!a || !b) return null
-  const orphans = new Set(Object.keys(a).filter((k) => k !== '' && !b[k] && (a[k]!['optional'] === true || a[k]!['devOptional'] === true)))
+  // Never one the new lockfile requires: npm may have placed its own copy (nested) on purpose.
+  const neededNow = new Set(Object.values(b).flatMap(requiredNames))
+  const orphans = new Set(
+    Object.keys(a).filter((k) => k !== '' && !b[k] && !neededNow.has(nameOfKey(k)) && (a[k]!['optional'] === true || a[k]!['devOptional'] === true)),
+  )
   // Drop every candidate something outside the set requires, until the set holds still.
   for (let changed = true; changed && orphans.size > 0; ) {
     changed = false
