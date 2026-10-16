@@ -300,6 +300,15 @@ npx tsx ci/rollout/run.ts help
   Visa button, "Visa alltid" label and "Öppna i" link. A dark theme that sets `--color-base-content`
   but not `--color-base-200` leaves light text on the light placeholder (knutssonsbil, about 1.2:1).
   `live post-merge` runs the same contrast check, so live sites are measured as well.
+- `verify` stops before any step when the disk holding the site has less than 15 GB free
+  (`ROLLOUT_MIN_FREE_GB` changes the threshold; demo mode skips it). Each verify runs `npm ci` and a
+  build twice and builds a Docker image, and Docker failed with I/O errors at 2.5 GB free during the
+  expansion. After a passing `live post-merge` (which `merge` runs), the tool deletes the clone's
+  `node_modules` and `dist`; a stop keeps them for the next verify.
+- Docker I/O errors (`input/output error`, `unable to lease content`): free disk first, then restart
+  Docker fully (`killall com.docker.backend; open -a Docker`, or Quit Docker Desktop and start it
+  again). No image or volume purge is needed. If a pull still fails, `docker pull` the base image by
+  hand once, then rerun verify.
 - `verify` step 8 builds the site's Dockerfile with `--build-arg SITE_URL=https://<first domain>`,
   as Coolify passes it: a Dockerfile with `ENV SITE_URL=$SITE_URL` otherwise builds with an empty one.
 - `live baseline` covers `report.domains` and every host of the Coolify apps that follow `main`,
