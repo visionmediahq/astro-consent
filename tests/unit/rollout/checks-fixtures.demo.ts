@@ -80,6 +80,9 @@ const FIXTURES: Record<string, string> = {
   sticky: embedPage(`add(el); localStorage.setItem('sticky', '1')`, `if (localStorage.getItem('sticky')) document.querySelectorAll('[data-consent-embed]').forEach(add)`),
   other: embedPage(`add(el); const s = document.createElement('script'); s.src = '${PIXEL}'; document.head.appendChild(s)`),
   oneoff: embedPage(`add(el)`),
+  // A loaded map keeps fetching tiles until the page goes away (knutssonsbil#2 live: tile and RPC
+  // requests from the old map fired as the reload started and were counted as "after reload").
+  busy: embedPage(`add(el); let i = 0; setInterval(() => { new Image().src = '${MAPS}&tile=' + i++ }, 50)`),
   // Visa that loads an iframe the page then squashes to nothing (salviablommor: a scoped display:block
   // on the wrapper beat `grid`, so the loaded map was 0px tall).
   flat: embedPage(`add(el); el.querySelector('iframe').style.height = '0'`),
@@ -111,14 +114,19 @@ for (const [name, html] of Object.entries(FIXTURES)) {
   mkdirSync(join(dir, name))
   writeFileSync(join(dir, name, 'index.html'), html)
 }
+// A live site answers in 100 ms or more, and the old page runs until the new one commits; this one
+// answers at once unless a fixture needs the old page to keep running through a navigation.
+const SLOW: Record<string, number> = { busy: 600 }
 const server = createServer((req, res) => {
   const name = (req.url ?? '/').split('?')[0]!.replace(/^\/|\/$/g, '')
-  try {
-    const body = readFileSync(join(dir, name, 'index.html'))
-    res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' }).end(body)
-  } catch {
-    res.writeHead(404).end('nope')
-  }
+  setTimeout(() => {
+    try {
+      const body = readFileSync(join(dir, name, 'index.html'))
+      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' }).end(body)
+    } catch {
+      res.writeHead(404).end('nope')
+    }
+  }, SLOW[name] ?? 0)
 })
 await new Promise<void>((r) => server.listen(0, '127.0.0.1', r))
 const address = server.address()
@@ -164,6 +172,10 @@ try {
   {
     const r = await paths('/oneoff/')
     expect(r.visaLoadsOnlyClicked && r.filterKept === null, '/oneoff/ control: one-off Visa passes, filter not asserted', r)
+  }
+  {
+    const r = await paths('/busy/')
+    expect(r.visaLoadsOnlyClicked, '/busy/ control: a map still loading tiles when the reload starts passes', r)
   }
   {
     const r = await paths('/sticky/')

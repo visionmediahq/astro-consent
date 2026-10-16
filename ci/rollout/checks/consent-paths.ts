@@ -131,9 +131,13 @@ async function visaOnlyClicked(browser: Browser, base: string, path: string, stu
     // (salviablommor). offsetWidth/Height ignore transforms, so an entrance animation cannot shrink it.
     const size = own && !widget ? await first.locator('iframe').first().evaluate((f) => ({ w: (f as HTMLElement).offsetWidth, h: (f as HTMLElement).offsetHeight })) : null
     const visible = size === null || (size.w >= MIN_SIDE && size.h >= MIN_SIDE)
+    // One-off: a reload must show no embed and request nothing from the registry. The loaded embed
+    // keeps fetching (map tiles) until its page is gone, and the old page runs until the new one
+    // commits, so leave it for about:blank first: only what the reloaded page requests is counted
+    // (knutssonsbil live: tile and RPC requests fired as the reload started).
+    await page.goto('about:blank')
     const foreign = hits.slice(before).filter((u) => matchesRegistry(u) !== service)
     const afterClick = hits.length
-    // One-off: a reload must show no embed and request nothing from the registry.
     await open(page, base, path)
     const reloaded = (await active(page).count()) + (await iframes(page).count())
     const afterReload = hits.length - afterClick
