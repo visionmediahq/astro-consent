@@ -118,6 +118,8 @@ export interface VerifyResult {
   /** The commit verified (HEAD after the push); null in demo mode. pr only trusts a run of the current HEAD. */
   sha: string | null
   steps: StepResult[]
+  /** Main's preview restarted mid-step after it stopped answering (#20), one line each. */
+  restarts?: string[]
 }
 
 export interface PoolRow {

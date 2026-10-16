@@ -39,7 +39,7 @@ import { isRoute, routeOf } from './detect/structure'
 import { dockerCheck } from './docker'
 import { type Exec, exec as realExec, tail } from './lib/exec'
 import { diffLock, diffPackageJson } from './lib/lockfile'
-import { type Preview, startPreview } from './preview'
+import { isUp, type Preview, startPreview } from './preview'
 import type { Report, StepResult, VerifyResult } from './types'
 import type { ServiceSlug } from '../../src/services'
 import { BRANCH } from './wire/index'
@@ -77,6 +77,8 @@ export interface VerifyDeps {
   docker: (repoUrl: string, branch: string, run: (url: string) => Promise<boolean>, buildArgs?: Record<string, string>) => Promise<{ pass: boolean; log: string }>
   /** Bytes free to an unprivileged user on the file system holding `dir`. */
   freeBytes: (dir: string) => number
+  /** Whether anything still answers at `url` (main's preview, after a connection error). */
+  isUp: (url: string) => Promise<boolean>
 }
 
 export interface VerifyOptions {
@@ -153,7 +155,11 @@ const realDeps = (): VerifyDeps => ({
     const s = statfsSync(dir)
     return s.bavail * s.bsize
   },
+  isUp,
 })
+
+/** A page load that found no server: the preview process is gone, not the page broken. */
+export const DROPPED = /net::ERR_(?:CONNECTION_REFUSED|CONNECTION_RESET|CONNECTION_CLOSED|EMPTY_RESPONSE|SOCKET_NOT_CONNECTED)|ECONNREFUSED|ECONNRESET/
 
 /** Free disk verify needs, GB: two npm ci, two builds and a Docker image fit with room to spare (#23). */
 export const MIN_FREE_GB = 15
@@ -256,8 +262,9 @@ export async function verify(dir: string, report: Report, opts: VerifyOptions = 
     steps.push({ step, name, pass: o.pass, evidence, ...(o.skipped ? { skipped: true } : {}) })
     return o.pass
   }
+  const restarts: string[] = []
   const finish = (): VerifyResult => {
-    const result: VerifyResult = { pass: steps.length > 0 && steps.every((s) => s.pass), sha, steps }
+    const result: VerifyResult = { pass: steps.length > 0 && steps.every((s) => s.pass), sha, steps, ...(restarts.length ? { restarts } : {}) }
     writeFileSync(join(out, 'verify.json'), `${JSON.stringify(result, null, 2)}\n`)
     return result
   }
@@ -334,6 +341,38 @@ export async function verify(dir: string, report: Report, opts: VerifyOptions = 
   let checks = null as Checks | null
   const getChecks = async () => (checks ??= await deps.checks())
   let branch = null as Preview | null
+
+  /**
+   * Main's preview for one step (#20). It twice stopped answering mid-verify with nothing in its
+   * log, and a rerun passed. `use` runs a check against it; when that throws a dropped connection
+   * and main no longer answers, main is restarted once on the same port and the check runs again.
+   * A second drop, any other error, or a main that still answers fails the step as before. The
+   * branch's preview is never restarted: a crash there may be the wiring's doing.
+   */
+  const mainPreview = async (step: string, lines: string[]) => {
+    let p = await deps.preview(mainDir!, PORTS.main, ssr)
+    previews.push(p)
+    let restarted = false
+    return {
+      url: () => p.url,
+      async use<T>(check: (url: string) => Promise<T>): Promise<T> {
+        try {
+          return await check(p.url)
+        } catch (e) {
+          const message = (e as Error).message.split('\n')[0]!
+          if (restarted || !DROPPED.test(message) || (await deps.isUp(`${p.url}/`))) throw e
+          restarted = true
+          await p.stop()
+          p = await deps.preview(mainDir!, PORTS.main, ssr)
+          previews.push(p)
+          lines.push(`main's preview stopped answering (${message}): restarted it once and checked main again`)
+          restarts.push(`step ${step}: ${message}`)
+          return await check(p.url)
+        }
+      },
+      stop: () => p.stop(),
+    }
+  }
   let paths: string[] = []
   let mapPages: string[] = []
   // Demo mode has no main side to record a baseline: the one error main always has is the missing
@@ -418,10 +457,9 @@ export async function verify(dir: string, report: Report, opts: VerifyOptions = 
       lines.push(`pages (${paths.length}): ${paths.join(' ')}`)
       if (!paths.some((p) => norm(p) === '/')) return { pass: false, lines: [...lines, '"/" is not among the pages: the page list is broken'] }
       if (!demo) {
-        const main = await deps.preview(mainDir!, PORTS.main, ssr)
-        previews.push(main)
-        mainResults = await c.requests(main.url, paths, {})
-        const mainHost = new URL(main.url).host
+        const main = await mainPreview('3 requests', lines)
+        mainResults = await main.use((url) => c.requests(url, paths, {}))
+        const mainHost = new URL(main.url()).host
         baseline = new Set(mainResults.flatMap((r) => r.errors).map((e) => e.replaceAll(mainHost, new URL(branch!.url).host)))
         lines.push('main (expected RED: no banner, registry requested on map pages):', ...formatRequests(mainResults).map((l) => `  ${l}`))
         const green = [
@@ -464,22 +502,22 @@ export async function verify(dir: string, report: Report, opts: VerifyOptions = 
       const mainW = new Map<string, number>()
       const wide = rows.filter((r) => r.kind === 'page' && r.clipped)
       let rootDiff: string[] | null = null
+      const mainLines: string[] = []
       // #46: each placeholder must be about as tall as the iframe it replaced (knutssonsbil).
       let heights: ReturnType<typeof compareEmbedHeights> | null = null
       if (!demo) {
-        const main = await deps.preview(mainDir!, PORTS.main, ssr)
-        previews.push(main)
+        const main = await mainPreview('5 clip', mainLines)
         try {
           if (wide.length)
-            for (const m of await c.clip(main.url, [...new Set(wide.map((r) => r.path))]))
+            for (const m of await main.use((url) => c.clip(url, [...new Set(wide.map((r) => r.path))])))
               if (m.kind === 'page') mainW.set(`${m.path} ${m.width}`, m.w)
-          rootDiff = diffRootStyles(await c.rootStyles(main.url), await c.rootStyles(branch!.url))
-          if (mapPages.length) heights = compareEmbedHeights(await c.embedBoxes(main.url, mapPages), await c.embedBoxes(branch!.url, mapPages))
+          rootDiff = diffRootStyles(await main.use((url) => c.rootStyles(url)), await c.rootStyles(branch!.url))
+          if (mapPages.length) heights = compareEmbedHeights(await main.use((url) => c.embedBoxes(url, mapPages)), await c.embedBoxes(branch!.url, mapPages))
         } finally {
           await main.stop()
         }
       }
-      const lines: string[] = []
+      const lines: string[] = [...mainLines]
       for (const r of rows) {
         const onMain = r.kind === 'page' && r.clipped ? mainW.get(`${r.path} ${r.width}`) : undefined
         if (onMain !== undefined && onMain >= r.w) r.clipped = false
@@ -603,6 +641,7 @@ function headSha(out: string): string {
 export function formatVerify(result: VerifyResult): string[] {
   return [
     ...result.steps.map((s) => `step ${s.step} ${s.name}: ${s.skipped ? 'skipped' : s.pass ? 'pass' : 'FAIL'}`),
+    ...(result.restarts ?? []).map((r) => `main preview restarted: ${r}`),
     `verify: ${result.pass ? 'PASS' : 'FAIL'}`,
   ]
 }

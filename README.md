@@ -305,6 +305,10 @@ npx tsx ci/rollout/run.ts help
   build twice and builds a Docker image, and Docker failed with I/O errors at 2.5 GB free during the
   expansion. After a passing `live post-merge` (which `merge` runs), the tool deletes the clone's
   `node_modules` and `dist`; a stop keeps them for the next verify.
+- If main's local preview stops answering mid-step (a dropped connection, and nothing answers on
+  its port), `verify` restarts it once and checks main again. The step output, `verify.json`
+  (`restarts`) and the summary say so. A second drop, any other error, or a crash of the branch's
+  preview fails the step: a branch crash may be the wiring's doing.
 - Docker I/O errors (`input/output error`, `unable to lease content`): free disk first, then restart
   Docker fully (`docker desktop restart`, or quit Docker Desktop from its menu and start it again).
   No image or volume purge is needed. If a pull still fails, `docker pull` the base image by
