@@ -8,7 +8,7 @@
 import { readFileSync } from 'node:fs'
 import { pathToFileURL } from 'node:url'
 import { normaliseReport } from './lib/report'
-import type { PoolRow } from './types'
+import type { PoolRow, Report } from './types'
 
 export const SEED = 20261006
 
@@ -66,6 +66,22 @@ export function slots(sizes: { consent: number; notice: number }, total = 15): {
   return out
 }
 
+/**
+ * pool.json's rows, normalised. Refuses rows stored before `Report.services` (#37): normalising
+ * cannot repair them, as a pre-#37 Elfsight row still carries `banners: ['elfsight']`, which
+ * strata() leaves out without a word, skewing the draw. The pool scan detects such rows again.
+ */
+export function loadPoolRows(text: string): PoolRow[] {
+  const rows = (JSON.parse(text) as { rows: PoolRow[] }).rows
+  const stale = rows.filter((r) => r.report && !Array.isArray((r.report as Partial<Report>).services)).map((r) => r.repo)
+  if (stale.length) {
+    throw new Error(
+      `${stale.length} row${stale.length === 1 ? '' : 's'} in pool.json ${stale.length === 1 ? 'was' : 'were'} scanned before Report.services and may be drawn wrongly: ${stale.join(', ')}. Run the pool scan first (tsx ci/rollout/pool.ts), which detects them again; a repo no longer in the pool (archived, excluded, no domain) is never scanned again, so delete its row by hand`,
+    )
+  }
+  return rows.map((r) => (r.report ? { ...r, report: normaliseReport(r.report) } : r))
+}
+
 const byRepo = (a: PoolRow, b: PoolRow): number => (a.repo < b.repo ? -1 : a.repo > b.repo ? 1 : 0)
 
 /** Shuffled repo names per stratum: `mulberry32(seed + i)`, i = 0 for consent and 1 for notice. */
@@ -85,7 +101,7 @@ function main(argv: string[]): void {
     else throw new Error(`unknown argument ${argv[i]}`)
   }
   if (!pool) throw new Error('usage: select.ts --pool <pool.json> [--total 15]')
-  const rows = (JSON.parse(readFileSync(pool, 'utf8')) as { rows: PoolRow[] }).rows.map((r) => (r.report ? { ...r, report: normaliseReport(r.report) } : r))
+  const rows = loadPoolRows(readFileSync(pool, 'utf8'))
   const order = drawOrder(rows, SEED)
   const n = slots({ consent: order.consent.length, notice: order.notice.length }, total)
   const lines = [`seed ${SEED}, ${rows.length} rows`]

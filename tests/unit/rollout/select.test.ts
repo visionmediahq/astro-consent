@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { drawOrder, fisherYates, mulberry32, slots, strata } from '../../../ci/rollout/select'
+import { drawOrder, fisherYates, loadPoolRows, mulberry32, slots, strata } from '../../../ci/rollout/select'
 import type { IframeInfo, PoolRow, Report } from '../../../ci/rollout/types'
 
 const iframe = (host: string, srcKind: IframeInfo['srcKind'] = 'literal'): IframeInfo => ({
@@ -104,5 +104,31 @@ describe('drawOrder', () => {
     const out = drawOrder([...maps, ...notice, row('x', { banners: ['cookiebot'] })], 20261006)
     expect([...out.consent].sort()).toEqual(maps.map((r) => r.repo))
     expect([...out.notice].sort()).toEqual(notice.map((r) => r.repo))
+  })
+})
+
+describe('loadPoolRows (#39: rows scanned before Report.services)', () => {
+  const current = (repo: string, extra: Partial<Report> = {}): PoolRow => {
+    const r = row(repo, { maps: true })
+    return { ...r, report: { ...r.report!, services: ['google-maps'], ...extra } }
+  }
+
+  it('a fully re-scanned pool loads as before, normalised', () => {
+    // An older shape that still has services: classification 'maps', no widgets.
+    const { widgets: _w, ...noWidgets } = current('a', { classification: 'maps' as Report['classification'] }).report!
+    const rows = loadPoolRows(JSON.stringify({ rows: [{ repo: 'a', domains: ['a.se'], report: noWidgets }, row('b', { report: null })] }))
+    expect(rows.map((r) => r.repo)).toEqual(['a', 'b'])
+    expect(rows[0]!.report).toMatchObject({ classification: 'consent', widgets: [], services: ['google-maps'] })
+  })
+
+  it('refuses a pool with rows stored before services, naming each and saying to run the pool scan', () => {
+    // A pre-#37 Elfsight site: banners ['elfsight'] makes strata() skip it silently.
+    const stale = { ...row('old-elfsight', { banners: ['elfsight'] }) }
+    const text = JSON.stringify({ rows: [current('a'), stale, row('old-map', { maps: true })] })
+    expect(() => loadPoolRows(text)).toThrow(/2 rows in pool\.json were scanned before Report\.services.*old-elfsight, old-map.*pool\.ts.*no longer in the pool/s)
+  })
+
+  it('a row without a report (a scan error) is not stale', () => {
+    expect(() => loadPoolRows(JSON.stringify({ rows: [current('a'), row('err', { report: null })] }))).not.toThrow()
   })
 })
