@@ -65,7 +65,8 @@ const cutPlaceholder = (box: string) =>
 // open link inherits the text colour, as daisyUI's .link does.
 const placeholder = (style: string) =>
   `<div data-consent-embed="google-maps" style="${style}"><div data-placeholder><div><p>Kartan hämtas från Google Maps.</p></div><div><button data-load>Visa</button><label><input type="checkbox" data-remember> Visa alltid</label><a data-open href="${MAPS}" style="color:inherit">Öppna</a></div></div></div>`
-// knutssonsbil's box: its height is padding (40 % of the width), at least 320px.
+// knutssonsbil's shape: a box whose height is padding (40 % of the width) plus a min-height (here
+// content-box, so 40 % + 320px; the shape, not knutssonsbil's numbers, is what matters).
 const ratioBox = (inner: string) => `<div style="position:relative;padding-bottom:40%;min-height:320px">${inner}</div>`
 const widget = `<div data-consent-embed="elfsight" data-script="${ELFSIGHT}"><template data-payload><div class="elfsight-app-x"></div></template><button data-load>Visa</button><input type="checkbox" data-remember></div>`
 

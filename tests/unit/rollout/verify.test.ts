@@ -117,7 +117,7 @@ function fake(
       paths.map((path): ClipResult => ({ path, width: 320, kind: 'button', button: 'Neka', w: 80, boxW: 300, over: false, out: false, covered: false, cut: false, clipped: false }))
     ),
     rootStyles: async () => (called.add('rootStyles'), { 'html scrollbar-color': 'auto', 'html background-color': 'rgb(255, 255, 255)' }),
-    embedBoxes: async (base, paths) => (called.add(`embedBoxes ${base}`), paths.flatMap((path) => [360, 1280].map((width): EmbedBox => ({ path, width, h: 420, w: width - 40 })))),
+    embedBoxes: async (base, paths) => (called.add(`embedBoxes ${base}`), paths.flatMap((path) => [360, 1280].map((width): EmbedBox => ({ path, width, service: 'google-maps', h: 420 })))),
     contrast: async (_base, paths) => (
       called.add('contrast'),
       paths.flatMap((path) => (['banner', 'links'] as const).map((kind): ContrastRow => ({
@@ -231,14 +231,14 @@ describe('verify', () => {
 
   describe('step 5: map heights are compared with main (#46, knutssonsbil)', () => {
     const boxes = (mainH: number, branchH: number) => async (base: string, paths: string[]) =>
-      paths.map((path): EmbedBox => ({ path, width: 1280, h: base.includes(':4398') ? mainH : branchH, w: 1150 }))
+      paths.map((path): EmbedBox => ({ path, width: 1280, service: 'google-maps', h: base.includes(':4398') ? mainH : branchH }))
 
     test('as tall as main: passes and lists each map', async () => {
       const dir = siteDir()
       const f = fake({ checks: { embedBoxes: boxes(460, 460) } })
       const result = await verify(dir, report(), { deps: f.deps })
       expect(result.steps.find((s) => s.step === 5)).toMatchObject({ pass: true })
-      expect(evidence(dir, '5-clip.txt')).toContain('/karta 1280px embed 1: 460px tall, main 460px ok')
+      expect(evidence(dir, '5-clip.txt')).toContain('/karta 1280px google-maps 1: 460px tall, main 460px ok')
     })
 
     test('more than 10 % shorter than main: fails and names both heights', async () => {
@@ -246,15 +246,15 @@ describe('verify', () => {
       const f = fake({ checks: { embedBoxes: boxes(460, 320) } })
       const result = await verify(dir, report(), { deps: f.deps })
       expect(result.steps.at(-1)).toMatchObject({ step: 5, pass: false })
-      expect(evidence(dir, '5-clip.txt')).toContain('/karta 1280px embed 1: 320px tall, main 460px SHORTER')
+      expect(evidence(dir, '5-clip.txt')).toContain('/karta 1280px google-maps 1: 320px tall, main 460px SHORTER')
     })
 
     test('counts that differ are noted, not failed (a map main built in a script)', async () => {
       const dir = siteDir()
-      const f = fake({ checks: { embedBoxes: async (base, paths) => (base.includes(':4398') ? [] : paths.map((path): EmbedBox => ({ path, width: 1280, h: 420, w: 1150 }))) } })
+      const f = fake({ checks: { embedBoxes: async (base, paths) => (base.includes(':4398') ? [] : paths.map((path): EmbedBox => ({ path, width: 1280, service: 'google-maps', h: 420 }))) } })
       const result = await verify(dir, report(), { deps: f.deps })
       expect(result.steps.find((s) => s.step === 5)).toMatchObject({ pass: true })
-      expect(evidence(dir, '5-clip.txt')).toContain('/karta 1280px: 0 map iframes on main, 1 embed on the branch: heights not compared')
+      expect(evidence(dir, '5-clip.txt')).toContain('/karta 1280px google-maps: 0 registry iframes on main, 1 embed on the branch: heights not compared')
     })
   })
 

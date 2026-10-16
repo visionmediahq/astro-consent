@@ -286,7 +286,7 @@ describe('contrast', () => {
 })
 
 describe('embed heights (#46: knutssonsbil, an in-flow wrapper in a padding-ratio box)', () => {
-  const box = (path: string, width: number, h: number, w = width - 40): EmbedBox => ({ path, width, h, w })
+  const box = (path: string, width: number, h: number, service: EmbedBox['service'] = 'google-maps'): EmbedBox => ({ path, width, service, h })
 
   it('pairs main iframes with branch placeholders in page order per path and width', () => {
     const r = compareEmbedHeights([box('/kontakt', 1280, 460), box('/kontakt', 360, 320)], [box('/kontakt', 1280, 460), box('/kontakt', 360, 320)])
@@ -308,7 +308,22 @@ describe('embed heights (#46: knutssonsbil, an in-flow wrapper in a padding-rati
   it('different counts on a page are not compared, and say so (a map main built in a script, stromsbacka)', () => {
     const r = compareEmbedHeights([], [box('/kontakt', 1280, 420)])
     expect(r.rows).toEqual([])
-    expect(r.notes).toEqual(['/kontakt 1280px: 0 map iframes on main, 1 embed on the branch: heights not compared'])
+    expect(r.notes).toEqual(['/kontakt 1280px google-maps: 0 registry iframes on main, 1 embed on the branch: heights not compared'])
+  })
+
+  it('pairs per service, so a calendar main kept as an iframe is never compared with a map placeholder', () => {
+    // Main: a calendar iframe the branch did not convert, then the map. Branch: a map main built in
+    // a script, then the map. Page order alone would pair the calendar (200px) with the first map.
+    const r = compareEmbedHeights(
+      [box('/', 1280, 200, 'google-calendar'), box('/', 1280, 450)],
+      [box('/', 1280, 450), box('/', 1280, 450)],
+    )
+    expect(r.rows).toEqual([])
+    expect(r.notes).toEqual([
+      '/ 1280px google-maps: 1 registry iframe on main, 2 embeds on the branch: heights not compared',
+    ])
+    const same = compareEmbedHeights([box('/', 1280, 200, 'google-calendar'), box('/', 1280, 450)], [box('/', 1280, 200, 'google-calendar'), box('/', 1280, 320)])
+    expect(same.rows.map((x) => [x.service, x.ok])).toEqual([['google-calendar', true], ['google-maps', false]])
   })
 })
 

@@ -291,11 +291,11 @@ npx tsx ci/rollout/run.ts help
   difference fails: it shows on every page, and the screenshots cannot show a scrollbar (faluridklubb).
   A page that scrolls sideways fails only if it is wider than on main at that width, so a site's
   own overflow is noted with main's width, not blamed on the banner.
-- `verify` step 5 also measures each map placeholder against the iframe it replaced on main, paired
-  in page order, at 360 and 1280 px: a placeholder more than 10 % shorter fails (knutssonsbil: an
-  in-flow wrapper in a padding-ratio box left the map 320px tall with an empty band below). A page
-  where main and the branch have different counts (a map main built in a script) is noted, not
-  compared.
+- `verify` step 5 also measures each embed placeholder against the registry iframe it replaced on
+  main, paired per service in page order, at 360 and 1280 px: a placeholder more than 10 % shorter
+  fails (knutssonsbil: an in-flow wrapper in a padding-ratio box left the map 320px tall with an
+  empty band below). Where main and the branch have different counts of a service on a page (a map
+  main built in a script) that service is noted, not compared.
 - `verify` step 6 measures the placeholder of every embed that has not loaded too: its info text,
   Visa button, "Visa alltid" label and "Öppna i" link. A dark theme that sets `--color-base-content`
   but not `--color-base-200` leaves light text on the light placeholder (knutssonsbil, about 1.2:1).

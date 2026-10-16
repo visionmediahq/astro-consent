@@ -12,8 +12,8 @@
 //   4 consent-paths  Visa / Visa alltid / Neka on every page with an embed
 //   5 clip        no banner or embed button clipped or cut off by an overflow:hidden ancestor, no
 //                 banner button covered, no page wider than
-//                 on main, at 320/360/375/1280 px; no map placeholder more than 10 % shorter than
-//                 the iframe it replaced on main, at 360/1280 px (#46)
+//                 on main, at 320/360/375/1280 px; no embed placeholder more than 10 % shorter than
+//                 the iframe of its service it replaced on main, at 360/1280 px (#46)
 //   6 contrast    every banner button, PrivacyLinks row and embed placeholder text ≥ 4.5:1 and
 //                 determinate (Ruling 20, #46)
 //   7 screenshots banner and map placeholders at 360 and 1280 px
@@ -463,7 +463,7 @@ export async function verify(dir: string, report: Report, opts: VerifyOptions = 
       else if (rootDiff.length === 0) lines.push('root styles on /: same as main')
       else lines.push(...rootDiff.map((d) => `root styles on / differ from main: ${d}`))
       if (heights) {
-        for (const h of heights.rows) lines.push(`${h.path} ${h.width}px embed ${h.index}: ${h.branchH}px tall, main ${h.mainH}px ${h.ok ? 'ok' : 'SHORTER'}`)
+        for (const h of heights.rows) lines.push(`${h.path} ${h.width}px ${h.service} ${h.index}: ${h.branchH}px tall, main ${h.mainH}px ${h.ok ? 'ok' : 'SHORTER'}`)
         lines.push(...heights.notes)
       } else if (mapPages.length) lines.push('embed heights: not compared (no main)')
       return { pass: measured && rows.every((r) => !r.clipped) && !rootDiff?.length && (heights?.rows.every((h) => h.ok) ?? true), lines }
