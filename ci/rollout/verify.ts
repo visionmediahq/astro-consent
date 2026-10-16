@@ -39,7 +39,7 @@ import { isRoute, routeOf } from './detect/structure'
 import { dockerCheck } from './docker'
 import { type Exec, exec as realExec, tail } from './lib/exec'
 import { diffLock, diffPackageJson } from './lib/lockfile'
-import { isUp, type Preview, startPreview } from './preview'
+import { isUp, type Preview, previewLog, startPreview } from './preview'
 import type { Report, StepResult, VerifyResult } from './types'
 import type { ServiceSlug } from '../../src/services'
 import { BRANCH } from './wire/index'
@@ -157,6 +157,8 @@ const realDeps = (): VerifyDeps => ({
   },
   isUp,
 })
+
+const firstLine = (e: unknown): string => (e instanceof Error ? e.message : String(e)).split('\n')[0]!
 
 /** A page load that found no server: the preview process is gone, not the page broken. */
 export const DROPPED = /net::ERR_(?:CONNECTION_REFUSED|CONNECTION_RESET|CONNECTION_CLOSED|EMPTY_RESPONSE|SOCKET_NOT_CONNECTED)|ECONNREFUSED|ECONNRESET/
@@ -359,15 +361,31 @@ export async function verify(dir: string, report: Report, opts: VerifyOptions = 
         try {
           return await check(p.url)
         } catch (e) {
-          const message = (e as Error).message.split('\n')[0]!
+          const message = firstLine(e)
           if (restarted || !DROPPED.test(message) || (await deps.isUp(`${p.url}/`))) throw e
           restarted = true
           await p.stop()
-          p = await deps.preview(mainDir!, PORTS.main, ssr)
+          // The new preview starts the log afresh, and it is the only clue to why main stopped.
+          let log = ''
+          try {
+            log = readFileSync(previewLog(PORTS.main), 'utf8')
+          } catch {
+            // no log (tests, or it was never written)
+          }
+          try {
+            p = await deps.preview(mainDir!, PORTS.main, ssr)
+          } catch (again) {
+            throw new Error(`main's preview stopped answering (${message}) and did not restart: ${firstLine(again)}`, { cause: again })
+          }
           previews.push(p)
           lines.push(`main's preview stopped answering (${message}): restarted it once and checked main again`)
+          if (log.trim()) lines.push("main's preview log before the restart:", ...tail(log, 10).split('\n').map((l) => `  ${l}`))
           restarts.push(`step ${step}: ${message}`)
-          return await check(p.url)
+          try {
+            return await check(p.url)
+          } catch (again) {
+            throw new Error(`after restarting main's preview once: ${firstLine(again)}`, { cause: again })
+          }
         }
       },
       stop: () => p.stop(),

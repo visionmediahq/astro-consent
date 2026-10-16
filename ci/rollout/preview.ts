@@ -15,6 +15,9 @@ export interface Preview {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
+/** The log a preview on `port` writes to; a new preview on the same port starts it afresh. */
+export const previewLog = (port: number): string => join(tmpdir(), `rollout-preview-${port}.log`)
+
 /** True when anything answers HTTP at `url`, whatever the status. */
 export async function isUp(url: string): Promise<boolean> {
   try {
@@ -67,7 +70,7 @@ export async function startPreview(dir: string, port: number, ssr: boolean, entr
   if ((await isUp(`http://127.0.0.1:${port}/`)) || (await isUp(`http://localhost:${port}/`))) {
     throw new Error(`port ${port} is already in use: stop whatever serves it first`)
   }
-  const log = join(tmpdir(), `rollout-preview-${port}.log`)
+  const log = previewLog(port)
   const fd = openSync(log, 'w')
   const [cmd, args] = ssr ? ['node', [entry]] : ['npm', ['run', 'preview', '--', '--port', String(port)]]
   const child = spawn(cmd as string, args as string[], {
