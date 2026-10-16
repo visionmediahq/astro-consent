@@ -49,6 +49,14 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - run: npm run demo:build -- consent
       - run: npx tsx ci/rollout/run.ts verify --demo demo/dist-consent
+      # Negative controls: broken pages each rollout check must fail, and controls it must pass.
+      # Exits 1 on any FAIL line, so a check that starts passing vacuously turns CI red.
+      - name: Rollout check fixtures
+        run: npx tsx tests/unit/rollout/checks-fixtures.demo.ts
+        timeout-minutes: 5
+      - name: Rollout checks on the consent demo
+        run: npx tsx tests/unit/rollout/checks.demo.ts
+        timeout-minutes: 5
       - run: npm run demo:build -- notice
       - run: npm run test:e2e
       - uses: actions/upload-artifact@v4
