@@ -21,5 +21,5 @@ export const prerender = true;
     image="/images/logo-skaraborg.png"
   />
   <HomeSplash />
-  <PrivacyLinks />
+  <PrivacyLinks class="mt-6" />
 </Base>

@@ -25,7 +25,7 @@ by this oracle, and are not listed below.
 **Detect input** (`detect(before, 'munkforstradgardstjanst', ['munkforstradgardstjanst.se'])`):
 `notice`; layout `Base.astro` with footer reference `VisionFooter` (the client `Footer` is rendered by
 `index.astro`); one footer, `src/components/Footer.astro`, `textClass: text-neutral-content`; its
-last-child chain ends in the `justify-between` bottom bar, so `justify-start!` is added (Ruling 18);
+last-child chain ends in the `justify-between` bottom bar (alignment `left`; the links go into that flex bar, so wire adds no `justify-start!`, #47);
 footerless: `404.astro`; no policy page.
 
 Identical in both: the config import, the CSS `@source` line, `<ConsentBanner />` before
@@ -39,12 +39,12 @@ Identical in both: the config import, the CSS `@source` line, `<ConsentBanner />
 2. **`Base.astro`: the ConsentBanner import comes after `import '../styles/global.css'`**; the pilot put
    it before. **Acceptable**: frontmatter import order only, following the rule "after the last import".
    Any effect on the order of the bundled CSS is left to verify's banner contrast check (C3 step 6).
-3. **`Footer.astro`: `<PrivacyLinks class="text-neutral-content justify-start!" />` is the last child
-   of `<div class="max-w-6xl mx-auto px-4 md:px-6">`**, below the bottom bar; the pilot put it at the
-   end of the last column (hours) with `mt-5`. **Acceptable (Ruling 17)**: `<footer>`'s only child is
-   that container, so the links sit inside its padding, left-aligned like the split bar; C2 does not
-   reproduce munkfors' hand placement, and `mt-5` was spacing for it.
-4. **`404.astro`: `<PrivacyLinks />` with no class**, the pilot's `mt-8 text-base-content/70`, both at
-   the end of the centred box under the back button. **Acceptable (Ruling 16)**: same position (the
-   only child of `<main>`); C2's footerless rule has no class source, and the links inherit
-   `text-base-content`, which is readable on `bg-base-100`.
+3. **`Footer.astro`: `<PrivacyLinks class="text-neutral-content" />` inside the split bottom bar,
+   between © and "Webbplats av"** (#47); the pilot put it at the end of the last column (hours) with
+   `mt-5`. **Acceptable**: the bar's flex row places the links, so there is no `justify-start!`; the
+   footer's own text colour overrides the bar's dimmed inline colour. C2 does not reproduce munkfors'
+   hand placement, and `mt-5` was spacing for it.
+4. **`404.astro`: `<PrivacyLinks class="mt-6" />`**, the pilot's `mt-8 text-base-content/70`, both at
+   the end of the centred box under the back button. **Acceptable (Ruling 16, #47)**: same position (the
+   only child of `<main>`), a top margin as the pilot's; the links inherit `text-base-content`, which is
+   readable on `bg-base-100`.

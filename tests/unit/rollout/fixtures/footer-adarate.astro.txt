@@ -1,0 +1,46 @@
+---
+// adarate origin/main 27380a5, src/components/Footer.astro, navigation and CSS reduced (#47).
+// Dark background in scoped CSS, no text colour on the footer: inherited links measured 1.05:1.
+---
+
+<footer class="site-footer">
+  <div class="site-footer__top">
+    <div class="site-footer__brand">
+      <p class="site-footer__tagline">Innovative,<br>Independent<br>Thinking</p>
+    </div>
+    <nav class="site-footer__nav" aria-label="Footer navigation">
+      <a href="/products/" class="footer-link">Products</a>
+      <a href="/contact-us/" class="footer-link">Contact Us</a>
+    </nav>
+  </div>
+  <div class="site-footer__bottom">
+    <p class="site-footer__copy">&copy; {new Date().getFullYear()} Adarate Systems AB</p>
+    <p class="site-footer__address">Text.</p>
+  </div>
+</footer>
+
+<style>
+  .site-footer {
+    display: block;
+    background: #0d1219;
+    border-top: 3px solid var(--color-primary);
+  }
+
+  .site-footer__tagline {
+    color: rgba(255, 255, 255, 0.9);
+  }
+
+  .site-footer__bottom {
+    max-width: 1100px;
+    margin: 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+  }
+
+  .site-footer__copy {
+    color: rgba(255, 255, 255, 0.25);
+  }
+</style>

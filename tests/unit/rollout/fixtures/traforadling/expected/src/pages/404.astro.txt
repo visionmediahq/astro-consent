@@ -29,7 +29,7 @@ export const prerender = true
           Tillbaka till startsidan
         </a>
       </div>
-      <PrivacyLinks />
+      <PrivacyLinks class="mt-6" />
     </div>
   </main>
 </Base>

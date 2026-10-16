@@ -256,9 +256,9 @@ describe('wireLinks', () => {
   })
 
   test.each([
-    ['a split footer (justify-between row)', '<div class="flex justify-between">\n      <p>©</p>\n      <p>Vision Media</p>\n    </div>'],
-    ['a left-aligned footer (text-left)', '<div class="text-left">\n      <p>©</p>\n    </div>'],
-  ])('%s gets justify-start!', (_name, bar) => {
+    ['a split footer (justify-between row)', '<div class="flex justify-between">\n      <p>Firma</p>\n      <p>Vision Media</p>\n    </div>'],
+    ['a left-aligned footer (text-left)', '<div class="text-left">\n      <p>Firma</p>\n    </div>'],
+  ])('%s with no © bar gets justify-start!', (_name, bar) => {
     const text = wire(
       [wireLinks],
       site(`<footer class="text-white">\n  <div class="container">\n    <div class="grid"><p>a</p><p>b</p></div>\n    ${bar}\n  </div>\n</footer>\n`),
@@ -267,13 +267,131 @@ describe('wireLinks', () => {
     expect(text).toContain('    <PrivacyLinks class="text-white justify-start!" />\n  </div>\n</footer>')
   })
 
-  test('a footer aligned only by its own CSS (alignment unknown): no justify-start!', () => {
+  test('a footer aligned only by its own CSS (alignment unknown), no © bar: no justify-start!', () => {
     const text = wire(
       [wireLinks],
-      site(`<footer class="site-footer">\n  <div class="inner"><p>a</p></div>\n  <div class="bottom"><p>©</p></div>\n</footer>\n`),
+      site(`<footer class="site-footer">\n  <div class="inner"><p>a</p></div>\n  <div class="bottom"><p>Firma</p></div>\n</footer>\n`),
       'src/components/Footer.astro',
     )
-    expect(text).toContain('  <div class="bottom"><p>©</p></div>\n  <PrivacyLinks />\n</footer>')
+    expect(text).toContain('  <div class="bottom"><p>Firma</p></div>\n  <PrivacyLinks />\n</footer>')
+  })
+
+  // #47: a footer with several sections got the links after its © bottom bar, outside every
+  // container. They go into the bar now, right after the © element, in its row.
+  describe('the © bottom bar (#47)', () => {
+    const real = (name: string): string => readFileSync(join(FIXTURES, `footer-${name}.astro.txt`), 'utf8')
+    const POLICY_PAGE = { 'src/pages/integritetspolicy.astro': PAGE }
+    const tags = (text: string): number => text.split('<PrivacyLinks').length - 1
+
+    test('stadsbudskontoret: in the bar after ©, before "Drivs av"; white text (the footer CSS sets color: #fff)', () => {
+      const text = wire([wireLinks], site(real('stadsbudskontoret')), 'src/components/Footer.astro')
+      expect(text).toContain(
+        'Alla rättigheter förbehållna.\n      </p>\n      <PrivacyLinks class="text-white/70" />\n      <p class="text-xs" style="color: rgba(255,255,255,0.5);">\n        Drivs av',
+      )
+      expect(text).toContain('    </div>\n  </div>\n</footer>')
+      expect(tags(text)).toBe(1)
+    })
+
+    test('ekostrateg (DaisyUI .footer grid): between © and the logo; colours only in CSS variables, so no class', () => {
+      const text = wire([wireLinks], site(real('ekostrateg')), 'src/components/Footer.astro')
+      expect(text).toContain('Alla rättigheter förbehållna.</p>\n    <PrivacyLinks />\n    <Image\n')
+      expect(text).toContain('    />\n  </div>\n</footer>')
+      expect(tags(text)).toBe(1)
+    })
+
+    test("landqvistmekaniska: the bar's own Integritetspolicy link to policy_url is replaced (PrivacyLinks renders it)", () => {
+      const text = wire([wireLinks], site(real('landqvistmekaniska'), POLICY_PAGE), 'src/components/Footer.astro')
+      expect(text).toContain('Verkstad AB.\n      </p>\n      <PrivacyLinks class="text-white/70" />\n    </div>\n  </div>\n</footer>')
+      expect(text).not.toContain('<p class="footer-legal">')
+      // The column link above the bar stays.
+      expect(text).toContain('<li><a href="/integritetspolicy/" class="footer-link">Integritetspolicy</a></li>')
+      expect(tags(text)).toBe(1)
+    })
+
+    test('landqvistmekaniska with an existing privacy.json: its policy_url path decides', () => {
+      const privacy = (url: string) => ({ 'src/data/privacy.json': JSON.stringify({ services: [], policy_url: url }) })
+      const same = wire([wireLinks], site(real('landqvistmekaniska'), privacy('https://x.se/integritetspolicy')), 'src/components/Footer.astro')
+      expect(same).not.toContain('<p class="footer-legal">')
+      const other = wire([wireLinks], site(real('landqvistmekaniska'), { ...POLICY_PAGE, ...privacy('https://x.se/gdpr/') }), 'src/components/Footer.astro')
+      expect(other).toContain('<p class="footer-legal">')
+    })
+
+    test.each([
+      ['no policy page', {}],
+      ['a policy page at another path', { 'src/pages/gdpr.astro': PAGE }],
+    ])('landqvistmekaniska with %s: the link stays, the links go after ©', (_name, extra) => {
+      const text = wire([wireLinks], site(real('landqvistmekaniska'), extra), 'src/components/Footer.astro')
+      expect(text).toContain('Verkstad AB.\n      </p>\n      <PrivacyLinks class="text-white/70" />\n      <p class="footer-legal">')
+    })
+
+    test('adarate: dark background in scoped CSS, no text colour → text-white/70 after ©', () => {
+      const text = wire([wireLinks], site(real('adarate')), 'src/components/Footer.astro')
+      expect(text).toContain('Adarate Systems AB</p>\n    <PrivacyLinks class="text-white/70" />\n    <p class="site-footer__address">')
+      expect(tags(text)).toBe(1)
+    })
+
+    test('adarate with a light scoped background: no class', () => {
+      const text = wire([wireLinks], site(real('adarate').replace('background: #0d1219;', 'background: #f4f1ea;')), 'src/components/Footer.astro')
+      expect(text).toContain('Adarate Systems AB</p>\n    <PrivacyLinks />\n')
+    })
+
+    test('ostansjobilskrot: dark inline background, bar inside the single wrapper → text-white/70 after ©, no justify-start!', () => {
+      const text = wire([wireLinks], site(real('ostansjobilskrot')), 'src/components/Footer.astro')
+      expect(text).toContain('förbehållna.\n            </p>\n            <PrivacyLinks class="text-white/70" />\n            <a\n')
+      expect(tags(text)).toBe(1)
+    })
+
+    test('a Tailwind dark background (bg-gray-900) with no text class → text-white/70', () => {
+      const text = wire(
+        [wireLinks],
+        site(`<footer class="bg-gray-900">\n  <div class="grid"><p>a</p><p>b</p></div>\n  <div class="flex justify-between">\n    <p>© Firma</p>\n    <p>Vision Media</p>\n  </div>\n</footer>\n`),
+        'src/components/Footer.astro',
+      )
+      expect(text).toContain('    <p>© Firma</p>\n    <PrivacyLinks class="text-white/70" />\n    <p>Vision Media</p>')
+    })
+
+    test('the footer text class wins; a flex bar needs no justify-start!', () => {
+      const text = wire(
+        [wireLinks],
+        site(`<footer class="text-white">\n  <div class="container">\n    <div class="grid"><p>a</p><p>b</p></div>\n    <div class="flex justify-between">\n      <p>©</p>\n      <p>Vision Media</p>\n    </div>\n  </div>\n</footer>\n`),
+        'src/components/Footer.astro',
+      )
+      expect(text).toContain('      <p>©</p>\n      <PrivacyLinks class="text-white" />\n      <p>Vision Media</p>\n    </div>\n  </div>\n</footer>')
+    })
+
+    test('a left-aligned bar that is not a flex row keeps justify-start!', () => {
+      const text = wire(
+        [wireLinks],
+        site(`<footer class="text-white">\n  <div class="container">\n    <div class="grid"><p>a</p><p>b</p></div>\n    <div class="text-left">\n      <p>©</p>\n    </div>\n  </div>\n</footer>\n`),
+        'src/components/Footer.astro',
+      )
+      expect(text).toContain('    <div class="text-left">\n      <p>©</p>\n      <PrivacyLinks class="text-white justify-start!" />\n    </div>')
+    })
+
+    test('a bar on one line: the links go inline right after the © element', () => {
+      const text = wire(
+        [wireLinks],
+        site(`<footer class="site-footer">\n  <div class="inner"><p>a</p></div>\n  <div class="bottom"><p>©</p></div>\n</footer>\n`),
+        'src/components/Footer.astro',
+      )
+      expect(text).toContain('  <div class="bottom"><p>©</p><PrivacyLinks /></div>\n</footer>')
+    })
+
+    test('"Alla rättigheter" and "Copyright" mark the bar too', () => {
+      for (const mark of ['Alla rättigheter förbehållna', 'Copyright 2026 Firma']) {
+        const text = wire(
+          [wireLinks],
+          site(`<footer>\n  <div class="cols"><p>a</p></div>\n  <div class="flex">\n    <span>${mark}</span>\n    <span>VM</span>\n  </div>\n</footer>\n`),
+          'src/components/Footer.astro',
+        )
+        expect(text).toContain(`    <span>${mark}</span>\n    <PrivacyLinks />\n    <span>VM</span>`)
+      }
+    })
+
+    test("a dark footer with no © bar still gets the readable class, at today's place", () => {
+      const text = wire([wireLinks], site(`<footer style="background: #111">\n  <div>\n    <p>a</p>\n    <p>b</p>\n  </div>\n</footer>\n`), 'src/components/Footer.astro')
+      expect(text).toContain('    <p>b</p>\n    <PrivacyLinks class="text-white/70" />\n  </div>')
+    })
   })
 
   test('footer with no text class: <PrivacyLinks />', () => {
@@ -346,13 +464,13 @@ describe('wireLinks', () => {
 
   // Brief: "footerless page with <main> → last child of <main>"; Ruling 16 refines it to the last
   // child of <main>'s only element child when there is exactly one.
-  test('footerless page whose <main> has several children: the last child of <main>', () => {
+  test('footerless page whose <main> has several children: the last child of <main>, with mt-6 (#47: air above the button)', () => {
     const text = wire(
       [wireLinks],
       { 'src/pages/404.astro': `<html><body>\n  <main>\n    <h1>404</h1>\n    <a href="/">Tillbaka</a>\n  </main>\n</body></html>\n` },
       'src/pages/404.astro',
     )
-    expect(text).toContain('    <a href="/">Tillbaka</a>\n    <PrivacyLinks />\n  </main>')
+    expect(text).toContain('    <a href="/">Tillbaka</a>\n    <PrivacyLinks class="mt-6" />\n  </main>')
   })
 
   test("footerless page whose <main> has one element child: the last child of that child (Ruling 16)", () => {
@@ -361,7 +479,7 @@ describe('wireLinks', () => {
       { 'src/pages/404.astro': `<html><body>\n  <main class="flex">\n    <div class="box">\n      <h1>404</h1>\n      <a href="/">Tillbaka</a>\n    </div>\n  </main>\n</body></html>\n` },
       'src/pages/404.astro',
     )
-    expect(text).toContain('      <a href="/">Tillbaka</a>\n      <PrivacyLinks />\n    </div>\n  </main>')
+    expect(text).toContain('      <a href="/">Tillbaka</a>\n      <PrivacyLinks class="mt-6" />\n    </div>\n  </main>')
   })
 
   test('a 404 whose <main> holds only an <h1>: the links go in <main>, not inside the heading (Ruling 29)', () => {
@@ -370,7 +488,7 @@ describe('wireLinks', () => {
       { 'src/pages/404.astro': `<html><body>\n  <main>\n    <h1>Sidan finns inte</h1>\n  </main>\n</body></html>\n` },
       'src/pages/404.astro',
     )
-    expect(text).toContain('    <h1>Sidan finns inte</h1>\n    <PrivacyLinks />\n  </main>')
+    expect(text).toContain('    <h1>Sidan finns inte</h1>\n    <PrivacyLinks class="mt-6" />\n  </main>')
   })
 
   test('footerless page without <main>: the last child of the outermost template element (a <script> beside it does not count)', () => {
@@ -382,12 +500,12 @@ describe('wireLinks', () => {
       },
       'src/pages/index.astro',
     )
-    expect(text).toContain('  <h1>Hej</h1>\n  <PrivacyLinks />\n</Base>')
+    expect(text).toContain('  <h1>Hej</h1>\n  <PrivacyLinks class="mt-6" />\n</Base>')
   })
 
   test('footerless page with its own <html> and no <main>: the last child of <body>', () => {
     const text = wire([wireLinks], { 'src/pages/tack.astro': `<html>\n  <body>\n    <p>Tack!</p>\n  </body>\n</html>\n` }, 'src/pages/tack.astro')
-    expect(text).toContain('    <p>Tack!</p>\n    <PrivacyLinks />\n  </body>')
+    expect(text).toContain('    <p>Tack!</p>\n    <PrivacyLinks class="mt-6" />\n  </body>')
   })
 
   test('footerless page with two top-level elements and no <main>: refused', () => {

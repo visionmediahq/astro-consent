@@ -122,6 +122,7 @@ import PrivacyLinks from '@visionmediahq/astro-consent/components/PrivacyLinks.a
     <!-- Bottom bar -->
     <div class="pt-5 flex flex-col md:flex-row items-center justify-between gap-3 text-xs" style="border-top: 1px solid rgba(155,127,200,0.22); color: rgba(255,255,255,0.28);">
       <p>© 2026 Vasshalla Katthotell &nbsp;·&nbsp; Text.</p>
+      <PrivacyLinks class="text-white/70" />
       <p>
         Webbplats av
         <a href="https://visionmedia.nu" target="_blank" rel="noopener noreferrer" class="footer-vm-link font-medium transition-colors">
@@ -129,7 +130,6 @@ import PrivacyLinks from '@visionmediahq/astro-consent/components/PrivacyLinks.a
         </a>
       </p>
     </div>
-    <PrivacyLinks class="justify-start!" />
   </div>
 </footer>
 
