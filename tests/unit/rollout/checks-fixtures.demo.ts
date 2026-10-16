@@ -9,6 +9,8 @@ import { join } from 'node:path'
 import { chromium } from '@playwright/test'
 import { checkClip } from '../../../ci/rollout/checks/clip'
 import { checkConsentPaths } from '../../../ci/rollout/checks/consent-paths'
+import { checkContrast } from '../../../ci/rollout/checks/contrast'
+import { checkEmbedBoxes, compareEmbedHeights } from '../../../ci/rollout/checks/embed-size'
 import { checkRequests } from '../../../ci/rollout/checks/requests'
 
 const MAPS = 'https://www.google.com/maps/embed?pb=fixture'
@@ -59,6 +61,13 @@ const iframeEmbed = (service: string, href: string) =>
   `<div data-consent-embed="${service}"><button data-load>Visa</button><input type="checkbox" data-remember><a data-open href="${href}">Öppna</a></div>`
 const cutPlaceholder = (box: string) =>
   `<div class="${box}"><div data-consent-embed="google-maps"><p style="height:320px;margin:0">Google Maps</p><button data-load>Visa</button><input type="checkbox" data-remember><a data-open href="${MAPS}">Öppna</a></div></div>`
+// An unloaded ConsentEmbed's placeholder as the package renders it (EmbedPlaceholder.astro); its
+// open link inherits the text colour, as daisyUI's .link does.
+const placeholder = (style: string) =>
+  `<div data-consent-embed="google-maps" style="${style}"><div data-placeholder><div><p>Kartan hämtas från Google Maps.</p></div><div><button data-load>Visa</button><label><input type="checkbox" data-remember> Visa alltid</label><a data-open href="${MAPS}" style="color:inherit">Öppna</a></div></div></div>`
+// knutssonsbil's shape: a box whose height is padding (40 % of the width) plus a min-height (here
+// content-box, so 40 % + 320px; the shape, not knutssonsbil's numbers, is what matters).
+const ratioBox = (inner: string) => `<div style="position:relative;padding-bottom:40%;min-height:320px">${inner}</div>`
 const widget = `<div data-consent-embed="elfsight" data-script="${ELFSIGHT}"><template data-payload><div class="elfsight-app-x"></div></template><button data-load>Visa</button><input type="checkbox" data-remember></div>`
 
 const LATE = `${banner()}<div style="height:10000px;position:relative"><div id="s" style="position:absolute;top:3000px;height:10px"></div></div>
@@ -98,6 +107,14 @@ const FIXTURES: Record<string, string> = {
   mixb: mixed(iframeEmbed('google-calendar', CAL) + widget + iframeEmbed('google-maps', MAPS) + iframeEmbed('google-maps', MAPS)),
   greedya: mixed(iframeEmbed('google-maps', MAPS) + iframeEmbed('google-calendar', CAL), true),
   greedyb: mixed(iframeEmbed('google-calendar', CAL) + iframeEmbed('google-maps', MAPS), true),
+  // #46: light text on the light placeholder (a dark theme without base-200), and a readable control.
+  darkph: page(placeholder('background:#f8f8f8;color:#daeaf5')),
+  okph: page(placeholder('background:#f8f8f8;color:#1f2937')),
+  // #46 (knutssonsbil): main's absolute iframe fills the ratio box; the in-flow 320px wrapper does
+  // not (the map shrinks, an empty band below); absolute inset-0 fills it again.
+  ratiomain: page(ratioBox(`<iframe src="${MAPS}" style="position:absolute;inset:0;width:100%;height:100%;border:0"></iframe>`)),
+  ratiowrap: page(ratioBox(`<div style="display:grid;min-height:320px">${placeholder('')}</div>`)),
+  ratiofill: page(ratioBox(`<div style="position:absolute;inset:0;display:grid">${placeholder('')}</div>`)),
   // Item 7: a button inside its (too wide) container but outside the viewport; a page that scrolls sideways.
   offbtn: page(`<section data-consent-banner style="position:absolute;top:0;left:0;width:1000px;background:#fff"><button data-consent-action="none" style="margin-left:900px">Neka</button></section>`),
   wide: page(`${banner()}<div style="width:2000px;height:10px"></div>`),
@@ -235,6 +252,25 @@ try {
   {
     const rows = await checkClip(browser, BASE, ['/cutok/', '/cutokx/'], [360])
     expect(rows.every((r) => !r.clipped), '/cutok/ /cutokx/ a tall enough box, or one that scrolls (overflow-x:hidden body included), is not clipped', rows)
+  }
+
+  {
+    const ph = async (path: string) => (await checkContrast(browser, BASE, [path], { stub: true })).filter((r) => r.kind === 'placeholder')
+    const dark = await ph('/darkph/')
+    // The Visa button keeps its own background (btn-primary in the package): the other three fail.
+    expect(dark.length === 4 && dark.filter((r) => r.button !== 'Visa').every((r) => !r.ok), '/darkph/ light text on the light placeholder: info text, label and open link fail (#46)', dark)
+    const ok = await ph('/okph/')
+    expect(ok.length === 4 && ok.every((r) => r.ok), '/okph/ control: a readable placeholder passes', ok)
+  }
+  {
+    const boxes = (path: string) => checkEmbedBoxes(browser, BASE, [path], [360, 1280], { stub: true })
+    // Main and branch are different fixture pages here: compare them as one path.
+    const as = (bs: Awaited<ReturnType<typeof boxes>>) => bs.map((b) => ({ ...b, path: '/kontakt' }))
+    const main = as(await boxes('/ratiomain/'))
+    const wrap = compareEmbedHeights(main, as(await boxes('/ratiowrap/')))
+    expect(main.length === 2 && wrap.rows.length === 2 && !wrap.rows.find((r) => r.width === 1280)!.ok, '/ratiowrap/ an in-flow wrapper in a padding-ratio box is shorter than main at 1280px (#46, knutssonsbil)', { main, wrap })
+    const fill = compareEmbedHeights(main, as(await boxes('/ratiofill/')))
+    expect(fill.rows.length === 2 && fill.rows.every((r) => r.ok), '/ratiofill/ control: absolute inset-0 fills the box as main did', fill)
   }
 } finally {
   await browser.close()

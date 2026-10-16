@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, test } from 'vitest'
 import type { ClipResult } from '../../../ci/rollout/checks/clip'
+import type { EmbedBox } from '../../../ci/rollout/checks/embed-size'
 import type { ConsentPathResult } from '../../../ci/rollout/checks/consent-paths'
 import type { ContrastRow } from '../../../ci/rollout/checks/contrast'
 import type { RequestResult } from '../../../ci/rollout/checks/requests'
@@ -116,6 +117,7 @@ function fake(
       paths.map((path): ClipResult => ({ path, width: 320, kind: 'button', button: 'Neka', w: 80, boxW: 300, over: false, out: false, covered: false, cut: false, clipped: false }))
     ),
     rootStyles: async () => (called.add('rootStyles'), { 'html scrollbar-color': 'auto', 'html background-color': 'rgb(255, 255, 255)' }),
+    embedBoxes: async (base, paths) => (called.add(`embedBoxes ${base}`), paths.flatMap((path) => [360, 1280].map((width): EmbedBox => ({ path, width, service: 'google-maps', h: 420 })))),
     contrast: async (_base, paths) => (
       called.add('contrast'),
       paths.flatMap((path) => (['banner', 'links'] as const).map((kind): ContrastRow => ({
@@ -225,6 +227,48 @@ describe('verify', () => {
     const result = await verify(dir, report(), { deps: f.deps })
     expect(result.steps.at(-1)).toMatchObject({ step: 5, pass: false })
     expect(evidence(dir, '5-clip.txt')).toContain('/kontakt/ 360px button "Visa Google Maps" 150px in 326px CLIPPED (cut off by an overflow:hidden ancestor)')
+  })
+
+  describe('step 5: map heights are compared with main (#46, knutssonsbil)', () => {
+    const boxes = (mainH: number, branchH: number) => async (base: string, paths: string[]) =>
+      paths.map((path): EmbedBox => ({ path, width: 1280, service: 'google-maps', h: base.includes(':4398') ? mainH : branchH }))
+
+    test('as tall as main: passes and lists each map', async () => {
+      const dir = siteDir()
+      const f = fake({ checks: { embedBoxes: boxes(460, 460) } })
+      const result = await verify(dir, report(), { deps: f.deps })
+      expect(result.steps.find((s) => s.step === 5)).toMatchObject({ pass: true })
+      expect(evidence(dir, '5-clip.txt')).toContain('/karta 1280px google-maps 1: 460px tall, main 460px ok')
+    })
+
+    test('more than 10 % shorter than main: fails and names both heights', async () => {
+      const dir = siteDir()
+      const f = fake({ checks: { embedBoxes: boxes(460, 320) } })
+      const result = await verify(dir, report(), { deps: f.deps })
+      expect(result.steps.at(-1)).toMatchObject({ step: 5, pass: false })
+      expect(evidence(dir, '5-clip.txt')).toContain('/karta 1280px google-maps 1: 320px tall, main 460px SHORTER')
+    })
+
+    test('counts that differ are noted, not failed (a map main built in a script)', async () => {
+      const dir = siteDir()
+      const f = fake({ checks: { embedBoxes: async (base, paths) => (base.includes(':4398') ? [] : paths.map((path): EmbedBox => ({ path, width: 1280, service: 'google-maps', h: 420 }))) } })
+      const result = await verify(dir, report(), { deps: f.deps })
+      expect(result.steps.find((s) => s.step === 5)).toMatchObject({ pass: true })
+      expect(evidence(dir, '5-clip.txt')).toContain('/karta 1280px google-maps: 0 registry iframes on main, 1 embed on the branch: heights not compared')
+    })
+  })
+
+  test('step 6: an unreadable embed placeholder fails (#46, knutssonsbil)', async () => {
+    const dir = siteDir()
+    const row = (path: string, kind: ContrastRow['kind'], ok = true): ContrastRow => ({ path, kind, button: kind === 'placeholder' ? 'Kartan hämtas från Google Maps' : 'Neka', ratio: ok ? 7 : 1.2, ok, fg: { r: 0, g: 0, b: 0 }, bg: { r: 255, g: 255, b: 255 } })
+    const f = fake({
+      checks: {
+        contrast: async (_base, paths) => [...paths.flatMap((p) => [row(p, 'banner'), row(p, 'links')]), row('/karta', 'placeholder', false)],
+      },
+    })
+    const result = await verify(dir, report(), { deps: f.deps })
+    expect(result.steps.at(-1)).toMatchObject({ step: 6, pass: false })
+    expect(evidence(dir, '6-contrast.txt')).toContain('/karta placeholder "Kartan hämtas från Google Maps" 1.20:1 FAIL')
   })
 
   describe('step 5: the root styles are compared with main (faluridklubb: daisyUI restyled the scrollbar)', () => {

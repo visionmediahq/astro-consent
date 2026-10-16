@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { rememberCandidates, rememberOk, type RememberCounts } from '../../../ci/rollout/checks/consent-paths'
 import { diffRootStyles } from '../../../ci/rollout/checks/root-styles'
 import { contrastRows, coversBackground, measureContrast, type RawContrast } from '../../../ci/rollout/checks/contrast'
+import { compareEmbedHeights, type EmbedBox } from '../../../ci/rollout/checks/embed-size'
 import { extractLinks, listPages, MISSING_PREFIX } from '../../../ci/rollout/checks/pages'
 import { blockUmami, freshPage, isBlocked, isUmamiUrl, notRequested, umamiScriptSrcs } from '../../../ci/rollout/checks/requests'
 import { wcagContrast } from '../../../ci/rollout/lib/colour'
@@ -270,10 +271,59 @@ describe('contrast', () => {
     expect(rows[2]!.ratio).toBeGreaterThan(4.5)
   })
 
+  it('placeholder rows (#46: the embed placeholder on a dark theme, knutssonsbil) get the same maths', () => {
+    // Light text from a dark theme's --color-base-content on daisyUI's light bg-base-200.
+    const [row] = contrastRows([raw({ kind: 'placeholder', label: 'Knutssons Bil AB hämtas från Google Maps', fg: [218, 234, 245, 255], layers: [[248, 248, 248, 255]] })])
+    expect(row).toMatchObject({ kind: 'placeholder', ok: false })
+    expect(row!.ratio).toBeLessThan(1.5)
+  })
+
   it('labels each row with its kind and text', () => {
     const [row] = contrastRows([raw({ kind: 'banner', label: 'Neka' })])
     expect(row).toMatchObject({ kind: 'banner', button: 'Neka' })
     expect(row!.ratio).toBeCloseTo(21, 5)
+  })
+})
+
+describe('embed heights (#46: knutssonsbil, an in-flow wrapper in a padding-ratio box)', () => {
+  const box = (path: string, width: number, h: number, service: EmbedBox['service'] = 'google-maps'): EmbedBox => ({ path, width, service, h })
+
+  it('pairs main iframes with branch placeholders in page order per path and width', () => {
+    const r = compareEmbedHeights([box('/kontakt', 1280, 460), box('/kontakt', 360, 320)], [box('/kontakt', 1280, 460), box('/kontakt', 360, 320)])
+    expect(r.rows.map((x) => [x.path, x.width, x.index, x.mainH, x.branchH, x.ok])).toEqual([
+      ['/kontakt', 1280, 1, 460, 460, true],
+      ['/kontakt', 360, 1, 320, 320, true],
+    ])
+    expect(r.notes).toEqual([])
+  })
+
+  it('a placeholder more than 10 % shorter than the iframe it replaced fails; taller or within 10 % passes', () => {
+    const r = compareEmbedHeights(
+      [box('/kontakt', 1280, 460), box('/a', 1280, 400), box('/b', 1280, 400)],
+      [box('/kontakt', 1280, 320), box('/a', 1280, 361), box('/b', 1280, 600)],
+    )
+    expect(r.rows.map((x) => x.ok)).toEqual([false, true, true])
+  })
+
+  it('different counts on a page are not compared, and say so (a map main built in a script, stromsbacka)', () => {
+    const r = compareEmbedHeights([], [box('/kontakt', 1280, 420)])
+    expect(r.rows).toEqual([])
+    expect(r.notes).toEqual(['/kontakt 1280px google-maps: 0 registry iframes on main, 1 embed on the branch: heights not compared'])
+  })
+
+  it('pairs per service, so a calendar main kept as an iframe is never compared with a map placeholder', () => {
+    // Main: a calendar iframe the branch did not convert, then the map. Branch: a map main built in
+    // a script, then the map. Page order alone would pair the calendar (200px) with the first map.
+    const r = compareEmbedHeights(
+      [box('/', 1280, 200, 'google-calendar'), box('/', 1280, 450)],
+      [box('/', 1280, 450), box('/', 1280, 450)],
+    )
+    expect(r.rows).toEqual([])
+    expect(r.notes).toEqual([
+      '/ 1280px google-maps: 1 registry iframe on main, 2 embeds on the branch: heights not compared',
+    ])
+    const same = compareEmbedHeights([box('/', 1280, 200, 'google-calendar'), box('/', 1280, 450)], [box('/', 1280, 200, 'google-calendar'), box('/', 1280, 320)])
+    expect(same.rows.map((x) => [x.service, x.ok])).toEqual([['google-calendar', true], ['google-maps', false]])
   })
 })
 
