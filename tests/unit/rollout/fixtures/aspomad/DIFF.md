@@ -40,10 +40,10 @@ and `src/data/privacy.json`.
    it before the two CSS imports. **Acceptable**: import order only (see munkfors entry 2).
 3. **`Footer.astro`: the PrivacyLinks import comes after the last import (`../lib/hours`)**; the pilot
    put it between `kontakt.json` and `../lib/hours`. **Acceptable**: import order only.
-4. **`Footer.astro`: `<PrivacyLinks class="text-neutral-content" />` inside the bottom bar, right
+4. **`Footer.astro`: `<PrivacyLinks class="text-neutral-content mt-2" />` inside the bottom bar, right
    after the © line** (#47); the pilot put `<PrivacyLinks class="text-neutral-content/80 mt-2" />` in
-   the same place. **Acceptable**: same position, in the footer's own text colour; the difference is
-   opacity and spacing.
+   the same place. **Acceptable**: same position and spacing (the bar is a centred block row: `mt-2`,
+   no justify class), in the footer's own text colour; the difference is opacity.
 5. **`ContactMap.astro`: the map box.** Expected puts `<div class="grid h-full">` around
    `<ConsentEmbed … aspect="auto" />` inside the unchanged `<section class="w-full h-[500px] relative">`;
    the pilot made the section itself `grid`, with `aspect="auto"`. **Acceptable (Ruling 25)**: the
