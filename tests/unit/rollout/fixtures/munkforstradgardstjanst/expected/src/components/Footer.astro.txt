@@ -99,8 +99,8 @@ import PrivacyLinks from '@visionmediahq/astro-consent/components/PrivacyLinks.a
 
     <div class="border-t pt-6 flex flex-col md:flex-row items-center justify-between gap-3 text-xs" style="border-color: rgba(255,255,255,0.12); color: rgba(255,255,255,0.35);">
       <span>© {new Date().getFullYear()} Munkfors Trädgårdstjänst AB. Alla rättigheter förbehållna.</span>
+      <PrivacyLinks class="text-neutral-content" />
       <span>Webbplats av <a href="https://visionmedia.io" target="_blank" rel="noopener noreferrer" class="underline hover:opacity-100 transition-opacity">Vision Media</a></span>
     </div>
-    <PrivacyLinks class="text-neutral-content justify-start!" />
   </div>
 </footer>

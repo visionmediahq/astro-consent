@@ -41,29 +41,25 @@ and `src/data/privacy.json`.
    **Acceptable**: order does not matter; appending keeps the comment block attached to `sitemap()`.
 2. **`Base.astro`: the ConsentBanner import comes after `import '../styles/global.css'`**; the pilot put
    it before. **Acceptable**: import order only (see munkfors entry 2).
-3. **`FooterLevene.astro`: `<PrivacyLinks />` is the last child of `<footer>`**, after `.footer-bottom`;
-   the pilot put it inside the bar between © and the portal link. **Acceptable (Rulings 17, 18)**:
-   `<footer>` has two element children, so the links go at its end. They stay centred (no
-   `justify-start!`), directly under the bar. The footer has no bottom padding of its own, so they sit
-   close to its bottom edge: cosmetic only.
+3. **`FooterLevene.astro`: `<PrivacyLinks />` inside `.footer-bottom`, between © and the portal
+   link** (#47), as the pilot put it. **Acceptable**: same position.
 4. **`FooterLevene.astro`: no colour class**, the pilot's `text-base-content`. **Acceptable**: the
    footer's scoped CSS sets `color: var(--color-base-content)`, which the links inherit: the same colour.
-5. **`FooterSkaraborg.astro`: `<PrivacyLinks />` is the last child of `<footer>`**, after
-   `.footer-bottom`; the pilot put it between the two `footer-copy` lines. **Acceptable (Rulings 17,
-   18)**: as entry 3.
+5. **`FooterSkaraborg.astro`: `<PrivacyLinks />` inside `.footer-bottom`, between the © line and
+   "Drivs av"** (#47), as the pilot put it. **Acceptable**: same position.
 6. **`FooterSkaraborg.astro`: no colour class**, the pilot's `text-base-content`. **Acceptable**: as
-   entry 4.
+   entry 4 (the scoped `background-color: #EDE8E0` is light, so #47's dark-footer class does not apply).
 7. **`FooterSkaraborg.astro`: the PrivacyLinks import comes after the lucide import (the last one)**;
    the pilot put it between the two. **Acceptable**: import order only.
-8. **`index.astro`: `<PrivacyLinks />` is the last child of `<Base>`**, after `<HomeSplash />`; the
+8. **`index.astro`: `<PrivacyLinks class="mt-6" />` is the last child of `<Base>`**, after `<HomeSplash />`; the
    pilot left `index.astro` alone and added a `bg-neutral pt-3` strip with
    `<PrivacyLinks class="text-neutral-content" />` after `</main>` in `HomeSplash.astro`.
    **Acceptable (Ruling 16)**: the page template has no `<main>` of its own (it is in `HomeSplash`), so
    the links go last in the outermost template element. They render in the layout's slot right after
    the splash, above VisionFooter, in the body's text colour; the strip was a hand design.
-9. **`404.astro`: `<PrivacyLinks />` at the end of the centred box** (the only child of `<main>`); the
-   pilot put it there too, with `mt-8 text-base-content/70`. **Acceptable (Ruling 16)**: same position;
-   the links inherit `text-base-content`.
+9. **`404.astro`: `<PrivacyLinks class="mt-6" />` at the end of the centred box** (the only child of
+   `<main>`); the pilot put it there too, with `mt-8 text-base-content/70`. **Acceptable (Ruling 16,
+   #47)**: same position, a top margin as the pilot's; the links inherit `text-base-content`.
 10. **`ContactFormSection.astro`: the map box.** Expected puts `<div class="grid h-[320px]">` with
     `aspect="auto"` inside the unchanged `<div class="map-frame overflow-hidden">`; the pilot added
     `grid h-[320px]` to `.map-frame` itself. **Acceptable (Ruling 22)**: `height="320"` is fixed; the

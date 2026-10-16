@@ -101,7 +101,7 @@ const navItems = [
       <p class="footer-copy">Text. {new Date().getFullYear()} Text.</p>
     </div>
 
-    <PrivacyLinks />
+    <PrivacyLinks class="text-white/70" />
   </div>
 </footer>
 

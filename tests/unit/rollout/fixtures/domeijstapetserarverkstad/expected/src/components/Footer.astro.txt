@@ -62,10 +62,10 @@ const currentYear = new Date().getFullYear();
         </a>
       </div>
       <p class="footer-copy">&copy; {currentYear} Domeijs Tapetserarverkstad</p>
+      <PrivacyLinks class="text-white/70 justify-start! md:justify-end! mt-2" />
       <p class="footer-attr">Byggd av Vision Media</p>
     </div>
 
-    <PrivacyLinks />
   </div>
 </footer>
 

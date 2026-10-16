@@ -26,7 +26,7 @@ by this oracle, and are not listed below.
 `maps`; layout `Base.astro` with no footer reference (the one-page `index.astro` renders `Footer`
 itself), so `<ConsentBanner />` goes before `</body>`; one footer, `src/components/Footer.astro`,
 `textClass: null`. Its last-child chain (`grid … items-end` → `md:text-right` column → `p`) has no
-`justify-between`/`justify-start`/`text-left`, so there is no `justify-start!` (Ruling 18). Footerless:
+`justify-between`/`justify-start`/`text-left` (alignment `unknown`; the © column is a block row, see entry 4). Footerless:
 `404.astro`; no policy page. One literal Google Maps iframe in `Contact.astro` (`height="100%"`,
 filling `.map-wrap`, whose scoped CSS gives it `min-height: 480px; height: 100%`: Ruling 25). Its scoped `<style>` has `.map-wrap iframe { filter: …; display; width;
 height; min-height; transition }` and `.map-wrap:hover iframe { filter: none }`.
@@ -40,21 +40,20 @@ Identical in both: the config import, the CSS `@source` line, the ConsentBanner 
    **Acceptable**: order does not matter; appending keeps the comment block attached to `sitemap()`.
 2. **`Footer.astro`: the PrivacyLinks import directly after `---`**; the pilot added a blank line after
    it. **Acceptable**: formatting only (the frontmatter had no imports).
-3. **`Footer.astro`: `<PrivacyLinks />` is the last child of the three-column grid**
-   (`max-w-7xl mx-auto grid … md:grid-cols-3`), so it becomes a fourth grid item: full width on mobile,
-   row 2 / column 1 on `md`. The pilot put it under © in the right column. **Acceptable (Ruling 17)**:
-   `<footer>`'s only child is the grid; C2 names domeij's placement under © as a hand decision. The
-   footer's `px-8 md:px-12` keeps the links off the edge.
-4. **`Footer.astro`: no `justify-start! md:justify-end!`**, which the pilot added. **Acceptable
-   (Ruling 18)**: the chain's only alignment is `md:text-right`, which is not left or split, so the links
-   keep PrivacyLinks' own centring within their grid cell.
-5. **`Footer.astro`: no colour class**, the pilot's `text-white/70`. The footer has no text colour class
-   and no inline `color`, so the links inherit the body's `--color-base-content` (dark grey) on the
-   footer's `#0e0a06`: unreadable. **Caught by verify (Ruling 20)**: wire keeps C2's "no class →
-   inherit"; verify's PrivacyLinks contrast check fails this site, and a human fixes it on the branch.
-6. **`404.astro`: `<PrivacyLinks />` at the end of the centred box** (the only child of `<main>`); the
-   pilot put it there too, with `mt-8 text-base-content/70`. **Acceptable (Ruling 16)**: same position;
-   the links inherit `text-base-content`.
+3. **`Footer.astro`: the links go right after `<p class="footer-copy">©…</p>` in the right column**
+   (#47: the grid's last column holds the © line, so that column is the bottom bar); the pilot put them
+   under © in the same column too. **Acceptable**: same position.
+4. **`Footer.astro`: `justify-start! md:justify-end! mt-2`, as the pilot** (#47 review). The column is
+   a block row (not flex), so the links sit on their own line under ©, lined up with its text: left on
+   mobile, right from `md` (the column's `md:text-right`). Before the review wire added neither, and
+   the links were centred in the column.
+5. **`Footer.astro`: `text-white/70`, as the pilot** (#47). The footer has no text colour class; its
+   inline `background: var(--color-bg-dark, #0e0a06)` has a literal fallback, on which `text-white/70`
+   reads at 4.5:1 or better, so wire adds it. Before #47 the links inherited the body's dark
+   `--color-base-content` here (unreadable, left to verify).
+6. **`404.astro`: `<PrivacyLinks class="mt-6" />` at the end of the centred box** (the only child of
+   `<main>`); the pilot put it there too, with `mt-8 text-base-content/70`. **Acceptable (Ruling 16,
+   #47)**: same position, a top margin as the pilot's; the links inherit `text-base-content`.
 7. **`Contact.astro`: the map box.** Expected puts `<div class="grid h-full">` around
    `<ConsentEmbed … aspect="auto" />` inside the unchanged `<div class="map-wrap">`; the pilot made
    `.map-wrap` itself `display: grid`, with `aspect="auto"`. **Acceptable (Ruling 25)**: `.map-wrap`

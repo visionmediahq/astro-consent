@@ -1,0 +1,60 @@
+---
+// ekostrateg origin/main 13f5277, src/components/Footer.astro, columns and CSS reduced (#47).
+// `class="footer"` is also DaisyUI 5's .footer grid: the links appended after .footer-bottom
+// were invisible at 360px.
+import { Image } from 'astro:assets';
+import { Phone, Mail, MapPin } from '@lucide/astro';
+---
+
+<footer class="footer">
+  <div class="footer-top">
+    <div class="footer-brand">
+      <p class="brand-eyebrow">Eco²-Consulting</p>
+      <h2 class="brand-name">Nolby<br><em>Ekostrategi</em></h2>
+      <a href="/kontakt" class="brand-cta">Kom i kontakt</a>
+    </div>
+
+    <div class="footer-cols">
+      <div class="footer-col">
+        <h3 class="col-label">Navigering</h3>
+        <nav class="nav-list" aria-label="Sidfotslänkar">
+          <a href="/" class="nav-item">Hem</a>
+          <a href="/kontakt" class="nav-item">Kontakt</a>
+        </nav>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer-bottom">
+    <p class="copy">© {new Date().getFullYear()} Nolby Ekostrategi. Alla rättigheter förbehållna.</p>
+    <Image
+      src="/images/logo-ekostrateg.webp"
+      alt="Nolby Ekostrategi"
+      width={120}
+      height={40}
+      loading="lazy"
+      class="bottom-logo"
+    />
+  </div>
+</footer>
+
+<style>
+  .footer {
+    background: var(--color-primary-dark);
+    color: var(--color-text-inv);
+  }
+
+  .footer-bottom {
+    max-width: 90rem;
+    margin: 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+  }
+
+  .copy {
+    color: oklch(58% 0.04 135);
+  }
+</style>

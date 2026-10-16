@@ -25,7 +25,7 @@ by this oracle, and are not listed below.
 **Detect input** (`detect(before, 'vasshallakatthotell', ['vasshallakatthotell.se'])`): `maps`; layout
 `Base.astro` with footer reference `VisionFooter`; one footer, `src/components/Footer.astro`,
 `textClass: null` (its colour is the inline `color: rgba(255,255,255,0.6)`); its last-child chain
-ends in the `justify-between` bottom bar, so `justify-start!` is added (Ruling 18); footerless:
+ends in the `justify-between` bottom bar (alignment `left`; the links go into that flex bar, so no `justify-start!`, #47); footerless:
 `404.astro`; one literal Google Maps iframe in `ContactSection.astro` (`height="100%"`, filling its
 parent's inline `height: clamp(260px, 50vw, 380px)`: Ruling 25; no classes, no filter). The policy page `src/pages/gdpr.astro` was added
 to the fixture in this amendment (reduced, see SOURCE.md). Under Ruling 21 detect (once Task 16
@@ -41,17 +41,17 @@ Identical in both: the config import, the CSS `@source` line, `<ConsentBanner />
    **Acceptable**: order does not matter; appending keeps the comment block attached to `sitemap()`.
 2. **`Base.astro`: the ConsentBanner import comes after `import '../styles/global.css'`**; the pilot put
    it before. **Acceptable**: import order only (see munkfors entry 2).
-3. **`Footer.astro`: `<PrivacyLinks class="justify-start!" />` is the last child of
-   `<div class="max-w-7xl mx-auto px-6 lg:px-8 pt-16 pb-8">`**, below the split bottom bar; the pilot put
-   `<PrivacyLinks class="text-white/70" />` inside the bar, between © and "Webbplats av". **Acceptable
-   (Ruling 23)**: the `aria-hidden` `absolute inset-0` paw-print layer doesn't count, so `<footer>` has
-   one element child and the descent continues into the padded container (Ruling 17). The links sit
-   inside its padding, left-aligned like the split bar (Ruling 18).
-4. **`Footer.astro`: no colour class**, the pilot's `text-white/70`. **Acceptable**: per C2 the links
-   inherit; the footer's inline `color: rgba(255,255,255,0.6)` is readable on its dark background.
-5. **`404.astro`: `<PrivacyLinks />` at the end of the centred box** (the only child of `<main>`); the
-   pilot put it there too, with `mt-8 text-base-content/70`. **Acceptable (Ruling 16)**: same position;
-   the links inherit `text-base-content`.
+3. **`Footer.astro`: `<PrivacyLinks class="text-white/70" />` inside the split bottom bar, between ©
+   and "Webbplats av"**, exactly as the pilot (#47). The `aria-hidden` `absolute inset-0` paw-print
+   layer doesn't count (Ruling 23), so the descent reaches the padded container, whose last child is
+   the © bar. The bar's flex row places the links: no `justify-start!`.
+4. **`Footer.astro`: `text-white/70`, as the pilot** (#47). The footer has no text colour class, and
+   its background is a variable; its inline `color: rgba(255,255,255,0.6)` is a light text colour, so
+   the footer counts as dark. Inside the bar the links would otherwise inherit its dimmed inline
+   `color: rgba(255,255,255,0.28)`.
+5. **`404.astro`: `<PrivacyLinks class="mt-6" />` at the end of the centred box** (the only child of
+   `<main>`); the pilot put it there too, with `mt-8 text-base-content/70`. **Acceptable (Ruling 16,
+   #47)**: same position, a top margin as the pilot's; the links inherit `text-base-content`.
 6. **`ContactSection.astro`: the map box.** Expected puts `<div class="grid h-full">` around
    `<ConsentEmbed … aspect="auto" />` inside the unchanged `<div … style="height: clamp(260px, 50vw,
    380px);">` card; the pilot dropped that inline height and used `aspect="4 / 3"`. **Acceptable

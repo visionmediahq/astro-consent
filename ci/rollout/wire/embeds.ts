@@ -217,7 +217,7 @@ const classList = (n: AstroNode): string[] | null => {
 }
 
 /** The scoped (not is:global) <style> elements of a file, with their content's offsets. */
-function scopedStyles(text: string, root: AstroNode): { start: number; end: number; node: AstroNode }[] {
+export function scopedStyles(text: string, root: AstroNode): { start: number; end: number; node: AstroNode }[] {
   return elements(root, 'style')
     .filter((s) => !s.attributes.some((a) => a.name === 'is:global' || a.name === 'global'))
     .flatMap((s) => {
@@ -233,7 +233,7 @@ const unimportant = (v: string): string => v.replace(/!\s*important\s*$/i, '').t
 const sized = (v: string): boolean => DEFINITE.test(v) && !/^0+(?:\.0+)?[a-z]*$/i.test(v)
 
 /** Scoped rules for exactly one of the element's classes (`.karta`), as Ruling 25 reads them. */
-const ownRules = (el: AstroNode, rules: CssRule[]): CssRule[] => {
+export const ownRules = (el: AstroNode, rules: CssRule[]): CssRule[] => {
   const classes = classList(el) ?? []
   return rules.filter((r) => splitTop(r.selector, /,/).some((s) => classes.some((c) => s.trim() === `.${c}`)))
 }

@@ -83,12 +83,12 @@ import PrivacyLinks from '@visionmediahq/astro-consent/components/PrivacyLinks.a
     <p class="footer-copy">
       © {new Date().getFullYear()} Skaraborgs Träförädling AB
     </p>
+    <PrivacyLinks />
     <p class="footer-copy">
       Drivs av <a href="https://visionmedia.se" class="hover:underline" target="_blank" rel="noopener noreferrer">Vision Media</a>
     </p>
   </div>
 
-  <PrivacyLinks />
 </footer>
 
 <style>
