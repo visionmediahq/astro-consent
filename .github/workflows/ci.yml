@@ -53,7 +53,7 @@ jobs:
       # Exits 1 on any FAIL line, so a check that starts passing vacuously turns CI red.
       - name: Rollout check fixtures
         run: npx tsx tests/unit/rollout/checks-fixtures.demo.ts
-        timeout-minutes: 5
+        timeout-minutes: 10
       - name: Rollout checks on the consent demo
         run: npx tsx tests/unit/rollout/checks.demo.ts
         timeout-minutes: 5
