@@ -348,7 +348,10 @@ npx tsx ci/rollout/run.ts help
 - `pr` names each service from `privacy.json` in the PR body, with its "Visa <name>" step. `verify`
   maps each route to the service of the first iframe on it that has a CSS filter, consent-paths measures the filter on the first embed of that service on the page (clicking it after the one-off check when it is not the first embed), and widget pages count as embed pages.
 - `ci/rollout/pool.ts` and `ci/rollout/select.ts` scan the site pool and draw the rollout batch;
-  their output holds client data and is never committed.
+  their output holds client data and is never committed. The scan resumes where it stopped and
+  skips rows it already has; `--rescan` detects every row again (a site can change after its
+  scan). `select` refuses a pool.json with rows scanned before `Report.services`, naming them: run
+  the scan first.
 
 ## Releasing
 

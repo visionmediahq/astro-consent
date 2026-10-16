@@ -5,6 +5,7 @@ import type { App } from '../../../ci/rollout/coolify'
 import {
   domainsFor,
   hasAstroDep,
+  parsePoolArgs,
   planPool,
   poolRepos,
   scanPool,
@@ -223,9 +224,26 @@ describe('scanPool', () => {
     expect(out.rows.map((r) => r.repo)).toEqual(['a', 'b', 'c'])
   })
 
+  test('rescan detects every row again, even ones already scanned (#39: sites change after their scan)', async () => {
+    const f = fakes()
+    const prior = { repo: 'b', domains: ['b.se'], report: report('b', ['b.se']) }
+    const out = await scanPool(targets, { rows: [prior], unmatched: [] }, f.deps, { rescan: true })
+    expect(f.events.filter((e) => e.startsWith('clone'))).toEqual(['clone a', 'clone b', 'clone c'])
+    expect(out.rows.map((r) => r.repo)).toEqual(['a', 'b', 'c'])
+  })
+
   test('limit stops after N newly scanned repos', async () => {
     const f = fakes()
     const out = await scanPool(targets, { rows: [], unmatched: [] }, f.deps, { limit: 2 })
     expect(out.rows.map((r) => r.repo)).toEqual(['a', 'b'])
+  })
+})
+
+describe('parsePoolArgs', () => {
+  test('--rescan takes no value; the rest keep theirs', () => {
+    const a = parsePoolArgs(['--rescan', '--limit', '3'], { WORK: '/w' })
+    expect(a.rescan).toBe(true)
+    expect(a.limit).toBe(3)
+    expect(parsePoolArgs([], { WORK: '/w' }).rescan).toBe(false)
   })
 })

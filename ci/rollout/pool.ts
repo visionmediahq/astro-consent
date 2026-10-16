@@ -2,11 +2,11 @@
 // minus the pilot and spam-guard sites. One shallow clone at a time, deleted right after.
 //
 //   tsx ci/rollout/pool.ts [--out <pool.json>] [--work <clone dir>] [--stats <clients dir>]
-//                          [--limit N] [--only <repo>]...
+//                          [--limit N] [--only <repo>]... [--rescan]
 //
 // $WORK defaults to ~/sites/consent-rollout. pool.json holds client data: it is never committed.
 // The scan is resumable: rows already in pool.json with a report that lists `services` are skipped; rows that ended in
-// an error are scanned again.
+// an error are scanned again. --rescan detects every row again: a site can change after its scan.
 import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
@@ -167,11 +167,13 @@ export async function scanPool(
   targets: PoolTarget[],
   existing: PoolFile,
   deps: ScanDeps,
-  opts: { limit?: number } = {},
+  opts: { limit?: number; rescan?: boolean } = {},
 ): Promise<PoolFile> {
   const file: PoolFile = { rows: [...existing.rows], unmatched: existing.unmatched }
-  // A report stored before `services` existed is detected again.
-  const done = new Set(file.rows.filter((r) => !r.error && r.report !== null && Array.isArray(r.report.services)).map((r) => r.repo))
+  // A report stored before `services` existed is detected again; with rescan, every row is.
+  const done = new Set(
+    opts.rescan ? [] : file.rows.filter((r) => !r.error && r.report !== null && Array.isArray(r.report.services)).map((r) => r.repo),
+  )
   let scanned = 0
   for (const { repo, domains } of targets) {
     if (done.has(repo)) continue
@@ -241,13 +243,18 @@ interface PoolArgs {
   stats: string
   limit?: number
   only: string[]
+  rescan: boolean
 }
 
 export function parsePoolArgs(args: string[], env: NodeJS.ProcessEnv = process.env): PoolArgs {
   const WORK = env.WORK ?? join(homedir(), 'sites/consent-rollout')
-  const parsed: PoolArgs = { out: join(WORK, 'pool.json'), work: join(WORK, 'pool'), stats: join(homedir(), 'stats-config/clients'), only: [] }
+  const parsed: PoolArgs = { out: join(WORK, 'pool.json'), work: join(WORK, 'pool'), stats: join(homedir(), 'stats-config/clients'), only: [], rescan: false }
   for (let i = 0; i < args.length; i++) {
     const flag = args[i]!
+    if (flag === '--rescan') {
+      parsed.rescan = true
+      continue
+    }
     const value = args[++i]
     if (value === undefined) throw new Error(`${flag} needs a value`)
     if (flag === '--out') parsed.out = resolve(value)
@@ -284,7 +291,7 @@ async function main(argv: string[]): Promise<number> {
   const unmatched = args.only.length
     ? [...new Set([...existing.unmatched.filter((r) => !args.only.includes(r)), ...plan.unmatched])].sort()
     : plan.unmatched
-  console.log(`${plan.repos.length} in the pool, ${plan.unmatched.length} Astro repos unmatched, ${scanned.size} already scanned`)
+  console.log(`${plan.repos.length} in the pool, ${plan.unmatched.length} Astro repos unmatched, ${args.rescan ? 'every row detected again (--rescan)' : `${scanned.size} already scanned`}`)
 
   const file = await scanPool(plan.repos, { rows: existing.rows, unmatched }, {
     dirFor: (repo) => join(args.work, repo),
@@ -297,7 +304,7 @@ async function main(argv: string[]): Promise<number> {
     remove: (dir) => rmSync(dir, { recursive: true, force: true }),
     save: (f) => writePool(args.out, f),
     log: (line) => console.log(line),
-  }, { limit: args.limit })
+  }, { limit: args.limit, rescan: args.rescan })
   writePool(args.out, file)
   console.log(`→ ${args.out} (${file.rows.length} rows, ${file.rows.filter((r) => r.error).length} errors)`)
   return 0
