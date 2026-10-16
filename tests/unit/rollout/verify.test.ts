@@ -11,7 +11,7 @@ import type { RequestResult } from '../../../ci/rollout/checks/requests'
 import { dockerCheck } from '../../../ci/rollout/docker'
 import { startPreview } from '../../../ci/rollout/preview'
 import type { Report } from '../../../ci/rollout/types'
-import { type Checks, embedRoutes, type Exec, filterRoutes, MIN_FREE_GB, minFreeGb, ORIGIN, type VerifyDeps, verify } from '../../../ci/rollout/verify'
+import { type Checks, embedRoutes, type Exec, filterRoutes, formatVerify, MIN_FREE_GB, minFreeGb, ORIGIN, type VerifyDeps, verify } from '../../../ci/rollout/verify'
 
 const PKG = '@visionmediahq/astro-consent'
 const DEMO_REPORT = JSON.parse(readFileSync(join(import.meta.dirname, 'fixtures/demo-report.json'), 'utf8')) as Report
@@ -143,6 +143,7 @@ function fake(
     },
     checks: async () => checks,
     freeBytes: () => 100e9,
+    isUp: async () => false,
     docker:
       opts.docker ??
       (async (_url, _branch, run) => {
@@ -269,6 +270,128 @@ describe('verify', () => {
     const result = await verify(dir, report(), { deps: f.deps })
     expect(result.steps.at(-1)).toMatchObject({ step: 5, pass: false })
     expect(evidence(dir, '5-clip.txt')).toContain('/kontakt/ 360px button "Visa Google Maps" 150px in 326px CLIPPED (cut off by an overflow:hidden ancestor)')
+  })
+
+  describe("main's preview stops answering mid-step (#20)", () => {
+    const REFUSED = 'page.goto: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:4398/'
+    const mainStarts = (calls: string[]) => calls.filter((c) => c.startsWith('preview') && c.endsWith(' 4398')).length
+    /** A requests check whose main side throws `error` the first `times` calls. */
+    const dying = (error: string, times: number) => {
+      let n = 0
+      return async (base: string, paths: string[]) => {
+        if (base.includes(':4398') && n++ < times) throw new Error(error)
+        return paths.map((p) => ({ path: p, banner: !base.includes(':4398'), banners: 1, blocked: [], errors: [], known: [], ok: true }))
+      }
+    }
+
+    test('dies once in step 3: restarted once, main is checked again, the step passes and says so', async () => {
+      const dir = siteDir()
+      const f = fake({ checks: { requests: dying(REFUSED, 1) } })
+      const result = await verify(dir, report(), { deps: f.deps })
+      expect(result.steps.find((s) => s.step === 3)).toMatchObject({ pass: true })
+      expect(evidence(dir, '3-requests.txt')).toMatch(/main's preview stopped answering \(.*ERR_CONNECTION_REFUSED.*\): restarted it once/)
+      expect(result.restarts).toEqual([expect.stringMatching(/^step 3 requests: .*ERR_CONNECTION_REFUSED/)])
+      expect(formatVerify(result)).toContain(`main preview restarted: ${result.restarts![0]}`)
+      // Step 3 started main twice (the first died, and was stopped before the second), step 5 once more.
+      expect(mainStarts(f.calls)).toBe(3)
+      const main = f.calls.filter((c) => (c.startsWith('preview') && c.endsWith(' 4398')) || c === 'stop 4398').map((c) => c.split(' ')[0])
+      expect(main.slice(0, 3)).toEqual(['preview', 'stop', 'preview'])
+      expect(result.pass).toBe(true)
+    })
+
+    test('dies twice: the step fails, with no second restart', async () => {
+      const dir = siteDir()
+      const f = fake({ checks: { requests: dying(REFUSED, 2) } })
+      const result = await verify(dir, report(), { deps: f.deps })
+      expect(result.steps.at(-1)).toMatchObject({ step: 3, pass: false })
+      expect(evidence(dir, '3-requests.txt')).toMatch(/after restarting main's preview once: .*ERR_CONNECTION_REFUSED/)
+      expect(mainStarts(f.calls)).toBe(2)
+    })
+
+    test('one restart per step: a second drop later in the same step fails it (step 5 talks to main three times)', async () => {
+      const dir = siteDir()
+      let styles = 0
+      const f = fake({
+        checks: {
+          rootStyles: async (base) => {
+            if (base.includes(':4398') && styles++ === 0) throw new Error(REFUSED)
+            return { 'html scrollbar-color': 'auto', 'html background-color': 'rgb(255, 255, 255)' }
+          },
+          embedBoxes: async (base, paths) => {
+            if (base.includes(':4398')) throw new Error(REFUSED)
+            return paths.map((path): EmbedBox => ({ path, width: 1280, service: 'google-maps', h: 420 }))
+          },
+        },
+      })
+      const result = await verify(dir, report(), { deps: f.deps })
+      expect(result.steps.at(-1)).toMatchObject({ step: 5, pass: false })
+      // Step 3 once, step 5 twice: no third start after the second drop.
+      expect(mainStarts(f.calls)).toBe(3)
+    })
+
+    test('a restart that fails keeps the drop in the message', async () => {
+      const dir = siteDir()
+      const f = fake({ checks: { requests: dying(REFUSED, 1) } })
+      const start = f.deps.preview!
+      let n = 0
+      f.deps.preview = async (d, port, ssr) => {
+        if (port === 4398 && n++ === 1) throw new Error('preview on port 4398 did not start')
+        return start(d, port, ssr)
+      }
+      const result = await verify(dir, report(), { deps: f.deps })
+      expect(result.steps.at(-1)).toMatchObject({ step: 3, pass: false })
+      expect(evidence(dir, '3-requests.txt')).toMatch(/main's preview stopped answering \(.*ERR_CONNECTION_REFUSED.*\) and did not restart: preview on port 4398 did not start/)
+    })
+
+    test("the branch's preview is never restarted: a connection error there fails the step at once", async () => {
+      const dir = siteDir()
+      const f = fake({
+        checks: {
+          requests: async (base, paths) => {
+            if (base.includes(':4399')) throw new Error('page.goto: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:4399/')
+            return paths.map((p) => ({ path: p, banner: false, banners: 1, blocked: [], errors: [], known: [], ok: false }))
+          },
+        },
+      })
+      const result = await verify(dir, report(), { deps: f.deps })
+      expect(result.steps.at(-1)).toMatchObject({ step: 3, pass: false })
+      expect(f.calls.filter((c) => c.startsWith('preview') && c.endsWith(' 4399'))).toHaveLength(1)
+      expect(result.restarts ?? []).toEqual([])
+    })
+
+    test('a failure that is not a dropped connection is not retried (a timeout, an HTTP error page)', async () => {
+      const dir = siteDir()
+      const f = fake({ checks: { requests: dying('page.goto: Timeout 45000ms exceeded.', 1) } })
+      const result = await verify(dir, report(), { deps: f.deps })
+      expect(result.steps.at(-1)).toMatchObject({ step: 3, pass: false })
+      expect(mainStarts(f.calls)).toBe(1)
+    })
+
+    test('a connection error while main still answers is not a dead preview: no restart, the step fails', async () => {
+      const dir = siteDir()
+      const f = fake({ checks: { requests: dying(REFUSED, 1) } })
+      f.deps.isUp = async () => true
+      const result = await verify(dir, report(), { deps: f.deps })
+      expect(result.steps.at(-1)).toMatchObject({ step: 3, pass: false })
+      expect(mainStarts(f.calls)).toBe(1)
+    })
+
+    test('dies in step 5: restarted there too, and step 5 passes', async () => {
+      const dir = siteDir()
+      let n = 0
+      const f = fake({
+        checks: {
+          rootStyles: async (base) => {
+            if (base.includes(':4398') && n++ === 0) throw new Error(REFUSED)
+            return { 'html scrollbar-color': 'auto', 'html background-color': 'rgb(255, 255, 255)' }
+          },
+        },
+      })
+      const result = await verify(dir, report(), { deps: f.deps })
+      expect(result.steps.find((s) => s.step === 5)).toMatchObject({ pass: true })
+      expect(evidence(dir, '5-clip.txt')).toMatch(/main's preview stopped answering/)
+      expect(result.restarts).toEqual([expect.stringMatching(/^step 5 clip: /)])
+    })
   })
 
   describe('step 5: map heights are compared with main (#46, knutssonsbil)', () => {
