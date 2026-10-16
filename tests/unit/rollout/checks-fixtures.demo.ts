@@ -82,6 +82,8 @@ const FIXTURES: Record<string, string> = {
   oneoff: embedPage(`add(el)`),
   // A loaded map keeps fetching tiles until the page goes away (knutssonsbil#2 live: tile and RPC
   // requests from the old map fired as the reload started and were counted as "after reload").
+  // Visa that leaves no embed behind but makes the reloaded page request the registry anyway.
+  ghost: embedPage(`add(el); localStorage.setItem('ghost', '1')`, `if (localStorage.getItem('ghost')) new Image().src = '${MAPS}&ghost'`),
   busy: embedPage(`add(el); let i = 0; setInterval(() => { new Image().src = '${MAPS}&tile=' + i++ }, 50)`),
   // Visa that loads an iframe the page then squashes to nothing (salviablommor: a scoped display:block
   // on the wrapper beat `grid`, so the loaded map was 0px tall).
@@ -176,6 +178,10 @@ try {
   {
     const r = await paths('/busy/')
     expect(r.visaLoadsOnlyClicked, '/busy/ control: a map still loading tiles when the reload starts passes', r)
+  }
+  {
+    const r = await paths('/ghost/')
+    expect(!r.visaLoadsOnlyClicked && r.notes.some((n) => /after reload active\+iframes=0 blocked=[1-9]/.test(n)), '/ghost/ reloaded page that requests the registry with no embed fails', r)
   }
   {
     const r = await paths('/sticky/')
