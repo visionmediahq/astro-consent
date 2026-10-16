@@ -12,8 +12,10 @@
 //   4 consent-paths  Visa / Visa alltid / Neka on every page with an embed
 //   5 clip        no banner or embed button clipped or cut off by an overflow:hidden ancestor, no
 //                 banner button covered, no page wider than
-//                 on main, at 320/360/375/1280 px
-//   6 contrast    every banner button and PrivacyLinks row ≥ 4.5:1 and determinate (Ruling 20)
+//                 on main, at 320/360/375/1280 px; no map placeholder more than 10 % shorter than
+//                 the iframe it replaced on main, at 360/1280 px (#46)
+//   6 contrast    every banner button, PrivacyLinks row and embed placeholder text ≥ 4.5:1 and
+//                 determinate (Ruling 20, #46)
 //   7 screenshots banner and map placeholders at 360 and 1280 px
 //   8 docker      the pushed branch cloned clean, built with its Dockerfile, steps 3–4 against it
 //
@@ -29,6 +31,7 @@ import { type ClipResult, checkClip } from './checks/clip'
 import { type RootStyles, checkRootStyles, diffRootStyles } from './checks/root-styles'
 import { type ConsentPathResult, checkConsentPaths } from './checks/consent-paths'
 import { type ContrastRow, checkContrast } from './checks/contrast'
+import { checkEmbedBoxes, compareEmbedHeights, type EmbedBox } from './checks/embed-size'
 import { isCmsAdminRoute, listPages, MISSING_PREFIX } from './checks/pages'
 import { checkRequests, formatRequests, type RequestResult } from './checks/requests'
 import { shots } from './checks/shots'
@@ -59,6 +62,8 @@ export interface Checks {
   clip(base: string, paths: string[]): Promise<ClipResult[]>
   /** Computed scrollbar and background styles on html and body of `/`, compared with main in step 5. */
   rootStyles(base: string): Promise<RootStyles>
+  /** Main's registry iframes or the branch's unloaded ConsentEmbeds at 360 and 1280px, compared in step 5 (#46). */
+  embedBoxes(base: string, paths: string[]): Promise<EmbedBox[]>
   contrast(base: string, paths: string[]): Promise<ContrastRow[]>
   shots(base: string, paths: string[], outDir: string): Promise<string[]>
   close(): Promise<void>
@@ -126,6 +131,7 @@ export function browserChecks(): Checks {
     consentPaths: async (base, paths, opts) => checkConsentPaths(await get(), base, paths, { ...opts, stub: true }),
     clip: async (base, paths) => checkClip(await get(), base, paths, [320, 360, 375, 1280], { stub: true }),
     rootStyles: async (base) => checkRootStyles(await get(), base, '/', { stub: true }),
+    embedBoxes: async (base, paths) => checkEmbedBoxes(await get(), base, paths, [360, 1280], { stub: true }),
     contrast: async (base, paths) => checkContrast(await get(), base, paths, { stub: true }),
     shots: async (base, paths, outDir) => shots(await get(), base, paths, outDir, [360, 1280], { stub: true }),
     async close() {
@@ -428,6 +434,8 @@ export async function verify(dir: string, report: Report, opts: VerifyOptions = 
       const mainW = new Map<string, number>()
       const wide = rows.filter((r) => r.kind === 'page' && r.clipped)
       let rootDiff: string[] | null = null
+      // #46: each placeholder must be about as tall as the iframe it replaced (knutssonsbil).
+      let heights: ReturnType<typeof compareEmbedHeights> | null = null
       if (!demo) {
         const main = await deps.preview(mainDir!, PORTS.main, ssr)
         previews.push(main)
@@ -436,6 +444,7 @@ export async function verify(dir: string, report: Report, opts: VerifyOptions = 
             for (const m of await c.clip(main.url, [...new Set(wide.map((r) => r.path))]))
               if (m.kind === 'page') mainW.set(`${m.path} ${m.width}`, m.w)
           rootDiff = diffRootStyles(await c.rootStyles(main.url), await c.rootStyles(branch!.url))
+          if (mapPages.length) heights = compareEmbedHeights(await c.embedBoxes(main.url, mapPages), await c.embedBoxes(branch!.url, mapPages))
         } finally {
           await main.stop()
         }
@@ -453,7 +462,11 @@ export async function verify(dir: string, report: Report, opts: VerifyOptions = 
       if (rootDiff === null) lines.push('root styles: not compared (no main)')
       else if (rootDiff.length === 0) lines.push('root styles on /: same as main')
       else lines.push(...rootDiff.map((d) => `root styles on / differ from main: ${d}`))
-      return { pass: measured && rows.every((r) => !r.clipped) && !rootDiff?.length, lines }
+      if (heights) {
+        for (const h of heights.rows) lines.push(`${h.path} ${h.width}px embed ${h.index}: ${h.branchH}px tall, main ${h.mainH}px ${h.ok ? 'ok' : 'SHORTER'}`)
+        lines.push(...heights.notes)
+      } else if (mapPages.length) lines.push('embed heights: not compared (no main)')
+      return { pass: measured && rows.every((r) => !r.clipped) && !rootDiff?.length && (heights?.rows.every((h) => h.ok) ?? true), lines }
     },
 
     async contrast() {

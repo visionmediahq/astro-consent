@@ -13,8 +13,11 @@ import { freshPage, gotoPage } from './requests'
 
 type Rgba = [number, number, number, number] // 0..255, alpha too
 
+/** 'banner': a banner button. 'links': PrivacyLinks text. 'placeholder': an unloaded embed's info text, Visa button, remember label or open link (#46). */
+export type ContrastKind = 'banner' | 'links' | 'placeholder'
+
 export interface RawContrast {
-  kind: 'banner' | 'links'
+  kind: ContrastKind
   label: string
   /** Text colour as the canvas returns it. */
   fg: Rgba
@@ -26,8 +29,7 @@ export interface RawContrast {
 
 export interface ContrastRow {
   path?: string
-  /** 'banner': a visible banner button. 'links': a PrivacyLinks button or link. */
-  kind: 'banner' | 'links'
+  kind: ContrastKind
   /** The button's or link's text. */
   button: string
   ratio: number
@@ -60,6 +62,9 @@ const MEASURE = `(() => {
   return [
     ...[...document.querySelectorAll('[data-consent-banner] button')].filter(visible).map((e) => row('banner', e)),
     ...[...document.querySelectorAll('[data-privacy-links] button, [data-privacy-links] a')].filter(visible).map((e) => row('links', e)),
+    // A dark theme that sets base-content but not base-200 leaves light text on the light
+    // placeholder (knutssonsbil, about 1.2:1). Only embeds that have not loaded show one.
+    ...[...document.querySelectorAll(['> div:first-child', '[data-load]', 'label', 'a[data-open]'].map((s) => '[data-consent-embed]:not([data-active]) [data-placeholder] ' + s).join(', '))].filter(visible).map((e) => row('placeholder', e)),
   ]
 })()`
 
@@ -95,14 +100,15 @@ export function contrastRows(raw: RawContrast[]): ContrastRow[] {
   })
 }
 
-/** Banner buttons and PrivacyLinks text on the page as it is now. */
+/** Banner buttons, PrivacyLinks text and unloaded embed placeholders on the page as it is now. */
 export async function measureContrast(page: Pick<Page, 'evaluate'>): Promise<ContrastRow[]> {
   return contrastRows((await page.evaluate(MEASURE)) as RawContrast[])
 }
 
 /**
- * Opens each path (default '/') in a fresh context and measures the visible banner buttons and the
- * PrivacyLinks text against their effective backgrounds. Step 6 wants every ratio ≥ 4.5.
+ * Opens each path (default '/') in a fresh context and measures the visible banner buttons, the
+ * PrivacyLinks text and any embed placeholder against their effective backgrounds. Step 6 wants
+ * every ratio ≥ 4.5.
  */
 export async function checkContrast(
   browser: Browser,
