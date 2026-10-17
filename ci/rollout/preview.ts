@@ -5,7 +5,7 @@
 import { spawn } from 'node:child_process'
 import { closeSync, existsSync, openSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, normalize } from 'node:path'
+import { isAbsolute, join, normalize } from 'node:path'
 import { tail } from './lib/exec'
 
 export interface Preview {
@@ -64,9 +64,11 @@ export const DEFAULT_SSR_ENTRY = 'dist/server/entry.mjs'
 /**
  * The file an SSR site's server runs (#60). kajsa-landgren starts `node ./dist/server-entry.mjs`,
  * its own server around the Astro handler; `dist/server/entry.mjs` there only exports the handler
- * and exits. So a `start` script that is exactly `node [flags] <file>`, with the file inside `dir`
- * and present after the build, gives the entry. Anything else (no script, `astro preview`, a chain
- * of commands, a missing file) keeps Astro's default.
+ * and exits. So a `start` script that is exactly `node <file>`, with the file inside `dir` and
+ * present after the build, gives the entry. Anything else keeps Astro's default: no script, `astro
+ * preview`, a chain of commands, a missing file, and node flags, which the preview would drop
+ * (astro-starter's `node --experimental-strip-types ./server.ts` is one; its standalone build
+ * starts from the default entry).
  */
 export function ssrEntry(dir: string): { entry: string; from: 'start' | 'default' } {
   const fallback = { entry: DEFAULT_SSR_ENTRY, from: 'default' } as const
@@ -76,10 +78,10 @@ export function ssrEntry(dir: string): { entry: string; from: 'start' | 'default
   } catch {
     return fallback
   }
-  const m = typeof start === 'string' ? /^node(?:\s+-{1,2}[\w-]+(?:=\S+)?)*\s+(\S+\.[cm]?js)\s*$/.exec(start.trim()) : null
+  const m = typeof start === 'string' ? /^node\s+([^\s-]\S*\.[cm]?js)$/.exec(start.trim()) : null
   if (!m) return fallback
   const entry = normalize(m[1]!)
-  if (entry.startsWith('..') || entry.startsWith('/') || !existsSync(join(dir, entry))) return fallback
+  if (entry === '..' || entry.startsWith('../') || isAbsolute(entry) || !existsSync(join(dir, entry))) return fallback
   return { entry, from: 'start' }
 }
 

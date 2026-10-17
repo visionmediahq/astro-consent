@@ -473,7 +473,7 @@ export async function verify(dir: string, report: Report, opts: VerifyOptions = 
         const b = ssrEntry(root)
         const m = ssrEntry(mainDir!)
         const say = (e: ReturnType<typeof ssrEntry>) => `${e.entry} (${e.from === 'start' ? 'the start script' : 'default'})`
-        lines.push(b.entry === m.entry && b.from === m.from ? `SSR entry: ${say(b)}` : `SSR entry: branch ${say(b)}, main ${say(m)}`)
+        lines.push(b.entry === m.entry ? `SSR entry: ${say(b)}` : `SSR entry: branch ${say(b)}, main ${say(m)}`)
       }
       branch = await deps.preview(root, PORTS.branch, ssr, demo ? 'server/entry.mjs' : entryOf(root))
       previews.push(branch)
