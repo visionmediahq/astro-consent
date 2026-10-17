@@ -81,7 +81,7 @@ export function ssrEntry(dir: string): { entry: string; from: 'start' | 'default
   const m = typeof start === 'string' ? /^node\s+([^\s-]\S*\.[cm]?js)$/.exec(start.trim()) : null
   if (!m) return fallback
   const entry = normalize(m[1]!)
-  if (entry === '..' || entry.startsWith('../') || isAbsolute(entry) || !existsSync(join(dir, entry))) return fallback
+  if (entry.startsWith('../') || isAbsolute(entry) || !existsSync(join(dir, entry))) return fallback
   return { entry, from: 'start' }
 }
 

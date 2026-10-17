@@ -1052,6 +1052,9 @@ describe('SSR entry from the start script (#60, kajsa-landgren)', () => {
     expect(ssrEntry(site('node dist/a.mjs && node dist/b.mjs', ['dist/a.mjs', 'dist/b.mjs']))).toEqual(fallback)
     expect(ssrEntry(site('node ../outside.mjs', ['../outside.mjs']))).toEqual(fallback)
     const abs = site(undefined, ['dist/x.mjs'])
+    // The same path also exists under the site, so only the absolute-path check can refuse it.
+    mkdirSync(join(abs, abs, 'dist'), { recursive: true })
+    writeFileSync(join(abs, abs, 'dist/x.mjs'), '')
     writeFileSync(join(abs, 'package.json'), JSON.stringify({ scripts: { start: `node ${join(abs, 'dist/x.mjs')}` } }))
     expect(ssrEntry(abs)).toEqual(fallback)
     const noPkg = mkdtempSync(join(tmpdir(), 'entry-'))
