@@ -9,7 +9,7 @@ import type { ConsentPathResult } from '../../../ci/rollout/checks/consent-paths
 import type { ContrastRow } from '../../../ci/rollout/checks/contrast'
 import type { RequestResult } from '../../../ci/rollout/checks/requests'
 import { dockerCheck } from '../../../ci/rollout/docker'
-import { startPreview } from '../../../ci/rollout/preview'
+import { ssrEntry, startPreview } from '../../../ci/rollout/preview'
 import type { Report } from '../../../ci/rollout/types'
 import { type Checks, embedRoutes, type Exec, filterRoutes, formatVerify, MIN_FREE_GB, minFreeGb, ORIGIN, type VerifyDeps, verify } from '../../../ci/rollout/verify'
 
@@ -1021,5 +1021,121 @@ describe('startPreview', () => {
     server = createServer((_q, s) => s.end('old')).listen(port, '127.0.0.1')
     await new Promise((r) => server!.once('listening', r))
     await expect(startPreview(tmpdir(), port, true)).rejects.toThrow(/in use/)
+  })
+})
+
+describe('SSR entry from the start script (#60, kajsa-landgren)', () => {
+  /** A temp root with the site at `<root>/site`, so a file "outside" it is still inside the temp dir. */
+  const site = (start: string | undefined, files: string[]) => {
+    const root = mkdtempSync(join(tmpdir(), 'entry-'))
+    dirs.push(root)
+    const dir = join(root, 'site')
+    mkdirSync(dir)
+    writeFileSync(join(dir, 'package.json'), JSON.stringify({ name: 'site', scripts: start === undefined ? {} : { start } }))
+    for (const f of files) {
+      mkdirSync(join(dir, f, '..'), { recursive: true })
+      writeFileSync(join(dir, f), '')
+    }
+    return dir
+  }
+  const fallback = { entry: 'dist/server/entry.mjs', from: 'default' }
+
+  test('a bare `node <file>` whose file exists after the build is the entry', () => {
+    expect(ssrEntry(site('node ./dist/server-entry.mjs', ['dist/server-entry.mjs']))).toEqual({ entry: 'dist/server-entry.mjs', from: 'start' })
+    expect(ssrEntry(site('node dist/server.js', ['dist/server.js']))).toEqual({ entry: 'dist/server.js', from: 'start' })
+  })
+
+  test('anything else falls back to dist/server/entry.mjs', () => {
+    expect(ssrEntry(site(undefined, []))).toEqual(fallback)
+    expect(ssrEntry(site('astro preview', []))).toEqual(fallback)
+    expect(ssrEntry(site('node ./dist/server-entry.mjs', []))).toEqual(fallback)
+    expect(ssrEntry(site('node dist/a.mjs && node dist/b.mjs', ['dist/a.mjs', 'dist/b.mjs']))).toEqual(fallback)
+    expect(ssrEntry(site('node ../outside.mjs', ['../outside.mjs']))).toEqual(fallback)
+    const abs = site(undefined, ['dist/x.mjs'])
+    // The same path also exists under the site, so only the absolute-path check can refuse it.
+    mkdirSync(join(abs, abs, 'dist'), { recursive: true })
+    writeFileSync(join(abs, abs, 'dist/x.mjs'), '')
+    writeFileSync(join(abs, 'package.json'), JSON.stringify({ scripts: { start: `node ${join(abs, 'dist/x.mjs')}` } }))
+    expect(ssrEntry(abs)).toEqual(fallback)
+    const noPkg = mkdtempSync(join(tmpdir(), 'entry-'))
+    dirs.push(noPkg)
+    expect(ssrEntry(noPkg)).toEqual(fallback)
+  })
+
+  test('node flags fall back: the preview would run the file without them', () => {
+    expect(ssrEntry(site('node --env-file=.env dist/s.mjs', ['dist/s.mjs']))).toEqual(fallback)
+    expect(ssrEntry(site('node --enable-source-maps dist/server.js', ['dist/server.js']))).toEqual(fallback)
+  })
+
+  test("astro-starter's `node --experimental-strip-types ./server.ts` falls back (standalone autostarts)", () => {
+    expect(ssrEntry(site('node --experimental-strip-types ./server.ts', ['server.ts']))).toEqual(fallback)
+    expect(ssrEntry(site('node server.ts', ['server.ts']))).toEqual(fallback)
+  })
+
+  /**
+   * An SSR verify where main and the branch have their own start script; each side's `npm run
+   * build` writes `mainBuilt` or `branchBuilt` there. Records `<port> <entry>` per preview start.
+   */
+  const ssrVerify = async (o: { mainStart?: string; branchStart?: string; mainBuilt?: string; branchBuilt?: string; checks?: Partial<Checks> }) => {
+    const dir = siteDir()
+    const pkg = (base: string, start?: string) => JSON.stringify({ ...JSON.parse(base), ...(start ? { scripts: { start } } : {}) })
+    writeFileSync(join(dir, 'package.json'), pkg(BRANCH_PKG, o.branchStart))
+    // Step 1 compares package.json beyond the dependency, so main's shown file carries the branch's scripts.
+    const shown = pkg(MAIN_PKG, o.branchStart)
+    const f = fake({ exec: { 'git show origin/main:package.json': { code: 0, out: shown } }, ...(o.checks ? { checks: o.checks } : {}) })
+    const exec = f.deps.exec!
+    f.deps.exec = async (cmd, args, cwd) => {
+      const res = await exec(cmd, args, cwd)
+      const line = [cmd, ...args].join(' ')
+      if (line.startsWith('git worktree add')) writeFileSync(join(args[args.indexOf('--detach') + 1]!, 'package.json'), pkg(MAIN_PKG, o.mainStart))
+      const built = cwd?.endsWith('-main') ? o.mainBuilt : o.branchBuilt
+      if (line === 'npm run build' && cwd && built) {
+        mkdirSync(join(cwd, built, '..'), { recursive: true })
+        writeFileSync(join(cwd, built), '')
+      }
+      return res
+    }
+    const entries: string[] = []
+    const start = f.deps.preview!
+    f.deps.preview = async (d, port, ssr, entry) => (entries.push(`${port} ${entry}`), start(d, port, ssr, entry))
+    const result = await verify(dir, report({ astro: { major: 7, output: 'server' } }), { deps: f.deps })
+    return { dir, result, entries, calls: f.calls }
+  }
+
+  test('verify starts both previews with the start script entry and says so in step 3', async () => {
+    const start = 'node ./dist/server-entry.mjs'
+    const { dir, result, entries } = await ssrVerify({ mainStart: start, branchStart: start, mainBuilt: 'dist/server-entry.mjs', branchBuilt: 'dist/server-entry.mjs' })
+    expect(result.steps.find((s) => s.step === 3)?.pass).toBe(true)
+    expect(entries).toContain('4399 dist/server-entry.mjs')
+    expect(entries).toContain('4398 dist/server-entry.mjs')
+    expect(evidence(dir, '3-requests.txt')).toMatch(/SSR entry: dist\/server-entry\.mjs \(the start script\)/)
+  })
+
+  test("each side gets its own entry: main's start script, not the branch's", async () => {
+    const { dir, entries } = await ssrVerify({ mainStart: 'node dist/old.mjs', branchStart: 'node dist/new.mjs', mainBuilt: 'dist/old.mjs', branchBuilt: 'dist/new.mjs' })
+    expect(entries).toContain('4399 dist/new.mjs')
+    expect(entries).toContain('4398 dist/old.mjs')
+    expect(entries).not.toContain('4398 dist/new.mjs')
+    expect(evidence(dir, '3-requests.txt')).toMatch(/SSR entry: branch dist\/new\.mjs \(the start script\), main dist\/old\.mjs \(the start script\)/)
+  })
+
+  test("main's restart (#20) keeps main's entry", async () => {
+    let n = 0
+    const requests = async (base: string, paths: string[]) => {
+      if (base.includes(':4398') && n++ < 1) throw new Error('page.goto: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:4398/')
+      return paths.map((p) => ({ path: p, banner: !base.includes(':4398'), banners: 1, blocked: [], errors: [], known: [], ok: true }))
+    }
+    const start = 'node ./dist/server-entry.mjs'
+    const { entries } = await ssrVerify({ mainStart: start, branchStart: start, mainBuilt: 'dist/server-entry.mjs', branchBuilt: 'dist/server-entry.mjs', checks: { requests } })
+    const main = entries.filter((e) => e.startsWith('4398 '))
+    expect(main.length).toBeGreaterThan(1)
+    expect(new Set(main)).toEqual(new Set(['4398 dist/server-entry.mjs']))
+  })
+
+  test('verify keeps dist/server/entry.mjs without a start script', async () => {
+    const { dir, entries } = await ssrVerify({})
+    expect(entries).toContain('4399 dist/server/entry.mjs')
+    expect(entries).toContain('4398 dist/server/entry.mjs')
+    expect(evidence(dir, '3-requests.txt')).toMatch(/SSR entry: dist\/server\/entry\.mjs \(default\)/)
   })
 })
