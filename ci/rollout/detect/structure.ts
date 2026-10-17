@@ -46,6 +46,8 @@ const isBranding = (file: string): boolean => posix.basename(file) === 'VisionFo
 const SECTIONING = new Set(['article', 'aside', 'blockquote', 'figure', 'nav', 'section'])
 
 const POLICY = /^(?:integritet|privacy|cookie|personuppgift|gdpr|dataskydd)/i
+/** A route under another language's folder (`/en/`, `/de-at/`…); Swedish folders such as `/om/` are not one, nor `/sv(-se)/`. */
+const FOREIGN_PREFIX = /^\/(?:en|de|fi|no|nb|nn|da|is|fr|es|it|nl|pl|pt|ru|uk|et|lv|lt|ar|tr|zh|ja|ko)(?:-[a-z]{2})?\//i
 
 const isPage = (file: string): boolean => file.startsWith('src/pages/')
 
@@ -275,7 +277,7 @@ export function detectStructure(files: SiteFiles): DetectedStructure {
 
   // #61 (schloetter): the glob order put `/en/gdpr` before `/gdpr`. A route under another language's
   // prefix (`/en/`, `/de/`…) comes last, then fewer segments, then the shorter path.
-  const foreign = (route: string): number => (/^\/(?!sv\/)[a-z]{2}(?:-[a-z]{2})?\//i.test(route) ? 1 : 0)
+  const foreign = (route: string): number => (FOREIGN_PREFIX.test(route) ? 1 : 0)
   const depth = (route: string): number => route.split('/').length
   const policy = files
     .list('src/pages/**/*.{astro,md,mdx}')

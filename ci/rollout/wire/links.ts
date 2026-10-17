@@ -160,10 +160,7 @@ function policyPath(planner: Planner, report: Pick<Report, 'policyPage' | 'domai
 function isLinkTo(text: string, n: AstroNode, path: string, domains: readonly string[]): boolean {
   for (;;) {
     if (n.type !== 'element') return false
-    if (n.name === 'a') {
-      const href = attr(n, 'href')
-      return href?.kind === 'quoted' && pathOf(href.value, domains) === path
-    }
+    if (n.name === 'a') return hrefPath(n, domains) === path
     const kids = contentChildren(n)
     if (kids.length !== 1 || ownText(text, n).trim() !== '') return false
     n = kids[0]!
@@ -178,7 +175,8 @@ function hrefPath(n: AstroNode, domains: readonly string[]): string | null {
   const href = attr(n, 'href')
   if (href?.kind === 'quoted') return pathOf(href.value, domains)
   if (href?.kind !== 'expression') return null
-  const m = /^\s*(?:[\w$.]+\(\s*)?(['"`])([^'"`$]*)\1\s*(?:[,)][^]*)?$/.exec(href.value)
+  const m =
+    /^\s*(['"`])([^'"`$]*)\1\s*$/.exec(href.value) ?? /^\s*[\w$.]+\(\s*(['"`])([^'"`$]*)\1\s*(?:,[^()]*)?\)\s*$/.exec(href.value)
   return m ? pathOf(m[2]!, domains) : null
 }
 
@@ -188,19 +186,24 @@ function hrefPath(n: AstroNode, domains: readonly string[]): string | null {
  * may hold the links (not phrasing content, Ruling 29). With its parent, for the layout.
  */
 function deepPolicyLink(row: AstroNode, mark: AstroNode, path: string, domains: readonly string[]): { link: AstroNode; parent: AstroNode } | null {
-  const found: { link: AstroNode; parent: AstroNode }[] = []
-  const visit = (n: AstroNode, parent: AstroNode): void => {
+  const found: { link: AstroNode; parent: AstroNode; ok: boolean }[] = []
+  // `ok` is false once the search has passed any element a <nav> may not sit in (review of #63).
+  const visit = (n: AstroNode, parent: AstroNode, ok: boolean): void => {
     if (n === mark || n.type !== 'element' || n.name === 'script' || n.name === 'style') return
     if (n.name === 'a') {
-      if (hrefPath(n, domains) === path) found.push({ link: n, parent })
+      if (hrefPath(n, domains) === path) found.push({ link: n, parent, ok })
       return
     }
-    for (const c of n.children) visit(c, n)
+    for (const c of n.children) visit(c, n, ok && holdsNav(n))
   }
-  for (const c of row.children) visit(c, row)
+  for (const c of row.children) visit(c, row, true)
   const only = found.length === 1 ? found[0]! : null
-  return only && only.parent !== row && enterable(only.parent) ? only : null
+  return only?.ok ? only : null
 }
+
+/** Elements whose content model has no room for <nav>: phrasing content, and address/dt/th (no sectioning). */
+const NO_NAV = new Set(['address', 'dt', 'th', 'abbr', 'u', 's', 'q', 'cite', 'code', 'sup', 'sub', 'mark', 'time', 'font', 'small', 'kbd', 'var', 'samp', 'data', 'del', 'ins', 'bdi', 'bdo', 'dfn', 'ruby', 'output', 'picture', 'select', 'option', 'legend', 'caption', 'summary'])
+const holdsNav = (n: AstroNode): boolean => enterable(n) && !NO_NAV.has(n.name ?? '')
 
 /** `markup` right after `node`: on its own line at the node's indent when the node ends its line, inline otherwise. */
 function afterNode(text: string, node: AstroNode, markup: string): { hit: Hit; text: string } {
@@ -306,7 +309,11 @@ const UNKNOWN = Symbol('unknown background')
 
 /** `el` sets a background of its own: a bg-* class (no variant) or a background in its CSS. */
 const ownBackground = (el: AstroNode, rules: CssRule[]): boolean =>
-  classesOf(el).some((c) => /^bg-(?!opacity)/.test(c)) || lastValue(ownDecls(el, rules), ['background', 'background-color']) !== undefined
+  classesOf(el).some((c) => /^bg-(?!opacity)/.test(c) || DAISY_SURFACE.test(c)) ||
+  lastValue(ownDecls(el, rules), ['background', 'background-color', 'background-image']) !== undefined
+
+/** daisyUI components that paint their own background (`btn-primary`, `badge`, …), so their white text says nothing. */
+const DAISY_SURFACE = /^(?:btn|badge|alert|card|chip|kbd|toast|tooltip|mockup-[\w-]+)(?:-[\w-]+)?$/
 
 /**
  * White text on `surface` itself (#61: evabekonomi `text-white/45`, milodahlmann inline
@@ -317,7 +324,7 @@ const ownBackground = (el: AstroNode, rules: CssRule[]): boolean =>
 function whiteTextOn(surface: AstroNode, rules: CssRule[]): boolean {
   const visit = (n: AstroNode): boolean => {
     if (n.type !== 'element' || n.name === 'script' || n.name === 'style') return false
-    if (n !== surface && ownBackground(n, rules)) return false
+    if (n !== surface && (ownBackground(n, rules) || classesOf(n).includes('sr-only'))) return false
     if (n !== surface && (classesOf(n).some((c) => /^text-white(?:\/\d+)?$/.test(c)) || lightText(ownDecls(n, rules)))) return true
     return n.children.some(visit)
   }
@@ -418,7 +425,7 @@ function inFooter(
   const tag = linksTag(name, [colour, ...layout])
   const own = policy === null ? [] : contentChildren(bar.row).filter((k) => k !== bar.mark && isLinkTo(text, k, policy, domains))
   if (own.length === 1) return { hit: { start: own[0]!.start, end: own[0]!.end }, text: tag }
-  const deep = policy === null || own.length > 1 ? null : deepPolicyLink(bar.row, bar.mark, policy, domains)
+  const deep = policy === null ? null : deepPolicyLink(bar.row, bar.mark, policy, domains)
   if (deep) {
     const tagHere = linksTag(name, [colour, !laidOutRow(deep.parent, rules) && 'justify-start!'])
     return { hit: { start: deep.link.start, end: deep.link.end }, text: tagHere }

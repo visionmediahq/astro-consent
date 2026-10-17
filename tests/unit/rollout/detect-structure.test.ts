@@ -336,6 +336,10 @@ import Bottom from '../components/SiteFooter.astro'
     expect(detectStructure(inline({ 'src/pages/de/datenschutz.astro': page, 'src/pages/en/privacy.astro': page, 'src/pages/sv/integritetspolicy.astro': page })).policyPage).toBe('/sv/integritetspolicy')
     expect(detectStructure(inline({ 'src/pages/info/integritetspolicy.astro': page, 'src/pages/integritetspolicy.astro': page })).policyPage).toBe('/integritetspolicy')
     expect(detectStructure(inline({ 'src/pages/en/privacy.astro': page })).policyPage).toBe('/en/privacy')
+    // Fewer segments beat a shorter path; a Swedish two-letter folder (/om/) and /sv-se/ are not foreign.
+    expect(detectStructure(inline({ 'src/pages/a/gdpr.astro': page, 'src/pages/integritetspolicy.astro': page })).policyPage).toBe('/integritetspolicy')
+    expect(detectStructure(inline({ 'src/pages/om/integritetspolicy.astro': page, 'src/pages/en/privacy.astro': page })).policyPage).toBe('/om/integritetspolicy')
+    expect(detectStructure(inline({ 'src/pages/sv-se/integritetspolicy.astro': page, 'src/pages/en/gdpr.astro': page })).policyPage).toBe('/sv-se/integritetspolicy')
     expect(detectStructure(inline({ 'src/pages/dataskyddspolicy.astro': page })).policyPage).toBe('/dataskyddspolicy')
     expect(detectStructure(inline({ 'src/pages/om/dataskydd.md': page })).policyPage).toBe('/om/dataskydd')
   })

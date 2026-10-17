@@ -358,6 +358,49 @@ describe('wireLinks', () => {
       }
     })
 
+    test('review of #63: a policy link with a phrasing or address ancestor anywhere stays (no <nav> inside <p>)', () => {
+      for (const deep of [
+        '<p>Läs <u><a href="/integritetspolicy/">integritetspolicy</a></u></p>',
+        '<p>Se <abbr title="x"><a href="/integritetspolicy/">GDPR</a></abbr></p>',
+        '<address>Storgatan 1<div><a href="/integritetspolicy/">Integritetspolicy</a></div></address>',
+        '<dl><dt><a href="/integritetspolicy/">Integritetspolicy</a></dt><dd>Läs</dd></dl>',
+      ]) {
+        const text = wire(
+          [wireLinks],
+          site(`<footer class="text-white">\n  <div class="grid"><p>a</p><p>b</p></div>\n  <div class="flex">\n    <p>© Firma</p>\n    ${deep}\n  </div>\n</footer>\n`, POLICY_PAGE),
+          'src/components/Footer.astro',
+        )
+        expect(text).toContain(`    <p>© Firma</p>\n    <PrivacyLinks class="text-white" />\n    ${deep}`)
+      }
+      // A wrapper that holds only the link is replaced whole, so nothing is left inside a <p>.
+      const whole = wire(
+        [wireLinks],
+        site('<footer class="text-white">\n  <div class="grid"><p>a</p><p>b</p></div>\n  <div class="flex">\n    <p>© Firma</p>\n    <p><abbr title="x"><a href="/integritetspolicy/">GDPR</a></abbr></p>\n  </div>\n</footer>\n', POLICY_PAGE),
+        'src/components/Footer.astro',
+      )
+      expect(whole).toContain('    <p>© Firma</p>\n    <PrivacyLinks class="text-white" />\n  </div>')
+    })
+
+    test('review of #63: an href expression that only starts with a call to the policy path is not a link to it', () => {
+      const deep = "<div class=\"flex\"><a href={isEn('/integritetspolicy/') ? '/en/privacy' : '/x'}>P</a></div>"
+      const text = wire(
+        [wireLinks],
+        site(`<footer class="text-white">\n  <div class="grid"><p>a</p><p>b</p></div>\n  <div class="flex">\n    <p>© Firma</p>\n    ${deep}\n  </div>\n</footer>\n`, POLICY_PAGE),
+        'src/components/Footer.astro',
+      )
+      expect(text).toContain(`    <p>© Firma</p>\n    <PrivacyLinks class="text-white" />\n    ${deep}`)
+    })
+
+    test("review of #63: a direct sibling of © with a localize() href is replaced, like a quoted one", () => {
+      const text = wire(
+        [wireLinks],
+        site("<footer class=\"text-white\">\n  <div class=\"grid\"><p>a</p><p>b</p></div>\n  <div class=\"flex\">\n    <p>© Firma</p>\n    <a href={localize('/integritetspolicy/', lang)}>Integritetspolicy</a>\n  </div>\n</footer>\n", POLICY_PAGE),
+        'src/components/Footer.astro',
+      )
+      expect(text).toContain('    <p>© Firma</p>\n    <PrivacyLinks class="text-white" />\n  </div>')
+      expect(tags(text)).toBe(1)
+    })
+
     test('adarate: dark background in scoped CSS, no text colour → text-white/70 after ©', () => {
       const text = wire([wireLinks], site(real('adarate')), 'src/components/Footer.astro')
       expect(text).toContain('Adarate Systems AB</p>\n    <PrivacyLinks class="text-white/70" />\n    <p class="site-footer__address">')
@@ -457,6 +500,20 @@ describe('wireLinks', () => {
       const text = wire(
         [wireLinks],
         site('<footer style="background: var(--surface);">\n  <div class="grid"><a class="bg-blue-700 text-white">Ring</a><p>b</p></div>\n  <div class="flex">\n    <p>© Firma</p>\n    <p>VM</p>\n  </div>\n</footer>\n'),
+        'src/components/Footer.astro',
+      )
+      expect(text).toContain('    <p>© Firma</p>\n    <PrivacyLinks />\n    <p>VM</p>')
+    })
+
+    test.each([
+      ['a daisyUI button', '<a class="btn btn-primary text-white">Ring</a>'],
+      ['a daisyUI badge', '<span class="badge badge-accent text-white">Ny</span>'],
+      ['a background image', '<div style="background-image: url(/x.jpg)"><h3 class="text-white">Hej</h3></div>'],
+      ['screen-reader text', '<span class="sr-only text-white">Meny</span>'],
+    ])('review of #63: unknown background, white text only in %s: no class', (_name, el) => {
+      const text = wire(
+        [wireLinks],
+        site(`<footer style="background: var(--surface);">\n  <div class="grid">${el}<p>b</p></div>\n  <div class="flex">\n    <p>© Firma</p>\n    <p>VM</p>\n  </div>\n</footer>\n`),
         'src/components/Footer.astro',
       )
       expect(text).toContain('    <p>© Firma</p>\n    <PrivacyLinks />\n    <p>VM</p>')
@@ -916,6 +973,8 @@ describe('wireEmbeds', () => {
       embed(`<iframe class="w-full" src="https://www.google.com/maps/embed?pb=!1" style="border:0; aspect-ratio: 4/3; height: auto" title="Karta"></iframe>\n`),
     ).toContain('<div class="w-full"><ConsentEmbed service="google-maps" src="https://www.google.com/maps/embed?pb=!1" title="Karta" aspect="4 / 3" /></div>')
     expect(embed(`<iframe src="https://www.google.com/maps/embed?pb=!1" style="aspect-ratio:1.5" title="Karta"></iframe>\n`)).toContain('title="Karta" aspect="1.5" />')
+    // The last declaration wins, as in CSS.
+    expect(embed(`<iframe src="https://www.google.com/maps/embed?pb=!1" style="aspect-ratio: 16/9; aspect-ratio: 1/1" title="Karta"></iframe>\n`)).toContain('title="Karta" aspect="1 / 1" />')
     // A fixed height wins, as before: the grid wrapper sizes it and the aspect is auto.
     expect(embed(`<iframe src="https://www.google.com/maps/embed?pb=!1" style="aspect-ratio: 4/3; height: 300px" title="Karta"></iframe>\n`)).toContain(
       '<div class="grid h-[300px]"><ConsentEmbed service="google-maps" src="https://www.google.com/maps/embed?pb=!1" title="Karta" aspect="auto" /></div>',
