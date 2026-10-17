@@ -8,14 +8,16 @@
 // "Copyright" before a year or an expression, "Alla rättigheter"), the links go into that bar: the
 // last such child, descending into whichever child holds the line until the element that holds it
 // directly, and the links follow that element as its sibling, in its row. A link in that row to
-// the policy page that PrivacyLinks will render itself (policy_url) is replaced by the links. With
-// no © bar, the links are the slot's last child, as before.
+// the policy page that PrivacyLinks will render itself (policy_url) is replaced by the links; so is
+// the only such link deeper in the bar, unless it sits in phrasing content (#61). With no © bar,
+// the links are the slot's last child, as before.
 //
 // The colour class: the footer's own text colour class. With none, the nearest background from
 // where the links go up to the <footer> decides (its inline style, its scoped CSS rule, a Tailwind
 // or daisyUI bg-* class): dark → `text-white/70`, daisyUI bg-neutral/primary/… → its
 // `text-*-content`, light or unknown → nothing, and verify's contrast step decides. With no
-// background anywhere, a light text colour on the footer means a dark footer.
+// background anywhere, a light text colour on the footer means a dark footer. A background wire
+// cannot read (a CSS variable, a mid shade) is dark when white text sits on it elsewhere (#61).
 //
 // Alignment: in a flex or grid row of the © bar, nothing (the row places the links). In a block
 // row the links sit on their own line under ©: `mt-2`, and the justify-* that matches the row's
@@ -168,6 +170,38 @@ function isLinkTo(text: string, n: AstroNode, path: string, domains: readonly st
   }
 }
 
+/**
+ * The path an `<a>` links to: a quoted href, or an expression that is a string literal or a call
+ * whose first argument is one (schloetter: `href={localize('/gdpr/', lang)}`). Null otherwise.
+ */
+function hrefPath(n: AstroNode, domains: readonly string[]): string | null {
+  const href = attr(n, 'href')
+  if (href?.kind === 'quoted') return pathOf(href.value, domains)
+  if (href?.kind !== 'expression') return null
+  const m = /^\s*(?:[\w$.]+\(\s*)?(['"`])([^'"`$]*)\1\s*(?:[,)][^]*)?$/.exec(href.value)
+  return m ? pathOf(m[2]!, domains) : null
+}
+
+/**
+ * The bar's own link to `path` below the © row's siblings (#61: exakthaltagning's in a neighbouring
+ * div, schloetter's in a `<ul>`), when there is exactly one in `row` outside `mark` and its parent
+ * may hold the links (not phrasing content, Ruling 29). With its parent, for the layout.
+ */
+function deepPolicyLink(row: AstroNode, mark: AstroNode, path: string, domains: readonly string[]): { link: AstroNode; parent: AstroNode } | null {
+  const found: { link: AstroNode; parent: AstroNode }[] = []
+  const visit = (n: AstroNode, parent: AstroNode): void => {
+    if (n === mark || n.type !== 'element' || n.name === 'script' || n.name === 'style') return
+    if (n.name === 'a') {
+      if (hrefPath(n, domains) === path) found.push({ link: n, parent })
+      return
+    }
+    for (const c of n.children) visit(c, n)
+  }
+  for (const c of row.children) visit(c, row)
+  const only = found.length === 1 ? found[0]! : null
+  return only && only.parent !== row && enterable(only.parent) ? only : null
+}
+
 /** `markup` right after `node`: on its own line at the node's indent when the node ends its line, inline otherwise. */
 function afterNode(text: string, node: AstroNode, markup: string): { hit: Hit; text: string } {
   const hit = { start: node.end, end: node.end }
@@ -244,7 +278,7 @@ function lightText(decls: CssDecl[]): boolean {
  * → null), then a Tailwind/daisyUI bg-* class without a variant; a background nobody can read
  * here (a variable, a mid shade) decides null unless `el` also sets a light text colour.
  */
-function surfaceClass(el: AstroNode, rules: CssRule[]): string | null | undefined {
+function surfaceClass(el: AstroNode, rules: CssRule[]): string | null | undefined | typeof UNKNOWN {
   const decls = ownDecls(el, rules)
   const css = lastValue(decls, ['background', 'background-color'])
   let unknown = false
@@ -264,7 +298,30 @@ function surfaceClass(el: AstroNode, rules: CssRule[]): string | null | undefine
     if (arbitrary || OTHER_SHADE.test(c)) unknown = true
   }
   if (!unknown) return undefined
-  return lightText(decls) ? 'text-white/70' : null
+  return lightText(decls) ? 'text-white/70' : UNKNOWN
+}
+
+/** A background set but unreadable here (a variable, a mid shade): decided by the text around it (#61). */
+const UNKNOWN = Symbol('unknown background')
+
+/** `el` sets a background of its own: a bg-* class (no variant) or a background in its CSS. */
+const ownBackground = (el: AstroNode, rules: CssRule[]): boolean =>
+  classesOf(el).some((c) => /^bg-(?!opacity)/.test(c)) || lastValue(ownDecls(el, rules), ['background', 'background-color']) !== undefined
+
+/**
+ * White text on `surface` itself (#61: evabekonomi `text-white/45`, milodahlmann inline
+ * `rgba(255,255,255,0.4)`, landhsel `text-white` headings): a `text-white` or `text-white/NN` class
+ * without a variant, or a light inline/scoped colour, on an element under `surface` that is not
+ * inside another background (a button's white text says nothing about the footer).
+ */
+function whiteTextOn(surface: AstroNode, rules: CssRule[]): boolean {
+  const visit = (n: AstroNode): boolean => {
+    if (n.type !== 'element' || n.name === 'script' || n.name === 'style') return false
+    if (n !== surface && ownBackground(n, rules)) return false
+    if (n !== surface && (classesOf(n).some((c) => /^text-white(?:\/\d+)?$/.test(c)) || lightText(ownDecls(n, rules)))) return true
+    return n.children.some(visit)
+  }
+  return visit(surface)
 }
 
 /** `target` and its ancestors up to and including `footer`, innermost first. */
@@ -288,6 +345,7 @@ export function linksColour(text: string, root: AstroNode, footer: AstroNode, ho
   for (const el of chainTo(footer, holder)) {
     if (el.type !== 'element') continue
     const cls = surfaceClass(el, rules)
+    if (cls === UNKNOWN) return whiteTextOn(el, rules) ? 'text-white/70' : null
     if (cls !== undefined) return cls
   }
   return lightText(ownDecls(footer, rules)) ? 'text-white/70' : null
@@ -360,6 +418,11 @@ function inFooter(
   const tag = linksTag(name, [colour, ...layout])
   const own = policy === null ? [] : contentChildren(bar.row).filter((k) => k !== bar.mark && isLinkTo(text, k, policy, domains))
   if (own.length === 1) return { hit: { start: own[0]!.start, end: own[0]!.end }, text: tag }
+  const deep = policy === null || own.length > 1 ? null : deepPolicyLink(bar.row, bar.mark, policy, domains)
+  if (deep) {
+    const tagHere = linksTag(name, [colour, !laidOutRow(deep.parent, rules) && 'justify-start!'])
+    return { hit: { start: deep.link.start, end: deep.link.end }, text: tagHere }
+  }
   return afterNode(text, bar.mark, tag)
 }
 

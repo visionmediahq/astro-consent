@@ -273,11 +273,16 @@ export function detectStructure(files: SiteFiles): DetectedStructure {
     return footers > 1 ? [{ page, footers }] : []
   })
 
+  // #61 (schloetter): the glob order put `/en/gdpr` before `/gdpr`. A route under another language's
+  // prefix (`/en/`, `/de/`…) comes last, then fewer segments, then the shorter path.
+  const foreign = (route: string): number => (/^\/(?!sv\/)[a-z]{2}(?:-[a-z]{2})?\//i.test(route) ? 1 : 0)
+  const depth = (route: string): number => route.split('/').length
   const policy = files
     .list('src/pages/**/*.{astro,md,mdx}')
     .filter((f) => isRoute(f) && !/\[/.test(f))
     .map(routeOf)
-    .find((route) => POLICY.test(route.split('/').pop() ?? ''))
+    .filter((route) => POLICY.test(route.split('/').pop() ?? ''))
+    .sort((a, b) => foreign(a) - foreign(b) || depth(a) - depth(b) || a.length - b.length || a.localeCompare(b))[0]
 
   return { layouts, footers, footerless, policyPage: policy ?? null, parseErrors, multiFooterPages, ownHtmlPages }
 }

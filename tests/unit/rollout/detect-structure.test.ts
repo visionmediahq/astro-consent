@@ -331,6 +331,11 @@ import Bottom from '../components/SiteFooter.astro'
     expect(detectStructure(inline({ 'src/pages/om-oss.astro': page })).policyPage).toBeNull()
     expect(detectStructure(inline({ 'src/pages/gdpr.astro': page })).policyPage).toBe('/gdpr')
     expect(detectStructure(inline({ 'src/pages/GDPR-policy.astro': page })).policyPage).toBe('/GDPR-policy')
+    // #61 (schloetter): `en/gdpr` sorts before `gdpr`; the Swedish page without a language prefix wins, then the shortest.
+    expect(detectStructure(inline({ 'src/pages/en/gdpr.astro': page, 'src/pages/gdpr.astro': page })).policyPage).toBe('/gdpr')
+    expect(detectStructure(inline({ 'src/pages/de/datenschutz.astro': page, 'src/pages/en/privacy.astro': page, 'src/pages/sv/integritetspolicy.astro': page })).policyPage).toBe('/sv/integritetspolicy')
+    expect(detectStructure(inline({ 'src/pages/info/integritetspolicy.astro': page, 'src/pages/integritetspolicy.astro': page })).policyPage).toBe('/integritetspolicy')
+    expect(detectStructure(inline({ 'src/pages/en/privacy.astro': page })).policyPage).toBe('/en/privacy')
     expect(detectStructure(inline({ 'src/pages/dataskyddspolicy.astro': page })).policyPage).toBe('/dataskyddspolicy')
     expect(detectStructure(inline({ 'src/pages/om/dataskydd.md': page })).policyPage).toBe('/om/dataskydd')
   })
