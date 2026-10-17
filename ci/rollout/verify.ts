@@ -39,7 +39,7 @@ import { isRoute, routeOf } from './detect/structure'
 import { dockerCheck } from './docker'
 import { type Exec, exec as realExec, tail } from './lib/exec'
 import { diffLock, diffPackageJson } from './lib/lockfile'
-import { isUp, type Preview, previewLog, startPreview } from './preview'
+import { isUp, type Preview, previewLog, ssrEntry, startPreview } from './preview'
 import type { Report, StepResult, VerifyResult } from './types'
 import type { ServiceSlug } from '../../src/services'
 import { BRANCH } from './wire/index'
@@ -351,8 +351,9 @@ export async function verify(dir: string, report: Report, opts: VerifyOptions = 
    * A second drop, any other error, or a main that still answers fails the step as before. The
    * branch's preview is never restarted: a crash there may be the wiring's doing.
    */
+  const entryOf = (dir: string) => (ssr ? ssrEntry(dir).entry : undefined)
   const mainPreview = async (step: string, lines: string[]) => {
-    let p = await deps.preview(mainDir!, PORTS.main, ssr)
+    let p = await deps.preview(mainDir!, PORTS.main, ssr, entryOf(mainDir!))
     previews.push(p)
     let restarted = false
     return {
@@ -373,7 +374,7 @@ export async function verify(dir: string, report: Report, opts: VerifyOptions = 
             // no log (tests, or it was never written)
           }
           try {
-            p = await deps.preview(mainDir!, PORTS.main, ssr)
+            p = await deps.preview(mainDir!, PORTS.main, ssr, entryOf(mainDir!))
           } catch (again) {
             throw new Error(`main's preview stopped answering (${message}) and did not restart: ${firstLine(again)}`, { cause: again })
           }
@@ -468,7 +469,13 @@ export async function verify(dir: string, report: Report, opts: VerifyOptions = 
         const res = await exec('npm', ['run', 'build'], mainDir!)
         if (res.code !== 0) return { pass: false, lines: ['npm run build failed on main:', tail(res.out)] }
       }
-      branch = await deps.preview(root, PORTS.branch, ssr, demo ? 'server/entry.mjs' : undefined)
+      if (ssr && !demo) {
+        const b = ssrEntry(root)
+        const m = ssrEntry(mainDir!)
+        const say = (e: ReturnType<typeof ssrEntry>) => `${e.entry} (${e.from === 'start' ? 'the start script' : 'default'})`
+        lines.push(b.entry === m.entry && b.from === m.from ? `SSR entry: ${say(b)}` : `SSR entry: branch ${say(b)}, main ${say(m)}`)
+      }
+      branch = await deps.preview(root, PORTS.branch, ssr, demo ? 'server/entry.mjs' : entryOf(root))
       previews.push(branch)
       const c = await getChecks()
       paths = await c.pages(branch.url, { distDir: demo ? root : join(root, 'dist'), ssr })

@@ -9,7 +9,7 @@ import type { ConsentPathResult } from '../../../ci/rollout/checks/consent-paths
 import type { ContrastRow } from '../../../ci/rollout/checks/contrast'
 import type { RequestResult } from '../../../ci/rollout/checks/requests'
 import { dockerCheck } from '../../../ci/rollout/docker'
-import { startPreview } from '../../../ci/rollout/preview'
+import { ssrEntry, startPreview } from '../../../ci/rollout/preview'
 import type { Report } from '../../../ci/rollout/types'
 import { type Checks, embedRoutes, type Exec, filterRoutes, formatVerify, MIN_FREE_GB, minFreeGb, ORIGIN, type VerifyDeps, verify } from '../../../ci/rollout/verify'
 
@@ -1021,5 +1021,77 @@ describe('startPreview', () => {
     server = createServer((_q, s) => s.end('old')).listen(port, '127.0.0.1')
     await new Promise((r) => server!.once('listening', r))
     await expect(startPreview(tmpdir(), port, true)).rejects.toThrow(/in use/)
+  })
+})
+
+describe('SSR entry from the start script (#60, kajsa-landgren)', () => {
+  const site = (start: string | undefined, files: string[]) => {
+    const dir = mkdtempSync(join(tmpdir(), 'entry-'))
+    dirs.push(dir)
+    writeFileSync(join(dir, 'package.json'), JSON.stringify({ name: 'site', scripts: start === undefined ? {} : { start } }))
+    for (const f of files) {
+      mkdirSync(join(dir, f, '..'), { recursive: true })
+      writeFileSync(join(dir, f), '')
+    }
+    return dir
+  }
+
+  test('`node <file>` whose file exists after the build is the entry; flags and ./ are allowed', () => {
+    expect(ssrEntry(site('node ./dist/server-entry.mjs', ['dist/server-entry.mjs']))).toEqual({ entry: 'dist/server-entry.mjs', from: 'start' })
+    expect(ssrEntry(site('node --enable-source-maps dist/server.js', ['dist/server.js']))).toEqual({ entry: 'dist/server.js', from: 'start' })
+  })
+
+  test('anything else falls back to dist/server/entry.mjs', () => {
+    const fallback = { entry: 'dist/server/entry.mjs', from: 'default' }
+    expect(ssrEntry(site(undefined, []))).toEqual(fallback)
+    expect(ssrEntry(site('astro preview', []))).toEqual(fallback)
+    expect(ssrEntry(site('node ./dist/server-entry.mjs', []))).toEqual(fallback)
+    expect(ssrEntry(site('node dist/a.mjs && node dist/b.mjs', ['dist/a.mjs', 'dist/b.mjs']))).toEqual(fallback)
+    expect(ssrEntry(site('node ../outside.mjs', ['../outside.mjs']))).toEqual(fallback)
+    const noPkg = mkdtempSync(join(tmpdir(), 'entry-'))
+    dirs.push(noPkg)
+    expect(ssrEntry(noPkg)).toEqual(fallback)
+  })
+
+  test('verify starts both previews with the start script entry and says so in step 3', async () => {
+    const dir = siteDir()
+    const scripts = { start: 'node ./dist/server-entry.mjs' }
+    writeFileSync(join(dir, 'package.json'), JSON.stringify({ ...JSON.parse(BRANCH_PKG), scripts }))
+    const mainPkg = JSON.stringify({ ...JSON.parse(MAIN_PKG), scripts })
+    const f = fake({ exec: { 'git show origin/main:package.json': { code: 0, out: mainPkg } } })
+    const exec = f.deps.exec!
+    f.deps.exec = async (cmd, args, cwd) => {
+      const res = await exec(cmd, args, cwd)
+      const line = [cmd, ...args].join(' ')
+      if (line.startsWith('git worktree add')) {
+        const target = args[args.indexOf('--detach') + 1]!
+        writeFileSync(join(target, 'package.json'), mainPkg)
+      }
+      if (line === 'npm run build' && cwd) {
+        mkdirSync(join(cwd, 'dist'), { recursive: true })
+        writeFileSync(join(cwd, 'dist/server-entry.mjs'), '')
+      }
+      return res
+    }
+    const entries: string[] = []
+    const start = f.deps.preview!
+    f.deps.preview = async (d, port, ssr, entry) => (entries.push(`${port} ${ssr} ${entry}`), start(d, port, ssr, entry))
+    const result = await verify(dir, report({ astro: { major: 7, output: 'server' } }), { deps: f.deps })
+    expect(result.steps.find((s) => s.step === 3)?.pass).toBe(true)
+    expect(entries).toContain('4399 true dist/server-entry.mjs')
+    expect(entries).toContain('4398 true dist/server-entry.mjs')
+    expect(evidence(dir, '3-requests.txt')).toMatch(/SSR entry: dist\/server-entry\.mjs \(the start script\)/)
+  })
+
+  test('verify keeps dist/server/entry.mjs without a start script', async () => {
+    const dir = siteDir()
+    const f = fake()
+    const entries: string[] = []
+    const start = f.deps.preview!
+    f.deps.preview = async (d, port, ssr, entry) => (entries.push(`${port} ${entry}`), start(d, port, ssr, entry))
+    await verify(dir, report({ astro: { major: 7, output: 'server' } }), { deps: f.deps })
+    expect(entries).toContain('4399 dist/server/entry.mjs')
+    expect(entries).toContain('4398 dist/server/entry.mjs')
+    expect(evidence(dir, '3-requests.txt')).toMatch(/SSR entry: dist\/server\/entry\.mjs \(default\)/)
   })
 })
