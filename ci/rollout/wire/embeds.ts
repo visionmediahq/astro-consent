@@ -239,12 +239,14 @@ export const ownRules = (el: AstroNode, rules: CssRule[]): CssRule[] => {
 }
 
 /**
- * The parent has a definite height (Ruling 25): a fixed h- class, an inline height, or a scoped CSS
- * height for one of its classes. A min-height is not one: a percentage height against it is auto.
+ * The parent has a definite height (Ruling 25): a fixed h- class, an aspect class (#61), an inline
+ * height, or a scoped CSS height for one of its classes. A min-height is not one: a percentage height against it is auto.
  */
 function definiteHeight(parent: AstroNode, rules: CssRule[]): boolean {
   if (parent.type !== 'element') return false
   if ((classList(parent) ?? []).some((c) => FIXED_CLASS.test(c))) return true
+  // #61 (champsoflogging): `aspect-video w-full` takes its height from its width. A variant is unsure.
+  if ((classList(parent) ?? []).some((c) => /^aspect-(?:video|square|\d+\/\d+|\[\d+(?:\.\d+)?\/\d+(?:\.\d+)?\])$/.test(c))) return true
   const isHeight = (d: CssDecl): boolean => d.prop === 'height' && sized(unimportant(d.value))
   const style = attr(parent, 'style')
   if (style?.kind === 'quoted' && declarations(style.value).some(isHeight)) return true
@@ -345,6 +347,8 @@ function scopedIframeHeight(ancestors: AstroNode[], rules: CssRule[]): string | 
 interface Box {
   classes: string[]
   aspect: boolean
+  /** An inline `aspect-ratio` to carry over as `aspect="…"` when nothing fixes the height (#61). */
+  ratio?: string
 }
 
 /** The wrapper's classes and whether the embed takes `aspect="auto"`, or the reason to refuse. */
@@ -429,7 +433,10 @@ function sizedBox(node: AstroNode, ancestors: AstroNode[], rules: CssRule[]): Bo
   }
   const n = inlineHeight !== undefined ? null : height?.kind === 'quoted' ? FIXED_ATTR.exec(height.value) : height?.kind === 'expression' ? /^\s*(\d+)()\s*$/.exec(height.value) : null
   if (n) return { classes: ['grid', `h-[${n[1]}${n[2] || 'px'}]`, ...classes], aspect: true }
-  return { classes, aspect: false }
+  // #61 (exakthaltagning): `aspect-ratio: 4/3; height: auto` would otherwise get the default 16:9.
+  const ratio = style?.kind === 'quoted' && (inlineHeight === undefined || inlineHeight === 'auto') ? declarations(style.value).findLast((d) => d.prop === 'aspect-ratio')?.value.trim() : undefined
+  const r = ratio !== undefined ? /^(\d+(?:\.\d+)?)(?:\s*\/\s*(\d+(?:\.\d+)?))?$/.exec(ratio) : null
+  return r ? { classes, aspect: false, ratio: r[2] ? `${r[1]} / ${r[2]}` : r[1]! } : { classes, aspect: false }
 }
 
 /** `name="…"` or `name={…}` exactly as written on the iframe. */
@@ -516,7 +523,7 @@ function wireFile(planner: Planner, file: string, frames: IframeInfo[]): void {
         continue
       }
       const id = attrSource(text, hit.node, 'id')
-      const props = [`service="${info.service}"`, attrSource(text, hit.node, 'src')!, title, ...(box.aspect ? ['aspect="auto"'] : []), ...(id ? [id] : [])]
+      const props = [`service="${info.service}"`, attrSource(text, hit.node, 'src')!, title, ...(box.aspect ? ['aspect="auto"'] : box.ratio ? [`aspect="${box.ratio}"`] : []), ...(id ? [id] : [])]
       const embed = `<${name} ${props.join(' ')} />`
       const wrapped = box.classes.length > 0 ? `<div class="${box.classes.join(' ')}">${embed}</div>` : needsDiv ? `<div>${embed}</div>` : embed
       spliceTarget(planner, target, file, () => false, () => at.map((a) => ({ hit: { start: a.node.start, end: a.node.end }, text: wrapped })), 'replace')

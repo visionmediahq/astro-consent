@@ -331,6 +331,23 @@ import Bottom from '../components/SiteFooter.astro'
     expect(detectStructure(inline({ 'src/pages/om-oss.astro': page })).policyPage).toBeNull()
     expect(detectStructure(inline({ 'src/pages/gdpr.astro': page })).policyPage).toBe('/gdpr')
     expect(detectStructure(inline({ 'src/pages/GDPR-policy.astro': page })).policyPage).toBe('/GDPR-policy')
+    // #61 (schloetter): `en/gdpr` sorts before `gdpr`; the Swedish page without a language prefix wins, then the shortest.
+    expect(detectStructure(inline({ 'src/pages/en/gdpr.astro': page, 'src/pages/gdpr.astro': page })).policyPage).toBe('/gdpr')
+    expect(detectStructure(inline({ 'src/pages/de/datenschutz.astro': page, 'src/pages/en/privacy.astro': page, 'src/pages/sv/integritetspolicy.astro': page })).policyPage).toBe('/sv/integritetspolicy')
+    expect(detectStructure(inline({ 'src/pages/info/integritetspolicy.astro': page, 'src/pages/integritetspolicy.astro': page })).policyPage).toBe('/integritetspolicy')
+    expect(detectStructure(inline({ 'src/pages/en/privacy.astro': page })).policyPage).toBe('/en/privacy')
+    // Fewer segments beat a shorter path; a Swedish two-letter folder (/om/) and /sv-se/ are not foreign.
+    expect(detectStructure(inline({ 'src/pages/a/gdpr.astro': page, 'src/pages/integritetspolicy.astro': page })).policyPage).toBe('/integritetspolicy')
+    expect(detectStructure(inline({ 'src/pages/om/integritetspolicy.astro': page, 'src/pages/en/privacy.astro': page })).policyPage).toBe('/om/integritetspolicy')
+    expect(detectStructure(inline({ 'src/pages/sv-se/integritetspolicy.astro': page, 'src/pages/en/gdpr.astro': page })).policyPage).toBe('/sv-se/integritetspolicy')
+    // At the same depth a privacy page beats a cookie page, and a Swedish word beats an English one.
+    expect(detectStructure(inline({ 'src/pages/gdpr.astro': page, 'src/pages/cookiepolicy.astro': page })).policyPage).toBe('/gdpr')
+    expect(detectStructure(inline({ 'src/pages/cookies.astro': page, 'src/pages/integritetspolicy.astro': page })).policyPage).toBe('/integritetspolicy')
+    expect(detectStructure(inline({ 'src/pages/privacy.astro': page, 'src/pages/integritetspolicy.astro': page })).policyPage).toBe('/integritetspolicy')
+    // kajsa-landgren: the policy word inside the slug, after another word; a page that starts with one still wins.
+    expect(detectStructure(inline({ 'src/pages/kopvillkor-och-integritetspolicy-gdpr.astro': page })).policyPage).toBe('/kopvillkor-och-integritetspolicy-gdpr')
+    expect(detectStructure(inline({ 'src/pages/villkor-och-gdpr.astro': page, 'src/pages/integritetspolicy.astro': page })).policyPage).toBe('/integritetspolicy')
+    expect(detectStructure(inline({ 'src/pages/blogg-om-gdprx.astro': page, 'src/pages/kontakt.astro': page })).policyPage).toBeNull()
     expect(detectStructure(inline({ 'src/pages/dataskyddspolicy.astro': page })).policyPage).toBe('/dataskyddspolicy')
     expect(detectStructure(inline({ 'src/pages/om/dataskydd.md': page })).policyPage).toBe('/om/dataskydd')
   })

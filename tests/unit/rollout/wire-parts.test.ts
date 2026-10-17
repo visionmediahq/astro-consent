@@ -324,6 +324,146 @@ describe('wireLinks', () => {
       expect(text).toContain('Verkstad AB.\n      </p>\n      <PrivacyLinks class="text-white/70" />\n      <p class="footer-legal">')
     })
 
+    // #61: the bar's own policy link deeper than the © row's siblings.
+    test('exakthaltagning: a policy link in a neighbouring flex div of the bar is replaced in place', () => {
+      const text = wire(
+        [wireLinks],
+        site('<footer class="text-white">\n  <div class="grid"><p>a</p><p>b</p></div>\n  <div class="flex justify-between">\n    <p>© Firma</p>\n    <div class="flex items-center gap-5">\n      <a href="/integritetspolicy/" class="text-xs">Integritetspolicy</a>\n      <span class="text-xs">Slöinge</span>\n    </div>\n  </div>\n</footer>\n', POLICY_PAGE),
+        'src/components/Footer.astro',
+      )
+      expect(text).toContain('    <p>© Firma</p>\n    <div class="flex items-center gap-5">\n      <PrivacyLinks class="text-white" />\n      <span class="text-xs">Slöinge</span>')
+      expect(text).not.toContain('Integritetspolicy</a>')
+      expect(tags(text)).toBe(1)
+    })
+
+    test("schloetter: the GDPR item in the bar's link list, href from a localize() call, becomes the links (justify-start! in a block <li>)", () => {
+      const text = wire(
+        [wireLinks],
+        site("<footer class=\"text-white\">\n  <div class=\"grid\"><p>a</p><p>b</p></div>\n  <div class=\"flex flex-col\">\n    <p>© {year} Firma</p>\n    <ul class=\"flex gap-x-6\">\n      <li><a href=\"mailto:x@y.se\">x@y.se</a></li>\n      <li><a href={localize('/gdpr/', lang)} class=\"topbar-link\">GDPR</a></li>\n    </ul>\n  </div>\n</footer>\n", { 'src/pages/gdpr.astro': PAGE }),
+        'src/components/Footer.astro',
+      )
+      expect(text).toContain('      <li><PrivacyLinks class="text-white justify-start!" /></li>\n    </ul>')
+      expect(text).toContain('    <p>© {year} Firma</p>\n    <ul')
+      expect(tags(text)).toBe(1)
+    })
+
+    test('a policy link inside a sentence, or two of them, stays: the links go after ©', () => {
+      for (const deep of ['<p>Läs vår <a href="/integritetspolicy/">integritetspolicy</a>.</p>', '<div class="flex"><a href="/integritetspolicy/">A</a><a href="/integritetspolicy">B</a></div>']) {
+        const text = wire(
+          [wireLinks],
+          site(`<footer class="text-white">\n  <div class="grid"><p>a</p><p>b</p></div>\n  <div class="flex">\n    <p>© Firma</p>\n    ${deep}\n  </div>\n</footer>\n`, POLICY_PAGE),
+          'src/components/Footer.astro',
+        )
+        expect(text).toContain(`    <p>© Firma</p>\n    <PrivacyLinks class="text-white" />\n    ${deep}`)
+      }
+    })
+
+    test('review of #63: a policy link with a phrasing or address ancestor anywhere stays (no <nav> inside <p>)', () => {
+      for (const deep of [
+        '<p>Läs <u><a href="/integritetspolicy/">integritetspolicy</a></u></p>',
+        '<p>Se <abbr title="x"><a href="/integritetspolicy/">GDPR</a></abbr></p>',
+        '<address>Storgatan 1<div><a href="/integritetspolicy/">Integritetspolicy</a></div></address>',
+        '<dl><dt><a href="/integritetspolicy/">Integritetspolicy</a></dt><dd>Läs</dd></dl>',
+      ]) {
+        const text = wire(
+          [wireLinks],
+          site(`<footer class="text-white">\n  <div class="grid"><p>a</p><p>b</p></div>\n  <div class="flex">\n    <p>© Firma</p>\n    ${deep}\n  </div>\n</footer>\n`, POLICY_PAGE),
+          'src/components/Footer.astro',
+        )
+        expect(text).toContain(`    <p>© Firma</p>\n    <PrivacyLinks class="text-white" />\n    ${deep}`)
+      }
+      // A wrapper that holds only the link is replaced whole, so nothing is left inside a <p>.
+      const whole = wire(
+        [wireLinks],
+        site('<footer class="text-white">\n  <div class="grid"><p>a</p><p>b</p></div>\n  <div class="flex">\n    <p>© Firma</p>\n    <p><abbr title="x"><a href="/integritetspolicy/">GDPR</a></abbr></p>\n  </div>\n</footer>\n', POLICY_PAGE),
+        'src/components/Footer.astro',
+      )
+      expect(whole).toContain('    <p>© Firma</p>\n    <PrivacyLinks class="text-white" />\n  </div>')
+    })
+
+    test('re-review of #63: only flow containers may hold the links; hidden or decorative content never does', () => {
+      for (const deep of [
+        '<div><u><a href="/integritetspolicy/">P</a></u><span>x</span></div>',
+        '<div><pre>x <a href="/integritetspolicy/">P</a></pre><span>x</span></div>',
+        '<div><svg viewBox="0 0 1 1"><title>t</title><a href="/integritetspolicy/">P</a></svg><span>x</span></div>',
+        '<div aria-hidden="true"><div><a href="/integritetspolicy/">P</a></div><span>x</span></div>',
+        '<div class="hidden md:flex"><a href="/integritetspolicy/">P</a><span>x</span></div>',
+        '<div class="max-md:hidden"><a href="/integritetspolicy/">P</a><span>x</span></div>',
+        '<div hidden><a href="/integritetspolicy/">P</a><span>x</span></div>',
+      ]) {
+        const text = wire(
+          [wireLinks],
+          site(`<footer class="text-white">\n  <div class="grid"><p>a</p><p>b</p></div>\n  <div class="flex">\n    <p>© Firma</p>\n    ${deep}\n  </div>\n</footer>\n`, POLICY_PAGE),
+          'src/components/Footer.astro',
+        )
+        expect(text).toContain(`    <p>© Firma</p>\n    <PrivacyLinks class="text-white" />\n    ${deep}`)
+      }
+    })
+
+    test('re-review of #63: a © line straight in the footer container: no deep search in the link columns', () => {
+      const text = wire(
+        [wireLinks],
+        site('<footer class="text-white">\n  <div class="container">\n    <div class="grid"><ul><li><a href="/integritetspolicy/">Integritetspolicy</a></li><li><a href="/om">Om</a></li></ul></div>\n    <p>© Firma</p>\n  </div>\n</footer>\n', POLICY_PAGE),
+        'src/components/Footer.astro',
+      )
+      expect(text).toContain('<li><a href="/integritetspolicy/">Integritetspolicy</a></li>')
+      expect(text).toContain('    <p>© Firma</p>\n    <PrivacyLinks class="text-white justify-start! mt-2" />\n  </div>')
+    })
+
+    test('re-review of #63: a deep replacement in a centred block takes no justify-start!; its colour is the nearest background', () => {
+      const centred = wire(
+        [wireLinks],
+        site('<footer class="bg-gray-900">\n  <div class="grid"><p>a</p><p>b</p></div>\n  <div class="flex flex-col">\n    <p>© Firma</p>\n    <div class="text-center"><a href="/integritetspolicy/">P</a> <span>|</span> <a href="/v">V</a></div>\n  </div>\n</footer>\n', POLICY_PAGE),
+        'src/components/Footer.astro',
+      )
+      expect(centred).toContain('<div class="text-center"><PrivacyLinks class="text-white/70" /> <span>|</span>')
+      const card = wire(
+        [wireLinks],
+        site('<footer class="bg-gray-900">\n  <div class="grid"><p>a</p><p>b</p></div>\n  <div class="flex flex-col">\n    <p>© Firma</p>\n    <div class="flex bg-white"><a href="/integritetspolicy/">P</a><a href="/v">V</a></div>\n  </div>\n</footer>\n', POLICY_PAGE),
+        'src/components/Footer.astro',
+      )
+      expect(card).toContain('<div class="flex bg-white"><PrivacyLinks /><a href="/v">V</a></div>')
+    })
+
+    test("re-review of #63: a block row's direct sibling with a localize() href gets the block layout (the own path)", () => {
+      const text = wire(
+        [wireLinks],
+        site("<footer class=\"text-white\">\n  <div class=\"grid\"><p>a</p><p>b</p></div>\n  <div class=\"text-left\">\n    <p>© Firma</p>\n    <a href={localize('/integritetspolicy/', lang)}>Integritetspolicy</a>\n  </div>\n</footer>\n", POLICY_PAGE),
+        'src/components/Footer.astro',
+      )
+      expect(text).toContain('    <p>© Firma</p>\n    <PrivacyLinks class="text-white justify-start! mt-2" />\n  </div>')
+    })
+
+    test("re-review of #63: a localize() call with a literal language is not the Swedish policy link", () => {
+      const deep = "<div class=\"flex\"><a href={localize('/integritetspolicy/', 'en')}>Privacy</a><span>x</span></div>"
+      const text = wire(
+        [wireLinks],
+        site(`<footer class="text-white">\n  <div class="grid"><p>a</p><p>b</p></div>\n  <div class="flex">\n    <p>© Firma</p>\n    ${deep}\n  </div>\n</footer>\n`, POLICY_PAGE),
+        'src/components/Footer.astro',
+      )
+      expect(text).toContain(`    <p>© Firma</p>\n    <PrivacyLinks class="text-white" />\n    ${deep}`)
+    })
+
+    test('review of #63: an href expression that only starts with a call to the policy path is not a link to it', () => {
+      const deep = "<div class=\"flex\"><a href={isEn('/integritetspolicy/') ? '/en/privacy' : '/x'}>P</a></div>"
+      const text = wire(
+        [wireLinks],
+        site(`<footer class="text-white">\n  <div class="grid"><p>a</p><p>b</p></div>\n  <div class="flex">\n    <p>© Firma</p>\n    ${deep}\n  </div>\n</footer>\n`, POLICY_PAGE),
+        'src/components/Footer.astro',
+      )
+      expect(text).toContain(`    <p>© Firma</p>\n    <PrivacyLinks class="text-white" />\n    ${deep}`)
+    })
+
+    test("review of #63: a direct sibling of © with a localize() href is replaced, like a quoted one", () => {
+      const text = wire(
+        [wireLinks],
+        site("<footer class=\"text-white\">\n  <div class=\"grid\"><p>a</p><p>b</p></div>\n  <div class=\"flex\">\n    <p>© Firma</p>\n    <a href={localize('/integritetspolicy/', lang)}>Integritetspolicy</a>\n  </div>\n</footer>\n", POLICY_PAGE),
+        'src/components/Footer.astro',
+      )
+      expect(text).toContain('    <p>© Firma</p>\n    <PrivacyLinks class="text-white" />\n  </div>')
+      expect(tags(text)).toBe(1)
+    })
+
     test('adarate: dark background in scoped CSS, no text colour → text-white/70 after ©', () => {
       const text = wire([wireLinks], site(real('adarate')), 'src/components/Footer.astro')
       expect(text).toContain('Adarate Systems AB</p>\n    <PrivacyLinks class="text-white/70" />\n    <p class="site-footer__address">')
@@ -408,6 +548,59 @@ describe('wireLinks', () => {
       const css = real('adarate').replace('background: #0d1219;', 'background: #f4f1ea;').replace('</style>', '  @media (min-width: 768px) {\n    .site-footer { background: #0d1219; }\n  }\n</style>')
       const text = wire([wireLinks], site(css), 'src/components/Footer.astro')
       expect(text).toContain('Adarate Systems AB</p>\n    <PrivacyLinks />\n')
+    })
+
+    // #61: a background in a CSS variable is unknown; white text on the footer's own surface says it is dark.
+    test.each([
+      ['evabekonomi (text-white/NN classes)', '<footer style="background-color: var(--color-on-secondary);">\n  <div class="grid"><p class="text-white/50">a</p><p>b</p></div>\n  <div class="flex">\n    <p class="text-white/45">© Firma</p>\n    <p>VM</p>\n  </div>\n</footer>\n', '<p class="text-white/45">© Firma</p>'],
+      ['milodahlmann (inline rgba white)', '<footer style="background: var(--color-primary);">\n  <div class="grid"><p style="color: rgba(255,255,255,0.6);">a</p><p>b</p></div>\n  <div class="flex">\n    <p style="color: rgba(255,255,255,0.4);">© Firma</p>\n    <p>VM</p>\n  </div>\n</footer>\n', '<p style="color: rgba(255,255,255,0.4);">© Firma</p>'],
+      ['landhsel (text-white headings, colour in a variable)', '<footer style="background: var(--dark-surface); color: var(--dark-text-secondary);">\n  <div class="grid"><h4 class="text-white">Om oss</h4><p>b</p></div>\n  <div class="flex">\n    <p>© Firma</p>\n    <p>VM</p>\n  </div>\n</footer>\n', '<p>© Firma</p>'],
+    ])('%s: unknown background with white text → text-white/70', (_name, footer, mark) => {
+      expect(wire([wireLinks], site(footer), 'src/components/Footer.astro')).toContain(`    ${mark}\n    <PrivacyLinks class="text-white/70" />\n    <p>VM</p>`)
+    })
+
+    test('unknown background: white text on an element with its own background (a button) does not count', () => {
+      const text = wire(
+        [wireLinks],
+        site('<footer style="background: var(--surface);">\n  <div class="grid"><a class="bg-blue-700 text-white">Ring</a><p>b</p></div>\n  <div class="flex">\n    <p>© Firma</p>\n    <p>VM</p>\n  </div>\n</footer>\n'),
+        'src/components/Footer.astro',
+      )
+      expect(text).toContain('    <p>© Firma</p>\n    <PrivacyLinks />\n    <p>VM</p>')
+    })
+
+    test.each([
+      ['a daisyUI button', '<a class="btn btn-primary text-white">Ring</a>'],
+      ['a daisyUI badge', '<span class="badge badge-accent text-white">Ny</span>'],
+      ['a background image', '<div style="background-image: url(/x.jpg)"><h3 class="text-white">Hej</h3></div>'],
+      ['screen-reader text', '<span class="sr-only text-white">Meny</span>'],
+    ])('review of #63: unknown background, white text only in %s: no class', (_name, el) => {
+      const text = wire(
+        [wireLinks],
+        site(`<footer style="background: var(--surface);">\n  <div class="grid">${el}<p>b</p></div>\n  <div class="flex">\n    <p>© Firma</p>\n    <p>VM</p>\n  </div>\n</footer>\n`),
+        'src/components/Footer.astro',
+      )
+      expect(text).toContain('    <p>© Firma</p>\n    <PrivacyLinks />\n    <p>VM</p>')
+    })
+
+    test.each([
+      ['a variant background', '<a class="md:bg-black text-white">Ring</a>'],
+      ['hidden text', '<span class="hidden text-white">x</span>'],
+    ])('re-review of #63: unknown background, white text only in %s: no class', (_name, el) => {
+      const text = wire(
+        [wireLinks],
+        site(`<footer style="background: var(--surface);">\n  <div class="grid">${el}<p>b</p></div>\n  <div class="flex">\n    <p>© Firma</p>\n    <p>VM</p>\n  </div>\n</footer>\n`),
+        'src/components/Footer.astro',
+      )
+      expect(text).toContain('    <p>© Firma</p>\n    <PrivacyLinks />\n    <p>VM</p>')
+    })
+
+    test('a known light background: white text elsewhere changes nothing', () => {
+      const text = wire(
+        [wireLinks],
+        site('<footer class="bg-white">\n  <div class="grid"><p class="text-white">a</p><p>b</p></div>\n  <div class="flex">\n    <p>© Firma</p>\n    <p>VM</p>\n  </div>\n</footer>\n'),
+        'src/components/Footer.astro',
+      )
+      expect(text).toContain('    <p>© Firma</p>\n    <PrivacyLinks />\n    <p>VM</p>')
     })
 
     // Review of #59, I2 (mibfastighetsteknik, transfix, wmtmiljo): a block bar with a left-aligned ©.
@@ -848,6 +1041,33 @@ describe('wireEmbeds', () => {
     expect(
       embed(`<iframe class="w-full" src="https://www.google.com/maps/embed?pb=!1" style="height:450px" title="Karta"></iframe>\n`),
     ).toContain('<div class="grid h-[450px] w-full"><ConsentEmbed service="google-maps" src="https://www.google.com/maps/embed?pb=!1" title="Karta" aspect="auto" /></div>')
+  })
+
+  test("an inline aspect-ratio on an iframe without a fixed height becomes the embed's aspect (#61, exakthaltagning)", () => {
+    expect(
+      embed(`<iframe class="w-full" src="https://www.google.com/maps/embed?pb=!1" style="border:0; aspect-ratio: 4/3; height: auto" title="Karta"></iframe>\n`),
+    ).toContain('<div class="w-full"><ConsentEmbed service="google-maps" src="https://www.google.com/maps/embed?pb=!1" title="Karta" aspect="4 / 3" /></div>')
+    expect(embed(`<iframe src="https://www.google.com/maps/embed?pb=!1" style="aspect-ratio:1.5" title="Karta"></iframe>\n`)).toContain('title="Karta" aspect="1.5" />')
+    // The last declaration wins, as in CSS.
+    expect(embed(`<iframe src="https://www.google.com/maps/embed?pb=!1" style="aspect-ratio: 16/9; aspect-ratio: 1/1" title="Karta"></iframe>\n`)).toContain('title="Karta" aspect="1 / 1" />')
+    // A fixed height wins, as before: the grid wrapper sizes it and the aspect is auto.
+    expect(embed(`<iframe src="https://www.google.com/maps/embed?pb=!1" style="aspect-ratio: 4/3; height: 300px" title="Karta"></iframe>\n`)).toContain(
+      '<div class="grid h-[300px]"><ConsentEmbed service="google-maps" src="https://www.google.com/maps/embed?pb=!1" title="Karta" aspect="auto" /></div>',
+    )
+    // A value wire cannot copy safely keeps the default 16:9; verify's height check is the judge.
+    expect(embed(`<iframe src="https://www.google.com/maps/embed?pb=!1" style="aspect-ratio: var(--r)" title="Karta"></iframe>\n`)).toContain('title="Karta" />')
+  })
+
+  test('a parent sized by an aspect class is definite (#61, champsoflogging: aspect-video)', () => {
+    for (const aspect of ['aspect-video', 'aspect-square', 'aspect-[4/3]', 'aspect-4/3']) {
+      expect(
+        embed(`<div class="${aspect} w-full">\n  <iframe src="https://www.google.com/maps/embed?pb=!1" width="100%" height="100%" style="border:0;" title="Karta"></iframe>\n</div>\n`),
+      ).toContain(`<div class="${aspect} w-full">\n  <div class="grid h-full"><ConsentEmbed service="google-maps" src="https://www.google.com/maps/embed?pb=!1" title="Karta" aspect="auto" /></div>\n</div>`)
+    }
+    // Only on some screens, or turned off: not definite.
+    for (const aspect of ['md:aspect-video', 'aspect-auto']) {
+      expect(refused(`<div class="${aspect}">\n  <iframe src="https://www.google.com/maps/embed?pb=!1" height="100%" title="Karta"></iframe>\n</div>\n`)).toEqual(['map fills a parent of unknown height'])
+    }
   })
 
   test('inline style height:100% in an unsized parent: refused (Ruling 31)', () => {
