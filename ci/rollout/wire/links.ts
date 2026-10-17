@@ -176,34 +176,44 @@ function hrefPath(n: AstroNode, domains: readonly string[]): string | null {
   if (href?.kind === 'quoted') return pathOf(href.value, domains)
   if (href?.kind !== 'expression') return null
   const m =
-    /^\s*(['"`])([^'"`$]*)\1\s*$/.exec(href.value) ?? /^\s*[\w$.]+\(\s*(['"`])([^'"`$]*)\1\s*(?:,[^()]*)?\)\s*$/.exec(href.value)
+    /^\s*(['"`])([^'"`$]*)\1\s*$/.exec(href.value) ?? /^\s*[\w$.]+\(\s*(['"`])([^'"`$]*)\1\s*(?:,\s*[\w$.]+\s*)*\)\s*$/.exec(href.value)
   return m ? pathOf(m[2]!, domains) : null
 }
 
 /**
  * The bar's own link to `path` below the © row's siblings (#61: exakthaltagning's in a neighbouring
- * div, schloetter's in a `<ul>`), when there is exactly one in `row` outside `mark` and its parent
- * may hold the links (not phrasing content, Ruling 29). With its parent, for the layout.
+ * div, schloetter's in a `<ul>`), when there is exactly one in `row` outside `mark`, its parent is a
+ * flow container that may hold a <nav>, and nothing between the row and it is phrasing, hidden or
+ * decoration (Ruling 29; fail closed). With its parent, for the layout.
  */
 function deepPolicyLink(row: AstroNode, mark: AstroNode, path: string, domains: readonly string[]): { link: AstroNode; parent: AstroNode } | null {
   const found: { link: AstroNode; parent: AstroNode; ok: boolean }[] = []
-  // `ok` is false once the search has passed any element a <nav> may not sit in (review of #63).
+  // `ok` stays true only through flow containers that are shown (re-review of #63: fail closed).
   const visit = (n: AstroNode, parent: AstroNode, ok: boolean): void => {
     if (n === mark || n.type !== 'element' || n.name === 'script' || n.name === 'style') return
     if (n.name === 'a') {
       if (hrefPath(n, domains) === path) found.push({ link: n, parent, ok })
       return
     }
-    for (const c of n.children) visit(c, n, ok && holdsNav(n))
+    for (const c of n.children) visit(c, n, ok && passes(n))
   }
-  for (const c of row.children) visit(c, row, true)
+  for (const c of row.children) visit(c, row, passes(row))
   const only = found.length === 1 ? found[0]! : null
-  return only?.ok ? only : null
+  return only?.ok && holdsNav(only.parent) ? only : null
 }
 
-/** Elements whose content model has no room for <nav>: phrasing content, and address/dt/th (no sectioning). */
-const NO_NAV = new Set(['address', 'dt', 'th', 'abbr', 'u', 's', 'q', 'cite', 'code', 'sup', 'sub', 'mark', 'time', 'font', 'small', 'kbd', 'var', 'samp', 'data', 'del', 'ins', 'bdi', 'bdo', 'dfn', 'ruby', 'output', 'picture', 'select', 'option', 'legend', 'caption', 'summary'])
-const holdsNav = (n: AstroNode): boolean => enterable(n) && !NO_NAV.has(n.name ?? '')
+/** Flow containers a <nav> may sit in. Anything else (phrasing, <pre>, <svg>, <address>, <dt>…) is refused. */
+const NAV_PARENTS = new Set(['div', 'li', 'dd', 'td', 'section', 'article', 'aside', 'nav', 'footer', 'header', 'main', 'figure', 'figcaption', 'details', 'form', 'fieldset', 'blockquote'])
+
+/** Hidden from everyone, or on some screens, or from assistive technology. */
+const hiddenEl = (n: AstroNode): boolean =>
+  isDecoration(n) || attr(n, 'hidden') !== null || classesOf(n).some((c) => /^(?:sr-only|invisible)$/.test(c) || /(?:^|:)hidden$/.test(c))
+
+const holdsNav = (n: AstroNode): boolean => n.type === 'element' && NAV_PARENTS.has(n.name ?? '') && !hiddenEl(n)
+
+/** An ancestor the search may pass through: a flow container, or a list or table around one. */
+const passes = (n: AstroNode): boolean =>
+  n.type === 'element' && (NAV_PARENTS.has(n.name ?? '') || /^(?:ul|ol|dl|menu|table|thead|tbody|tfoot|tr)$/.test(n.name ?? '')) && !hiddenEl(n)
 
 /** `markup` right after `node`: on its own line at the node's indent when the node ends its line, inline otherwise. */
 function afterNode(text: string, node: AstroNode, markup: string): { hit: Hit; text: string } {
@@ -309,11 +319,11 @@ const UNKNOWN = Symbol('unknown background')
 
 /** `el` sets a background of its own: a bg-* class (no variant) or a background in its CSS. */
 const ownBackground = (el: AstroNode, rules: CssRule[]): boolean =>
-  classesOf(el).some((c) => /^bg-(?!opacity)/.test(c) || DAISY_SURFACE.test(c)) ||
+  classesOf(el).some((c) => /^(?:[\w-]+:)*bg-(?!opacity)/.test(c) || DAISY_SURFACE.test(c)) ||
   lastValue(ownDecls(el, rules), ['background', 'background-color', 'background-image']) !== undefined
 
 /** daisyUI components that paint their own background (`btn-primary`, `badge`, …), so their white text says nothing. */
-const DAISY_SURFACE = /^(?:btn|badge|alert|card|chip|kbd|toast|tooltip|mockup-[\w-]+)(?:-[\w-]+)?$/
+const DAISY_SURFACE = /^(?:btn|badge|alert|card|kbd|toast|tooltip|modal-box|dropdown-content|menu|hero-overlay|stat|tab-active|mockup-[\w-]+)(?:-[\w-]+)?$/
 
 /**
  * White text on `surface` itself (#61: evabekonomi `text-white/45`, milodahlmann inline
@@ -324,7 +334,7 @@ const DAISY_SURFACE = /^(?:btn|badge|alert|card|chip|kbd|toast|tooltip|mockup-[\
 function whiteTextOn(surface: AstroNode, rules: CssRule[]): boolean {
   const visit = (n: AstroNode): boolean => {
     if (n.type !== 'element' || n.name === 'script' || n.name === 'style') return false
-    if (n !== surface && (ownBackground(n, rules) || classesOf(n).includes('sr-only'))) return false
+    if (n !== surface && (ownBackground(n, rules) || hiddenEl(n))) return false
     if (n !== surface && (classesOf(n).some((c) => /^text-white(?:\/\d+)?$/.test(c)) || lightText(ownDecls(n, rules)))) return true
     return n.children.some(visit)
   }
@@ -425,10 +435,12 @@ function inFooter(
   const tag = linksTag(name, [colour, ...layout])
   const own = policy === null ? [] : contentChildren(bar.row).filter((k) => k !== bar.mark && isLinkTo(text, k, policy, domains))
   if (own.length === 1) return { hit: { start: own[0]!.start, end: own[0]!.end }, text: tag }
-  const deep = policy === null ? null : deepPolicyLink(bar.row, bar.mark, policy, domains)
+  // Only in a real bar: when © sits straight in the slot, the "bar" is the whole footer (link columns too).
+  const deep = policy === null || bar.row === slot ? null : deepPolicyLink(bar.row, bar.mark, policy, domains)
   if (deep) {
-    const tagHere = linksTag(name, [colour, !laidOutRow(deep.parent, rules) && 'justify-start!'])
-    return { hit: { start: deep.link.start, end: deep.link.end }, text: tagHere }
+    const here = info.textClass ?? linksColour(text, root, footer, deep.parent)
+    const justify = laidOutRow(deep.parent, rules) ? [] : blockJustify(chainTo(footer, deep.parent), rules)
+    return { hit: { start: deep.link.start, end: deep.link.end }, text: linksTag(name, [here, ...justify]) }
   }
   return afterNode(text, bar.mark, tag)
 }

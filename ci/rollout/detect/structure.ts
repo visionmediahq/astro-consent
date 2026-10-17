@@ -46,6 +46,12 @@ const isBranding = (file: string): boolean => posix.basename(file) === 'VisionFo
 const SECTIONING = new Set(['article', 'aside', 'blockquote', 'figure', 'nav', 'section'])
 
 const POLICY = /^(?:integritet|privacy|cookie|personuppgift|gdpr|dataskydd)/i
+const leafOf = (route: string): string => route.split('/').pop() ?? ''
+
+/** A later word of the slug is a policy word: `integritet…`, `personuppgift…`, `dataskydd…`, or exactly `gdpr`/`privacy`. */
+const POLICY_INSIDE = (leaf: string): boolean =>
+  leaf.split('-').some((w) => /^(?:integritet|personuppgift|dataskydd)/i.test(w) || /^(?:gdpr|privacy)$/i.test(w))
+
 /** A route under another language's folder (`/en/`, `/de-at/`…); Swedish folders such as `/om/` are not one, nor `/sv(-se)/`. */
 const FOREIGN_PREFIX = /^\/(?:en|de|fi|no|nb|nn|da|is|fr|es|it|nl|pl|pt|ru|uk|et|lv|lt|ar|tr|zh|ja|ko)(?:-[a-z]{2})?\//i
 
@@ -279,12 +285,19 @@ export function detectStructure(files: SiteFiles): DetectedStructure {
   // prefix (`/en/`, `/de/`…) comes last, then fewer segments, then the shorter path.
   const foreign = (route: string): number => (FOREIGN_PREFIX.test(route) ? 1 : 0)
   const depth = (route: string): number => route.split('/').length
+  // A Swedish privacy word first, then gdpr, then English, then a cookie page.
+  const rank = (route: string): number => {
+    const leaf = route.split('/').pop() ?? ''
+    // A slug that only has the word later on (kajsa-landgren: kopvillkor-och-integritetspolicy-gdpr) comes after one that starts with it.
+    if (!POLICY.test(leaf)) return 10
+    return [/^(?:integritet|personuppgift|dataskydd)/i, /^gdpr/i, /^privacy/i].findIndex((r) => r.test(leaf)) >>> 0
+  }
   const policy = files
     .list('src/pages/**/*.{astro,md,mdx}')
     .filter((f) => isRoute(f) && !/\[/.test(f))
     .map(routeOf)
-    .filter((route) => POLICY.test(route.split('/').pop() ?? ''))
-    .sort((a, b) => foreign(a) - foreign(b) || depth(a) - depth(b) || a.length - b.length || a.localeCompare(b))[0]
+    .filter((route) => POLICY.test(leafOf(route)) || POLICY_INSIDE(leafOf(route)))
+    .sort((a, b) => foreign(a) - foreign(b) || depth(a) - depth(b) || rank(a) - rank(b) || a.length - b.length || a.localeCompare(b))[0]
 
   return { layouts, footers, footerless, policyPage: policy ?? null, parseErrors, multiFooterPages, ownHtmlPages }
 }

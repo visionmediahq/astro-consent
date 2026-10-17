@@ -381,6 +381,69 @@ describe('wireLinks', () => {
       expect(whole).toContain('    <p>© Firma</p>\n    <PrivacyLinks class="text-white" />\n  </div>')
     })
 
+    test('re-review of #63: only flow containers may hold the links; hidden or decorative content never does', () => {
+      for (const deep of [
+        '<div><u><a href="/integritetspolicy/">P</a></u><span>x</span></div>',
+        '<div><pre>x <a href="/integritetspolicy/">P</a></pre><span>x</span></div>',
+        '<div><svg viewBox="0 0 1 1"><title>t</title><a href="/integritetspolicy/">P</a></svg><span>x</span></div>',
+        '<div aria-hidden="true"><div><a href="/integritetspolicy/">P</a></div><span>x</span></div>',
+        '<div class="hidden md:flex"><a href="/integritetspolicy/">P</a><span>x</span></div>',
+        '<div class="max-md:hidden"><a href="/integritetspolicy/">P</a><span>x</span></div>',
+        '<div hidden><a href="/integritetspolicy/">P</a><span>x</span></div>',
+      ]) {
+        const text = wire(
+          [wireLinks],
+          site(`<footer class="text-white">\n  <div class="grid"><p>a</p><p>b</p></div>\n  <div class="flex">\n    <p>© Firma</p>\n    ${deep}\n  </div>\n</footer>\n`, POLICY_PAGE),
+          'src/components/Footer.astro',
+        )
+        expect(text).toContain(`    <p>© Firma</p>\n    <PrivacyLinks class="text-white" />\n    ${deep}`)
+      }
+    })
+
+    test('re-review of #63: a © line straight in the footer container: no deep search in the link columns', () => {
+      const text = wire(
+        [wireLinks],
+        site('<footer class="text-white">\n  <div class="container">\n    <div class="grid"><ul><li><a href="/integritetspolicy/">Integritetspolicy</a></li><li><a href="/om">Om</a></li></ul></div>\n    <p>© Firma</p>\n  </div>\n</footer>\n', POLICY_PAGE),
+        'src/components/Footer.astro',
+      )
+      expect(text).toContain('<li><a href="/integritetspolicy/">Integritetspolicy</a></li>')
+      expect(text).toContain('    <p>© Firma</p>\n    <PrivacyLinks class="text-white justify-start! mt-2" />\n  </div>')
+    })
+
+    test('re-review of #63: a deep replacement in a centred block takes no justify-start!; its colour is the nearest background', () => {
+      const centred = wire(
+        [wireLinks],
+        site('<footer class="bg-gray-900">\n  <div class="grid"><p>a</p><p>b</p></div>\n  <div class="flex flex-col">\n    <p>© Firma</p>\n    <div class="text-center"><a href="/integritetspolicy/">P</a> <span>|</span> <a href="/v">V</a></div>\n  </div>\n</footer>\n', POLICY_PAGE),
+        'src/components/Footer.astro',
+      )
+      expect(centred).toContain('<div class="text-center"><PrivacyLinks class="text-white/70" /> <span>|</span>')
+      const card = wire(
+        [wireLinks],
+        site('<footer class="bg-gray-900">\n  <div class="grid"><p>a</p><p>b</p></div>\n  <div class="flex flex-col">\n    <p>© Firma</p>\n    <div class="flex bg-white"><a href="/integritetspolicy/">P</a><a href="/v">V</a></div>\n  </div>\n</footer>\n', POLICY_PAGE),
+        'src/components/Footer.astro',
+      )
+      expect(card).toContain('<div class="flex bg-white"><PrivacyLinks /><a href="/v">V</a></div>')
+    })
+
+    test("re-review of #63: a block row's direct sibling with a localize() href gets the block layout (the own path)", () => {
+      const text = wire(
+        [wireLinks],
+        site("<footer class=\"text-white\">\n  <div class=\"grid\"><p>a</p><p>b</p></div>\n  <div class=\"text-left\">\n    <p>© Firma</p>\n    <a href={localize('/integritetspolicy/', lang)}>Integritetspolicy</a>\n  </div>\n</footer>\n", POLICY_PAGE),
+        'src/components/Footer.astro',
+      )
+      expect(text).toContain('    <p>© Firma</p>\n    <PrivacyLinks class="text-white justify-start! mt-2" />\n  </div>')
+    })
+
+    test("re-review of #63: a localize() call with a literal language is not the Swedish policy link", () => {
+      const deep = "<div class=\"flex\"><a href={localize('/integritetspolicy/', 'en')}>Privacy</a><span>x</span></div>"
+      const text = wire(
+        [wireLinks],
+        site(`<footer class="text-white">\n  <div class="grid"><p>a</p><p>b</p></div>\n  <div class="flex">\n    <p>© Firma</p>\n    ${deep}\n  </div>\n</footer>\n`, POLICY_PAGE),
+        'src/components/Footer.astro',
+      )
+      expect(text).toContain(`    <p>© Firma</p>\n    <PrivacyLinks class="text-white" />\n    ${deep}`)
+    })
+
     test('review of #63: an href expression that only starts with a call to the policy path is not a link to it', () => {
       const deep = "<div class=\"flex\"><a href={isEn('/integritetspolicy/') ? '/en/privacy' : '/x'}>P</a></div>"
       const text = wire(
@@ -511,6 +574,18 @@ describe('wireLinks', () => {
       ['a background image', '<div style="background-image: url(/x.jpg)"><h3 class="text-white">Hej</h3></div>'],
       ['screen-reader text', '<span class="sr-only text-white">Meny</span>'],
     ])('review of #63: unknown background, white text only in %s: no class', (_name, el) => {
+      const text = wire(
+        [wireLinks],
+        site(`<footer style="background: var(--surface);">\n  <div class="grid">${el}<p>b</p></div>\n  <div class="flex">\n    <p>© Firma</p>\n    <p>VM</p>\n  </div>\n</footer>\n`),
+        'src/components/Footer.astro',
+      )
+      expect(text).toContain('    <p>© Firma</p>\n    <PrivacyLinks />\n    <p>VM</p>')
+    })
+
+    test.each([
+      ['a variant background', '<a class="md:bg-black text-white">Ring</a>'],
+      ['hidden text', '<span class="hidden text-white">x</span>'],
+    ])('re-review of #63: unknown background, white text only in %s: no class', (_name, el) => {
       const text = wire(
         [wireLinks],
         site(`<footer style="background: var(--surface);">\n  <div class="grid">${el}<p>b</p></div>\n  <div class="flex">\n    <p>© Firma</p>\n    <p>VM</p>\n  </div>\n</footer>\n`),
