@@ -259,7 +259,9 @@ function definiteHeight(parent: AstroNode, rules: CssRule[]): boolean {
  * ahatrafikskola: `.frame { aspect-ratio: 4 / 5 }`, 4 / 3 on phones. A plain ratio for one of the
  * parent's classes outside an at-rule, and nothing else that could switch it off: no rule naming
  * the class in any selector (`.wrap .frame`, `.frame:hover`, inside an at-rule) with another
- * aspect-ratio value, no inline aspect-ratio or inline display, and not a span.
+ * aspect-ratio value or a display other than a block-level one, no display class that is not one,
+ * no inline aspect-ratio or display at all, and not a span. Attribute selectors
+ * (`[class~=frame]`) are not seen, as in ownRules.
  */
 function ratioSized(parent: AstroNode, own: CssRule[], rules: CssRule[]): boolean {
   if (parent.type !== 'element' || parent.name === 'span') return false
@@ -267,9 +269,14 @@ function ratioSized(parent: AstroNode, own: CssRule[], rules: CssRule[]): boolea
   const style = attr(parent, 'style')
   if (style?.kind === 'quoted' && declarations(style.value).some((d) => d.prop === 'aspect-ratio' || d.prop === 'display')) return false
   const names = (classList(parent) ?? []).map((c) => new RegExp(`\\.${c.replace(/[^\w-]/g, '\\$&')}(?![\\w-])`))
+  if ((classList(parent) ?? []).some((c) => DISPLAY_CLASS.test(c.slice(c.lastIndexOf(':') + 1)) && !BOX_DISPLAY.test(c.slice(c.lastIndexOf(':') + 1)))) return false
   const naming = rules.filter((r) => names.some((n) => n.test(r.selector)))
-  return naming.every((r) => r.decls.every((d) => d.prop !== 'aspect-ratio' || ratio(d.value)))
+  return naming.every((r) => r.decls.every((d) => (d.prop !== 'aspect-ratio' || ratio(d.value)) && (d.prop !== 'display' || BOX_DISPLAY.test(unimportant(d.value)))))
 }
+
+/** Tailwind's display utilities, and the display values that keep a block box with an aspect-ratio. */
+const DISPLAY_CLASS = /^(?:block|inline|inline-block|flex|inline-flex|grid|inline-grid|flow-root|contents|hidden|list-item|table(?:-[a-z-]+)?|inline-table)$/
+const BOX_DISPLAY = /^(?:block|flex|grid|flow-root)$/
 
 /** A plain, non-degenerate aspect-ratio value: `4 / 3`, `16/9`, `1.5`. */
 function ratio(value: string): boolean {
@@ -461,7 +468,7 @@ function sizedBox(node: AstroNode, ancestors: AstroNode[], rules: CssRule[]): Bo
   if (n) return { classes: ['grid', `h-[${n[1]}${n[2] || 'px'}]`, ...classes], aspect: true }
   // #61 (exakthaltagning): `aspect-ratio: 4/3; height: auto` would otherwise get the default 16:9.
   const ratio = style?.kind === 'quoted' && (inlineHeight === undefined || inlineHeight === 'auto') ? declarations(style.value).findLast((d) => d.prop === 'aspect-ratio')?.value.trim() : undefined
-  const r = ratio !== undefined ? /^(\d+(?:\.\d+)?)(?:\s*\/\s*(\d+(?:\.\d+)?))?$/.exec(ratio) : null
+  const r = ratio !== undefined ? RATIO.exec(ratio) : null
   return r ? { classes, aspect: false, ratio: r[2] ? `${r[1]} / ${r[2]}` : r[1]! } : { classes, aspect: false }
 }
 

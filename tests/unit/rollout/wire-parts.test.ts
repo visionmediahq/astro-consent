@@ -1090,6 +1090,14 @@ describe('wireEmbeds', () => {
     }
     expect(embed(`<div class="frame">\n  ${map}\n</div>\n<style>\n  .frame { aspect-ratio: 4 / 5 !important; }\n</style>\n`)).toContain('<div class="grid h-full"><ConsentEmbed')
     // An inline style wins over the scoped rule; an inline box has no aspect-ratio.
+    // A display that drops the box (contents, inline, none), in scoped CSS or a class: not definite.
+    for (const css of ['.frame { aspect-ratio: 4 / 5; display: contents; }', '.frame { aspect-ratio: 4 / 5; }\n  @media (max-width: 640px) { .frame { display: inline; } }']) {
+      expect(refused(`<div class="frame">\n  ${map}\n</div>\n<style>\n  ${css}\n</style>\n`)).toEqual(['map fills a parent of unknown height'])
+    }
+    for (const cls of ['contents', 'inline', 'md:hidden']) {
+      expect(refused(`<div class="frame ${cls}">\n  ${map}\n</div>\n<style>\n  .frame { aspect-ratio: 4 / 5; }\n</style>\n`)).toEqual(['map fills a parent of unknown height'])
+    }
+    expect(embed(`<div class="frame">\n  ${map}\n</div>\n<style>\n  .frame { display: block; aspect-ratio: 4 / 5; }\n</style>\n`)).toContain('<div class="grid h-full"><ConsentEmbed')
     for (const style of ['aspect-ratio: auto', 'display: inline', 'display: contents']) {
       expect(refused(`<div class="frame" style="${style}">\n  ${map}\n</div>\n<style>\n  .frame { aspect-ratio: 4 / 5; }\n</style>\n`)).toEqual(['map fills a parent of unknown height'])
     }
