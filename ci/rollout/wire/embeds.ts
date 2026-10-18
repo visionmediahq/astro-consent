@@ -258,18 +258,27 @@ function definiteHeight(parent: AstroNode, rules: CssRule[]): boolean {
 /**
  * ahatrafikskola: `.frame { aspect-ratio: 4 / 5 }`, 4 / 3 on phones. A plain ratio for one of the
  * parent's classes outside an at-rule, and nothing else that could switch it off: no rule naming
- * the class in any selector (`.wrap .frame`, `.frame:hover`, inside an at-rule) with another
- * aspect-ratio value or a display other than a block-level one, no display class that is not one,
- * no inline aspect-ratio or display at all, and not a span. Attribute selectors
- * (`[class~=frame]`) are not seen, as in ownRules.
+ * the class, the element or its id in any selector (`.wrap .frame`, `.frame:hover`, `div`, inside
+ * an at-rule) with another aspect-ratio value or a display other than a block-level one, no display
+ * class that is not one (variants and `!` included), no inline aspect-ratio or display at all, and
+ * not a span. Attribute selectors (`[class~=frame]`) are not seen, as in ownRules.
  */
 function ratioSized(parent: AstroNode, own: CssRule[], rules: CssRule[]): boolean {
   if (parent.type !== 'element' || parent.name === 'span') return false
   if (!own.some((r) => !r.media && r.decls.some((d) => d.prop === 'aspect-ratio' && ratio(d.value)))) return false
   const style = attr(parent, 'style')
   if (style?.kind === 'quoted' && declarations(style.value).some((d) => d.prop === 'aspect-ratio' || d.prop === 'display')) return false
-  const names = (classList(parent) ?? []).map((c) => new RegExp(`\\.${c.replace(/[^\w-]/g, '\\$&')}(?![\\w-])`))
-  if ((classList(parent) ?? []).some((c) => DISPLAY_CLASS.test(c.slice(c.lastIndexOf(':') + 1)) && !BOX_DISPLAY.test(c.slice(c.lastIndexOf(':') + 1)))) return false
+  const esc = (x: string): string => x.replace(/[^\w-]/g, '\\$&')
+  const id = attr(parent, 'id')
+  const names = [
+    ...(classList(parent) ?? []).map((c) => new RegExp(`\\.${esc(c)}(?![\\w-])`)),
+    ...(parent.name ? [new RegExp(`(?:^|[\\s>+~,(])${esc(parent.name)}(?![\\w-])`, 'i')] : []),
+    ...(id?.kind === 'quoted' ? [new RegExp(`#${esc(id.value.trim())}(?![\\w-])`)] : []),
+  ]
+  // The utility after its variants, without Tailwind's important modifier (`!contents`, v4 `contents!`).
+  const utility = (c: string): string => c.slice(c.lastIndexOf(':') + 1).replace(/^!|!$/g, '')
+  const display = (c: string): boolean => /\[display:/i.test(c) || (DISPLAY_CLASS.test(utility(c)) && !BOX_DISPLAY.test(utility(c)))
+  if ((classList(parent) ?? []).some(display)) return false
   const naming = rules.filter((r) => names.some((n) => n.test(r.selector)))
   return naming.every((r) => r.decls.every((d) => (d.prop !== 'aspect-ratio' || ratio(d.value)) && (d.prop !== 'display' || BOX_DISPLAY.test(unimportant(d.value)))))
 }
