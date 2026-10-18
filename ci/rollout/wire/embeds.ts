@@ -240,7 +240,7 @@ export const ownRules = (el: AstroNode, rules: CssRule[]): CssRule[] => {
 
 /**
  * The parent has a definite height (Ruling 25): a fixed h- class, an aspect class (#61), an inline
- * height, or a scoped CSS height for one of its classes. A min-height is not one: a percentage height against it is auto.
+ * height, or a scoped CSS height or aspect-ratio for one of its classes. A min-height is not one: a percentage height against it is auto.
  */
 function definiteHeight(parent: AstroNode, rules: CssRule[]): boolean {
   if (parent.type !== 'element') return false
@@ -250,8 +250,16 @@ function definiteHeight(parent: AstroNode, rules: CssRule[]): boolean {
   const isHeight = (d: CssDecl): boolean => d.prop === 'height' && sized(unimportant(d.value))
   const style = attr(parent, 'style')
   if (style?.kind === 'quoted' && declarations(style.value).some(isHeight)) return true
-  return ownRules(parent, rules).some((r) => r.decls.some(isHeight))
+  const own = ownRules(parent, rules)
+  if (own.some((r) => r.decls.some(isHeight))) return true
+  // ahatrafikskola: `.frame { aspect-ratio: 4 / 5 }`, 4 / 3 on phones. A ratio outside an at-rule,
+  // and no at-rule that sets anything else (auto, a variable), on any screen.
+  const ratios = own.flatMap((r) => r.decls.filter((d) => d.prop === 'aspect-ratio').map((d) => ({ media: r.media, ratio: RATIO.test(unimportant(d.value)) })))
+  return ratios.some((x) => !x.media && x.ratio) && ratios.every((x) => x.ratio)
 }
+
+/** A plain aspect-ratio value: `4 / 3`, `16/9`, `1.5`. */
+const RATIO = /^\d+(?:\.\d+)?(?:\s*\/\s*\d+(?:\.\d+)?)?$/
 
 const MIN_H_CLASS = /^(?:[\w-]+:)*min-h-(?:\d+(?:\.\d+)?|\[[^\]\s]+\]|screen|svh|dvh|lvh)$/
 

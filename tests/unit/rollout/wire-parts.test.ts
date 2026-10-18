@@ -1070,6 +1070,21 @@ describe('wireEmbeds', () => {
     }
   })
 
+  test('a parent sized by a scoped aspect-ratio is definite (ahatrafikskola: .contact-info-map-frame)', () => {
+    const map = `<iframe src="https://www.google.com/maps/embed?pb=!1" width="100%" height="100%" style="border:0;" title="Karta"></iframe>`
+    const aha = `<div class="frame">\n  ${map}\n</div>\n<style>\n  .frame {\n    aspect-ratio: 4 / 5;\n    overflow: hidden;\n  }\n  @media (max-width: 900px) {\n    .frame { aspect-ratio: 4 / 3; }\n  }\n</style>\n`
+    expect(embed(aha)).toContain(`<div class="frame">\n  <div class="grid h-full"><ConsentEmbed service="google-maps" src="https://www.google.com/maps/embed?pb=!1" title="Karta" aspect="auto" /></div>\n</div>`)
+    // Only on some screens, turned off on some, or not a ratio: not definite.
+    for (const css of [
+      '@media (min-width: 900px) { .frame { aspect-ratio: 4 / 5; } }',
+      '.frame { aspect-ratio: 4 / 5; }\n  @media (max-width: 640px) { .frame { aspect-ratio: auto; } }',
+      '.frame { aspect-ratio: auto; }',
+      '.frame { aspect-ratio: var(--r); }',
+    ]) {
+      expect(refused(`<div class="frame">\n  ${map}\n</div>\n<style>\n  ${css}\n</style>\n`)).toEqual(['map fills a parent of unknown height'])
+    }
+  })
+
   test('inline style height:100% in an unsized parent: refused (Ruling 31)', () => {
     expect(refused(`<div>\n  <iframe src="https://www.google.com/maps/embed?pb=!1" style="width:100%;height:100%" title="Karta"></iframe>\n</div>\n`)).toEqual([
       'map fills a parent of unknown height',
