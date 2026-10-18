@@ -252,14 +252,32 @@ function definiteHeight(parent: AstroNode, rules: CssRule[]): boolean {
   if (style?.kind === 'quoted' && declarations(style.value).some(isHeight)) return true
   const own = ownRules(parent, rules)
   if (own.some((r) => r.decls.some(isHeight))) return true
-  // ahatrafikskola: `.frame { aspect-ratio: 4 / 5 }`, 4 / 3 on phones. A ratio outside an at-rule,
-  // and no at-rule that sets anything else (auto, a variable), on any screen.
-  const ratios = own.flatMap((r) => r.decls.filter((d) => d.prop === 'aspect-ratio').map((d) => ({ media: r.media, ratio: RATIO.test(unimportant(d.value)) })))
-  return ratios.some((x) => !x.media && x.ratio) && ratios.every((x) => x.ratio)
+  return ratioSized(parent, own, rules)
 }
 
-/** A plain aspect-ratio value: `4 / 3`, `16/9`, `1.5`. */
-const RATIO = /^\d+(?:\.\d+)?(?:\s*\/\s*\d+(?:\.\d+)?)?$/
+/**
+ * ahatrafikskola: `.frame { aspect-ratio: 4 / 5 }`, 4 / 3 on phones. A plain ratio for one of the
+ * parent's classes outside an at-rule, and nothing else that could switch it off: no rule naming
+ * the class in any selector (`.wrap .frame`, `.frame:hover`, inside an at-rule) with another
+ * aspect-ratio value, no inline aspect-ratio or inline display, and not a span.
+ */
+function ratioSized(parent: AstroNode, own: CssRule[], rules: CssRule[]): boolean {
+  if (parent.type !== 'element' || parent.name === 'span') return false
+  if (!own.some((r) => !r.media && r.decls.some((d) => d.prop === 'aspect-ratio' && ratio(d.value)))) return false
+  const style = attr(parent, 'style')
+  if (style?.kind === 'quoted' && declarations(style.value).some((d) => d.prop === 'aspect-ratio' || d.prop === 'display')) return false
+  const names = (classList(parent) ?? []).map((c) => new RegExp(`\\.${c.replace(/[^\w-]/g, '\\$&')}(?![\\w-])`))
+  const naming = rules.filter((r) => names.some((n) => n.test(r.selector)))
+  return naming.every((r) => r.decls.every((d) => d.prop !== 'aspect-ratio' || ratio(d.value)))
+}
+
+/** A plain, non-degenerate aspect-ratio value: `4 / 3`, `16/9`, `1.5`. */
+function ratio(value: string): boolean {
+  const m = RATIO.exec(unimportant(value))
+  return m !== null && Number(m[1]) > 0 && (m[2] === undefined || Number(m[2]) > 0)
+}
+
+const RATIO = /^(\d+(?:\.\d+)?)(?:\s*\/\s*(\d+(?:\.\d+)?))?$/
 
 const MIN_H_CLASS = /^(?:[\w-]+:)*min-h-(?:\d+(?:\.\d+)?|\[[^\]\s]+\]|screen|svh|dvh|lvh)$/
 

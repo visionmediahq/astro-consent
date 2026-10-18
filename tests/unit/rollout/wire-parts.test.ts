@@ -1080,9 +1080,20 @@ describe('wireEmbeds', () => {
       '.frame { aspect-ratio: 4 / 5; }\n  @media (max-width: 640px) { .frame { aspect-ratio: auto; } }',
       '.frame { aspect-ratio: auto; }',
       '.frame { aspect-ratio: var(--r); }',
+      '.frame { aspect-ratio: 4 / 5; }\n  .frame { aspect-ratio: auto; }',
+      '.frame { aspect-ratio: 4 / 5; }\n  @media (max-width: 600px) { .wrap .frame { aspect-ratio: auto; } }',
+      '.frame { aspect-ratio: 4 / 5; }\n  .frame:hover { aspect-ratio: auto; }',
+      '.frame { aspect-ratio: 0; }',
+      '.frame { aspect-ratio: 1 / 0; }',
     ]) {
       expect(refused(`<div class="frame">\n  ${map}\n</div>\n<style>\n  ${css}\n</style>\n`)).toEqual(['map fills a parent of unknown height'])
     }
+    expect(embed(`<div class="frame">\n  ${map}\n</div>\n<style>\n  .frame { aspect-ratio: 4 / 5 !important; }\n</style>\n`)).toContain('<div class="grid h-full"><ConsentEmbed')
+    // An inline style wins over the scoped rule; an inline box has no aspect-ratio.
+    for (const style of ['aspect-ratio: auto', 'display: inline', 'display: contents']) {
+      expect(refused(`<div class="frame" style="${style}">\n  ${map}\n</div>\n<style>\n  .frame { aspect-ratio: 4 / 5; }\n</style>\n`)).toEqual(['map fills a parent of unknown height'])
+    }
+    expect(refused(`<span class="frame">\n  ${map}\n</span>\n<style>\n  .frame { aspect-ratio: 4 / 5; }\n</style>\n`)).toEqual(['map fills a parent of unknown height'])
   })
 
   test('inline style height:100% in an unsized parent: refused (Ruling 31)', () => {
