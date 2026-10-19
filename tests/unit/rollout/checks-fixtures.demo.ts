@@ -128,6 +128,29 @@ const FIXTURES: Record<string, string> = {
   gradfilter: page(gradientFooter('#00375f', 'filter:brightness(3)', 'color:#fff')),
   gradfade: page(gradientFooter('#00375f', 'opacity:0.4', 'color:#fff')),
   linksfade: page(gradientFooter('#00375f', '', 'color:#fff;opacity:0.7')),
+  // PR #72 re-review. The starter's [data-animate]: opacity 0 in CSS, faded in by Motion's inView
+  // when scrolled to. Below the fold: a placeholder inside one (ernstedt, knutssonsbil, …), and a
+  // background-less one around PrivacyLinks; a slow 2.5 s fade, and an infinite spinner elsewhere
+  // that must not hold the wait up.
+  animated: page(`<style>[data-animate]{opacity:0}@keyframes spin{to{transform:rotate(360deg)}}</style>
+    <div style="width:20px;height:20px;background:#ccc;animation:spin 1s linear infinite"></div>
+    <div style="height:2000px"></div>
+    <div data-animate>${placeholder('background:#f8f8f8;color:#1f2937')}</div>
+    <div style="height:1500px"></div>
+    <footer style="background:#00375f;padding:24px"><div data-animate data-slow><div data-privacy-links style="color:#fff"><button data-consent-open style="color:inherit;background:none;border:0">Cookie-inställningar</button></div></div></footer>
+    <script>
+      for (const el of document.querySelectorAll('[data-animate]'))
+        new IntersectionObserver((es, o) => { if (es[0].isIntersecting) { o.disconnect(); el.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 'slow' in el.dataset ? 2500 : 500, fill: 'forwards' }) } }).observe(el)
+    </script>`),
+  // ahatrafikskola: a 1px absolute gradient hairline at the top of the footer, and an a::after
+  // underline at width 0: neither is over the text.
+  hairline: page(`<style>footer{position:relative;background:#00375f;padding:24px}footer::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,#f00,#00f)}a{position:relative;color:#fff}a::after{content:'';position:absolute;left:0;bottom:-2px;width:0;height:2px;background:#fff}</style><footer><div data-privacy-links><a href="/integritet">Integritetspolicy</a></div></footer>`),
+  // A white ::before at z-index -1 inside an isolated black footer paints over the black, under the
+  // white text; a near-white overlay on a positioned section around a non-positioned black footer.
+  pseudoneg: page(`<style>footer{background:#000;position:relative;isolation:isolate;padding:24px}footer::before{content:'';position:absolute;inset:0;background:#fff;z-index:-1}</style><footer><div data-privacy-links><a href="/integritet" style="color:#fff">Integritetspolicy</a></div></footer>`),
+  pseudoup: page(`<style>section{position:relative}section::before{content:'';position:absolute;inset:0;background:rgba(255,255,255,.95)}footer{background:#000;padding:24px}</style><section><footer><div data-privacy-links><a href="/integritet" style="color:#fff">Integritetspolicy</a></div></footer></section>`),
+  // Above the opaque footer: a backdrop-filter cannot reach the text; an identity filter on the footer.
+  backdropup: page(`<style>section{backdrop-filter:blur(4px)}footer{background:#000;padding:24px;filter:grayscale(0)}</style><section><footer><div data-privacy-links><a href="/integritet" style="color:#fff">Integritetspolicy</a></div></footer></section>`),
   // #46 (knutssonsbil): main's absolute iframe fills the ratio box; the in-flow 320px wrapper does
   // not (the map shrinks, an empty band below); absolute inset-0 fills it again.
   ratiomain: page(ratioBox(`<iframe src="${MAPS}" style="position:absolute;inset:0;width:100%;height:100%;border:0"></iframe>`)),
@@ -301,6 +324,21 @@ try {
     const faded = await links('/linksfade/')
     const want = wcagContrast({ r: 0.7 * 255 + 0.3 * 0, g: 0.7 * 255 + 0.3 * 0x37, b: 0.7 * 255 + 0.3 * 0x5f }, { r: 0, g: 0x37, b: 0x5f })
     expect(faded.length === 2 && faded.every((r) => r.ok && !r.indeterminate && Math.abs(r.ratio - want) < 0.05), '/linksfade/ opacity-70 on the background-less links wrapper fades the text and is measured', { faded, want })
+
+    const anim = await checkContrast(browser, BASE, ['/animated/'], { stub: true })
+    expect(
+      anim.filter((r) => r.kind === 'placeholder').length === 4 && anim.filter((r) => r.kind === 'links').length === 1 && anim.every((r) => r.ok && !r.indeterminate),
+      '/animated/ data-animate wrappers below the fold (opacity 0 until scrolled to, one slow) are measured settled: ok (ernstedt, knutssonsbil, …)',
+      anim,
+    )
+    const hair = await links('/hairline/')
+    expect(hair.length === 1 && hair.every((r) => r.ok && !r.indeterminate), '/hairline/ a 1px ::before hairline and a width-0 a::after underline are not over the text (ahatrafikskola)', hair)
+    for (const [path, what] of [['/pseudoneg/', 'a z-index -1 ::before inside an isolated footer'], ['/pseudoup/', 'an overlay ::before on a positioned ancestor above the opaque footer']] as const) {
+      const rows = await links(path)
+      expect(rows.length === 1 && rows.every((r) => !r.ok && r.indeterminate === 'effect on the text or its background: positioned ::before with a background'), `${path} ${what} is over the text: indeterminate`, rows)
+    }
+    const up = await links('/backdropup/')
+    expect(up.length === 1 && up.every((r) => r.ok && !r.indeterminate), '/backdropup/ backdrop-filter above the opaque layer and filter: grayscale(0) do not count', up)
   }
   {
     const boxes = (path: string) => checkEmbedBoxes(browser, BASE, [path], [360, 1280], { stub: true })

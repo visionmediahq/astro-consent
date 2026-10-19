@@ -23,7 +23,7 @@
 // Opacity on the text or a background-less wrapper is folded into the text colour instead.
 import type { Browser, Page } from '@playwright/test'
 import { type Rgb, wcagContrast } from '../lib/colour'
-import { freshPage, gotoPage } from './requests'
+import { freshPage, open } from './requests'
 
 type Rgba = [number, number, number, number] // 0..255, alpha too
 
@@ -43,6 +43,8 @@ export interface RawContrast {
   fade?: number
   /** Effects on the way that the colours do not show (background-blend-mode, filter, …). */
   effects?: string[]
+  /** An opacity animation is still running on the text or an ancestor (a scroll-in fade). */
+  animating?: boolean
   /** Stop and color-mix() strings as the page rasterised them; null when it is not a colour. Filled by measureContrast. */
   colours?: Record<string, Rgba | null>
 }
@@ -82,19 +84,64 @@ const MEASURE = `(() => {
   const ctx = document.createElement('canvas').getContext('2d', { willReadFrequently: true })
   const rgba = (c) => { ctx.clearRect(0, 0, 1, 1); ctx.fillStyle = 'rgba(0, 0, 0, 0)'; ctx.fillStyle = c; ctx.fillRect(0, 0, 1, 1); return [...ctx.getImageData(0, 0, 1, 1).data] }
   const BOXES = ['border-box', 'padding-box', 'content-box']
+  // filter: none, or only functions that change nothing (Tailwind leaves grayscale(0) and the like).
+  const IDENTITY = /^(?:(?:grayscale|sepia|invert)\\(0%?\\)|(?:brightness|contrast|saturate|opacity)\\((?:1|100%)\\)|blur\\(0(?:px)?\\)|hue-rotate\\(0(?:deg)?\\))$/
+  const noFilter = (f) => !f || f === 'none' || (f.replace(/[a-z-]+\\([^)]*\\)/g, '').trim() === '' && (f.match(/[a-z-]+\\([^)]*\\)/g) || []).every((x) => IDENTITY.test(x)))
+  // A translation (or nothing): getBoundingClientRect is then still the box.
+  const flat = (t) => t === 'none' || /^matrix\\(1, 0, 0, 1, [-\\d.e]+, [-\\d.e]+\\)$/.test(t)
+  const px = (v) => (/^-?[\\d.]+(?:e-?\\d+)?px$/.test(v) ? parseFloat(v) : NaN)
+  const opacityRunning = (e) => e.getAnimations().some((a) => (a.playState === 'running' || a.playState === 'pending') && a.effect && a.effect.getKeyframes().some((k) => 'opacity' in k))
+  // Whether e's positioned ::before/::after paints a background over the text's box. Its box is
+  // computed only when its containing block is known: e itself (positioned, no transform) for
+  // absolute, the viewport for fixed (no ancestor that would capture it); anything else counts.
+  // Above the opaque layer, a negative z-index paints below that layer's in-flow background.
+  const pseudoOver = (e, pseudo, text, above) => {
+    const p = getComputedStyle(e, pseudo)
+    if (p.content === 'none' || p.content === 'normal' || !/absolute|fixed/.test(p.position)) return false
+    if (above && parseInt(p.zIndex, 10) < 0) return false
+    if (!(rgba(p.backgroundColor)[3] > 0 || (p.backgroundImage && p.backgroundImage !== 'none'))) return false
+    if (p.transform !== 'none') return true
+    let x0, y0
+    if (p.position === 'absolute') {
+      const s = getComputedStyle(e)
+      if (s.position === 'static' || !flat(s.transform)) return true
+      const r = e.getBoundingClientRect()
+      x0 = r.left + px(s.borderLeftWidth)
+      y0 = r.top + px(s.borderTopWidth)
+    } else {
+      for (let a = e; a; a = a.parentElement) {
+        const s = getComputedStyle(a)
+        if (s.transform !== 'none' || !noFilter(s.filter) || s.perspective !== 'none' || (s.backdropFilter && s.backdropFilter !== 'none') || /paint|strict|content|layout/.test(s.contain) || /transform|filter|perspective/.test(s.willChange)) return true
+      }
+      x0 = 0
+      y0 = 0
+    }
+    const extra = (a, b, c, d) => (p.boxSizing === 'border-box' ? 0 : px(a) + px(b) + px(c) + px(d))
+    const left = x0 + px(p.left) + px(p.marginLeft)
+    const top = y0 + px(p.top) + px(p.marginTop)
+    const w = px(p.width) + extra(p.paddingLeft, p.paddingRight, p.borderLeftWidth, p.borderRightWidth)
+    const h = px(p.height) + extra(p.paddingTop, p.paddingBottom, p.borderTopWidth, p.borderBottomWidth)
+    if (![left, top, w, h].every(Number.isFinite)) return true
+    const ix = Math.min(left + w, text.right) - Math.max(left, text.left)
+    const iy = Math.min(top + h, text.bottom) - Math.max(top, text.top)
+    return ix > 0 && iy > 0
+  }
   const layersOf = (el) => {
+    const text = el.getBoundingClientRect()
     const layers = []
     const images = []
     const effects = []
     let fade = 1
+    let animating = false
     let below = false // a background has been seen below this element
     let reached = false // the first opaque background is behind us
     for (let e = el; e; e = e.parentElement) {
       const style = getComputedStyle(e)
       const opacity = Number(style.opacity)
+      if (opacityRunning(e)) animating = true
       if (style.mixBlendMode !== 'normal') effects.push('mix-blend-mode')
-      if (style.filter && style.filter !== 'none') effects.push('filter')
-      if (style.backdropFilter && style.backdropFilter !== 'none') effects.push('backdrop-filter')
+      if (!noFilter(style.filter)) effects.push('filter')
+      for (const pseudo of ['::before', '::after']) if (pseudoOver(e, pseudo, text, reached)) effects.push('positioned ' + pseudo + ' with a background')
       if (reached) {
         if (opacity < 1) effects.push('opacity')
         continue
@@ -102,23 +149,20 @@ const MEASURE = `(() => {
       const image = style.backgroundImage && style.backgroundImage !== 'none'
       const c = rgba(style.backgroundColor)
       const has = image || c[3] > 0
+      // Behind an opaque background of its own, the backdrop cannot reach the text.
+      if (style.backdropFilter && style.backdropFilter !== 'none' && c[3] !== 255) effects.push('backdrop-filter')
       if (opacity < 1) {
         if (!below && !has) fade *= opacity
         else effects.push('opacity')
       }
       if (has && style.backgroundBlendMode.split(',').some((v) => v.trim() !== 'normal')) effects.push('background-blend-mode')
       if (has && [...style.backgroundClip.split(','), ...style.backgroundOrigin.split(',')].some((v) => !BOXES.includes(v.trim()))) effects.push('background-clip')
-      for (const pseudo of ['::before', '::after']) {
-        const p = getComputedStyle(e, pseudo)
-        const painted = rgba(p.backgroundColor)[3] > 0 || (p.backgroundImage && p.backgroundImage !== 'none')
-        if (p.content !== 'none' && p.content !== 'normal' && /absolute|fixed/.test(p.position) && painted && !(parseInt(p.zIndex, 10) < 0)) effects.push('positioned ' + pseudo + ' with a background')
-      }
       if (image) images.push({ value: style.backgroundImage, at: layers.length, size: style.backgroundSize, repeat: style.backgroundRepeat, position: style.backgroundPosition })
       if (c[3] > 0) layers.push(c)
       if (has) below = true
       if (c[3] === 255) reached = true
     }
-    return { layers, images, fade, effects: [...new Set(effects)] }
+    return { layers, images, fade, animating, effects: [...new Set(effects)] }
   }
   const visible = (e) => e.offsetParent !== null && e.getBoundingClientRect().width > 0
   const row = (kind, e) => ({ kind, label: (e.textContent || '').trim().replace(/\\s+/g, ' ').slice(0, 40), fg: rgba(getComputedStyle(e).color), ...layersOf(e) })
@@ -149,6 +193,18 @@ const RASTER = `((colours) => {
   probe.remove()
   return out
 })`
+
+// Finite animations (a Motion inView fade, not an infinite spinner) that are still running.
+const BUSY = `document.getAnimations().filter((a) => (a.playState === 'running' || a.playState === 'pending') && a.effect && Number.isFinite(a.effect.getComputedTiming().endTime))`
+const ANIMATION_TIMEOUT = 5000
+/** Until no finite animation runs, or the timeout: true when settled. */
+const SETTLED = `new Promise((done) => {
+  const t0 = performance.now()
+  const tick = () => { const busy = ${BUSY}.length > 0; if (!busy || performance.now() - t0 > ${ANIMATION_TIMEOUT}) done(!busy); else setTimeout(tick, 100) }
+  tick()
+})`
+/** Waits for the running finite animations to finish, or the timeout: true when they did. */
+const FINISHED = `Promise.race([Promise.all(${BUSY}.map((a) => a.finished)).then(() => true, () => true), new Promise((r) => setTimeout(() => r(false), ${ANIMATION_TIMEOUT}))])`
 
 /** `top` over `below`, unrounded: the worst point of a gradient must not be rounded up past 4.5. */
 const over = (top: Rgba, below: Rgb): Rgb => {
@@ -391,7 +447,9 @@ function evaluate(r: RawContrast): Evaluated {
     }
   }
   const effects = r.effects ?? []
-  const indeterminate = effects.length
+  const indeterminate = r.animating
+    ? 'animation not settled'
+    : effects.length
     ? `effect on the text or its background: ${effects.join(', ')}`
     : unknown
       ? 'background image behind the text'
@@ -429,7 +487,12 @@ export function pendingColours(raw: RawContrast[]): string[] {
 
 /** Banner buttons, PrivacyLinks text and unloaded embed placeholders on the page as it is now. */
 export async function measureContrast(page: Pick<Page, 'evaluate'>): Promise<ContrastRow[]> {
-  const raw = (await page.evaluate(MEASURE)) as RawContrast[]
+  let raw = (await page.evaluate(MEASURE)) as RawContrast[]
+  // A scroll-in fade still running on the way: wait for it once, then read again.
+  if (raw.some((r) => r.animating)) {
+    await page.evaluate(FINISHED)
+    raw = (await page.evaluate(MEASURE)) as RawContrast[]
+  }
   const colours: Record<string, Rgba | null> = {}
   for (const r of raw) r.colours = colours
   // Stops first, then the grid and each refinement level of any non-sRGB segment: a few rounds.
@@ -457,10 +520,13 @@ export async function checkContrast(
   for (const path of paths) {
     const { context, page } = await freshPage(browser, opts.stub ?? true)
     try {
-      await gotoPage(page, base + path)
+      // Scrolled through and back, as the request check does: the starter's [data-animate] is
+      // opacity 0 until Motion's inView fades it in, and ~25 sites wrap an embed in one.
+      await open(page, base, path)
       // DaisyUI buttons animate colour changes; read the settled value.
       await page.addStyleTag({ content: '* { transition: none !important }' })
       await page.waitForTimeout(300)
+      await page.evaluate(SETTLED)
       for (const row of await measureContrast(page)) rows.push({ path, ...row })
     } finally {
       await context.close()

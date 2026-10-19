@@ -313,11 +313,20 @@ npx tsx ci/rollout/run.ts help
   `color-mix()` in the same method, and the line names it. A `url()` image that shows, a second
   gradient that shows, or a stop or mix the page cannot resolve stays indeterminate.
 - Effects the colours do not show are indeterminate: `background-blend-mode`, `background-clip:
-  text`, `opacity` on an element with a background or above it, and `mix-blend-mode`, `filter` or
-  `backdrop-filter` on the text or any ancestor. Opacity on the text or a background-less wrapper
-  (`opacity-70` on the links) fades the text colour and is measured. A positioned `::before`/`::after`
-  with a background on the way is indeterminate whether or not it covers the text (its box is not
-  checked), so a decorative stripe can block a site that is fine: look at the screenshot.
+  text`, `opacity` on an element with a background or above it, `mix-blend-mode` or a filter that
+  changes something (`grayscale(0)` does not) on the text or any ancestor, and `backdrop-filter`
+  below the first opaque background. Opacity on the text or a background-less wrapper (`opacity-70`
+  on the links) fades the text colour and is measured.
+- A positioned `::before`/`::after` with a background, on the text or any ancestor, counts only when
+  its box overlaps the text's (ahatrafikskola's 1px footer hairline and a width-0 link underline do
+  not). Its box is computed when its containing block is its own element (positioned, no transform)
+  or the viewport (fixed); any other containing block, or a transform on it, is indeterminate. A
+  negative z-index counts too, except above the opaque background, which it paints beneath.
+- The contrast step scrolls each page through and back (as step 3 does) and waits for finite
+  animations to finish: the starter's `[data-animate]` is `opacity: 0` until Motion's `inView` fades
+  it in, and about 25 sites wrap an embed in one. An opacity animation still running on the text or
+  an ancestor gets one more wait (5 s) and a second reading; after that the row is `animation not
+  settled`.
 - `verify` stops before any step when the disk holding the site has less than 15 GB free
   (`ROLLOUT_MIN_FREE_GB` changes the threshold; demo mode skips it). Each verify runs `npm ci` and a
   build twice and builds a Docker image, and Docker failed with I/O errors at 2.5 GB free during the

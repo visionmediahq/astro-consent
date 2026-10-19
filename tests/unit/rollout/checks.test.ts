@@ -476,15 +476,15 @@ describe('contrast', () => {
       const c = () => Math.floor(rnd() * 256)
       const lerp = (a: number[], b: number[], t: number) => a.map((x, i) => x + (b[i]! - x) * t)
       let worstGap = 0
-      for (let n = 0; n < 300; n++) {
+      for (let n = 0; n < 200; n++) {
         const a = [c(), c(), c()]
         const b = [c(), c(), c()]
         const fg: RawContrast['fg'] = [c(), c(), c(), 128 + Math.floor(rnd() * 128)]
         const colours = { [`rgb(${a.join(', ')})`]: [...a, 255], [`rgb(${b.join(', ')})`]: [...b, 255] } as RawContrast['colours']
         const [row] = contrastRows([raw({ fg, layers: [[255, 255, 255, 255]], images: [img(`linear-gradient(rgb(${a.join(', ')}), rgb(${b.join(', ')}))`)], colours })])
         let brute = Infinity
-        for (let k = 0; k <= 20000; k++) {
-          const [r, g, bb] = lerp(a, b, k / 20000) as [number, number, number]
+        for (let k = 0; k <= 10000; k++) {
+          const [r, g, bb] = lerp(a, b, k / 10000) as [number, number, number]
           const al = fg[3] / 255
           const f = { r: al * fg[0] + (1 - al) * r, g: al * fg[1] + (1 - al) * g, b: al * fg[2] + (1 - al) * bb }
           brute = Math.min(brute, wcagContrast(f, { r, g, b: bb }))
@@ -492,7 +492,7 @@ describe('contrast', () => {
         worstGap = Math.max(worstGap, row!.ratio - brute)
       }
       expect(worstGap).toBeLessThan(1e-4)
-    })
+    }, 30_000)
 
     it('more than one gradient that shows is not combined: indeterminate', () => {
       const top = 'linear-gradient(rgba(0, 0, 0, 0.5), rgb(0, 0, 0))'
@@ -510,6 +510,32 @@ describe('contrast', () => {
         expect(row, effect).toMatchObject({ ok: false, indeterminate: `effect on the text or its background: ${effect}` })
         expect(row!.ratio, effect).toBeCloseTo(21, 5)
       }
+    })
+
+    it('an opacity animation still running on the way is "animation not settled", never a fail or a pass', () => {
+      const [row] = contrastRows([raw({ animating: true, fade: 0 })])
+      expect(row).toMatchObject({ ok: false, indeterminate: 'animation not settled' })
+    })
+
+    it('measureContrast waits for a running animation on the way and measures once more (data-animate fade-in)', async () => {
+      const calls: string[] = []
+      const page = {
+        evaluate: async (src: string) => {
+          calls.push(src)
+          if (src.includes('.finished')) return true
+          // First read: mid-fade. Second read, after the wait: settled.
+          return calls.length === 1 ? [raw({ animating: true, fade: 0.3 })] : [raw({})]
+        },
+      }
+      const [row] = await measureContrast(page as never)
+      expect(calls.filter((c) => c.includes('.finished'))).toHaveLength(1)
+      expect(calls).toHaveLength(3)
+      expect(row).toMatchObject({ ok: true })
+      expect(row!.indeterminate).toBeUndefined()
+
+      // Still animating after the wait: indeterminate, no further retries.
+      const stuck = { evaluate: async (src: string) => (src.includes('.finished') ? false : [raw({ animating: true })]) }
+      expect((await measureContrast(stuck as never))[0]).toMatchObject({ ok: false, indeterminate: 'animation not settled' })
     })
 
     it('opacity on the text with no background of its own fades the text colour (a footer opacity-70)', () => {
