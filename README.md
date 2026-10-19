@@ -317,19 +317,26 @@ npx tsx ci/rollout/run.ts help
   changes something (`grayscale(0)` does not) on the text or any ancestor, and `backdrop-filter`
   below the first opaque background. Opacity on the text or a background-less wrapper (`opacity-70`
   on the links) fades the text colour and is measured.
-- A positioned `::before`/`::after` that paints (a background colour or image, a visible border, or
-  `content: url(…)`), on the text or any ancestor, counts only when its box overlaps the text's
-  (ahatrafikskola's 1px footer hairline and a width-0 link underline do not). A `box-shadow` or an
-  outline reaches outside the box and always counts. A fixed one counts on any horizontal overlap,
-  wherever the text is scrolled. Its box is computed when its containing block is its own element
-  (positioned, not scrolled, and neither it nor any ancestor scaled, rotated or zoomed) or the
-  viewport (fixed, no ancestor with a transform, `translate`, `scale`, `rotate`, `zoom`, filter,
-  `contain` or `content-visibility` capturing it); any other containing block, a transform or
-  individual transform property on the pseudo-element, or `direction: rtl` on it is indeterminate.
+- A positioned `::before`/`::after` that paints (a background colour or image, a visible border, or a
+  `backdrop-filter`), on the text or any ancestor, counts only when its box overlaps the text's
+  (ahatrafikskola's 1px footer hairline and a width-0 link underline do not). A `box-shadow` with a
+  visible colour (Tailwind's resting `0 0 #0000` is not), an outline, a filter that changes
+  something (drop-shadow, blur) or any `content` other than `""` (text, glyphs, a url() image)
+  reaches outside the box and always counts. A fixed one counts on any horizontal overlap, wherever
+  the text is scrolled. Its box is computed when its containing block is its own element
+  (positioned, not scrolled, not an inline element broken over lines, and neither it nor any
+  ancestor scaled, rotated, zoomed or on an `offset-path`) or the viewport (fixed, no ancestor with a
+  transform, `translate`, `scale`, `rotate`, `zoom`, `offset-path`, any filter, `preserve-3d`,
+  `contain`, `content-visibility` or a matching `will-change` capturing it); any other containing
+  block, a transform, individual transform property, `zoom` or `offset-path` on the pseudo-element,
+  or `direction: rtl` on it is indeterminate.
 - Pseudo-elements that do not count: faint feTurbulence grain (ernstedt's fixed `body::after`: an SVG
-  whose every shape is drawn through a filter, at opacity 0.2 or less, with no other paint); and a
-  negative z-index above the opaque background with no z-index on or between them, which paints
-  beneath it. A higher z-index around the text is not taken as proof that it paints above a
+  whose every shape is drawn through a filter, with no other paint), while the grain opacities on a
+  row's path add up to 0.2 or less; and a negative z-index above the opaque background with no
+  z-index on or between them, which paints beneath it. The grain exemption is a bounded error, not
+  proof: up to 0.2 of white grain over a background can lift or lower a borderline ratio (white text
+  on #767676 measures 4.54:1 ok under 0.2 white grain that brightens it), so a row within a few
+  hundredths of 4.5 on a grain site deserves a look at the screenshot. A higher z-index around the text is not taken as proof that it paints above a
   pseudo-element: a solid fixed overlay counts even under the z-50 banner. Scrolling elsewhere is
   already in both boxes; the pseudo-element's own element scrolled is indeterminate.
 - The contrast step scrolls each page through and back (as step 3 does) and waits for finite

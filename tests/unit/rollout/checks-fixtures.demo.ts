@@ -77,6 +77,9 @@ const ANC = 'footer{position:relative;background:#000;padding:400px 24px 24px}fo
 const svgUrl = (s: string) => `url("data:image/svg+xml,${encodeURIComponent(s).replace(/'/g, '%27')}")`
 const NOISE_FILTERED = svgUrl(`<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(#n)'/></svg>`)
 const NOISE_WHITE_RECT = svgUrl(`<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence baseFrequency='0.8'/></filter><rect width='100%' height='100%' fill='white'/></svg>`)
+const BLACK_GRAIN = svgUrl(`<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence baseFrequency='0.8'/><feColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0 1'/></filter><rect width='100%' height='100%' filter='url(#n)'/></svg>`)
+const fixedStrip = (decl: string) =>
+  `<style>footer{background:#000;padding:24px}.w{${decl};margin-left:400px}.w::before{content:"";position:fixed;left:0;top:0;width:300px;height:100%;background:#fff}</style><footer><div class="w">${whiteLink}</div></footer>`
 const widget = `<div data-consent-embed="elfsight" data-script="${ELFSIGHT}"><template data-payload><div class="elfsight-app-x"></div></template><button data-load>Visa</button><input type="checkbox" data-remember></div>`
 
 const LATE = `${banner()}<div style="height:10000px;position:relative"><div id="s" style="position:absolute;top:3000px;height:10px"></div></div>
@@ -187,6 +190,28 @@ const FIXTURES: Record<string, string> = {
   pshadow: page(`<style>${PF}footer::before{content:"";position:absolute;inset:0;box-shadow:inset 0 0 0 400px #fff}</style><footer>${whiteLink}</footer>`),
   // content-visibility: auto on an ancestor captures a fixed pseudo like contain: paint.
   cvfixed: page(`<style>section{content-visibility:auto}footer{background:#000;padding:24px}footer::before{content:"";position:fixed;left:0;top:0;width:100%;height:100%;background:#fff}</style><div style="height:1500px"></div><section><footer>${whiteLink}</footer></section>`),
+  // Round 5 (rr72f probe5). Faint grain adds up: four 0.2 grain layers pairs over the text.
+  grainstack: page(`<style>${PF}.w{position:relative}${['footer', '.a', '.b', '.c'].map((n) => `${n}::before,${n}::after{content:"";position:absolute;inset:0;opacity:.2;background-image:${BLACK_GRAIN}}`).join('')}</style><footer><div class="w a"><div class="w b"><div class="w c">${whiteLink}</div></div></div></footer>`),
+  // A pseudo moved by its own zoom or offset-path; an absolute one under an ancestor's offset-path.
+  pzoom: page(`<style>${PF}footer::before{content:"";position:absolute;left:0;top:0;width:10px;height:10px;background:#fff;zoom:30}</style><footer>${whiteLink}</footer>`),
+  poffset: page(`<style>${PF}footer::before{content:"";position:absolute;left:0;top:800px;width:400px;height:100px;background:#fff;offset-path:path("M 200 -750 L 201 -750");offset-rotate:0deg}</style><footer>${whiteLink}</footer>`),
+  ancoffset: page(`<style>section{offset-path:path("M 0 0 L 1 0")}${ANC}</style><section><footer>${whiteLink}</footer></section>`),
+  // Things that capture a fixed pseudo: an identity filter, preserve-3d, will-change: translate,
+  // offset-path. Uncaptured, the 300px strip at the left would miss the text at 400px.
+  fixidfilter: page(fixedStrip('filter:grayscale(0)')),
+  fixpreserve: page(fixedStrip('transform-style:preserve-3d')),
+  fixwillchange: page(fixedStrip('will-change:translate')),
+  fixoffset: page(fixedStrip('offset-path:path("M 0 0 L 1 0")')),
+  // Paint that reaches outside the pseudo's box: a drop-shadow filter, text content, a big url()
+  // content image in a 1px box; and a backdrop-filter that blacks out what is behind.
+  pdropshadow: page(`<style>${PF}footer{margin-top:300px}footer::before{content:"";position:absolute;left:0;right:0;top:-200px;height:100px;background:#fff;filter:drop-shadow(0 220px 0 #fff)}</style><footer>${whiteLink}</footer>`),
+  ptext: page(`<style>${PF}footer::before{content:"\\2588\\2588\\2588\\2588\\2588\\2588";position:absolute;left:0;top:0;font-size:120px;line-height:1;color:#fff}</style><footer>${whiteLink}</footer>`),
+  pcontenturl: page(`<style>${PF}footer::before{content:${svgUrl(`<svg xmlns='http://www.w3.org/2000/svg' width='2000' height='2000'><rect width='2000' height='2000' fill='white'/></svg>`)};position:absolute;left:0;top:0;width:1px;height:1px}</style><footer>${whiteLink}</footer>`),
+  pbackdrop: page(`<style>${PF}footer::before{content:"";position:absolute;inset:0;backdrop-filter:brightness(0)}</style><footer>${whiteLink}</footer>`),
+  // An absolute pseudo whose containing block is an inline element broken over two lines.
+  inlinewrap: page(`<style>footer{background:#000;padding:24px;color:#fff}.e{position:relative}.e::before{content:"";position:absolute;left:0;top:0;width:100px;height:30px;background:#fff}</style><footer><div data-privacy-links style="width:420px;font:16px/20px sans-serif">Leading words here <span class="e"><a href="/integritet" style="color:#fff">Integritetspolicy</a> and then many more words to wrap onto the next line</span></div></footer>`),
+  // Tailwind's resting box-shadow (0 0 #0000) paints nothing: a 1px bar at the top stays clear of the text.
+  pclearshadow: page(`<style>${PF}footer::before{content:"";position:absolute;left:0;top:0;width:100%;height:1px;background:#333;box-shadow:0 0 #0000}</style><footer>${whiteLink}</footer>`),
   // Above the opaque footer: a backdrop-filter cannot reach the text; an identity filter on the footer.
   backdropup: page(`<style>section{backdrop-filter:blur(4px)}footer{background:#000;padding:24px;filter:grayscale(0)}</style><section><footer><div data-privacy-links><a href="/integritet" style="color:#fff">Integritetspolicy</a></div></footer></section>`),
   // #46 (knutssonsbil): main's absolute iframe fills the ratio box; the in-flow 320px wrapper does
@@ -403,9 +428,27 @@ try {
       ['/pborder/', 'a pseudo painting with a thick border'],
       ['/pshadow/', 'a pseudo painting with an inset shadow'],
       ['/cvfixed/', 'a fixed pseudo captured by content-visibility: auto'],
+      ['/pzoom/', 'a pseudo moved by its own zoom'],
+      ['/poffset/', 'a pseudo moved by its own offset-path'],
+      ['/ancoffset/', "an absolute pseudo under an ancestor's offset-path"],
+      ['/fixidfilter/', 'a fixed pseudo captured by filter: grayscale(0)'],
+      ['/fixpreserve/', 'a fixed pseudo captured by transform-style: preserve-3d'],
+      ['/fixwillchange/', 'a fixed pseudo captured by will-change: translate'],
+      ['/fixoffset/', 'a fixed pseudo captured by offset-path'],
+      ['/pdropshadow/', 'a drop-shadow filter painting outside the box'],
+      ['/ptext/', 'text content overflowing the box'],
+      ['/pcontenturl/', 'a url() content image overflowing a 1px box'],
+      ['/pbackdrop/', 'a backdrop-filter that blacks out the background'],
+      ['/inlinewrap/', 'an absolute pseudo of an inline element broken over two lines'],
     ] as const) {
       const rows = await links(path)
       expect(rows.length === 1 && rows.every((r) => !r.ok && r.indeterminate === 'effect on the text or its background: positioned ::before with a background'), `${path} ${what}: indeterminate`, rows)
+    }
+    {
+      const rows = await links('/grainstack/')
+      expect(rows.length === 1 && rows.every((r) => !r.ok && /^effect on the text or its background: positioned ::(before|after) with a background/.test(r.indeterminate ?? '')), '/grainstack/ eight 0.2 grain layers add up past 0.2: indeterminate', rows)
+      const clear = await links('/pclearshadow/')
+      expect(clear.length === 1 && clear.every((r) => r.ok && !r.indeterminate), "/pclearshadow/ Tailwind's transparent resting box-shadow paints nothing", clear)
     }
     {
       const rows = await links('/ctxfixed/')

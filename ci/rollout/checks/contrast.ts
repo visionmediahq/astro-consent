@@ -108,7 +108,10 @@ const MEASURE = `(() => {
   // What a positioned pseudo paints: 'none', 'box' (inside its border box), or 'beyond' (a shadow
   // or an outline, which reach outside it).
   const paintOf = (p) => {
-    if (p.boxShadow && p.boxShadow !== 'none') return 'beyond'
+    // Tailwind's resting shadow (0 0 #0000) paints nothing: only a shadow with a visible colour counts.
+    if (p.boxShadow && p.boxShadow !== 'none' && !(p.boxShadow.match(/rgba?\\([^)]*\\)|#[0-9a-f]+|[a-z]+\\([^)]*\\)/gi) || ['#000']).every((c) => !shows(c))) return 'beyond'
+    if (!noFilter(p.filter) || p.content !== '""') return 'beyond'
+    if (p.backdropFilter && p.backdropFilter !== 'none') return 'box'
     if (p.outlineStyle !== 'none' && px(p.outlineWidth) > 0 && shows(p.outlineColor)) return 'beyond'
     const border = ['Top', 'Right', 'Bottom', 'Left'].some((side) => px(p['border' + side + 'Width']) > 0 && !/none|hidden/.test(p['border' + side + 'Style']) && shows(p['border' + side + 'Color']))
     if (shows(p.backgroundColor) || border || /url\\(|image-set\\(|gradient\\(/.test(p.content)) return 'box'
@@ -117,7 +120,7 @@ const MEASURE = `(() => {
     let grain = true
     const rest = image.replace(NOISE_URL, (_, payload) => { if (!filteredOnly(payload)) grain = false; return '' })
     if (rest.replace(/none|,|\\s/g, '') !== '') return 'box'
-    return grain && Number(p.opacity) <= 0.2 ? 'none' : 'box'
+    return grain && Number(p.opacity) <= 0.2 ? 'grain' : 'box'
   }
   // Whether e's positioned ::before/::after paints over the text's box. Its box is computed only
   // when its containing block is known: e itself (positioned, not scrolled, and neither it nor an
@@ -130,14 +133,15 @@ const MEASURE = `(() => {
     if (exempt && parseInt(p.zIndex, 10) < 0) return false
     const paint = paintOf(p)
     if (paint === 'none') return false
-    if (paint === 'beyond' || moved(p) || p.direction === 'rtl') return true
+    if (paint === 'grain') { grainSum += Number(p.opacity); return grainSum > 0.2 }
+    if (paint === 'beyond' || moved(p) || zoomed(p) || p.offsetPath !== 'none' || p.direction === 'rtl') return true
     let x0, y0
     if (p.position === 'absolute') {
       const s = getComputedStyle(e)
-      if (s.position === 'static' || e.scrollTop || e.scrollLeft) return true
+      if (s.position === 'static' || e.scrollTop || e.scrollLeft || (s.display === 'inline' && e.getClientRects().length > 1)) return true
       for (let a = e; a; a = a.parentElement) {
         const t = getComputedStyle(a)
-        if (!flat(t.transform) || t.scale !== 'none' || t.rotate !== 'none' || zoomed(t)) return true
+        if (!flat(t.transform) || t.scale !== 'none' || t.rotate !== 'none' || zoomed(t) || t.offsetPath !== 'none') return true
       }
       const r = e.getBoundingClientRect()
       x0 = r.left + px(s.borderLeftWidth)
@@ -145,7 +149,7 @@ const MEASURE = `(() => {
     } else {
       for (let a = e; a; a = a.parentElement) {
         const s = getComputedStyle(a)
-        if (moved(s) || zoomed(s) || !noFilter(s.filter) || s.perspective !== 'none' || (s.backdropFilter && s.backdropFilter !== 'none') || /paint|strict|content|layout/.test(s.contain) || (s.contentVisibility && s.contentVisibility !== 'visible') || /transform|filter|perspective/.test(s.willChange)) return true
+        if (moved(s) || zoomed(s) || s.offsetPath !== 'none' || s.transformStyle === 'preserve-3d' || (s.filter && s.filter !== 'none') || s.perspective !== 'none' || (s.backdropFilter && s.backdropFilter !== 'none') || /paint|strict|content|layout/.test(s.contain) || (s.contentVisibility && s.contentVisibility !== 'visible') || /transform|translate|scale|rotate|offset|filter|perspective|contain/.test(s.willChange)) return true
       }
       x0 = 0
       y0 = 0
@@ -161,7 +165,9 @@ const MEASURE = `(() => {
     const iy = p.position === 'fixed' ? h : Math.min(top + h, text.bottom) - Math.max(top, text.top)
     return ix > 0 && iy > 0
   }
+  let grainSum = 0
   const layersOf = (el) => {
+    grainSum = 0
     const text = el.getBoundingClientRect()
     const layers = []
     const images = []
