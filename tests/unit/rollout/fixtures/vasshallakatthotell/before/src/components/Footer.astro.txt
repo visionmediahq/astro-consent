@@ -89,7 +89,7 @@ import { Phone, Mail, MapPin } from '@lucide/astro';
         </ul>
         <div class="mt-6">
           <a
-            href="https://www.facebook.com/profile.php?id=100063727656056"
+            href="https://www.facebook.com/profile.php?id=0"
             target="_blank"
             rel="noopener noreferrer"
             aria-label="Besök oss på Facebook"

@@ -44,6 +44,7 @@ Pages and components that hold a footer, an iframe or a map embed, reduced the s
 
 - `src/components/Footer.astro` (before and merged): the owner's name in the copyright line replaced with `Text.`.
 - `src/components/OmOssContent.astro` (before and merged): the owner's name in the quote's `<cite>` replaced with `Text.`, and the name in the HTML comment above the quote replaced with "the owner's".
+- `src/components/ContactSection.astro` and `src/components/Footer.astro` (before, expected and merged): the Facebook `profile.php?id=` link's id replaced with `0`; it may be a personal profile.
 - Kept as business contact details: the business phone number and `info@` address.
 
 ## Secret scan
