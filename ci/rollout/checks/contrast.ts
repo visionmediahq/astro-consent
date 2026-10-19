@@ -9,10 +9,18 @@
 // feTurbulence at 20 % opacity) is decoration on top of the button colour and does not count.
 //
 // Gradients of colours are not images in that sense (nanolfs-villan's footer is a linear-gradient of
-// two brand blues). Their stops are read from the computed value (var() already resolved), rasterised
-// by the page like every other colour, and every point between consecutive stops is sampled, alpha
-// composited over what is beneath: the row is measured against the worst point. A url(), a stop
-// that does not rasterise, or anything else the parser is unsure of stays indeterminate.
+// two brand blues). Their stops are read from the computed value (var() already resolved) and
+// rasterised by the page. Each segment between two stops is searched for its worst point: on a grid,
+// then refined around every local minimum. sRGB segments are interpolated here (premultiplied, as
+// browsers paint them); any other space or hue method is mixed by the page itself with color-mix()
+// in the same method. One gradient that shows is measured; a second one, a url(), a stop or mix the
+// page does not resolve, or a prelude keyword the parser does not know stays indeterminate.
+//
+// Effects the colours do not show are indeterminate too: background-blend-mode, a background-clip or
+// -origin other than border/padding/content-box (text), opacity on an element with a background or
+// above it, mix-blend-mode, filter or backdrop-filter on the text or any ancestor, and a positioned
+// ::before/::after with a background on the way (it may sit over the text; its box is not checked).
+// Opacity on the text or a background-less wrapper is folded into the text colour instead.
 import type { Browser, Page } from '@playwright/test'
 import { type Rgb, wcagContrast } from '../lib/colour'
 import { freshPage, gotoPage } from './requests'
@@ -31,7 +39,11 @@ export interface RawContrast {
   layers: Rgba[]
   /** Computed background-image values (other than 'none') on the way to the first opaque background. */
   images: BgImage[]
-  /** Each gradient stop's colour string as the page's canvas rasterised it; null when it is not a colour. Filled by measureContrast. */
+  /** Product of the opacity of the text and of background-less wrappers below every background: it fades the text. */
+  fade?: number
+  /** Effects on the way that the colours do not show (background-blend-mode, filter, …). */
+  effects?: string[]
+  /** Stop and color-mix() strings as the page rasterised them; null when it is not a colour. Filled by measureContrast. */
   colours?: Record<string, Rgba | null>
 }
 
@@ -69,18 +81,44 @@ export const formatContrast = (r: ContrastRow): string =>
 const MEASURE = `(() => {
   const ctx = document.createElement('canvas').getContext('2d', { willReadFrequently: true })
   const rgba = (c) => { ctx.clearRect(0, 0, 1, 1); ctx.fillStyle = 'rgba(0, 0, 0, 0)'; ctx.fillStyle = c; ctx.fillRect(0, 0, 1, 1); return [...ctx.getImageData(0, 0, 1, 1).data] }
+  const BOXES = ['border-box', 'padding-box', 'content-box']
   const layersOf = (el) => {
     const layers = []
     const images = []
+    const effects = []
+    let fade = 1
+    let below = false // a background has been seen below this element
+    let reached = false // the first opaque background is behind us
     for (let e = el; e; e = e.parentElement) {
       const style = getComputedStyle(e)
-      if (style.backgroundImage && style.backgroundImage !== 'none') images.push({ value: style.backgroundImage, at: layers.length, size: style.backgroundSize, repeat: style.backgroundRepeat, position: style.backgroundPosition })
+      const opacity = Number(style.opacity)
+      if (style.mixBlendMode !== 'normal') effects.push('mix-blend-mode')
+      if (style.filter && style.filter !== 'none') effects.push('filter')
+      if (style.backdropFilter && style.backdropFilter !== 'none') effects.push('backdrop-filter')
+      if (reached) {
+        if (opacity < 1) effects.push('opacity')
+        continue
+      }
+      const image = style.backgroundImage && style.backgroundImage !== 'none'
       const c = rgba(style.backgroundColor)
-      if (c[3] === 0) continue
-      layers.push(c)
-      if (c[3] === 255) break
+      const has = image || c[3] > 0
+      if (opacity < 1) {
+        if (!below && !has) fade *= opacity
+        else effects.push('opacity')
+      }
+      if (has && style.backgroundBlendMode.split(',').some((v) => v.trim() !== 'normal')) effects.push('background-blend-mode')
+      if (has && [...style.backgroundClip.split(','), ...style.backgroundOrigin.split(',')].some((v) => !BOXES.includes(v.trim()))) effects.push('background-clip')
+      for (const pseudo of ['::before', '::after']) {
+        const p = getComputedStyle(e, pseudo)
+        const painted = rgba(p.backgroundColor)[3] > 0 || (p.backgroundImage && p.backgroundImage !== 'none')
+        if (p.content !== 'none' && p.content !== 'normal' && /absolute|fixed/.test(p.position) && painted && !(parseInt(p.zIndex, 10) < 0)) effects.push('positioned ' + pseudo + ' with a background')
+      }
+      if (image) images.push({ value: style.backgroundImage, at: layers.length, size: style.backgroundSize, repeat: style.backgroundRepeat, position: style.backgroundPosition })
+      if (c[3] > 0) layers.push(c)
+      if (has) below = true
+      if (c[3] === 255) reached = true
     }
-    return { layers, images }
+    return { layers, images, fade, effects: [...new Set(effects)] }
   }
   const visible = (e) => e.offsetParent !== null && e.getBoundingClientRect().width > 0
   const row = (kind, e) => ({ kind, label: (e.textContent || '').trim().replace(/\\s+/g, ' ').slice(0, 40), fg: rgba(getComputedStyle(e).color), ...layersOf(e) })
@@ -93,21 +131,32 @@ const MEASURE = `(() => {
   ]
 })()`
 
-// Rasterises colour strings the way MEASURE does; null for anything CSS does not take as a colour.
+// Rasterises colour strings (color-mix() included) through a probe element's computed colour and
+// the canvas; null for anything CSS does not take as a colour.
 const RASTER = `((colours) => {
   const ctx = document.createElement('canvas').getContext('2d', { willReadFrequently: true })
-  return colours.map((c) => {
+  const probe = document.createElement('span')
+  probe.style.display = 'none'
+  document.documentElement.appendChild(probe)
+  const out = colours.map((c) => {
     if (!CSS.supports('color', c)) return null
-    ctx.clearRect(0, 0, 1, 1); ctx.fillStyle = 'rgba(0, 0, 0, 0)'; ctx.fillStyle = c; ctx.fillRect(0, 0, 1, 1)
+    probe.style.color = ''
+    probe.style.color = c
+    if (!probe.style.color) return null
+    ctx.clearRect(0, 0, 1, 1); ctx.fillStyle = 'rgba(0, 0, 0, 0)'; ctx.fillStyle = getComputedStyle(probe).color; ctx.fillRect(0, 0, 1, 1)
     return [...ctx.getImageData(0, 0, 1, 1).data]
   })
+  probe.remove()
+  return out
 })`
 
+/** `top` over `below`, unrounded: the worst point of a gradient must not be rounded up past 4.5. */
 const over = (top: Rgba, below: Rgb): Rgb => {
   const a = top[3] / 255
-  const mix = (t: number, b: number) => Math.round(a * t + (1 - a) * b)
+  const mix = (t: number, b: number) => a * t + (1 - a) * b
   return { r: mix(top[0], below.r), g: mix(top[1], below.g), b: mix(top[2], below.b) }
 }
+const round = (c: Rgb): Rgb => ({ r: Math.round(c.r), g: Math.round(c.g), b: Math.round(c.b) })
 
 const WHITE: Rgb = { r: 255, g: 255, b: 255 }
 
@@ -139,18 +188,22 @@ const COLOUR_FN = /^(?:rgba?|hsla?|hwb|lab|lch|oklab|oklch|color)\(/i
 const LEGACY = /^(?:rgba?\(|hsla?\(|#|transparent$)/i
 const isColour = (t: string) => COLOUR_FN.test(t) || /^#[0-9a-f]{3,8}$/i.test(t) || /^transparent$/i.test(t)
 const POSITION = /^-?(?:\d+\.?\d*|\.\d+)(?:%|[a-z]+)?$|^calc\(/i
+const PRELUDE = new Set(['to', 'left', 'right', 'top', 'bottom', 'center', 'circle', 'ellipse', 'closest-side', 'closest-corner', 'farthest-side', 'farthest-corner', 'at', 'from'])
+const SPACES = new Set(['srgb', 'srgb-linear', 'display-p3', 'a98-rgb', 'prophoto-rgb', 'rec2020', 'lab', 'oklab', 'xyz', 'xyz-d50', 'xyz-d65', 'hsl', 'hwb', 'lch', 'oklch'])
+const POLAR = new Set(['hsl', 'hwb', 'lch', 'oklch'])
+const HUE = new Set(['shorter', 'longer', 'increasing', 'decreasing'])
 
 /**
- * The colour stops of one computed gradient layer, in order, and its interpolation space when that
- * is not sRGB. Undefined for anything else (url(), image-set(), currentcolor, a var() left
- * unresolved, an argument it does not understand): the caller then stays indeterminate.
+ * The colour stops of one computed gradient layer, in order, and its interpolation method when that
+ * is not sRGB ('oklch', 'hsl longer hue'). Undefined for anything else (url(), image-set(),
+ * currentcolor, a var() left unresolved, a keyword it does not know): the caller is then indeterminate.
  */
-export function gradientStops(layer: string): { stops: string[]; space?: string } | undefined {
+export function gradientStops(layer: string): { stops: string[]; method?: string } | undefined {
   const m = /^(?:repeating-)?(?:linear|radial|conic)-gradient\((.*)\)$/is.exec(layer.trim())
   if (!m) return undefined
   const args = splitTop(m[1]!, ',')
   const stops: string[] = []
-  let space: string | undefined
+  let method: string | undefined
   for (const [i, arg] of args.entries()) {
     const tokens = splitTop(arg, ' ')
     if (tokens.length && isColour(tokens[0]!)) {
@@ -159,44 +212,43 @@ export function gradientStops(layer: string): { stops: string[]; space?: string 
     } else if (tokens.length === 1 && POSITION.test(tokens[0]!) && stops.length) {
       // A colour hint between two stops: it moves the midpoint, not the colours.
     } else if (i === 0) {
-      // Direction, shape and position, or an interpolation method ("in oklch", "in hsl longer hue").
-      if (tokens.some((t) => t.includes('(') && !/^calc\(/i.test(t))) return undefined
-      const k = tokens.findIndex((t) => t.toLowerCase() === 'in')
-      if (k >= 0) space = tokens[k + 1]?.toLowerCase()
+      // Direction, shape, size and position, and an interpolation method ("in hsl longer hue").
+      for (let k = 0; k < tokens.length; k++) {
+        const t = tokens[k]!.toLowerCase()
+        if (t !== 'in') {
+          if (!PRELUDE.has(t) && !POSITION.test(t)) return undefined
+          continue
+        }
+        const space = tokens[k + 1]?.toLowerCase()
+        if (method !== undefined || !space || !SPACES.has(space)) return undefined
+        method = space
+        k++
+        const hue = tokens[k + 1]?.toLowerCase()
+        if (hue && HUE.has(hue)) {
+          if (!POLAR.has(space) || tokens[k + 2]?.toLowerCase() !== 'hue') return undefined
+          method += ` ${hue} hue`
+          k += 2
+        }
+      }
     } else return undefined
   }
   if (stops.length < 2) return undefined
   // Stops that are not all legacy sRGB colours interpolate in oklab by default (CSS Color 4).
-  if (!space && !stops.every((c) => LEGACY.test(c))) space = 'oklab'
-  if (space === 'srgb') space = undefined
-  return space ? { stops, space } : { stops }
+  if (method === undefined && !stops.every((c) => LEGACY.test(c))) method = 'oklab'
+  if (method === 'srgb') method = undefined
+  return method ? { stops, method } : { stops }
 }
 
 /** Whether an image layer covers the whole box: it repeats, or is the box's size at its origin. */
 const covers = (size: string, repeat: string, position: string) =>
   /^repeat(?: repeat)?$/.test(repeat) || (/^(?:auto(?: auto)?|cover|100% 100%)$/.test(size) && /^(?:0%(?: 0%)?|0px 0px)$/.test(position))
 
-const SAMPLES = 16
-const MAX_CANDIDATES = 4096
+const pct = (n: number) => Number(n.toFixed(4))
+/** The color-mix() the page resolves for a point t (0..1) between stops a and b. */
+const mixKey = (method: string, a: string, b: string, t: number) => `color-mix(in ${method}, ${a} ${pct(100 - pct(t * 100))}%, ${b} ${pct(t * 100)}%)`
 
-type Point = { c: Rgba; stop: boolean }
-type Entry = { kind: 'colour'; c: Rgba } | { kind: 'gradient'; points: Point[]; covers: boolean; space?: string } | { kind: 'unknown' }
-
-/** Points along a gradient: the stops and SAMPLES steps between each pair, interpolated premultiplied in sRGB. */
-function samplePoints(stops: Rgba[]): Point[] {
-  const points: Point[] = [{ c: stops[0]!, stop: true }]
-  for (let i = 1; i < stops.length; i++) {
-    const a = stops[i - 1]!
-    const b = stops[i]!
-    for (let k = 1; k <= SAMPLES; k++) {
-      const t = k / SAMPLES
-      const alpha = a[3] + (b[3] - a[3]) * t
-      const ch = (j: number) => (alpha === 0 ? 0 : (a[j]! * a[3] + (b[j]! * b[3] - a[j]! * a[3]) * t) / alpha)
-      points.push({ c: [ch(0), ch(1), ch(2), alpha], stop: k === SAMPLES })
-    }
-  }
-  return points
-}
+type Gradient = { stops: string[]; method?: string; covers: boolean }
+type Entry = { kind: 'colour'; c: Rgba } | ({ kind: 'gradient' } & Gradient) | { kind: 'unknown' }
 
 /** A row's background from the bottom up: colours and image layers in paint order. */
 function entries(r: RawContrast): Entry[] {
@@ -209,15 +261,8 @@ function entries(r: RawContrast): Entry[] {
     for (const [i, layer] of splitTop(img.value, ',').entries()) {
       if (!coversBackground(layer)) continue
       const g = gradientStops(layer)
-      const stops = g?.stops.map((c) => r.colours?.[c] ?? null)
-      if (!g || !stops || stops.some((c) => c === null)) es.push({ kind: 'unknown' })
-      else
-        es.push({
-          kind: 'gradient',
-          points: samplePoints(stops as Rgba[]),
-          covers: covers(nth(sizes, i, 'auto'), nth(repeats, i, 'repeat'), nth(positions, i, '0% 0%')),
-          ...(g.space ? { space: g.space } : {}),
-        })
+      if (!g) es.push({ kind: 'unknown' })
+      else es.push({ kind: 'gradient', ...g, covers: covers(nth(sizes, i, 'auto'), nth(repeats, i, 'repeat'), nth(positions, i, '0% 0%')) })
     }
     return es.reverse() // the first layer is painted on top
   }
@@ -230,72 +275,169 @@ function entries(r: RawContrast): Entry[] {
   return out
 }
 
-const opaqueCover = (e: Entry) =>
-  e.kind === 'colour' ? e.c[3] === 255 : e.kind === 'gradient' && e.covers && e.points.every((p) => p.c[3] === 255)
+/** Opaque everywhere and covering the box; for a gradient, every stop opaque (any mix of them is too). */
+const opaqueCover = (e: Entry, colours: RawContrast['colours']) =>
+  e.kind === 'colour' ? e.c[3] === 255 : e.kind === 'gradient' && e.covers && e.stops.every((s) => colours?.[s]?.[3] === 255)
 
-type Candidate = { bg: Rgb; stop: boolean }
+const GRID = 64
+const REFINE = 32
+const LEVELS = 2
+const MINIMA = 8
+
+/**
+ * The minimum of f on [0, 1]: a grid, then two finer grids around each of the lowest local minima.
+ * f returns undefined for a point it cannot evaluate yet (a mix the page has not resolved); the
+ * search then stops at that level and returns undefined, having asked f for every point of it.
+ */
+function minimise(f: (t: number) => number | undefined): { t: number; v: number } | undefined {
+  const grid = Array.from({ length: GRID + 1 }, (_, k) => k / GRID)
+  const vals = grid.map(f)
+  if (vals.some((v) => v === undefined)) return undefined
+  const vs = vals as number[]
+  let best = { t: 0, v: Infinity }
+  for (const [k, v] of vs.entries()) if (v < best.v) best = { t: grid[k]!, v }
+  const minima = vs
+    .map((v, k) => ({ k, v }))
+    .filter(({ k, v }) => v <= (vs[k - 1] ?? Infinity) && v <= (vs[k + 1] ?? Infinity))
+    .sort((a, b) => a.v - b.v)
+    .slice(0, MINIMA)
+  let pending = false
+  for (const { k } of minima) {
+    let centre = grid[k]!
+    let h = 1 / GRID
+    for (let level = 0; level < LEVELS; level++) {
+      const ts = Array.from({ length: REFINE + 1 }, (_, j) => Math.min(1, Math.max(0, centre - h + (2 * h * j) / REFINE)))
+      const got = ts.map(f)
+      if (got.some((v) => v === undefined)) {
+        pending = true
+        break
+      }
+      let j = 0
+      for (let i = 1; i < got.length; i++) if (got[i]! < got[j]!) j = i
+      centre = ts[j]!
+      if (got[j]! < best.v) best = { t: centre, v: got[j]! }
+      h = (2 * h) / REFINE
+    }
+  }
+  return pending ? undefined : best
+}
+
+/** Premultiplied sRGB interpolation, as browsers paint a gradient without an `in` method. */
+const lerpSrgb = (a: Rgba, b: Rgba, t: number): Rgba => {
+  const alpha = a[3] + (b[3] - a[3]) * t
+  const ch = (j: number) => (alpha === 0 ? 0 : (a[j]! * a[3] + (b[j]! * b[3] - a[j]! * a[3]) * t) / alpha)
+  return [ch(0), ch(1), ch(2), alpha]
+}
+
+interface Evaluated {
+  row: ContrastRow
+  /** Colour strings the page still has to resolve before this row can be measured. */
+  missing: string[]
+}
+
+function evaluate(r: RawContrast): Evaluated {
+  const missing = new Set<string>()
+  const colour = (s: string): Rgba | undefined => {
+    const c = r.colours?.[s]
+    if (c === undefined) missing.add(s)
+    return c ?? undefined
+  }
+  const fgBase: Rgba = [r.fg[0], r.fg[1], r.fg[2], r.fg[3] * (r.fade ?? 1)]
+  const es = entries(r)
+  // Everything beneath the topmost opaque layer that covers the box is hidden.
+  let start = es.length - 1
+  while (start >= 0 && !opaqueCover(es[start]!, r.colours)) start--
+  const opaque = start >= 0
+  const shown = es.slice(Math.max(0, start))
+  const gradients = shown.filter((e) => e.kind === 'gradient')
+  const unknown = shown.some((e) => e.kind === 'unknown')
+  // Colours beneath the (single) gradient, composited, and the colour layers above it.
+  const gi = shown.findIndex((e) => e.kind === 'gradient')
+  const colours = (es: Entry[]) => es.filter((e): e is { kind: 'colour'; c: Rgba } => e.kind === 'colour')
+  let beneath = WHITE
+  for (const e of colours(gi < 0 ? shown : shown.slice(0, gi))) beneath = over(e.c, beneath)
+  const above = gi < 0 ? [] : colours(shown.slice(gi + 1))
+  const withAbove = (bg: Rgb) => above.reduce((b, e) => over(e.c, b), bg)
+  const ratioOn = (bg: Rgb) => wcagContrast(over(fgBase, bg), bg)
+
+  type Worst = { bg: Rgb; ratio: number; stop: boolean }
+  let worst: Worst = { bg: withAbove(beneath), ratio: ratioOn(withAbove(beneath)), stop: true }
+  let unresolved = false
+  const g = gradients.length === 1 ? (gradients[0] as { kind: 'gradient' } & Gradient) : undefined
+  if (g) {
+    const stops = g.stops.map(colour)
+    if (stops.some((c) => c === undefined)) unresolved = true
+    else {
+      const bgOf = (c: Rgba) => withAbove(over(c, beneath))
+      const found: Worst[] = []
+      for (let i = 1; i < g.stops.length; i++) {
+        const [a, b] = [stops[i - 1]!, stops[i]!]
+        const at = (t: number): Rgba | undefined =>
+          !g.method || t === 0 || t === 1 ? (t === 0 ? a : t === 1 ? b : lerpSrgb(a, b, t)) : colour(mixKey(g.method, g.stops[i - 1]!, g.stops[i]!, t))
+        const min = minimise((t) => {
+          const c = at(t)
+          return c && ratioOn(bgOf(c))
+        })
+        if (!min) unresolved = true
+        else found.push({ bg: bgOf(at(min.t)!), ratio: min.v, stop: min.t === 0 || min.t === 1 })
+      }
+      if (!g.covers) found.push(worst)
+      worst = found.reduce((w, x) => (x.ratio < w.ratio - 1e-9 || (Math.abs(x.ratio - w.ratio) <= 1e-9 && x.stop && !w.stop) ? x : w), {
+        bg: WHITE,
+        ratio: Infinity,
+        stop: true,
+      })
+      if (!Number.isFinite(worst.ratio)) worst = { bg: withAbove(beneath), ratio: ratioOn(withAbove(beneath)), stop: true }
+    }
+  }
+  const effects = r.effects ?? []
+  const indeterminate = effects.length
+    ? `effect on the text or its background: ${effects.join(', ')}`
+    : unknown
+      ? 'background image behind the text'
+      : gradients.length > 1
+        ? 'more than one gradient behind the text'
+        : unresolved
+          ? 'gradient colour the page did not resolve'
+          : !opaque
+            ? 'no opaque background; composited over white'
+            : undefined
+  const note =
+    g && !unresolved ? `gradient, ${worst.stop ? 'worst stop' : 'worst point between stops'}${g.method ? `; interpolated in ${g.method}` : ''}` : undefined
+  const row: ContrastRow = {
+    kind: r.kind,
+    button: r.label,
+    ratio: worst.ratio,
+    ok: worst.ratio >= 4.5 && !indeterminate,
+    fg: round(over(fgBase, worst.bg)),
+    bg: round(worst.bg),
+    ...(indeterminate ? { indeterminate } : {}),
+    ...(note ? { note } : {}),
+  }
+  return { row, missing: [...missing] }
+}
 
 /** Pure: composites the page's raw colours and computes the WCAG ratio for each row. */
 export function contrastRows(raw: RawContrast[]): ContrastRow[] {
-  return raw.map((r) => {
-    const es = entries(r)
-    // Everything beneath the topmost opaque layer that covers the box is hidden.
-    let start = es.length - 1
-    while (start >= 0 && !opaqueCover(es[start]!)) start--
-    const opaque = start >= 0
-    // Every background colour the text may sit on; `stop`: not a point between two gradient stops.
-    let cands: Candidate[] = [{ bg: WHITE, stop: true }]
-    let image = false
-    let gradient = false
-    const spaces = new Set<string>()
-    for (const e of es.slice(Math.max(0, start))) {
-      if (e.kind === 'colour') cands = cands.map((c) => ({ ...c, bg: over(e.c, c.bg) }))
-      else if (e.kind === 'unknown') image = true
-      else {
-        gradient = true
-        if (e.space) spaces.add(e.space)
-        const next = e.points.flatMap((p) => cands.map((c) => ({ bg: over(p.c, c.bg), stop: p.stop && c.stop })))
-        cands = e.covers ? next : [...next, ...cands]
-      }
-      const seen = new Map<string, Candidate>()
-      for (const c of cands) {
-        const k = `${c.bg.r},${c.bg.g},${c.bg.b}`
-        const had = seen.get(k)
-        if (!had || (c.stop && !had.stop)) seen.set(k, c)
-      }
-      cands = [...seen.values()]
-      if (cands.length > MAX_CANDIDATES) {
-        image = true // too many stacked gradients to be sure of
-        cands = cands.slice(0, MAX_CANDIDATES)
-      }
-    }
-    let worst: (Candidate & { fg: Rgb; ratio: number }) | undefined
-    for (const c of cands) {
-      const fg = over(r.fg, c.bg)
-      const ratio = wcagContrast(fg, c.bg)
-      if (!worst || ratio < worst.ratio - 1e-9 || (Math.abs(ratio - worst.ratio) <= 1e-9 && c.stop && !worst.stop)) worst = { ...c, fg, ratio }
-    }
-    const { bg, fg, ratio, stop } = worst!
-    const indeterminate = image
-      ? 'background image behind the text'
-      : !opaque
-        ? 'no opaque background; composited over white'
-        : undefined
-    const note = gradient
-      ? `gradient, ${stop ? 'worst stop' : 'worst point between stops'}${spaces.size ? `; interpolated in ${[...spaces].join('/')}, sampled in sRGB` : ''}`
-      : undefined
-    return { kind: r.kind, button: r.label, ratio, ok: ratio >= 4.5 && !indeterminate, fg, bg, ...(indeterminate ? { indeterminate } : {}), ...(note ? { note } : {}) }
-  })
+  return raw.map((r) => evaluate(r).row)
+}
+
+/** The stop and color-mix() strings the rows still need the page to resolve. */
+export function pendingColours(raw: RawContrast[]): string[] {
+  return [...new Set(raw.flatMap((r) => evaluate(r).missing))]
 }
 
 /** Banner buttons, PrivacyLinks text and unloaded embed placeholders on the page as it is now. */
 export async function measureContrast(page: Pick<Page, 'evaluate'>): Promise<ContrastRow[]> {
   const raw = (await page.evaluate(MEASURE)) as RawContrast[]
-  const wanted = [...new Set(raw.flatMap((r) => r.images.flatMap((img) => splitTop(img.value, ',').flatMap((l) => gradientStops(l)?.stops ?? []))))]
-  if (wanted.length) {
+  const colours: Record<string, Rgba | null> = {}
+  for (const r of raw) r.colours = colours
+  // Stops first, then the grid and each refinement level of any non-sRGB segment: a few rounds.
+  for (let round = 0; round < 6; round++) {
+    const wanted = pendingColours(raw)
+    if (!wanted.length) break
     const got = (await page.evaluate(`${RASTER}(${JSON.stringify(wanted)})`)) as (Rgba | null)[]
-    const colours = Object.fromEntries(wanted.map((c, i) => [c, got[i] ?? null]))
-    for (const r of raw) r.colours = colours
+    for (const [i, c] of wanted.entries()) colours[c] = got[i] ?? null
   }
   return contrastRows(raw)
 }

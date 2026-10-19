@@ -12,6 +12,7 @@ import { checkConsentPaths } from '../../../ci/rollout/checks/consent-paths'
 import { checkContrast } from '../../../ci/rollout/checks/contrast'
 import { checkEmbedBoxes, compareEmbedHeights } from '../../../ci/rollout/checks/embed-size'
 import { checkRequests } from '../../../ci/rollout/checks/requests'
+import { wcagContrast } from '../../../ci/rollout/lib/colour'
 
 const MAPS = 'https://www.google.com/maps/embed?pb=fixture'
 const CAL = 'https://calendar.google.com/calendar/embed?src=fixture'
@@ -68,8 +69,8 @@ const placeholder = (style: string) =>
 // knutssonsbil's shape: a box whose height is padding (40 % of the width) plus a min-height (here
 // content-box, so 40 % + 320px; the shape, not knutssonsbil's numbers, is what matters).
 const ratioBox = (inner: string) => `<div style="position:relative;padding-bottom:40%;min-height:320px">${inner}</div>`
-const gradientFooter = (background: string) =>
-  `<style>:root{--color-primary:#004b85;--brand-dark:#00375f}footer{background:${background};color:#fff;padding:24px}</style><footer><div data-privacy-links style="color:rgb(255 255 255 / 0.7)"><button data-consent-open style="color:inherit;background:none;border:0">Cookie-inställningar</button> <a href="/integritet" style="color:inherit">Integritetspolicy</a></div></footer>`
+const gradientFooter = (background: string, footer = '', links = 'color:rgb(255 255 255 / 0.7)') =>
+  `<style>:root{--color-primary:#004b85;--brand-dark:#00375f}footer{background:${background};color:#fff;padding:24px;${footer}}</style><footer><div data-privacy-links style="${links}"><button data-consent-open style="color:inherit;background:none;border:0">Cookie-inställningar</button> <a href="/integritet" style="color:inherit">Integritetspolicy</a></div></footer>`
 const widget = `<div data-consent-embed="elfsight" data-script="${ELFSIGHT}"><template data-payload><div class="elfsight-app-x"></div></template><button data-load>Visa</button><input type="checkbox" data-remember></div>`
 
 const LATE = `${banner()}<div style="height:10000px;position:relative"><div id="s" style="position:absolute;top:3000px;height:10px"></div></div>
@@ -117,6 +118,16 @@ const FIXTURES: Record<string, string> = {
   gradfoot: page(gradientFooter('linear-gradient(180deg, var(--color-primary) 0%, var(--brand-dark) 100%)')),
   gradfail: page(gradientFooter('linear-gradient(180deg, var(--brand-dark) 0%, #fafafa 100%)')),
   gradphoto: page(gradientFooter('url("/photo.jpg"), linear-gradient(180deg, var(--color-primary) 0%, var(--brand-dark) 100%)')),
+  // PR #72 review: white on darkblue→darkred in hsl longer hue passes yellow (3.64:1), not the 10:1
+  // of its stops; a dark gradient screened over white; a black gradient clipped to the text.
+  gradhsl: page(gradientFooter('linear-gradient(to right in hsl longer hue, darkblue, darkred)', '', 'color:#fff')),
+  gradblend: page(gradientFooter('linear-gradient(#003, #003), #fff', 'background-blend-mode:screen', 'color:#fff')),
+  gradclip: page(gradientFooter('linear-gradient(#000, #000)', '-webkit-background-clip:text;background-clip:text', 'color:#fff')),
+  // Ancestor effects: a filter on the footer; opacity on a footer with a background (indeterminate),
+  // and opacity on the background-less links wrapper (folded into the text colour, measured).
+  gradfilter: page(gradientFooter('#00375f', 'filter:brightness(3)', 'color:#fff')),
+  gradfade: page(gradientFooter('#00375f', 'opacity:0.4', 'color:#fff')),
+  linksfade: page(gradientFooter('#00375f', '', 'color:#fff;opacity:0.7')),
   // #46 (knutssonsbil): main's absolute iframe fills the ratio box; the in-flow 320px wrapper does
   // not (the map shrinks, an empty band below); absolute inset-0 fills it again.
   ratiomain: page(ratioBox(`<iframe src="${MAPS}" style="position:absolute;inset:0;width:100%;height:100%;border:0"></iframe>`)),
@@ -277,6 +288,19 @@ try {
     expect(light.length === 2 && light.every((r) => !r.ok && !r.indeterminate && r.ratio < 1.5), '/gradfail/ a gradient ending near white fails, determinately', light)
     const photo = await links('/gradphoto/')
     expect(photo.length === 2 && photo.every((r) => !r.ok && r.indeterminate === 'background image behind the text'), '/gradphoto/ a photo over the gradient stays indeterminate', photo)
+    const hsl = await links('/gradhsl/')
+    expect(hsl.length === 2 && hsl.every((r) => !r.ok && !r.indeterminate && r.ratio > 3.5 && r.ratio < 3.8 && r.note === 'gradient, worst point between stops; interpolated in hsl longer hue'), '/gradhsl/ hsl longer hue is mixed by the page: white fails on the yellow it passes, about 3.64:1', hsl)
+    const blend = await links('/gradblend/')
+    expect(blend.length === 2 && blend.every((r) => !r.ok && r.indeterminate === 'effect on the text or its background: background-blend-mode'), '/gradblend/ background-blend-mode is indeterminate', blend)
+    const clip = await links('/gradclip/')
+    expect(clip.length === 2 && clip.every((r) => !r.ok && r.indeterminate === 'effect on the text or its background: background-clip'), '/gradclip/ background-clip: text is indeterminate', clip)
+    const filter = await links('/gradfilter/')
+    expect(filter.length === 2 && filter.every((r) => !r.ok && r.indeterminate === 'effect on the text or its background: filter'), '/gradfilter/ a filter on an ancestor is indeterminate', filter)
+    const fade = await links('/gradfade/')
+    expect(fade.length === 2 && fade.every((r) => !r.ok && r.indeterminate === 'effect on the text or its background: opacity'), '/gradfade/ opacity on the footer that has the background is indeterminate', fade)
+    const faded = await links('/linksfade/')
+    const want = wcagContrast({ r: 0.7 * 255 + 0.3 * 0, g: 0.7 * 255 + 0.3 * 0x37, b: 0.7 * 255 + 0.3 * 0x5f }, { r: 0, g: 0x37, b: 0x5f })
+    expect(faded.length === 2 && faded.every((r) => r.ok && !r.indeterminate && Math.abs(r.ratio - want) < 0.05), '/linksfade/ opacity-70 on the background-less links wrapper fades the text and is measured', { faded, want })
   }
   {
     const boxes = (path: string) => checkEmbedBoxes(browser, BASE, [path], [360, 1280], { stub: true })

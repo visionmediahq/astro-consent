@@ -6,7 +6,7 @@ import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { rememberCandidates, rememberOk, type RememberCounts } from '../../../ci/rollout/checks/consent-paths'
 import { diffRootStyles } from '../../../ci/rollout/checks/root-styles'
-import { type BgImage, contrastRows, coversBackground, formatContrast, gradientStops, measureContrast, type RawContrast } from '../../../ci/rollout/checks/contrast'
+import { type BgImage, contrastRows, coversBackground, formatContrast, gradientStops, measureContrast, pendingColours, type RawContrast } from '../../../ci/rollout/checks/contrast'
 import { compareEmbedHeights, type EmbedBox } from '../../../ci/rollout/checks/embed-size'
 import { extractLinks, listPages, MISSING_PREFIX } from '../../../ci/rollout/checks/pages'
 import { blockUmami, freshPage, isBlocked, isUmamiUrl, notRequested, umamiScriptSrcs } from '../../../ci/rollout/checks/requests'
@@ -300,7 +300,7 @@ describe('contrast', () => {
     const footer = (value: string, more: Partial<RawContrast> = {}) => raw({ fg: WHITE70, layers: [[255, 255, 255, 255]], images: [img(value)], colours, ...more })
     const vs = (fg: [number, number, number], bg: [number, number, number]) => {
       const a = 179 / 255
-      const mixed = fg.map((c, i) => Math.round(a * c + (1 - a) * bg[i]!))
+      const mixed = fg.map((c, i) => a * c + (1 - a) * bg[i]!)
       return wcagContrast({ r: mixed[0]!, g: mixed[1]!, b: mixed[2]! }, { r: bg[0], g: bg[1], b: bg[2] })
     }
 
@@ -308,10 +308,25 @@ describe('contrast', () => {
       expect(gradientStops(FOOTER)).toEqual({ stops: [PRIMARY, DARK] })
       expect(gradientStops('radial-gradient(circle at 50% 50%, rgba(0, 0, 0, 0.5), 30%, rgb(0, 0, 0) 40% 60%)')).toEqual({ stops: ['rgba(0, 0, 0, 0.5)', 'rgb(0, 0, 0)'] })
       expect(gradientStops('repeating-linear-gradient(to right, rgb(0, 0, 0) 0px, rgb(255, 0, 0) 10px)')).toEqual({ stops: ['rgb(0, 0, 0)', 'rgb(255, 0, 0)'] })
-      expect(gradientStops('linear-gradient(in oklch 90deg, oklch(0.4 0.1 250), oklch(0.3 0.1 250))')).toEqual({ stops: ['oklch(0.4 0.1 250)', 'oklch(0.3 0.1 250)'], space: 'oklch' })
+      expect(gradientStops('linear-gradient(in oklch 90deg, oklch(0.4 0.1 250), oklch(0.3 0.1 250))')).toEqual({ stops: ['oklch(0.4 0.1 250)', 'oklch(0.3 0.1 250)'], method: 'oklch' })
+      expect(gradientStops('linear-gradient(to right in hsl longer hue, rgb(0, 0, 139), rgb(139, 0, 0))')).toEqual({ stops: ['rgb(0, 0, 139)', 'rgb(139, 0, 0)'], method: 'hsl longer hue' })
+      expect(gradientStops('conic-gradient(from 90deg at 10px 20%, rgb(0, 0, 0), rgb(1, 1, 1))')).toEqual({ stops: ['rgb(0, 0, 0)', 'rgb(1, 1, 1)'] })
+      expect(gradientStops('radial-gradient(farthest-corner ellipse at left top in srgb, rgb(0, 0, 0), rgb(1, 1, 1))')).toEqual({ stops: ['rgb(0, 0, 0)', 'rgb(1, 1, 1)'] })
       // Non-legacy stops interpolate in oklab by default (CSS Color 4).
-      expect(gradientStops('linear-gradient(oklch(0.4 0.1 250), oklch(0.3 0.1 250))')).toEqual({ stops: ['oklch(0.4 0.1 250)', 'oklch(0.3 0.1 250)'], space: 'oklab' })
-      for (const bad of ['url("/bg.jpg")', 'linear-gradient(currentcolor, rgb(0, 0, 0))', 'linear-gradient(rgb(0, 0, 0))', 'linear-gradient(var(--x), rgb(0, 0, 0))', 'image-set("a.png" 1x)', 'linear-gradient(rgb(0, 0, 0), rgb(0, 0, 0) foo)'])
+      expect(gradientStops('linear-gradient(oklch(0.4 0.1 250), oklch(0.3 0.1 250))')).toEqual({ stops: ['oklch(0.4 0.1 250)', 'oklch(0.3 0.1 250)'], method: 'oklab' })
+      for (const bad of [
+        'url("/bg.jpg")',
+        'linear-gradient(currentcolor, rgb(0, 0, 0))',
+        'linear-gradient(rgb(0, 0, 0))',
+        'linear-gradient(var(--x), rgb(0, 0, 0))',
+        'image-set("a.png" 1x)',
+        'linear-gradient(rgb(0, 0, 0), rgb(0, 0, 0) foo)',
+        // The prelude is whitelisted: an unknown keyword, space or hue method is not guessed at.
+        'linear-gradient(sideways, rgb(0, 0, 0), rgb(1, 1, 1))',
+        'linear-gradient(in foo, rgb(0, 0, 0), rgb(1, 1, 1))',
+        'linear-gradient(in srgb longer hue, rgb(0, 0, 0), rgb(1, 1, 1))',
+        'linear-gradient(in hsl longer, rgb(0, 0, 0), rgb(1, 1, 1))',
+      ])
         expect(gradientStops(bad), bad).toBeUndefined()
     })
 
@@ -356,15 +371,15 @@ describe('contrast', () => {
       expect(row!.ratio).toBeLessThan(wcagContrast({ r: 0, g: 0, b: 0 }, { r: 255, g: 0, b: 0 }))
     })
 
-    it('another interpolation space is sampled in sRGB and says so', () => {
+    it('another interpolation space is not guessed: without the page mixing its points it is indeterminate', () => {
       const [row] = contrastRows([footer('linear-gradient(in oklch, oklch(0.4 0.1 250), oklch(0.3 0.1 250))')])
-      expect(row!.ok).toBe(true)
-      expect(row!.note).toBe('gradient, worst stop; interpolated in oklch, sampled in sRGB')
+      expect(row).toMatchObject({ ok: false, indeterminate: 'gradient colour the page did not resolve' })
+      expect(pendingColours([footer('linear-gradient(in oklch, oklch(0.4 0.1 250), oklch(0.3 0.1 250))')])).toContain('color-mix(in oklch, oklch(0.4 0.1 250) 50%, oklch(0.3 0.1 250) 50%)')
     })
 
     it('a stop the page could not rasterise is indeterminate', () => {
       const [row] = contrastRows([footer('linear-gradient(rgb(1, 2, 3), rgb(0, 0, 0))')])
-      expect(row).toMatchObject({ ok: false, indeterminate: 'background image behind the text' })
+      expect(row).toMatchObject({ ok: false, indeterminate: 'gradient colour the page did not resolve' })
     })
 
     it('an opaque gradient hides what is beneath it: no opaque colour needed, a body photo ignored', () => {
@@ -392,6 +407,116 @@ describe('contrast', () => {
       const [row] = await measureContrast(page as never)
       expect(calls).toHaveLength(2)
       expect(row).toMatchObject({ ok: true, note: 'gradient, worst stop' })
+    })
+
+    // A stand-in for the page's colour resolution: rgb() as is, and color-mix in hsl longer hue.
+    const resolve = (css: string): RawContrast['fg'] | null => {
+      const rgb = (s: string) => s.match(/\d+/g)!.map(Number) as [number, number, number]
+      if (/^rgb\(/.test(css)) return [...rgb(css), 255]
+      const m = /^color-mix\(in hsl longer hue, (rgb\([^)]*\)) ([\d.]+)%, (rgb\([^)]*\)) ([\d.]+)%\)$/.exec(css)
+      if (!m) return null
+      const toHsl = ([r, g, b]: number[]) => {
+        const [R, G, B] = [r! / 255, g! / 255, b! / 255]
+        const max = Math.max(R, G, B)
+        const min = Math.min(R, G, B)
+        const l = (max + min) / 2
+        const d = max - min
+        const s = d === 0 ? 0 : d / (1 - Math.abs(2 * l - 1))
+        const h = d === 0 ? 0 : max === R ? 60 * (((G - B) / d + 6) % 6) : max === G ? 60 * ((B - R) / d + 2) : 60 * ((R - G) / d + 4)
+        return [h, s, l] as const
+      }
+      const fromHsl = (h: number, s: number, l: number) => {
+        const f = (n: number) => {
+          const k = (n + h / 30) % 12
+          return l - s * Math.min(l, 1 - l) * Math.max(-1, Math.min(k - 3, 9 - k, 1))
+        }
+        return [f(0), f(8), f(4)].map((v) => Math.round(v * 255))
+      }
+      const a = toHsl(rgb(m[1]!))
+      const b = toHsl(rgb(m[3]!))
+      const t = Number(m[4]) / 100
+      let [h1, h2] = [a[0], b[0]]
+      const d = h2 - h1
+      if (d > 0 && d < 180) h1 += 360
+      else if (d > -180 && d <= 0) h2 += 360
+      const h = (((h1 + (h2 - h1) * t) % 360) + 360) % 360
+      return [...(fromHsl(h, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t) as [number, number, number]), 255]
+    }
+    const fakePage = (rows: RawContrast[]) => {
+      const calls: string[] = []
+      return {
+        calls,
+        evaluate: async (src: string) => {
+          calls.push(src)
+          if (calls.length === 1) return rows
+          return (JSON.parse(/\)\((\[.*\])\)$/s.exec(src)![1]!) as string[]).map(resolve)
+        },
+      }
+    }
+
+    it('#1 another space is mixed by the page: white on darkblue to darkred in hsl longer hue passes yellow, 3.64:1', async () => {
+      const value = 'linear-gradient(to right in hsl longer hue, rgb(0, 0, 139), rgb(139, 0, 0))'
+      const page = fakePage([raw({ fg: [255, 255, 255, 255], layers: [[255, 255, 255, 255]], images: [img(value)] })])
+      const [row] = await measureContrast(page as never)
+      expect(row!.indeterminate).toBeUndefined()
+      expect(row).toMatchObject({ ok: false, note: 'gradient, worst point between stops; interpolated in hsl longer hue' })
+      expect(row!.ratio).toBeCloseTo(3.64, 1)
+      expect(page.calls.some((c) => c.includes('color-mix(in hsl longer hue, rgb(0, 0, 139)'))).toBe(true)
+    })
+
+    it('a mix the page does not resolve stays indeterminate', async () => {
+      const page = fakePage([raw({ fg: [255, 255, 255, 255], layers: [[255, 255, 255, 255]], images: [img('linear-gradient(in lch, rgb(0, 0, 139), rgb(139, 0, 0))')] })])
+      const [row] = await measureContrast(page as never)
+      expect(row).toMatchObject({ ok: false, indeterminate: 'gradient colour the page did not resolve' })
+    })
+
+    it('#5 the worst point is found to well within 0.001, not just the nearest sample', () => {
+      let seed = 42
+      const rnd = () => ((seed = (seed * 1103515245 + 12345) % 2 ** 31) / 2 ** 31)
+      const c = () => Math.floor(rnd() * 256)
+      const lerp = (a: number[], b: number[], t: number) => a.map((x, i) => x + (b[i]! - x) * t)
+      let worstGap = 0
+      for (let n = 0; n < 300; n++) {
+        const a = [c(), c(), c()]
+        const b = [c(), c(), c()]
+        const fg: RawContrast['fg'] = [c(), c(), c(), 128 + Math.floor(rnd() * 128)]
+        const colours = { [`rgb(${a.join(', ')})`]: [...a, 255], [`rgb(${b.join(', ')})`]: [...b, 255] } as RawContrast['colours']
+        const [row] = contrastRows([raw({ fg, layers: [[255, 255, 255, 255]], images: [img(`linear-gradient(rgb(${a.join(', ')}), rgb(${b.join(', ')}))`)], colours })])
+        let brute = Infinity
+        for (let k = 0; k <= 20000; k++) {
+          const [r, g, bb] = lerp(a, b, k / 20000) as [number, number, number]
+          const al = fg[3] / 255
+          const f = { r: al * fg[0] + (1 - al) * r, g: al * fg[1] + (1 - al) * g, b: al * fg[2] + (1 - al) * bb }
+          brute = Math.min(brute, wcagContrast(f, { r, g, b: bb }))
+        }
+        worstGap = Math.max(worstGap, row!.ratio - brute)
+      }
+      expect(worstGap).toBeLessThan(1e-4)
+    })
+
+    it('more than one gradient that shows is not combined: indeterminate', () => {
+      const top = 'linear-gradient(rgba(0, 0, 0, 0.5), rgb(0, 0, 0))'
+      const [row] = contrastRows([raw({ fg: [255, 255, 255, 255], layers: [[255, 255, 255, 255]], images: [img(`${top}, ${FOOTER}`)], colours })])
+      expect(row).toMatchObject({ ok: false, indeterminate: 'more than one gradient behind the text' })
+      // An opaque gradient on top hides the other one.
+      expect(contrastRows([footer(`${FOOTER}, ${top}`)])[0]).toMatchObject({ ok: true })
+    })
+  })
+
+  describe('effects the colours do not show (#2–#4): indeterminate', () => {
+    it('background-blend-mode, background-clip: text, filter, mix-blend-mode, backdrop-filter, opacity over a background', () => {
+      for (const effect of ['background-blend-mode', 'background-clip', 'opacity', 'mix-blend-mode', 'filter', 'backdrop-filter', 'positioned ::before with a background']) {
+        const [row] = contrastRows([raw({ effects: [effect] })])
+        expect(row, effect).toMatchObject({ ok: false, indeterminate: `effect on the text or its background: ${effect}` })
+        expect(row!.ratio, effect).toBeCloseTo(21, 5)
+      }
+    })
+
+    it('opacity on the text with no background of its own fades the text colour (a footer opacity-70)', () => {
+      const [row] = contrastRows([raw({ fg: [255, 255, 255, 255], fade: 0.7, layers: [[0, 0, 0, 255]] })])
+      expect(row!.indeterminate).toBeUndefined()
+      expect(row!.ratio).toBeCloseTo(wcagContrast({ r: 178.5, g: 178.5, b: 178.5 }, { r: 0, g: 0, b: 0 }), 5)
+      expect(row!.fg).toEqual({ r: 179, g: 179, b: 179 })
     })
   })
 

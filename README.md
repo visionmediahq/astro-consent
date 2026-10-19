@@ -305,11 +305,19 @@ npx tsx ci/rollout/run.ts help
   Visa button, "Visa alltid" label and "Öppna i" link. A dark theme that sets `--color-base-content`
   but not `--color-base-200` leaves light text on the light placeholder (knutssonsbil, about 1.2:1).
   `live post-merge` runs the same contrast check, so live sites are measured as well.
-- A background that is a gradient of colours (nanolfs-villan's footer: two brand blues) is measured,
-  not reported indeterminate: every stop and 16 points between each pair, alpha composited over what
-  is beneath, and the worst wins (`5.23:1 ok (gradient, worst stop)`). A `url()` image that shows,
-  or a stop the page cannot rasterise, stays indeterminate. A gradient interpolated in another space
-  (`in oklch`, or oklch stops) is still sampled in sRGB, and the line says so.
+- A background that is one gradient of colours (nanolfs-villan's footer: two brand blues) is
+  measured, not reported indeterminate. Each segment between two stops is searched for its worst
+  point (a grid, refined around every local minimum), alpha composited over what is beneath:
+  `5.25:1 ok (gradient, worst stop)`. sRGB segments are interpolated by the tool; any other method
+  (`in oklch`, `in hsl longer hue`, the oklab default for oklch stops) is mixed by the page with
+  `color-mix()` in the same method, and the line names it. A `url()` image that shows, a second
+  gradient that shows, or a stop or mix the page cannot resolve stays indeterminate.
+- Effects the colours do not show are indeterminate: `background-blend-mode`, `background-clip:
+  text`, `opacity` on an element with a background or above it, and `mix-blend-mode`, `filter` or
+  `backdrop-filter` on the text or any ancestor. Opacity on the text or a background-less wrapper
+  (`opacity-70` on the links) fades the text colour and is measured. A positioned `::before`/`::after`
+  with a background on the way is indeterminate whether or not it covers the text (its box is not
+  checked), so a decorative stripe can block a site that is fine: look at the screenshot.
 - `verify` stops before any step when the disk holding the site has less than 15 GB free
   (`ROLLOUT_MIN_FREE_GB` changes the threshold; demo mode skips it). Each verify runs `npm ci` and a
   build twice and builds a Docker image, and Docker failed with I/O errors at 2.5 GB free during the
