@@ -1116,6 +1116,11 @@ describe('wireEmbeds', () => {
     ]) {
       expect(embed(parent)).toContain(inside())
     }
+    // Review of #67: a flex or grid parent would shrink the embed (ConsentEmbed's root has no
+    // width; 807×454 where main was 1280×720), with any variant or `!`.
+    for (const cls of ['flex', 'inline-flex', 'md:flex', 'grid', '!grid', 'lg:grid!', 'place-items-center', 'items-center', 'justify-center', 'md:justify-start']) {
+      expect(embed(`<div class="aspect-video w-full ${cls}">\n  ${map}\n</div>\n`)).toContain(`<div class="aspect-video w-full ${cls}">\n  ${inside()}\n</div>`)
+    }
     expect(embed(`<div class="aspect-video">\n  <iframe class="w-full h-full map-frame" src="https://www.google.com/maps/embed?pb=!1" title="Karta"></iframe>\n</div>\n`)).toContain(
       inside(' w-full map-frame'),
     )
@@ -1185,6 +1190,21 @@ describe('wireEmbeds', () => {
     expect(
       refused(`<div class="relative h-96">\n  <iframe class="absolute inset-0 w-full h-full" ${src}></iframe>\n</div>\n<style>\n  @media (max-width: 640px) { iframe { position: static; } }\n</style>\n`),
     ).toEqual(["scoped CSS 'iframe' sets an iframe position and wire cannot tell if it applies to this map"])
+    // Review of #67: a background map under other content in the box. The wrapper would sit under
+    // that content (Visa unclickable) and a 0px box would spill over what follows; main refused it.
+    expect(
+      refused(`<div class="relative">\n  <iframe class="absolute inset-0 w-full h-full" ${src}></iframe>\n  <div class="relative z-10 p-8"><h2>Hitta hit</h2></div>\n</div>\n`),
+    ).toEqual(['the map iframe fills its parent absolutely, but the parent holds more than the map'])
+    // A comment beside it is no content (aremaskin's KontaktSection holds only the iframe).
+    expect(embed(`<div class="relative min-h-[400px] lg:min-h-0" data-animate>\n  <!-- karta -->\n  <iframe class="absolute inset-0 w-full h-full" style="border: 0; display: block;" ${src}></iframe>\n</div>\n`)).toContain(
+      '<div class="absolute inset-0 grid"><ConsentEmbed',
+    )
+    // Review of #67: a min/max size class on the iframe is not dropped silently.
+    for (const cls of ['max-h-96', 'min-h-[300px]', 'md:max-w-xl']) {
+      expect(refused(`<div class="relative h-96">\n  <iframe class="absolute inset-0 w-full h-full ${cls}" ${src}></iframe>\n</div>\n`)).toEqual([
+        `the map iframe has a min/max size class (${cls}) that the absolute wrapper does not carry`,
+      ])
+    }
   })
 
   test('a parent sized by a scoped aspect-ratio is definite (ahatrafikskola: .contact-info-map-frame)', () => {

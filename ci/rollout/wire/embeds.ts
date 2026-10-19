@@ -502,8 +502,23 @@ function absoluteBox(node: AstroNode, parent: AstroNode, rules: CssRule[], class
     return new Error('the map iframe is absolutely positioned but does not fill its parent')
   }
   if (!relativeParent(parent, rules)) return new Error('the map iframe fills its parent absolutely, but the parent is not position: relative')
+  // Review of #67: a background map under other content. The wrapper would sit under that content
+  // (Visa unclickable), and a box that takes its height from the content alone has none of its own.
+  if (!onlyChild(parent, node, text)) return new Error('the map iframe fills its parent absolutely, but the parent holds more than the map')
+  const limit = classes.find((c) => MIN_MAX_CLASS.test(utility(c)))
+  if (limit) return new Error(`the map iframe has a min/max size class (${limit}) that the absolute wrapper does not carry`)
   return aspectParentBox(node, parent, rules, classes, text) ?? { classes: ['absolute', 'inset-0', 'grid', ...classes.filter((c) => !PLACEMENT_CLASS.test(c))], aspect: true }
 }
+
+const MIN_MAX_CLASS = /^(?:min|max)-[wh]-/
+
+/** `node` is the parent's only content: whitespace and comments aside. */
+function onlyChild(parent: AstroNode, node: AstroNode, text: string): boolean {
+  return parent.children.every((c) => c === node || c.type === 'comment' || (c.type === 'text' && text.slice(c.start, c.end).trim() === ''))
+}
+
+/** Review of #67: a flex or grid parent (any variant, `!` included) would shrink the embed, whose root has no width. */
+const LAYOUT_CLASS = /^(?:flex|inline-flex|grid|inline-grid|place-.+|items-.+|justify-.+)$/
 
 const SIZE_PROP = /^(?:height|min-height|max-height|block-size|min-block-size|max-block-size|aspect-ratio|display)$/
 /** What an iframe replaced with its aspect parent may carry: the embed's own iframe does the same. */
@@ -519,12 +534,13 @@ const DROPPED_IFRAME_STYLE = new Set(['position', 'inset', 'top', 'left', 'width
  */
 function aspectParentBox(node: AstroNode, parent: AstroNode, rules: CssRule[], classes: string[], text: string): Box | null {
   if (parent.type !== 'element' || parent.name === 'span') return null
-  if (parent.children.some((c) => c !== node && !(c.type === 'text' && text.slice(c.start, c.end).trim() === ''))) return null
+  if (!onlyChild(parent, node, text)) return null
   const written = classList(parent)
   const aspects = (written ?? []).filter((c) => ASPECT_CLASS.test(c))
   if (written === null || aspects.length !== 1) return null
   const others = written.filter((c) => c !== aspects[0])
-  const sizing = (c: string): boolean => /^(?:aspect|h|min-h|max-h|size)-/.test(utility(c)) || /\[(?:display|height|min-height|max-height|aspect-ratio):/i.test(c) || dropsBox(c)
+  const sizing = (c: string): boolean =>
+    /^(?:aspect|h|min-h|max-h|size)-/.test(utility(c)) || LAYOUT_CLASS.test(utility(c)) || /\[(?:display|height|min-height|max-height|aspect-ratio):/i.test(c) || dropsBox(c)
   if (others.some(sizing)) return null
   const style = attr(parent, 'style')
   if (style && (style.kind !== 'quoted' || declarations(style.value).some((d) => SIZE_PROP.test(d.prop)))) return null
