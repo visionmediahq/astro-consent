@@ -3,7 +3,7 @@
   "addressCity": "Drottningskär",
   "addressZip": "37364",
   "addressCountry": "SE",
-  "phone": "0708 143 158",
+  "phone": "070-000 00 00",
   "email": "info@aspomad.se",
   "facebookUrl": "https://www.facebook.com/people/Asp-Mad-Vin-Caf/61555871051613/",
   "instagramUrl": "https://www.instagram.com/aspo_mad_vin_och_cafe/",

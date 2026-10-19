@@ -539,7 +539,7 @@ exports[`detect > pilot vasshallakatthotell: consent, matching the committed sna
     {
       "alignment": "left",
       "centred": false,
-      "end": 7482,
+      "end": 7468,
       "file": "src/components/Footer.astro",
       "kind": "component",
       "start": 100,
@@ -549,14 +549,14 @@ exports[`detect > pilot vasshallakatthotell: consent, matching the committed sna
   "iframes": [
     {
       "classes": null,
-      "end": 4488,
+      "end": 4474,
       "file": "src/components/ContactSection.astro",
       "height": "100%",
       "host": "maps.google.com",
       "service": "google-maps",
       "src": "https://maps.google.com/maps?q=57.698734,13.042359&hl=sv&z=15&output=embed",
       "srcKind": "literal",
-      "start": 4110,
+      "start": 4096,
       "style": "border:0;",
       "title": "Karta till Vasshalla Katthotell i Gånghester",
     },

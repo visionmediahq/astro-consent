@@ -45,7 +45,7 @@ import { Phone, Mail, MapPin, ExternalLink } from '@lucide/astro';
         </p>
 
         <a
-          href="https://www.facebook.com/profile.php?id=100063727656056"
+          href="https://www.facebook.com/profile.php?id=0"
           target="_blank"
           rel="noopener noreferrer"
           class="focus-ring-primary inline-flex items-center gap-2 text-sm font-medium hover:underline mb-6"

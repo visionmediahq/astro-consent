@@ -90,7 +90,7 @@ import PrivacyLinks from '@visionmediahq/astro-consent/components/PrivacyLinks.a
         </ul>
         <div class="mt-6">
           <a
-            href="https://www.facebook.com/profile.php?id=100063727656056"
+            href="https://www.facebook.com/profile.php?id=0"
             target="_blank"
             rel="noopener noreferrer"
             aria-label="Besök oss på Facebook"
