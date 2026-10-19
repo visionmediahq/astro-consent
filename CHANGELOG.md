@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.1.3 (unreleased)
+
+- Fix: the banner's width is `max-w-[42rem]` instead of `max-w-2xl`. Tailwind 4 resolves
+  `max-w-2xl` through a site's `--spacing-2xl` when the site defines one, which made the banner
+  64px wide on gron-kontor (#64).
+- The banner is `z-[100]` instead of `z-50`, so a fixed site bar at z-index 50–99 (a mobile call
+  bar on hkc-fitness and aspokarlsson) no longer covers its buttons (#64).
+- The placeholder's "Öppna i …" link is `text-base-content`, so a site's `a { color }` in
+  `@layer base` can't lower its contrast (tfhydraulik, #64).
+- The placeholder's "Visa alltid" checkbox border is `border-base-content/60`, for WCAG 1.4.11
+  (3:1 for a control's boundary). DaisyUI's default measured 1.5:1 on `bg-base-200` in the demo. The banner's
+  settings toggles already passed 3:1 and are unchanged; e2e now measures both (#52).
+- No wording change: `CONSENT_VERSION` is unchanged and no visitor is asked again.
+
 ## 1.1.2
 
 - Fix: on Astro 6, `<ConsentWidget>` rendered its placeholder inside the inert `<template>`, so the

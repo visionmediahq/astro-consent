@@ -1,0 +1,120 @@
+// What a site's own CSS can do to the package's markup, and what the package must survive.
+import { expect, test, type Locator } from '@playwright/test'
+import { parseColour, wcagContrast } from '../../ci/rollout/lib/colour'
+import { action, banner, stub } from './helpers'
+
+/**
+ * The colour of `property` on `el` as it is painted, and the background behind it: the element's
+ * and its ancestors' backgrounds composited over white, then the colour itself over that. Canvas
+ * does the compositing, so alpha and oklch()/oklab() serialisations come out as plain sRGB.
+ */
+async function painted(el: Locator, property: 'color' | 'border-top-color'): Promise<{ fg: string; bg: string }> {
+  return el.evaluate((node, prop) => {
+    const ctx = document.createElement('canvas').getContext('2d', { willReadFrequently: true })!
+    const read = (): string => {
+      const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data
+      return `rgb(${r}, ${g}, ${b})`
+    }
+    const layers: string[] = []
+    for (let at: Element | null = node; at; at = at.parentElement) layers.unshift(getComputedStyle(at).backgroundColor)
+    ctx.fillStyle = '#fff'
+    ctx.fillRect(0, 0, 1, 1)
+    for (const layer of layers) {
+      ctx.fillStyle = layer
+      ctx.fillRect(0, 0, 1, 1)
+    }
+    const bg = read()
+    ctx.fillStyle = getComputedStyle(node).getPropertyValue(prop)
+    ctx.fillRect(0, 0, 1, 1)
+    return { fg: read(), bg }
+  }, property)
+}
+
+async function contrast(el: Locator, property: 'color' | 'border-top-color'): Promise<[number, string]> {
+  const { fg, bg } = await painted(el, property)
+  return [wcagContrast(parseColour(fg), parseColour(bg)), `${property} ${fg} on ${bg}`]
+}
+
+const noTransitions = '* { transition: none !important }'
+
+test.describe('site styles', () => {
+  // tfhydraulik (#64): a site's `a { color }` in @layer base gave the "Öppna i" link 3.34:1.
+  test("the placeholder's open link keeps AA contrast under a site's link colour", async ({ page, context }) => {
+    await stub(context)
+    await page.goto('/karta')
+    await page.addStyleTag({ content: `${noTransitions} @layer base { a { color: #c8c8c8 } }` })
+    const links = page.locator('[data-consent-embed] a[data-open]')
+    expect(await links.count()).toBeGreaterThan(0)
+    for (const link of await links.all()) {
+      const [ratio, what] = await contrast(link, 'color')
+      expect(ratio, what).toBeGreaterThanOrEqual(4.5)
+    }
+  })
+
+  // hkc-fitness (#64): a fixed mobile call bar at z-index 60 covered the banner's buttons.
+  test('a fixed site bar up to z-index 99 does not cover the banner', async ({ page, context }) => {
+    await stub(context)
+    await page.setViewportSize({ width: 360, height: 640 })
+    await page.goto('/')
+    await expect(banner(page)).toBeVisible()
+    await page.evaluate(() => {
+      const bar = document.createElement('a')
+      bar.textContent = '0142-425 25'
+      bar.setAttribute('style', 'position:fixed;left:0;right:0;bottom:0;height:60vh;z-index:99;background:#ddd')
+      document.body.append(bar)
+    })
+    for (const name of ['settings', 'none', 'all']) {
+      const hit = await action(page, name).evaluate((button) => {
+        const box = button.getBoundingClientRect()
+        const top = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2)
+        return top !== null && button.contains(top)
+      })
+      expect(hit, `${name} is the topmost element at its centre`).toBe(true)
+    }
+  })
+})
+
+// WCAG 1.4.11 (#52): the boundary of a control needs 3:1 against what is behind it. DaisyUI's
+// checkbox border is base-content at 20 % (about 1.8:1).
+test.describe('control boundaries are 3:1', () => {
+  test('the placeholder remember checkbox', async ({ page, context }) => {
+    await stub(context)
+    await page.goto('/karta')
+    await page.addStyleTag({ content: noTransitions })
+    const boxes = page.locator('[data-consent-embed] [data-remember]')
+    expect(await boxes.count()).toBeGreaterThan(0)
+    for (const box of await boxes.all()) {
+      for (const checked of [false, true]) {
+        await box.setChecked(checked)
+        const [ratio, what] = await contrast(box, 'border-top-color')
+        expect(ratio, `${checked ? 'checked' : 'unchecked'}: ${what}`).toBeGreaterThanOrEqual(3)
+      }
+    }
+  })
+
+  test('the widget remember checkbox', async ({ page, context }) => {
+    await stub(context)
+    await page.goto('/flode')
+    await page.addStyleTag({ content: noTransitions })
+    const [ratio, what] = await contrast(page.locator('#flode-a [data-remember]'), 'border-top-color')
+    expect(ratio, what).toBeGreaterThanOrEqual(3)
+  })
+
+  test('the banner settings toggles', async ({ page, context }) => {
+    await stub(context)
+    await page.goto('/')
+    await page.addStyleTag({ content: noTransitions })
+    await action(page, 'settings').click()
+    // Service rows show only once granted; show them unticked to measure them too.
+    await page.evaluate(() => {
+      for (const row of document.querySelectorAll<HTMLElement>('[data-consent-service]')) row.hidden = false
+    })
+    const toggles = banner(page).locator('form[data-consent-settings] input[type="checkbox"]:not(:disabled)')
+    expect(await toggles.count()).toBeGreaterThan(2)
+    for (const toggle of await toggles.all()) {
+      const name = await toggle.getAttribute('name')
+      const [ratio, what] = await contrast(toggle, 'border-top-color')
+      expect(ratio, `${name}: ${what}`).toBeGreaterThanOrEqual(3)
+    }
+  })
+})
