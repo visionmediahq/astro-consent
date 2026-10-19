@@ -52,8 +52,13 @@ const leafOf = (route: string): string => route.split('/').pop() ?? ''
 const POLICY_INSIDE = (leaf: string): boolean =>
   leaf.split('-').some((w) => /^(?:integritet|personuppgift|dataskydd)/i.test(w) || /^(?:gdpr|privacy)$/i.test(w))
 
-/** A route under another language's folder (`/en/`, `/de-at/`…); Swedish folders such as `/om/` are not one, nor `/sv(-se)/`. */
-const FOREIGN_PREFIX = /^\/(?:en|de|fi|no|nb|nn|da|is|fr|es|it|nl|pl|pt|ru|uk|et|lv|lt|ar|tr|zh|ja|ko)(?:-[a-z]{2})?\//i
+/**
+ * A route under another language's folder (`/en/`, `/de-at/`…); Swedish folders such as `/om/` are
+ * not one, nor `/sv(-se)/`. Nor `/it/` (#65): Swedish IT firms use it as a folder, and an Italian
+ * version of a Swedish client site is rarer than that. Treating it as foreign only demoted the
+ * route, so leaving it out at worst lets an Italian page tie with a Swedish one at the same depth.
+ */
+const FOREIGN_PREFIX = /^\/(?:en|de|fi|no|nb|nn|da|is|fr|es|nl|pl|pt|ru|uk|et|lv|lt|ar|tr|zh|ja|ko)(?:-[a-z]{2})?\//i
 
 const isPage = (file: string): boolean => file.startsWith('src/pages/')
 
@@ -282,22 +287,25 @@ export function detectStructure(files: SiteFiles): DetectedStructure {
   })
 
   // #61 (schloetter): the glob order put `/en/gdpr` before `/gdpr`. A route under another language's
-  // prefix (`/en/`, `/de/`…) comes last, then fewer segments, then the shorter path.
+  // prefix (`/en/`, `/de/`…) comes last; then a cookie page or a slug with the word only later on
+  // (#65: `/om-oss/integritetspolicy` beats `/cookies`); then fewer segments, the word, the shorter path.
   const foreign = (route: string): number => (FOREIGN_PREFIX.test(route) ? 1 : 0)
   const depth = (route: string): number => route.split('/').length
-  // A Swedish privacy word first, then gdpr, then English, then a cookie page.
+  // A Swedish privacy word first, then gdpr, then English, then a cookie page, then a slug that only
+  // has the word later on (kajsa-landgren: kopvillkor-och-integritetspolicy-gdpr).
   const rank = (route: string): number => {
-    const leaf = route.split('/').pop() ?? ''
-    // A slug that only has the word later on (kajsa-landgren: kopvillkor-och-integritetspolicy-gdpr) comes after one that starts with it.
-    if (!POLICY.test(leaf)) return 10
-    return [/^(?:integritet|personuppgift|dataskydd)/i, /^gdpr/i, /^privacy/i].findIndex((r) => r.test(leaf)) >>> 0
+    const leaf = leafOf(route)
+    if (!POLICY.test(leaf)) return 4
+    const i = [/^(?:integritet|personuppgift|dataskydd)/i, /^gdpr/i, /^privacy/i].findIndex((r) => r.test(leaf))
+    return i === -1 ? 3 : i
   }
+  const secondary = (route: string): number => (rank(route) >= 3 ? 1 : 0)
   const policy = files
     .list('src/pages/**/*.{astro,md,mdx}')
     .filter((f) => isRoute(f) && !/\[/.test(f))
     .map(routeOf)
     .filter((route) => POLICY.test(leafOf(route)) || POLICY_INSIDE(leafOf(route)))
-    .sort((a, b) => foreign(a) - foreign(b) || depth(a) - depth(b) || rank(a) - rank(b) || a.length - b.length || a.localeCompare(b))[0]
+    .sort((a, b) => foreign(a) - foreign(b) || secondary(a) - secondary(b) || depth(a) - depth(b) || rank(a) - rank(b) || a.length - b.length || a.localeCompare(b))[0]
 
   return { layouts, footers, footerless, policyPage: policy ?? null, parseErrors, multiFooterPages, ownHtmlPages }
 }
