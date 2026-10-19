@@ -35,12 +35,12 @@ const fill = (text: string, vars: Record<string, string>): string =>
       aria-describedby={infoId}>{fill(sv.embed.show, { name })}</button
     >
     <label class="flex cursor-pointer items-center gap-2 text-xs">
-      <input type="checkbox" class="checkbox checkbox-sm" data-remember />
+      <input type="checkbox" class="checkbox checkbox-sm border-base-content/60" data-remember />
       {fill(sv.embed.remember, { name })}
     </label>
     {
       openHref && (
-        <a href={openHref} target="_blank" rel="noopener noreferrer" class="link text-xs" data-open>
+        <a href={openHref} target="_blank" rel="noopener noreferrer" class="link text-xs text-base-content" data-open>
           {fill(sv.embed.open, { name })}
         </a>
       )
