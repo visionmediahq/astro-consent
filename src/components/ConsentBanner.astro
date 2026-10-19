@@ -18,7 +18,7 @@ const servicesIn = (category: Category): ServiceSlug[] =>
   hidden
   role="region"
   aria-label={sv.region}
-  class="card fixed inset-x-4 bottom-4 z-[100] mx-auto max-h-[calc(100dvh-2rem)] max-w-[42rem] overflow-y-auto border border-base-300 bg-base-100 text-base-content shadow-xl"
+  class="card fixed inset-x-4 bottom-4 z-[99] mx-auto max-h-[calc(100dvh-2rem)] max-w-[42rem] overflow-y-auto border border-base-300 bg-base-100 text-base-content shadow-xl"
 >
   <div class="card-body gap-3 p-4">
     {
@@ -30,7 +30,7 @@ const servicesIn = (category: Category): ServiceSlug[] =>
             {config.policyUrl && (
               <>
                 {' '}
-                <a class="link" href={config.policyUrl}>{sv.notice.more}</a>
+                <a class="link text-base-content" href={config.policyUrl}>{sv.notice.more}</a>
               </>
             )}
           </p>
@@ -49,7 +49,7 @@ const servicesIn = (category: Category): ServiceSlug[] =>
               {config.policyUrl && (
                 <>
                   {' '}
-                  <a class="link" href={config.policyUrl}>{sv.consent.more}</a>
+                  <a class="link text-base-content" href={config.policyUrl}>{sv.consent.more}</a>
                 </>
               )}
             </p>

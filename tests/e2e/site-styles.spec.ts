@@ -39,20 +39,25 @@ const noTransitions = '* { transition: none !important }'
 
 test.describe('site styles', () => {
   // tfhydraulik (#64): a site's `a { color }` in @layer base gave the "Öppna i" link 3.34:1.
-  test("the placeholder's open link keeps AA contrast under a site's link colour", async ({ page, context }) => {
+  // PrivacyLinks is left out on purpose: it follows the site's footer colour.
+  test("the banner's and the placeholder's links keep AA contrast under a site's link colour", async ({ page, context }) => {
     await stub(context)
     await page.goto('/karta')
+    await expect(banner(page)).toBeVisible()
     await page.addStyleTag({ content: `${noTransitions} @layer base { a { color: #c8c8c8 } }` })
-    const links = page.locator('[data-consent-embed] a[data-open]')
-    expect(await links.count()).toBeGreaterThan(0)
-    for (const link of await links.all()) {
+    const embedLinks = page.locator('[data-consent-embed] a[data-open]')
+    const bannerLinks = banner(page).locator('a')
+    expect(await embedLinks.count()).toBeGreaterThan(0)
+    expect(await bannerLinks.count()).toBeGreaterThan(0)
+    for (const link of [...(await embedLinks.all()), ...(await bannerLinks.all())]) {
       const [ratio, what] = await contrast(link, 'color')
-      expect(ratio, what).toBeGreaterThanOrEqual(4.5)
+      expect(ratio, `${await link.textContent()}: ${what}`).toBeGreaterThanOrEqual(4.5)
     }
   })
 
-  // hkc-fitness (#64): a fixed mobile call bar at z-index 60 covered the banner's buttons.
-  test('a fixed site bar up to z-index 99 does not cover the banner', async ({ page, context }) => {
+  // hkc-fitness (#64): a fixed mobile call bar at z-index 60 covered the banner's buttons. The banner
+  // is z-99, not 100: starter sites' skip link is focus:z-[100] ahead of it and must stay on top.
+  test('a fixed site bar up to z-index 98 does not cover the banner', async ({ page, context }) => {
     await stub(context)
     await page.setViewportSize({ width: 360, height: 640 })
     await page.goto('/')
@@ -60,7 +65,7 @@ test.describe('site styles', () => {
     await page.evaluate(() => {
       const bar = document.createElement('a')
       bar.textContent = '0142-425 25'
-      bar.setAttribute('style', 'position:fixed;left:0;right:0;bottom:0;height:60vh;z-index:99;background:#ddd')
+      bar.setAttribute('style', 'position:fixed;left:0;right:0;bottom:0;height:60vh;z-index:98;background:#ddd')
       document.body.append(bar)
     })
     for (const name of ['settings', 'none', 'all']) {
@@ -71,6 +76,24 @@ test.describe('site styles', () => {
       })
       expect(hit, `${name} is the topmost element at its centre`).toBe(true)
     }
+  })
+
+  test("a starter site's focused skip link at z-index 100 stays above the banner", async ({ page, context }) => {
+    await stub(context)
+    await page.setViewportSize({ width: 360, height: 640 })
+    await page.goto('/')
+    await expect(banner(page)).toBeVisible()
+    // Ahead of the banner in the DOM, as in astro-starter's layout; placed where the banner is.
+    const hit = await page.evaluate(() => {
+      const skip = document.createElement('a')
+      skip.href = '#main'
+      skip.textContent = 'Hoppa till innehåll'
+      skip.setAttribute('style', 'position:fixed;left:0;right:0;bottom:0;height:60vh;z-index:100;background:#fff')
+      document.body.prepend(skip)
+      const box = document.querySelector('[data-consent-banner]')!.getBoundingClientRect()
+      return document.elementFromPoint(box.left + box.width / 2, box.bottom - 8) === skip
+    })
+    expect(hit, 'the skip link is the topmost element over the banner').toBe(true)
   })
 })
 

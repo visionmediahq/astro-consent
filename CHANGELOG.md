@@ -1,17 +1,21 @@
 # Changelog
 
-## 1.1.3 (unreleased)
+## 1.1.3
 
 - Fix: the banner's width is `max-w-[42rem]` instead of `max-w-2xl`. Tailwind 4 resolves
   `max-w-2xl` through a site's `--spacing-2xl` when the site defines one, which made the banner
   64px wide on gron-kontor (#64).
-- The banner is `z-[100]` instead of `z-50`, so a fixed site bar at z-index 50–99 (a mobile call
-  bar on hkc-fitness and aspokarlsson) no longer covers its buttons (#64).
-- The placeholder's "Öppna i …" link is `text-base-content`, so a site's `a { color }` in
-  `@layer base` can't lower its contrast (tfhydraulik, #64).
+- The banner is `z-[99]` instead of `z-50`, so a fixed site bar at z-index 50–98 (a mobile call
+  bar on hkc-fitness and aspokarlsson) no longer covers its buttons (#64). It stays below 100, so
+  astro-starter's focused skip link (`focus:z-[100]`, ahead of the banner in the DOM) is still on
+  top when a tall banner reaches the top of a small phone.
+- The placeholder's "Öppna i …" link and the banner's "Läs mer" links are `text-base-content`, so
+  a site's `a { color }` in `@layer base` can't lower their contrast (tfhydraulik, #64). This
+  covers a link colour in `@layer base` only: unlayered site CSS still wins over the package's
+  utilities. `PrivacyLinks` keeps following the site's footer colour on purpose.
 - The placeholder's "Visa alltid" checkbox border is `border-base-content/60`, for WCAG 1.4.11
-  (3:1 for a control's boundary). DaisyUI's default measured 1.5:1 on `bg-base-200` in the demo. The banner's
-  settings toggles already passed 3:1 and are unchanged; e2e now measures both (#52).
+  (3:1 for a control's boundary). DaisyUI's default measured 1.5:1 on `bg-base-200` in the demo.
+  The banner's settings toggles already passed 3:1 and are unchanged; e2e now measures both (#52).
 - No wording change: `CONSENT_VERSION` is unchanged and no visitor is asked again.
 
 ## 1.1.2
