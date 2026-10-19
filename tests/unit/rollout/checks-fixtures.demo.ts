@@ -71,6 +71,12 @@ const placeholder = (style: string) =>
 const ratioBox = (inner: string) => `<div style="position:relative;padding-bottom:40%;min-height:320px">${inner}</div>`
 const gradientFooter = (background: string, footer = '', links = 'color:rgb(255 255 255 / 0.7)') =>
   `<style>:root{--color-primary:#004b85;--brand-dark:#00375f}footer{background:${background};color:#fff;padding:24px;${footer}}</style><footer><div data-privacy-links style="${links}"><button data-consent-open style="color:inherit;background:none;border:0">Cookie-inställningar</button> <a href="/integritet" style="color:inherit">Integritetspolicy</a></div></footer>`
+const whiteLink = `<div data-privacy-links><a href="/integritet" style="color:#fff">Integritetspolicy</a></div>`
+const PF = 'footer{position:relative;background:#000;padding:24px}'
+const ANC = 'footer{position:relative;background:#000;padding:400px 24px 24px}footer::before{content:"";position:absolute;left:0;right:0;top:800px;height:100px;background:#fff}'
+const svgUrl = (s: string) => `url("data:image/svg+xml,${encodeURIComponent(s).replace(/'/g, '%27')}")`
+const NOISE_FILTERED = svgUrl(`<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(#n)'/></svg>`)
+const NOISE_WHITE_RECT = svgUrl(`<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence baseFrequency='0.8'/></filter><rect width='100%' height='100%' fill='white'/></svg>`)
 const widget = `<div data-consent-embed="elfsight" data-script="${ELFSIGHT}"><template data-payload><div class="elfsight-app-x"></div></template><button data-load>Visa</button><input type="checkbox" data-remember></div>`
 
 const LATE = `${banner()}<div style="height:10000px;position:relative"><div id="s" style="position:absolute;top:3000px;height:10px"></div></div>
@@ -163,6 +169,24 @@ const FIXTURES: Record<string, string> = {
   negstack: page(`<style>section{position:relative}section::before{content:'';position:absolute;inset:0;background:rgba(255,255,255,.95);z-index:-1}footer{background:#000;position:relative;z-index:-2;padding:24px}</style><section><footer><div data-privacy-links><a href="/integritet" style="color:#fff">Integritetspolicy</a></div></footer></section>`),
   // A scrolled box: its ::before scrolls with the content, over the text, though unscrolled maths miss it.
   scrolled: page(`<style>.box{position:relative;overflow:auto;height:100px;background:#000}.box::before{content:'';position:absolute;top:60px;left:0;right:0;height:24px;background:#fff}</style><div class="box"><div style="height:60px"></div><div data-privacy-links><a href="/integritet" style="color:#fff">Integritetspolicy</a></div><div style="height:300px"></div></div><script>document.querySelector('.box').scrollTop = 50</script>`),
+  // Round 4. A higher z-index around the text does not lift it above a pseudo that sits over the
+  // opaque background: white over the black footer, under white text in a z-2 (or z-50) wrapper.
+  ctxout: page(`<style>footer{background:#000;padding:24px}.e{position:relative}.e::before{content:"";position:absolute;inset:0;background:#fff;z-index:1}.t{position:relative;z-index:2}</style><footer><div class="e"><div class="t">${whiteLink}</div></div></footer>`),
+  ctxfixed: page(`<style>body::after{content:"";position:fixed;inset:0;background:#fff;z-index:1}footer{background:#000;padding:24px}.t{position:relative;z-index:50}</style><footer><div class="t">${whiteLink}</div></footer>`),
+  // Noise that is not faint grain: at full opacity, and an SVG that declares feTurbulence but
+  // draws a plain white rect.
+  noisefull: page(`<style>${PF}footer::before{content:"";position:absolute;inset:0;background-image:${NOISE_FILTERED}}</style><footer>${whiteLink}</footer>`),
+  noiserect: page(`<style>${PF}footer::before{content:"";position:absolute;inset:0;opacity:.05;background-image:${NOISE_WHITE_RECT}}</style><footer>${whiteLink}</footer>`),
+  // An ancestor's scale, transform or zoom moves an absolute pseudo away from its computed box: at
+  // top 800px unscaled it is below the text, scaled by .5 it lands on it.
+  ancscale: page(`<style>section{scale:.5;transform-origin:0 0}${ANC}</style><section><footer>${whiteLink}</footer></section>`),
+  anctransform: page(`<style>section{transform:scale(.5);transform-origin:0 0}${ANC}</style><section><footer>${whiteLink}</footer></section>`),
+  anczoom: page(`<style>section{zoom:.5}${ANC}</style><section><footer>${whiteLink}</footer></section>`),
+  // Pseudos that paint without a background: a thick border, an inset shadow.
+  pborder: page(`<style>${PF}footer::before{content:"";position:absolute;left:0;right:0;top:0;height:0;border-top:200px solid #fff}</style><footer>${whiteLink}</footer>`),
+  pshadow: page(`<style>${PF}footer::before{content:"";position:absolute;inset:0;box-shadow:inset 0 0 0 400px #fff}</style><footer>${whiteLink}</footer>`),
+  // content-visibility: auto on an ancestor captures a fixed pseudo like contain: paint.
+  cvfixed: page(`<style>section{content-visibility:auto}footer{background:#000;padding:24px}footer::before{content:"";position:fixed;left:0;top:0;width:100%;height:100%;background:#fff}</style><div style="height:1500px"></div><section><footer>${whiteLink}</footer></section>`),
   // Above the opaque footer: a backdrop-filter cannot reach the text; an identity filter on the footer.
   backdropup: page(`<style>section{backdrop-filter:blur(4px)}footer{background:#000;padding:24px;filter:grayscale(0)}</style><section><footer><div data-privacy-links><a href="/integritet" style="color:#fff">Integritetspolicy</a></div></footer></section>`),
   // #46 (knutssonsbil): main's absolute iframe fills the ratio box; the in-flow 320px wrapper does
@@ -359,7 +383,9 @@ try {
       const all = await checkContrast(browser, BASE, ['/overlay/'], { stub: true })
       const ban = all.filter((r) => r.kind === 'banner')
       const lk = all.filter((r) => r.kind === 'links')
-      expect(ban.length === 2 && ban.every((r) => r.ok && !r.indeterminate), '/overlay/ a z-50 banner paints above a z-index 1 fixed overlay', ban)
+      // Without a model of where the opaque background sits in the stacking order, a z-50 banner over
+      // a solid fixed overlay is not proven above it: indeterminate (round 4: textAbove dropped).
+      expect(ban.length === 2 && ban.every((r) => !r.ok && r.indeterminate === 'effect on the text or its background: positioned ::after with a background'), '/overlay/ a solid fixed overlay counts even under a z-50 banner', ban)
       expect(lk.length === 1 && lk.every((r) => !r.ok && r.indeterminate === 'effect on the text or its background: positioned ::after with a background'), '/overlay/ a fixed overlay is over a footer below the fold too', lk)
     }
     for (const [path, what] of [
@@ -368,9 +394,22 @@ try {
       ['/captured/', "a fixed pseudo captured by an ancestor's translate"],
       ['/negstack/', 'a z-index -1 overlay above an opaque footer at z-index -2'],
       ['/scrolled/', "a pseudo in a scrolled box's content"],
+      ['/ctxout/', 'a white pseudo over the black footer under a z-2 text wrapper'],
+      ['/noisefull/', 'feTurbulence noise at full opacity'],
+      ['/noiserect/', 'an SVG that declares feTurbulence but draws a white rect'],
+      ['/ancscale/', "an absolute pseudo moved by an ancestor's scale"],
+      ['/anctransform/', "an absolute pseudo moved by an ancestor's transform"],
+      ['/anczoom/', "an absolute pseudo moved by an ancestor's zoom"],
+      ['/pborder/', 'a pseudo painting with a thick border'],
+      ['/pshadow/', 'a pseudo painting with an inset shadow'],
+      ['/cvfixed/', 'a fixed pseudo captured by content-visibility: auto'],
     ] as const) {
       const rows = await links(path)
       expect(rows.length === 1 && rows.every((r) => !r.ok && r.indeterminate === 'effect on the text or its background: positioned ::before with a background'), `${path} ${what}: indeterminate`, rows)
+    }
+    {
+      const rows = await links('/ctxfixed/')
+      expect(rows.length === 1 && rows.every((r) => !r.ok && r.indeterminate === 'effect on the text or its background: positioned ::after with a background'), '/ctxfixed/ a white fixed overlay under a z-50 text wrapper without a background: indeterminate', rows)
     }
     const up = await links('/backdropup/')
     expect(up.length === 1 && up.every((r) => r.ok && !r.indeterminate), '/backdropup/ backdrop-filter above the opaque layer and filter: grayscale(0) do not count', up)

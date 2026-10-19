@@ -93,50 +93,59 @@ const MEASURE = `(() => {
   const opacityRunning = (e) => e.getAnimations().some((a) => (a.playState === 'running' || a.playState === 'pending') && a.effect && a.effect.getKeyframes().some((k) => 'opacity' in k))
   // transform, or Tailwind v4's individual translate/scale/rotate.
   const moved = (s) => s.transform !== 'none' || s.translate !== 'none' || s.scale !== 'none' || s.rotate !== 'none'
-  // DaisyUI-style feTurbulence noise is decoration, as for backgrounds (coversBackground).
-  const NOISE = /url\\("data:image\\/svg\\+xml[^"]*feTurbulence[^"]*"\\)/g
-  const imagePainted = (v) => !!v && v.replace(NOISE, '').replace(/none|,|\\s/g, '') !== ''
-  const flexParent = (a) => a.parentElement && /flex|grid/.test(getComputedStyle(a.parentElement).display)
-  const contextOf = (a) => {
-    const s = getComputedStyle(a)
-    const explicit = s.zIndex !== 'auto' && (s.position !== 'static' || flexParent(a))
-    const forms = explicit || /fixed|sticky/.test(s.position) || Number(s.opacity) < 1 || moved(s) || !noFilter(s.filter) || (s.backdropFilter && s.backdropFilter !== 'none') || s.mixBlendMode !== 'normal' || s.isolation === 'isolate' || /paint|strict|content|layout/.test(s.contain) || /transform|opacity|filter|perspective/.test(s.willChange) || s.perspective !== 'none' || s.clipPath !== 'none' || (s.mask && s.mask !== 'none')
-    return forms ? { z: explicit ? parseInt(s.zIndex, 10) : undefined } : undefined
+  const zoomed = (s) => !!s.zoom && s.zoom !== '1' && s.zoom !== 'normal'
+  // Faint feTurbulence grain (ernstedt's body::after at opacity .055) is decoration: an SVG whose
+  // every shape is drawn through a filter, on a pseudo at opacity 0.2 or less with nothing else.
+  const NOISE_URL = /url\\("data:image\\/svg\\+xml,([^"]*feTurbulence[^"]*)"\\)/g
+  const SHAPES = /<(?:rect|path|circle|ellipse|polygon|polyline|line|image|text|use)\\b[^>]*>/gi
+  const filteredOnly = (payload) => {
+    let svg
+    try { svg = decodeURIComponent(payload) } catch { return false }
+    const shapes = svg.match(SHAPES) || []
+    return shapes.length > 0 && shapes.every((s) => /\\sfilter\\s*=/.test(s))
   }
-  // The text paints above e's pseudo when the outermost stacking context around the text below e
-  // has an explicit z-index above the pseudo's (ernstedt: a z-50 banner over a z-index 1 grain).
-  const textAbove = (el, e, p) => {
-    let outer
-    for (let a = el; a && a !== e; a = a.parentElement) {
-      const c = contextOf(a)
-      if (c) outer = c
-    }
-    const zp = p.zIndex === 'auto' ? 0 : parseInt(p.zIndex, 10)
-    return !!outer && outer.z !== undefined && outer.z > zp
+  const shows = (c) => rgba(c)[3] > 0
+  // What a positioned pseudo paints: 'none', 'box' (inside its border box), or 'beyond' (a shadow
+  // or an outline, which reach outside it).
+  const paintOf = (p) => {
+    if (p.boxShadow && p.boxShadow !== 'none') return 'beyond'
+    if (p.outlineStyle !== 'none' && px(p.outlineWidth) > 0 && shows(p.outlineColor)) return 'beyond'
+    const border = ['Top', 'Right', 'Bottom', 'Left'].some((side) => px(p['border' + side + 'Width']) > 0 && !/none|hidden/.test(p['border' + side + 'Style']) && shows(p['border' + side + 'Color']))
+    if (shows(p.backgroundColor) || border || /url\\(|image-set\\(|gradient\\(/.test(p.content)) return 'box'
+    const image = p.backgroundImage
+    if (!image || image === 'none') return 'none'
+    let grain = true
+    const rest = image.replace(NOISE_URL, (_, payload) => { if (!filteredOnly(payload)) grain = false; return '' })
+    if (rest.replace(/none|,|\\s/g, '') !== '') return 'box'
+    return grain && Number(p.opacity) <= 0.2 ? 'none' : 'box'
   }
-  // Whether e's positioned ::before/::after paints a background over the text's box. Its box is
-  // computed only when its containing block is known: e itself (positioned, not scaled or rotated,
-  // not scrolled) for absolute, the viewport for fixed (no ancestor that would capture it); anything
-  // else counts. 'exempt': above the opaque layer with no z-index between, where a negative z-index
-  // paints below that layer's in-flow background.
-  const pseudoOver = (el, e, pseudo, text, exempt) => {
+  // Whether e's positioned ::before/::after paints over the text's box. Its box is computed only
+  // when its containing block is known: e itself (positioned, not scrolled, and neither it nor an
+  // ancestor scaled, rotated or zoomed) for absolute, the viewport for fixed (no ancestor that would
+  // capture it); anything else counts. 'exempt': above the opaque layer with no z-index between,
+  // where a negative z-index paints below that layer's in-flow background.
+  const pseudoOver = (e, pseudo, text, exempt) => {
     const p = getComputedStyle(e, pseudo)
     if (p.content === 'none' || p.content === 'normal' || !/absolute|fixed/.test(p.position)) return false
     if (exempt && parseInt(p.zIndex, 10) < 0) return false
-    if (!(rgba(p.backgroundColor)[3] > 0 || imagePainted(p.backgroundImage))) return false
-    if (textAbove(el, e, p)) return false
-    if (moved(p) || p.direction === 'rtl') return true
+    const paint = paintOf(p)
+    if (paint === 'none') return false
+    if (paint === 'beyond' || moved(p) || p.direction === 'rtl') return true
     let x0, y0
     if (p.position === 'absolute') {
       const s = getComputedStyle(e)
-      if (s.position === 'static' || !flat(s.transform) || s.scale !== 'none' || s.rotate !== 'none' || e.scrollTop || e.scrollLeft) return true
+      if (s.position === 'static' || e.scrollTop || e.scrollLeft) return true
+      for (let a = e; a; a = a.parentElement) {
+        const t = getComputedStyle(a)
+        if (!flat(t.transform) || t.scale !== 'none' || t.rotate !== 'none' || zoomed(t)) return true
+      }
       const r = e.getBoundingClientRect()
       x0 = r.left + px(s.borderLeftWidth)
       y0 = r.top + px(s.borderTopWidth)
     } else {
       for (let a = e; a; a = a.parentElement) {
         const s = getComputedStyle(a)
-        if (moved(s) || !noFilter(s.filter) || s.perspective !== 'none' || (s.backdropFilter && s.backdropFilter !== 'none') || /paint|strict|content|layout/.test(s.contain) || /transform|filter|perspective/.test(s.willChange)) return true
+        if (moved(s) || zoomed(s) || !noFilter(s.filter) || s.perspective !== 'none' || (s.backdropFilter && s.backdropFilter !== 'none') || /paint|strict|content|layout/.test(s.contain) || (s.contentVisibility && s.contentVisibility !== 'visible') || /transform|filter|perspective/.test(s.willChange)) return true
       }
       x0 = 0
       y0 = 0
@@ -168,7 +177,7 @@ const MEASURE = `(() => {
       if (opacityRunning(e)) animating = true
       if (style.mixBlendMode !== 'normal') effects.push('mix-blend-mode')
       if (!noFilter(style.filter)) effects.push('filter')
-      for (const pseudo of ['::before', '::after']) if (pseudoOver(el, e, pseudo, text, reached && !zSeen)) effects.push('positioned ' + pseudo + ' with a background')
+      for (const pseudo of ['::before', '::after']) if (pseudoOver(e, pseudo, text, reached && !zSeen)) effects.push('positioned ' + pseudo + ' with a background')
       if (reached && style.zIndex !== 'auto') zSeen = true
       if (reached) {
         if (opacity < 1) effects.push('opacity')

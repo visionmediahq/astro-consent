@@ -317,21 +317,21 @@ npx tsx ci/rollout/run.ts help
   changes something (`grayscale(0)` does not) on the text or any ancestor, and `backdrop-filter`
   below the first opaque background. Opacity on the text or a background-less wrapper (`opacity-70`
   on the links) fades the text colour and is measured.
-- A positioned `::before`/`::after` with a background, on the text or any ancestor, counts only when
-  its box overlaps the text's (ahatrafikskola's 1px footer hairline and a width-0 link underline do
-  not). A fixed one counts on any horizontal overlap, wherever the text is scrolled. Its box is
-  computed when its containing block is its own element (positioned, not scaled or rotated, not
-  scrolled) or the viewport (fixed, no ancestor with a transform, `translate`, `scale`, `rotate`,
-  filter or `contain` capturing it); any other containing block, a transform or individual
-  transform property on the pseudo-element, or `direction: rtl` on it is indeterminate.
-- Pseudo-elements that do not count: an feTurbulence noise background (ernstedt's fixed grain, as for
-  DaisyUI's buttons); one below a stacking context the text is in (the outermost one between the
-  text and the pseudo-element's element has an explicit z-index above the pseudo-element's: the z-50
-  banner over a z-index 1 overlay); and a negative z-index above the opaque background with no
-  z-index on or between them, which paints beneath it. Scrolling elsewhere is already in both
-  boxes; the pseudo-element's own element scrolled is indeterminate. Out of scope: paint orders the
-  z-index comparison does not model (equal z-indexes in tree order, z-index on elements that are
-  not positioned or flex/grid items); they count as overlapping, never as a pass.
+- A positioned `::before`/`::after` that paints (a background colour or image, a visible border, or
+  `content: url(…)`), on the text or any ancestor, counts only when its box overlaps the text's
+  (ahatrafikskola's 1px footer hairline and a width-0 link underline do not). A `box-shadow` or an
+  outline reaches outside the box and always counts. A fixed one counts on any horizontal overlap,
+  wherever the text is scrolled. Its box is computed when its containing block is its own element
+  (positioned, not scrolled, and neither it nor any ancestor scaled, rotated or zoomed) or the
+  viewport (fixed, no ancestor with a transform, `translate`, `scale`, `rotate`, `zoom`, filter,
+  `contain` or `content-visibility` capturing it); any other containing block, a transform or
+  individual transform property on the pseudo-element, or `direction: rtl` on it is indeterminate.
+- Pseudo-elements that do not count: faint feTurbulence grain (ernstedt's fixed `body::after`: an SVG
+  whose every shape is drawn through a filter, at opacity 0.2 or less, with no other paint); and a
+  negative z-index above the opaque background with no z-index on or between them, which paints
+  beneath it. A higher z-index around the text is not taken as proof that it paints above a
+  pseudo-element: a solid fixed overlay counts even under the z-50 banner. Scrolling elsewhere is
+  already in both boxes; the pseudo-element's own element scrolled is indeterminate.
 - The contrast step scrolls each page through and back (as step 3 does) and waits for finite
   animations to finish: the starter's `[data-animate]` is `opacity: 0` until Motion's `inView` fades
   it in, and about 25 sites wrap an embed in one. An opacity animation still running on the text or
