@@ -396,6 +396,10 @@ describe('detectFonts: review probes', () => {
     ["a _headers CSP that names no Google host and lacks 'self'", base(L, { 'public/_headers': "/*\n  Content-Security-Policy: default-src https:\n" }), 'font-src'],
     ['two policies in a module, the second without self', base(L, { 'src/middleware.ts': `export const A = "default-src 'self'; font-src 'self' https://fonts.gstatic.com"\nexport const B = "default-src 'none'; style-src 'self'"\n` }), 'font-src'],
     ['an @import after a rule (ignored by browsers)', css(`${TW}.a { color: red }\n@import url(${U});\n`), '@import after'],
+    // Final check of #74.
+    ['a CSP <meta> whose content is an expression', base(`<meta http-equiv="Content-Security-Policy" content={csp} />${L}`, {}, `import '../styles/global.css'\nconst csp = "default-src 'self'; font-src https://cdn.example.com"`), 'Content-Security-Policy'],
+    ['a CSP header set in frontmatter without self', base(L, {}, `import '../styles/global.css'\nAstro.response.headers.set('Content-Security-Policy', "default-src 'self'; font-src https://cdn.example.com")`), 'font-src'],
+    ['an escaped \\) in an unquoted url() before a gstatic url()', css(`${TW}.a{background:url(/a\\)/*b.png)}\n@font-face{font-family:X;src:url(https://fonts.gstatic.com/s/x.woff2)}\n/* end */\n`, L), 'outside'],
   ])('%s is needs-human', (_name, files, fragment) => needsHuman(fonts(files), fragment))
 
   test.each<[string, SiteFiles]>([

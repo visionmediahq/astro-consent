@@ -136,9 +136,10 @@ function scanCss(text: string): { spans: Span[]; blanked: string; topLevel: (at:
       quote = c
       quoteStart = i
     } else if (/^url\(\s*[^\s"']/i.test(text.slice(i, i + 6)) && !/[\w-]/.test(text[i - 1] ?? '')) {
-      // An unquoted url(…) runs to its `)`: a `/*` inside it is part of the URL, not a comment.
-      const close = text.indexOf(')', i)
-      const end = close < 0 ? text.length : close + 1
+      // An unquoted url(…) runs to its first unescaped `)`: a `/*` inside it is part of the URL.
+      let j = i + 4
+      while (j < text.length && text[j] !== ')') j += text[j] === '\\' ? 2 : 1
+      const end = Math.min(j + 1, text.length)
       depth.fill(d, i, end)
       i = end - 1
     } else if (c === '/' && text[i + 1] === '*') {
@@ -203,7 +204,7 @@ function astroFile(files: SiteFiles, file: string, c: Collector): void {
   const text = files.read(file)
   if (text.includes('@font-face')) c.selfHosted = true
   const hosts = hostsIn(text)
-  if (hosts.length === 0 && !/<link\b[^>]*\bhref=\{/.test(text) && !/content-security-policy/i.test(text)) return
+  if (hosts.length === 0 && !/<link\b[^>]*\bhref=\{/.test(text) && !/content-security-policy|[a-z]-src\s/i.test(text)) return
   let tree: ReturnType<typeof parseAstro>
   try {
     tree = parseAstro(text)
@@ -214,6 +215,13 @@ function astroFile(files: SiteFiles, file: string, c: Collector): void {
   const { frontmatter, root } = tree
   const sf = frontmatter ? parseModule(frontmatter.text) : null
   const fmOffset = frontmatter?.start ?? 0
+  // CSP directive strings in the frontmatter (`Astro.response.headers.set(…)`), each on its own.
+  if (sf) {
+    for (const n of stringNodes(sf)) {
+      const value = (n as ts.LiteralLikeNode).text
+      if (DIRECTIVE.test(value)) c.policy(file, value)
+    }
+  }
 
   const accounted: Span[] = []
   const comments: Span[] = []
@@ -325,6 +333,10 @@ function astroFile(files: SiteFiles, file: string, c: Collector): void {
       if (equiv?.kind === 'quoted' && equiv.value.toLowerCase() === 'content-security-policy') {
         const content = attr(node, 'content')
         if (content?.kind === 'quoted') c.policy(file, decode(content.value))
+        else {
+          const r = `${file}:${lineOf(text, node.start)}: Content-Security-Policy <meta> whose content is not a literal`
+          if (!c.cspReasons.includes(r)) c.cspReasons.push(r)
+        }
         if (content?.kind === 'quoted' && hostsIn(content.value).length > 0) {
           accounted.push(node)
           c.csp.push({ file, kind: 'meta', start: node.start, end: node.end })
