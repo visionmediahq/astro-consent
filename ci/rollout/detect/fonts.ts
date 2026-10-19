@@ -16,18 +16,21 @@ import { findDefineConfig, importsOf, parseModule, propertyOf } from '../lib/ts-
 import type { SiteFiles } from '../lib/site-files'
 import { packageDeps } from './scripts'
 
-const HOST = /fonts\.(?:googleapis|gstatic)\.com/gi
+/** A Google Fonts host, or a wildcard that covers it (`*.gstatic.com` in a CSP). */
+const HOST = /(?:fonts|\*)\.(?:googleapis|gstatic)\.com/gi
 const ORIGINS = new Set(['https://fonts.googleapis.com', 'https://fonts.gstatic.com'])
 /** Folders never read: build output, tool state, site-factory metadata (`scout/`, not served). */
 const SKIP = /^(?:scout|\.rollout)\/|(?:^|\/)(?:node_modules|\.git|dist|\.astro)\//
 /** Read anywhere in the checkout; outside src/ and public/ only these (and root `_headers`, `.env*`) are read. */
 const ANYWHERE = /\.(?:astro|mdx?|css|[cm]?[jt]s|[jt]sx)$/
 /** A host name as a bare CSP source token: `https://fonts.gstatic.com`, `fonts.googleapis.com/`. */
-const SOURCE_TOKEN = /(?<=\s)(?:https?:\/\/)?fonts\.(?:googleapis|gstatic)\.com\/?(?=[\s;]|$)/gi
+const SOURCE_TOKEN = /(?<=\s)(?:https?:\/\/)?(?:fonts|\*)\.(?:googleapis|gstatic)\.com\/?(?=[\s;]|$)/gi
 /** Font loaders that need no literal Google Fonts host in the site's own files. */
 const LOADERS: [RegExp, string][] = [
   [/ajax\.googleapis\.com\/ajax\/libs\/webfont/i, 'Web Font Loader script (ajax.googleapis.com/ajax/libs/webfont)'],
   [/\bWebFont\s*\.\s*load\b/, 'WebFont.load (Web Font Loader)'],
+  [/\bWebFontConfig\b/, 'WebFontConfig (Web Font Loader)'],
+  [/\/ajax\/libs\/webfont\/|\bwebfont(?:loader)?(?:\.min)?\.js\b/i, 'Web Font Loader script'],
 ]
 /** Dependencies that load or rewrite web fonts at build or run time. */
 const LOADER_DEPS = /^(?:(?:@types\/)?webfontloader|unplugin-fonts|astro-font|vite-plugin-webfont-dl|vite-plugin-fonts|.*google-?fonts.*)$/i
@@ -132,6 +135,12 @@ function scanCss(text: string): { spans: Span[]; blanked: string; topLevel: (at:
     } else if (c === '"' || c === "'") {
       quote = c
       quoteStart = i
+    } else if (/^url\(\s*[^\s"']/i.test(text.slice(i, i + 6)) && !/[\w-]/.test(text[i - 1] ?? '')) {
+      // An unquoted url(…) runs to its `)`: a `/*` inside it is part of the URL, not a comment.
+      const close = text.indexOf(')', i)
+      const end = close < 0 ? text.length : close + 1
+      depth.fill(d, i, end)
+      i = end - 1
     } else if (c === '/' && text[i + 1] === '*') {
       const close = text.indexOf('*/', i + 2)
       const end = close < 0 ? text.length : close + 2
@@ -171,9 +180,14 @@ class Collector {
     if (problem) this.reason(`${file}: ${problem}`)
   }
 
-  policy(file: string, policies: string[]): void {
-    const problem = cspProblem(policies)
-    if (problem) this.reason(`${file}: Content-Security-Policy ${problem}`)
+  /** CSP problems: reasons only when the site loads Google Fonts, since only wire needs 'self'. */
+  cspReasons: string[] = []
+
+  /** Checks one policy (or one directive string) on its own. */
+  policy(file: string, policy: string): void {
+    const problem = cspProblem([policy])
+    const r = `${file}: Content-Security-Policy ${problem}`
+    if (problem && !this.cspReasons.includes(r)) this.cspReasons.push(r)
   }
 
   /** Loaders found by name, comments included: a false hit only costs a look. */
@@ -189,7 +203,7 @@ function astroFile(files: SiteFiles, file: string, c: Collector): void {
   const text = files.read(file)
   if (text.includes('@font-face')) c.selfHosted = true
   const hosts = hostsIn(text)
-  if (hosts.length === 0 && !/<link\b[^>]*\bhref=\{/.test(text)) return
+  if (hosts.length === 0 && !/<link\b[^>]*\bhref=\{/.test(text) && !/content-security-policy/i.test(text)) return
   let tree: ReturnType<typeof parseAstro>
   try {
     tree = parseAstro(text)
@@ -310,11 +324,11 @@ function astroFile(files: SiteFiles, file: string, c: Collector): void {
       const equiv = attr(node, 'http-equiv')
       if (equiv?.kind === 'quoted' && equiv.value.toLowerCase() === 'content-security-policy') {
         const content = attr(node, 'content')
+        if (content?.kind === 'quoted') c.policy(file, decode(content.value))
         if (content?.kind === 'quoted' && hostsIn(content.value).length > 0) {
           accounted.push(node)
           c.csp.push({ file, kind: 'meta', start: node.start, end: node.end })
           if (inExpression) c.reason(`${file}:${lineOf(text, node.start)}: Content-Security-Policy <meta> inside an expression`)
-          c.policy(file, [decode(content.value)])
         }
         return
       }
@@ -405,6 +419,16 @@ function cssFile(files: SiteFiles, file: string, c: Collector): void {
       c.reason(`${file}:${lineOf(text, m.index)}: @import of Google Fonts with "${m[5]!.trim()}" not understood`)
       continue
     }
+    // Browsers ignore an @import after any rule but @charset, @layer statements and other @imports.
+    const before = blanked
+      .slice(0, m.index)
+      .replace(new RegExp(CSS_IMPORT.source, 'g'), '')
+      .replace(/@(?:charset|layer)\b[^;{}]*;/g, '')
+      .trim()
+    if (before !== '') {
+      c.reason(`${file}:${lineOf(text, m.index)}: @import after other rules (ignored by browsers)`)
+      continue
+    }
     c.url(file, url)
     c.locations.push({ file, kind: 'import', ...span })
   }
@@ -417,7 +441,7 @@ function cssFile(files: SiteFiles, file: string, c: Collector): void {
 function moduleFile(files: SiteFiles, file: string, c: Collector): void {
   const text = files.read(file)
   const hosts = hostsIn(text)
-  if (hosts.length === 0) return
+  if (hosts.length === 0 && !/[a-z]-src\s/i.test(text)) return
   const sf = parseModule(text)
   const outside = (at: number): void => c.reason(`${file}:${lineOf(text, at)}: Google Fonts host outside a recognised <link>, @import or CSP`)
   /** String nodes holding a mention, each once. */
@@ -429,24 +453,18 @@ function moduleFile(files: SiteFiles, file: string, c: Collector): void {
       if (!strings.has(node)) strings.set(node, at)
     } else outside(at)
   }
-  let csp = false
   for (const [node, at] of strings) {
     const value = (node as ts.LiteralLikeNode).text
     // A CSP string: a directive, and every mention a bare source token (not inside markup or a URL path).
     const tokens = [...value.matchAll(SOURCE_TOKEN)].length
     if (DIRECTIVE.test(value) && tokens === hostsIn(value).length) {
-      csp = true
       c.csp.push({ file, kind: 'module', start: node.getStart(sf), end: node.end })
     } else outside(at)
   }
-  if (csp) {
-    // Each directive string of the module counts, not only those that name Google.
-    c.policy(
-      file,
-      stringNodes(sf)
-        .map((n) => (n as ts.LiteralLikeNode).text)
-        .filter((s) => DIRECTIVE.test(s)),
-    )
+  // Every directive string of the module is checked on its own, whether it names Google or not.
+  for (const n of stringNodes(sf)) {
+    const value = (n as ts.LiteralLikeNode).text
+    if (DIRECTIVE.test(value)) c.policy(file, value)
   }
 }
 
@@ -456,14 +474,15 @@ function headersFile(files: SiteFiles, file: string, c: Collector): void {
   for (const line of text.split('\n')) {
     const start = offset
     offset += line.length + 1
-    if (hostsIn(line).length === 0 || line.trimStart().startsWith('#')) continue
+    if (line.trimStart().startsWith('#')) continue
     const m = /^\s*Content-Security-Policy\s*:(.*)$/i.exec(line)
+    if (m) c.policy(file, m[1]!)
+    if (hostsIn(line).length === 0) continue
     if (!m) {
       c.reason(`${file}:${lineOf(text, start)}: Google Fonts host outside a recognised <link>, @import or CSP`)
       continue
     }
     c.csp.push({ file, kind: 'headers', start, end: start + line.replace(/\r$/, '').length })
-    c.policy(file, [m[1]!])
   }
 }
 
@@ -498,7 +517,11 @@ export function detectFonts(files: SiteFiles, cssEntry: string | null): FontsInf
     .filter((f) => /^(?:src|public)\//.test(f) || ANYWHERE.test(f) || f === '_headers' || /^\.env(?:\..+)?$/.test(f))
   for (const file of read) {
     const text = files.read(file)
-    if (text.includes('\u0000')) continue
+    if (text.includes('\u0000')) {
+      const at = hostsIn(text)[0]
+      if (at !== undefined) c.reason(`${file}: binary file (NUL byte) names a Google Fonts host`)
+      continue
+    }
     c.loaders(file, text)
     if (file.endsWith('.astro')) astroFile(files, file, c)
     else if (file.endsWith('.css') && !file.startsWith('public/')) cssFile(files, file, c)
@@ -525,6 +548,7 @@ export function detectFonts(files: SiteFiles, cssEntry: string | null): FontsInf
     return { status: selfHosted ? 'self-hosted' : 'none', url: null, urls: [], locations: [], csp, reasons: [] }
   }
 
+  for (const r of c.cspReasons) c.reason(r)
   if (c.urls.length > 1) c.reason(`${c.urls.length} distinct Google Fonts urls: ${c.urls.join(' ')}`)
   if (c.urls.length === 0 && c.reasons.length === 0) c.reason('preconnect to Google Fonts without a stylesheet')
   if (fontsConfig) c.reason(`${fontsConfig}: the Astro fonts config is already set`)

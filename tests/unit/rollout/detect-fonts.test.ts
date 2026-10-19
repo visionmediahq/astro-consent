@@ -385,16 +385,34 @@ describe('detectFonts: review probes', () => {
     ['is:raw content', base(L, {}, undefined, `<div is:raw><link rel="stylesheet" href="${U}"></div>`), 'outside'],
     ['a JS comment in a template expression', base(L, {}, undefined, `{/* ${U} */}`), 'outside'],
     ['a url() to fonts.gstatic.com in @font-face', css(`${TW}@font-face{font-family:X;src:url(https://fonts.gstatic.com/s/x.woff2)}\n`, L), 'outside'],
+    // Second review of #74.
+    ['WebFontConfig with the loader from jsdelivr', base(L, {}, undefined, "<script is:inline>WebFontConfig={google:{families:['Lato']}}</script><script is:inline async src=\"https://cdn.jsdelivr.net/npm/webfontloader@1.6.28/webfontloader.js\"></script>"), 'WebFontConfig'],
+    ['the loader from cdnjs', base(L, {}, undefined, '<script is:inline src="https://cdnjs.cloudflare.com/ajax/libs/webfont/1.6.28/webfontloader.js"></script>'), 'Web Font Loader'],
+    ['webfont.min.js from anywhere', base(L, { 'src/scripts/x.ts': "const s = '/vendor/webfont.min.js'\n" }), 'Web Font Loader'],
+    ['/* in an unquoted url() hiding a later gstatic url()', css(`${TW}@font-face{font-family:A;src:url(/fonts/a/*b.woff2)}\n@font-face{font-family:X;src:url(https://fonts.gstatic.com/s/x.woff2)}\n`, L), 'outside'],
+    ['a file with a NUL byte that names a Google host', base(L, { 'public/blob.bin': `\u0000\u0001${U}` }), 'public/blob.bin'],
+    ['a CSP with wildcard Google hosts and no self', base(`<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src https://*.googleapis.com; font-src https://*.gstatic.com" />${L}`), 'font-src'],
+    ["a CSP that names no Google host and lacks 'self' in font-src", base(`<meta http-equiv="Content-Security-Policy" content="default-src 'self'; font-src https://cdn.example.com" />${L}`), 'font-src'],
+    ["a _headers CSP that names no Google host and lacks 'self'", base(L, { 'public/_headers': "/*\n  Content-Security-Policy: default-src https:\n" }), 'font-src'],
+    ['two policies in a module, the second without self', base(L, { 'src/middleware.ts': `export const A = "default-src 'self'; font-src 'self' https://fonts.gstatic.com"\nexport const B = "default-src 'none'; style-src 'self'"\n` }), 'font-src'],
+    ['an @import after a rule (ignored by browsers)', css(`${TW}.a { color: red }\n@import url(${U});\n`), '@import after'],
   ])('%s is needs-human', (_name, files, fragment) => needsHuman(fonts(files), fragment))
 
   test.each<[string, SiteFiles]>([
     ['the layout and a component that both import the entry', base(L, { 'src/components/Head.astro': `---\nimport '../styles/global.css'\n---\n${L}` })],
     ['void links without a slash', base(`<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>\n<link rel="stylesheet" href="${U}">\n<meta name="x" content="y">`)],
     ['the same @import twice', css(`@import url(${U});@import url(${U});\n${TW}`)],
+    ['an @import after @charset, @layer and the Tailwind import', css(`@charset "utf-8";\n@layer base;\n${TW}@import url(${U});\n.a { color: red }\n`)],
+    ['an unquoted url() with /* and a comment after it', css(`${TW}@import url(${U});\n.a { background: url(/img/a/*b.png) } /* fonts.gstatic.com was here */\n`)],
     ['a scout/ folder (site-factory metadata, not served)', base(L, { 'scout/brief.json': `{ "fonts": "${U}" }\n` })],
   ])('%s is wire', (_name, files) => {
     const r = fonts(files)
     expect(r.reasons).toEqual([])
     expect(r.status).toBe('wire')
+  })
+
+  test("a CSP without 'self' on a site without Google Fonts is still none", () => {
+    const r = fonts(base(`<meta http-equiv="Content-Security-Policy" content="default-src 'self'; font-src https://cdn.example.com" />`))
+    expect(r).toMatchObject({ status: 'none', reasons: [], csp: [] })
   })
 })

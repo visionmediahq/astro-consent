@@ -353,9 +353,14 @@ npx tsx ci/rollout/run.ts help
   `WebFont.load`) or a font-loading dependency (`webfontloader`, `unplugin-fonts`, `astro-font`,
   `*google-fonts*`), an Astro `fonts` config, an existing `src/styles/fonts.css` or `public/fonts/`,
   a CSP whose `font-src` or `style-src` (or `default-src`) lacks `'self'`, or a layout that does not
-  import the Tailwind entry. Binary files are skipped by a NUL byte, not by name. Not read: CSPs in
-  `netlify.toml`, `vercel.json` or nginx config, HTML-entity-encoded hosts, and a `<link>` inside a
-  `<template>` is treated like any other.
+  import the Tailwind entry, the Web Font Loader by `WebFontConfig` or its script from any CDN, and
+  an `@import` after another rule (browsers ignore it). Every CSP found (meta, `_headers`, each
+  module directive string on its own) is checked for `'self'` in `font-src` and `style-src` (else
+  `default-src`), whether it names Google or not; `*.googleapis.com`/`*.gstatic.com` count as
+  mentions. A file with a NUL byte is binary and skipped, unless it names a Google host (a reason).
+  Not read: CSPs in `netlify.toml`, `vercel.json` or nginx config; HTML-entity-encoded hosts;
+  symlinks; `dist/` and `.astro/` at any depth; `.html`, `.json`, `.yaml` and `.scss` files outside
+  `src/` and `public/`. A `<link>` inside a `<template>` is treated like any other.
 - **Elfsight.** Recognised only as one loader `<script>` (`https://elfsightcdn.com/platform.js` or
   `https://static.elfsight.com/platform/platform.js`; other attributes only `async` and `is:inline`)
   plus one or more empty `<div class="elfsight-app-<uuid>">` (other attribute only
