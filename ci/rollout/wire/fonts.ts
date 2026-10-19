@@ -13,15 +13,18 @@
 //   - `@import "./fonts.css";` right after `@import "tailwindcss"` in the Tailwind entry, which
 //     every layout already imports: bundled into the site's hashed CSS, and still an @import
 //     before any rule, as CSS requires;
-//   - every location removed (whole lines, with a font comment right above them and one of two
-//     blank lines left around them), and fonts.googleapis.com / fonts.gstatic.com cut from each CSP.
+//   - every location removed (whole lines, with a one-line fonts comment right above them, see
+//     isFontComment, and one of two blank lines around them); the two hosts cut from each CSP.
+// The report must still match a fresh detect (its offsets are where the cuts go).
 // Any failed request, unexpected answer, or file already there refuses the whole plan.
 import { execFileSync } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
 import { join, posix, resolve } from 'node:path'
+import { isDeepStrictEqual } from 'node:util'
+import { detectFonts } from '../detect/fonts'
 import { type AstroNode, parseAstro } from '../lib/astro-ast'
 import type { SiteFiles } from '../lib/site-files'
-import type { Edit, FontsInfo, FontsPlan } from '../types'
+import type { Edit, FontCsp, FontsInfo, FontsPlan } from '../types'
 import { topLevelImportEnds } from './css'
 import { applyEdits, eolOf } from './engine'
 import { codePointsOf, type Face, fontFileName, parseCss2, selectFaces, slug, uPlus } from './fonts-css'
@@ -38,9 +41,15 @@ const TARGET = 'google fonts'
 const GOOGLE_FONTS = 'https://raw.githubusercontent.com/google/fonts/main'
 const HOSTS = /fonts\.(?:googleapis|gstatic)\.com/i
 /** A CSP source token for one of the two hosts, with the whitespace before it. */
-const TOKEN = /[ \t]+(?:https?:\/\/)?fonts\.(?:googleapis|gstatic)\.com\/?(?=[\s;"'`,]|$)/gi
+const TOKEN = /\s+(?:https?:\/\/)?fonts\.(?:googleapis|gstatic)\.com\/?(?=[\s;"'`,]|$)/gi
 /** An HTML comment about the fonts block it heads. */
-const FONT_COMMENT = /\bfonts?\b|typograph|typsnitt/i
+const FONT_PHRASE = /^(?:(?:google|brand)\s+)?(?:fonts?|typsnitt|typography|typografi)\b/i
+/**
+ * Whether a comment's text (without its delimiters) heads the fonts block: one line, starting with
+ * a fonts phrase ("Google Fonts", "Fonts: …", "Typography: …", "Typsnitt"). A multi-line comment or
+ * one that merely mentions fonts ("DO NOT remove the meta viewport: the fonts…") stays.
+ */
+export const isFontComment = (inner: string): boolean => !/[\r\n]/.test(inner) && FONT_PHRASE.test(inner.trim())
 const SV_JSON = join(import.meta.dirname, '../../../src/text/sv.json')
 
 export interface FetchAnswer {
@@ -145,9 +154,10 @@ function comments(root: AstroNode): Span[] {
  * an .astro file a font comment on the line(s) right above a run joins it; each run is cut by
  * cutLines.
  */
-export function locationCuts(file: string, text: string, spans: Span[]): Span[] {
+export function locationCuts(file: string, text: string, spans: (Span & { kind?: string })[]): Span[] {
   const runs: Span[] = []
-  for (const s of [...spans].sort((a, b) => a.start - b.start)) {
+  const widened = spans.map((s) => (s.kind === 'const' ? constSpan(text, s) : { start: s.start, end: s.end }))
+  for (const s of widened.sort((a, b) => a.start - b.start)) {
     const last = runs.at(-1)
     if (last && s.start >= last.end && text.slice(last.end, s.start).trim() === '') last.end = Math.max(last.end, s.end)
     else runs.push({ ...s })
@@ -156,21 +166,52 @@ export function locationCuts(file: string, text: string, spans: Span[]): Span[] 
     const notes = comments(parseAstro(text).root)
     for (const run of runs) {
       const c = notes.find((n) => n.end <= run.start && /^[ \t]*\r?\n[ \t]*$/.test(text.slice(n.end, run.start)))
-      if (c && text.slice(lineAt(text, c.start).start, c.start).trim() === '' && FONT_COMMENT.test(text.slice(c.start, c.end))) run.start = c.start
+      const inner = c ? text.slice(c.start, c.end).replace(/^<!--/, '').replace(/-->$/, '') : ''
+      if (c && text.slice(lineAt(text, c.start).start, c.start).trim() === '' && isFontComment(inner)) run.start = c.start
     }
   }
   return runs.map((r) => cutLines(text, r))
 }
 
-/** Directive names (`connect-src`) followed by no source at all in `text`. */
-const emptyDirectives = (text: string): Set<string> =>
-  new Set([...text.matchAll(/\b([a-z]+(?:-[a-z]+)*-src(?:-elem|-attr)?)[ \t]*(?=;|["'`]|\r?\n|$)/gim)].map((m) => m[1]!.toLowerCase()))
+/**
+ * A frontmatter const statement widened over a trailing `// note` on its last line (it explains
+ * the const and goes with it) and a fonts `// …` line comment on the line right above it.
+ */
+function constSpan(text: string, s: Span): Span {
+  let { start, end } = s
+  const trailing = /^[ \t]*\/\/[^\r\n]*/.exec(text.slice(end))
+  if (trailing) end += trailing[0].length
+  const line = lineAt(text, start)
+  if (text.slice(line.start, start).trim() === '' && line.start > 0) {
+    const prev = lineAt(text, line.start - 1)
+    const m = /^[ \t]*\/\/(.*?)\r?$/.exec(text.slice(prev.start, prev.end))
+    if (m && isFontComment(m[1]!)) start = prev.start + text.slice(prev.start, prev.end).indexOf('//')
+  }
+  return { start, end }
+}
+
+/** The policy text of a CSP span: a meta's content value, a `_headers` line after its colon, a module string's content. */
+function policyOf(kind: FontCsp['kind'], span: string): string {
+  if (kind === 'meta') return /\bcontent\s*=\s*(["'])([\s\S]*?)\1/i.exec(span)?.[2] ?? ''
+  if (kind === 'headers') return span.slice(span.indexOf(':') + 1)
+  return span.slice(1, -1)
+}
+
+/** Directive names (`connect-src`) with no source: each `;` part split on whitespace, name alone. */
+const emptyDirectives = (policy: string): Set<string> =>
+  new Set(
+    policy
+      .split(';')
+      .map((part) => part.trim().split(/\s+/).filter(Boolean))
+      .filter((tokens) => tokens.length === 1 && /-src(?:-elem|-attr)?$/i.test(tokens[0]!))
+      .map((tokens) => tokens[0]!.toLowerCase()),
+  )
 
 /** A CSP with the two hosts' source tokens cut, the rest untouched. Throws if a directive would be left empty. */
-export function stripCsp(file: string, span: string): string {
+export function stripCsp(file: string, span: string, kind: FontCsp['kind']): string {
   const out = span.replace(TOKEN, '')
-  const before = emptyDirectives(span)
-  for (const d of emptyDirectives(out)) if (!before.has(d)) throw new Error(`${file}: Content-Security-Policy ${d} would be left with no source`)
+  const before = emptyDirectives(policyOf(kind, span))
+  for (const d of emptyDirectives(policyOf(kind, out))) if (!before.has(d)) throw new Error(`${file}: Content-Security-Policy ${d} would be left with no source`)
   if (HOSTS.test(out)) throw new Error(`${file}: a Google Fonts host in the Content-Security-Policy is not a plain source token`)
   return out
 }
@@ -201,7 +242,7 @@ export function fontEdits(files: SiteFiles, fonts: FontsInfo, entry: string): Ed
   }
   for (const c of fonts.csp) {
     const span = files.read(c.file).slice(c.start, c.end)
-    const stripped = stripCsp(c.file, span)
+    const stripped = stripCsp(c.file, span, c.kind)
     if (stripped !== span) edits.push({ file: c.file, start: c.start, end: c.end, text: stripped, target: `${TARGET} csp (${c.file})` })
   }
   edits.push(importEdit(files, entry))
@@ -244,6 +285,16 @@ export async function planFonts(files: SiteFiles, report: FontsInput, opts: Plan
   if (!entry) return refuse('no Tailwind CSS entry to import the self-hosted fonts from')
   const url = fonts.url
   if (!/^https:\/\/fonts\.googleapis\.com\/css2\?/.test(url)) return refuse(`not a css2 URL: ${url}`)
+  // The edits cut at the report's offsets, so they are only right for the files detect read. A
+  // fresh detect must reproduce report.fonts exactly; otherwise the checkout moved on (the banner
+  // merged, a hand edit) and the report, which is what was reviewed, is stale.
+  let fresh: FontsInfo
+  try {
+    fresh = detectFonts(files, entry)
+  } catch (e) {
+    return refuse(`detect failed on the checkout: ${(e as Error).message}`)
+  }
+  if (!isDeepStrictEqual(fresh, fonts)) return refuse('report.fonts no longer matches the checkout: run detect again')
 
   let edits: Edit[]
   try {
@@ -370,18 +421,25 @@ export function fontsTargetsTaken(root: string): string | null {
 /**
  * Writes `files` and commits them alone (FONTS_COMMIT_MESSAGE). With `branch`, first switches to a
  * new branch from origin/main (startBranch refuses a dirty or diverged checkout, or a branch that
- * exists). Throws with the reason; after a failure past the branch switch, with how to recover.
+ * exists). With `onto`, the commit goes on top of that branch's own commit (wire --fonts: the
+ * banner). Every edited file must still be on disk as planned (`before`), or nothing is written.
+ * Throws with the reason; after a failure past the first write, with how to recover.
  */
-export function commitFonts(dir: string, files: readonly FontsFile[], opts: { branch?: string } = {}): void {
+export function commitFonts(dir: string, files: readonly FontsFile[], opts: { branch?: string; onto?: string } = {}): void {
   const root = resolve(dir)
   const taken = fontsTargetsTaken(root)
   if (taken) throw new Error(taken)
+  for (const f of files) {
+    if (f.before !== null && readFileSync(join(root, f.path), 'utf8') !== f.before) throw new Error(`${f.path} changed since it was planned, nothing written: run detect and the command again`)
+  }
   if (opts.branch) startBranch(root, opts.branch)
   try {
     writeFiles(root, files.map((f) => ({ path: f.path, data: f.after })))
     commitAllowed(root, new Set(files.map((f) => f.path)), FONTS_COMMIT_MESSAGE)
   } catch (e) {
-    const branch = opts.branch ?? execFileSync('git', ['branch', '--show-current'], { cwd: root, encoding: 'utf8' }).trim()
-    throw new Error(`${(e as Error).message}\n${recovery(branch)}`)
+    const how = opts.onto
+      ? `the banner is committed on ${opts.onto}, the fonts are not: git reset --hard && git clean -fd drops the fonts and keeps the banner commit (self-host them later with run.ts fonts); to start over: git reset --hard && git clean -fd && git switch main && git branch -D ${opts.onto}`
+      : recovery(opts.branch ?? execFileSync('git', ['branch', '--show-current'], { cwd: root, encoding: 'utf8' }).trim())
+    throw new Error(`${(e as Error).message}\n${how}`)
   }
 }

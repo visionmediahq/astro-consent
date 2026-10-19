@@ -227,7 +227,7 @@ from a checkout of this repo with `npx tsx`:
 
 ```bash
 npx tsx ci/rollout/run.ts detect <site dir> --domain <host> [--domain <host>]...
-npx tsx ci/rollout/run.ts wire   <site dir> [--dry-run] [--no-fonts]
+npx tsx ci/rollout/run.ts wire   <site dir> [--dry-run] [--fonts]
 npx tsx ci/rollout/run.ts fonts  <site dir> [--dry-run]   # Google Fonts alone, on branch fonts-selfhost
 npx tsx ci/rollout/run.ts verify <site dir>
 npx tsx ci/rollout/run.ts verify --demo <dist dir>      # a built demo, no git/npm/Docker
@@ -238,7 +238,7 @@ npx tsx ci/rollout/run.ts help
 ```
 
 - `detect` reads the site and writes the report; `wire` plans every edit and either prints the
-  diff (`--dry-run`, writes nothing) or applies it all on branch `consent-banner` with one commit (a second for Google Fonts, below);
+  diff (`--dry-run`, writes nothing) or applies it all on branch `consent-banner` with one commit (with `--fonts`, a second for Google Fonts, below);
   `verify` runs the build and browser checks; `pr` opens the PR; `live baseline` records the live
   site before the merge; `merge` re-verifies if `main` moved, merges, waits for Coolify and runs
   `live post-merge`.
@@ -337,18 +337,23 @@ npx tsx ci/rollout/run.ts help
   `src/data/privacy.json` from `report.services`; an existing `privacy.json` that lacks one of them
   is refused. Pool rows without `services` are re-detected, and `select` strata are
   `consent`/`notice`.
-- **Self-hosting Google Fonts (`wire`, `fonts`; `verify` and `live` do not check it yet).** When
+- **Self-hosting Google Fonts (`wire --fonts`, `fonts`; opt-in: `verify` and `live` do not check
+  it yet).** Without `--fonts`, `wire` leaves Google Fonts alone. With it, and when
   `report.fonts.status` is `wire`, `wire` adds a second commit on `consent-banner` ("feat: Google
-  Fonts från sajten själv (self-hosted)"); `wire --no-fonts` leaves the fonts alone. For a site
-  whose banner is already live, `fonts <site dir>` makes the same commit alone on a new branch
+  Fonts från sajten själv (self-hosted)"), and a refused fonts plan refuses the whole wire. For a
+  site whose banner is already live, `fonts <site dir>` makes the same commit alone on a new branch
   `fonts-selfhost` from origin/main (same checks as `wire`: clean checkout at origin/main, no such
-  branch locally or on origin). Everything is planned before anything is written; a failed request,
-  an unexpected answer or an existing `src/styles/fonts.css` or `public/fonts/` refuses the whole
-  plan (exit 3), and a refused fonts plan refuses `wire` too. What it does:
+  branch locally or on origin). It also refuses while origin has a `consent-banner` branch that
+  main does not contain, or an open `consent-banner` PR: the two would conflict. Everything is
+  planned before anything is written. A fresh detect must reproduce `report.fonts` exactly (the
+  edits cut at its offsets), otherwise: run `detect` again. A failed request, an unexpected answer,
+  an existing `src/styles/fonts.css` or `public/fonts/`, or an edited file that changed on disk
+  since planning refuses the whole plan (exit 3). What it does:
   - fetches the css2 URL once with a pinned Chrome User-Agent (`CHROME_UA` in `wire/fonts.ts`),
     so Google answers with woff2 and a unicode-range per subset; anything else is refused;
   - keeps `latin` and `latin-ext`, plus any other subset whose unicode-range covers a character in
-    the site's `src/` (literal, HTML entity, JS or CSS escape) that latin and latin-ext do not:
+    the site's `src/` (literal, HTML entity, JS or CSS escape) that the same family's latin and
+    latin-ext do not:
     the only faces a browser could have fetched from Google (an arrow `→` keeps Open Sans
     `symbols` and `math`);
   - writes each woff2 once (a variable font serves several weights) as
@@ -358,9 +363,12 @@ npx tsx ci/rollout/run.ts help
     `src/styles/fonts.css`: a header naming the URL, the date, the subsets and the licences, then
     Google's `@font-face` blocks verbatim with local urls (`font-display: swap` added where absent);
   - adds `@import "./fonts.css";` right after `@import "tailwindcss"` in `report.css.entry`;
-  - removes every location (whole lines; a font comment on the line right above goes with them;
-    no double blank line is left) and cuts `fonts.googleapis.com` / `fonts.gstatic.com` source
-    tokens from each CSP, refusing if that would leave a directive empty.
+  - removes every location as whole lines, leaving no double blank line. A one-line comment right
+    above that starts with a fonts phrase ("Google Fonts", "Fonts: …", "Typography: …",
+    "Typsnitt"; HTML, or `//` above the const) goes with it; a multi-line comment or one that only
+    mentions fonts stays. A `// note` after the const on its line goes with the const;
+  - cuts `fonts.googleapis.com` / `fonts.gstatic.com` source tokens from each CSP, refusing if a
+    directive (split on `;`, then whitespace) would be left with no source.
 - **Google Fonts detection.** `detect` also writes `report.fonts`, separate from the
   banner: it never changes `classification` or `reasons`. `status` is `wire` for exactly one literal `fonts.googleapis.com/css2` URL loaded
   only by `<link rel="stylesheet">`, `<link rel="preload" as="style">` (any attribute order, split

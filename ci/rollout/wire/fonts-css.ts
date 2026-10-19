@@ -125,12 +125,16 @@ export interface Selection {
 
 /** Which faces to self-host for a site that shows `codePoints` (see the header). Keeps Google's order. */
 export function selectFaces(faces: Face[], codePoints: Set<number>): Selection {
-  const base = faces.filter((f) => ALWAYS.has(f.subset)).flatMap((f) => f.ranges)
-  const residual = [...codePoints].filter((cp) => !covers(base, cp)).sort((a, b) => a - b)
+  // Per family: what that family's own latin and latin-ext leave uncovered.
+  const residual = new Map<string, number[]>()
+  for (const family of new Set(faces.map((f) => f.family))) {
+    const base = faces.filter((f) => f.family === family && ALWAYS.has(f.subset)).flatMap((f) => f.ranges)
+    residual.set(family, [...codePoints].filter((cp) => !covers(base, cp)).sort((a, b) => a - b))
+  }
   const need = new Map<string, Set<number>>()
   const kept = faces.filter((f) => {
     if (ALWAYS.has(f.subset)) return true
-    const hits = residual.filter((cp) => covers(f.ranges, cp))
+    const hits = residual.get(f.family)!.filter((cp) => covers(f.ranges, cp))
     if (hits.length === 0) return false
     const set = need.get(f.subset) ?? new Set<number>()
     for (const cp of hits) set.add(cp)
