@@ -1,32 +1,35 @@
-// The pr stage (spec C4): opens the consent-banner PR on a client site repo with a Swedish body.
-// The body is built only from the branch's src/data/privacy.json (which template block: Ruling 40),
-// the Report, verify.json (step names and results, never evidence text),
-// the changed file names and issue links. Screenshots are not committed to the site repo: openPr
-// returns the files to copy into site-factory (`screenshotsDir`), and the body links them under
-// `screenshotsBase`. The copy, commit and push of site-factory is the controller's job.
+// The pr stage (spec C4): opens the PR of the checkout's flow (flows.ts) on a client site repo with
+// a Swedish body. consent-banner: built from the branch's src/data/privacy.json (which template
+// block: Ruling 40), plus a fonts paragraph when the branch self-hosts the Google Fonts.
+// fonts-selfhost: from the families in the branch's src/styles/fonts.css. Both take the Report,
+// the flow's verify result (step names and results, never evidence text), the changed file names
+// and issue links. Screenshots are not committed to the site repo: openPr returns the files to copy
+// into site-factory (`screenshotsDir`), and the body links them under `screenshotsBase`. The copy,
+// commit and push of site-factory is the controller's job.
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
+import { parseFontsCss } from './checks/fonts'
+import { currentFlow, FLOWS, fontsCssAt, openPrsFrom, readStatePath, statePath } from './flows'
 import { type Exec, exec as realExec, tail } from './lib/exec'
 import { normaliseReport } from './lib/report'
 import { SERVICES, type ServiceSlug } from '../../src/services'
 import sv from '../../src/text/sv.json'
 import type { Report, VerifyResult } from './types'
-import { ORIGIN, verify as realVerify } from './verify'
-import { BRANCH } from './wire/index'
+import { ORIGIN, VERIFY_FILE, verify as realVerify } from './verify'
+import { FONTS_BRANCH, FONTS_CSS } from './wire/fonts'
 
-/**
- * No version (#51): the range wire installs moves with each release (1.0 named a ^1.1.2 install),
- * and the PR's package.json diff shows it exactly.
- */
-export const TITLE = 'Samtyckesbanner (astro-consent)'
-/** Titles this tool gave its PRs before; an open PR with one of them is still its own. */
-const OWN_TITLES = new Set([TITLE, 'Samtyckesbanner (astro-consent 1.0)'])
-export const TEMPLATE_PATH = join(import.meta.dirname, 'pr-body.sv.md')
+/** The consent-banner PR's title. No version (#51): the range wire installs moves with each release. */
+export const TITLE = FLOWS['consent-banner'].title
+export const TEMPLATE_PATH = FLOWS['consent-banner'].template
+export const FONTS_TEMPLATE_PATH = FLOWS['fonts-selfhost'].template
 
 export interface BodyInput {
-  /** Which template block: from the branch's privacy.json (`templateKind`), not the classification. */
-  kind: 'consent' | 'notice'
-  /** The services of the consent block, in registry order; empty for notice. */
+  /**
+   * Which template block: `consent` or `notice` from the branch's privacy.json (`templateKind`),
+   * not the classification; `fonts` for the fonts-selfhost template.
+   */
+  kind: 'consent' | 'notice' | 'fonts'
+  /** The services of the consent block, in registry order; empty otherwise. */
   services: ServiceSlug[]
   verify: VerifyResult
   /** Issue URLs. */
@@ -34,6 +37,8 @@ export interface BodyInput {
   domain: string
   files?: string[]
   screenshots?: { file: string; url: string }[]
+  /** The self-hosted families (fonts.css): the `{{#fonts}}` blocks are kept, and fill `{{families}}`. */
+  fonts?: { families: string[] }
 }
 
 // Fills the placeholder texts exactly as src/components/EmbedPlaceholder.astro does.
@@ -54,22 +59,31 @@ function consentSteps(services: ServiceSlug[]): string {
   return steps.map((t, i) => `${i + 2}. ${t}`).join('\n')
 }
 
-/** Fills `{{name}}` values and `{{#consent}}…{{/consent}}` / `{{#notice}}…{{/notice}}` blocks. */
+/** The banner body's last test step, for the self-hosted fonts: numbered after the banner's own. */
+function fontsStep(kind: BodyInput['kind'], services: ServiceSlug[]): string {
+  const n = kind === 'consent' ? services.length + 4 : 4
+  return `${n}. Öppna webbläsarens nätverksflik och ladda om sidan: inga anrop till \`fonts.googleapis.com\` eller \`fonts.gstatic.com\`, typsnitten hämtas från \`/fonts/\`.`
+}
+
+/** Fills `{{name}}` values and `{{#consent}}`, `{{#notice}}`, `{{#fonts}}` … `{{/…}}` blocks. */
 export function renderBody(template: string, input: BodyInput): string {
   const { kind, services, verify, issues, domain } = input
   if (!verify.pass) throw new Error('verify did not pass: no PR body')
+  const active = new Set<string>([kind, ...(input.fonts ? ['fonts'] : [])])
   const values: Record<string, string> = {
     domain,
     serviceNames: list(services.map((slug) => SERVICES[slug].name)),
     serviceSlugs: services.map((slug) => `\`${slug}\``).join(', '),
     consentSteps: consentSteps(services),
+    fontsStep: fontsStep(kind, services),
+    families: list(input.fonts?.families ?? []),
     files: (input.files?.length ? input.files : ['(se diffen)']).map((f) => `- \`${f}\``).join('\n'),
     steps: verify.steps.map((s) => `- ${s.skipped ? 'hoppades över' : s.pass ? 'ok' : 'FEL'}: ${s.step}. ${s.name}`).join('\n'),
     screenshots: input.screenshots?.length ? input.screenshots.map((s) => `- [${s.file}](${s.url})`).join('\n') : 'Inga.',
     issues: issues.length ? issues.map((i) => `- ${i}`).join('\n') : 'Inga',
   }
   const out = template
-    .replace(/\{\{#(consent|notice)\}\}([\s\S]*?)\{\{\/\1\}\}/g, (_, name: string, text: string) => (name === kind ? text : ''))
+    .replace(/\{\{#(consent|notice|fonts)\}\}([\s\S]*?)\{\{\/\1\}\}/g, (_, name: string, text: string) => (active.has(name) ? text : ''))
     .replace(/\{\{(\w+)\}\}/g, (m, name: string) => values[name] ?? m)
   const left = out.match(/\{\{[^}]*\}\}/)
   if (left) throw new Error(`unfilled placeholder ${left[0]} in the PR body template`)
@@ -126,20 +140,29 @@ const readJson = <T>(path: string, what: string): T => {
   return JSON.parse(readFileSync(path, 'utf8')) as T
 }
 
+/** The distinct families of a fonts.css, in order. */
+export const familiesOf = (css: string): string[] => [...new Set(parseFontsCss(css).map((f) => f.family))]
+
 /**
- * Opens the PR for the site in `dir` (on consent-banner, verified). Rebases onto origin/main first
- * if it moved and verifies again in full. An open PR from consent-banner titled TITLE (or an earlier
- * title of this tool's) is returned as it is; one with another title is someone else's and is refused.
+ * Opens the PR for the site in `dir` (on a branch of FLOWS, verified). Refuses while the other
+ * flow has an open PR (they would conflict). Rebases onto origin/main first if it moved and
+ * verifies again in full. An open PR from the branch with one of the flow's titles is returned as
+ * it is; one with another title is someone else's and is refused.
  */
 export async function openPr(dir: string, opts: PrOptions): Promise<PrResult> {
   const exec = opts.exec ?? realExec
   const root = resolve(dir)
+  const rollout = join(root, '.rollout')
   const git = (...args: string[]) => exec('git', args, root)
-  const report = normaliseReport(readJson<unknown>(join(root, '.rollout/report.json'), 'run detect first'))
+  const report = normaliseReport(readJson<unknown>(join(rollout, 'report.json'), 'run detect first'))
 
-  const head = (await git('rev-parse', '--abbrev-ref', 'HEAD')).out.trim()
-  if (head !== BRANCH) throw new Error(`pr runs on branch ${BRANCH}; ${root} is on ${head || '(unknown)'}`)
+  const flow = await currentFlow(exec, root, 'pr')
+  const branch = flow.branch
   const repo = originRepo((await git('remote', 'get-url', 'origin')).out.trim())
+  const others = await openPrsFrom(exec, root, repo, flow.other)
+  if (others.length) {
+    throw new Error(`an open ${flow.other} PR (${others.map((p) => p.url).join(', ')}) would conflict with ${branch}: merge or close it first`)
+  }
 
   const fetched = await git('fetch', 'origin', 'main')
   if (fetched.code !== 0) throw new Error(`git fetch origin main failed:\n${tail(fetched.out)}`)
@@ -154,10 +177,11 @@ export async function openPr(dir: string, opts: PrOptions): Promise<PrResult> {
     throw new Error(`git merge-base --is-ancestor failed:\n${tail(ancestor.out)}`)
   }
   const rebased = ancestor.code === 1
-  // Only a passing verify run of this exact commit counts; verify wipes .rollout/shots when it
+  // Only a passing verify run of this exact commit counts; verify wipes the flow's shots when it
   // starts, so the screenshots below always belong to that run.
   const current = (await git('rev-parse', 'HEAD')).out.trim()
-  const stored = existsSync(join(root, '.rollout/verify.json')) ? readJson<Partial<VerifyResult>>(join(root, '.rollout/verify.json'), '') : null
+  const verifyPath = readStatePath(rollout, VERIFY_FILE, branch)
+  const stored = existsSync(verifyPath) ? readJson<Partial<VerifyResult>>(verifyPath, '') : null
   let result: VerifyResult
   if (!rebased && stored?.pass === true && stored.sha && stored.sha === current) {
     result = stored as VerifyResult
@@ -167,24 +191,29 @@ export async function openPr(dir: string, opts: PrOptions): Promise<PrResult> {
     if (result.sha !== current) throw new Error(`verify ran for ${result.sha ?? '(no commit)'}, HEAD is ${current}`)
   }
 
-  const shotsDir = join(root, '.rollout/shots')
+  const shotsDir = readStatePath(rollout, 'shots', branch)
   const names = existsSync(shotsDir) ? readdirSync(shotsDir).filter((f) => f.endsWith('.png')).sort() : []
   const files = names.map((n) => ({ from: join(shotsDir, n), to: `${opts.screenshotsDir.replace(/\/+$/, '')}/${n}` }))
 
-  const privacy = await git('show', 'HEAD:src/data/privacy.json')
-  if (privacy.code !== 0) throw new Error(`src/data/privacy.json is not on the branch: wire the site first\n${tail(privacy.out)}`)
-  const { kind, services } = templateKind(privacy.out)
+  const changed = (await git('diff', '--name-only', 'origin/main...HEAD')).out.split('\n').filter(Boolean)
+  // The fonts paragraph (consent-banner) and the fonts body name the families the branch self-hosts.
+  const fontsCss = branch === FONTS_BRANCH || changed.includes(FONTS_CSS) ? await fontsCssAt(exec, root, 'HEAD') : null
+  if (branch === FONTS_BRANCH && fontsCss === null) throw new Error(`${FONTS_CSS} from this tool is not on the branch: run.ts fonts first`)
+  let kind: BodyInput['kind'] = 'fonts'
+  let services: ServiceSlug[] = []
+  if (branch !== FONTS_BRANCH) {
+    const privacy = await git('show', 'HEAD:src/data/privacy.json')
+    if (privacy.code !== 0) throw new Error(`src/data/privacy.json is not on the branch: wire the site first\n${tail(privacy.out)}`)
+    ;({ kind, services } = templateKind(privacy.out))
+  }
 
-  const existing = await exec('gh', ['pr', 'list', '-R', repo, '--head', BRANCH, '--state', 'open', '--json', 'url,title'], root)
-  if (existing.code !== 0) throw new Error(`gh pr list failed:\n${tail(existing.out)}`)
-  const open = (JSON.parse(existing.out || '[]') as { url: string; title: string }[])[0]
-  if (open && !OWN_TITLES.has(open.title)) {
-    throw new Error(`an open PR from ${BRANCH} is not this tool's: ${open.url} "${open.title}" (expected "${TITLE}"); resolve it by hand`)
+  const open = (await openPrsFrom(exec, root, repo, branch))[0]
+  if (open && !flow.ownTitles.includes(open.title)) {
+    throw new Error(`an open PR from ${branch} is not this tool's: ${open.url} "${open.title}" (expected "${flow.title}"); resolve it by hand`)
   }
   if (open) return { url: open.url, files }
 
-  const changed = (await git('diff', '--name-only', 'origin/main...HEAD')).out.split('\n').filter(Boolean)
-  const body = renderBody(readFileSync(TEMPLATE_PATH, 'utf8'), {
+  const body = renderBody(readFileSync(flow.template, 'utf8'), {
     kind,
     services,
     verify: result,
@@ -192,10 +221,11 @@ export async function openPr(dir: string, opts: PrOptions): Promise<PrResult> {
     domain: opts.domain ?? report.domains[0] ?? report.site,
     files: changed,
     screenshots: names.map((n) => ({ file: n, url: `${opts.screenshotsBase.replace(/\/+$/, '')}/${n}` })),
+    ...(fontsCss !== null ? { fonts: { families: familiesOf(fontsCss) } } : {}),
   })
-  const bodyFile = join(root, '.rollout/pr-body.md')
+  const bodyFile = statePath(rollout, 'pr-body.md', branch)
   writeFileSync(bodyFile, body)
-  const created = await exec('gh', ['pr', 'create', '-R', repo, '-H', BRANCH, '-B', 'main', '-t', TITLE, '-F', bodyFile], root)
+  const created = await exec('gh', ['pr', 'create', '-R', repo, '-H', branch, '-B', 'main', '-t', flow.title, '-F', bodyFile], root)
   const link = created.out.trim().split('\n').pop() ?? ''
   if (created.code !== 0 || !/^https:\/\/github\.com\//.test(link)) throw new Error(`gh pr create failed:\n${tail(created.out)}`)
   return { url: link, files }

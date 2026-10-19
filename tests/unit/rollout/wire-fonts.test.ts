@@ -607,17 +607,17 @@ describe('run.ts wire: fonts as a second commit on consent-banner', () => {
   const aspomadNet = (over: Record<string, Answer | Error> = {}) => network(over, { [ASPOMAD_URL]: css2('figtree') })
   const aspomad = (): string => checkout(treeOf(join(FIXTURES, 'aspomad', 'before')))
 
-  test('parseWireArgs: fonts are opt-in with --fonts (until verify checks them); --no-fonts is gone', () => {
-    expect(parseWireArgs(['site', '--fonts'])).toEqual({ dir: 'site', dryRun: false, fonts: true })
-    expect(parseWireArgs(['--dry-run', 'site'])).toEqual({ dir: 'site', dryRun: true })
-    expect(() => parseWireArgs(['site', '--no-fonts'])).toThrow(/unknown option --no-fonts/)
+  test('parseWireArgs (PR 3): fonts are on by default, --no-fonts skips them; --fonts is gone and says so', () => {
+    expect(parseWireArgs(['site'])).toEqual({ dir: 'site', dryRun: false, fonts: true })
+    expect(parseWireArgs(['--dry-run', 'site', '--no-fonts'])).toEqual({ dir: 'site', dryRun: true, fonts: false })
+    expect(() => parseWireArgs(['site', '--fonts'])).toThrow(/unknown option --fonts \(fonts are self-hosted by default now; --no-fonts skips them\)/)
   })
 
-  test('without --fonts, wire is what it was on main: one commit, no request, fonts untouched', async () => {
+  test('--no-fonts: wire is what it was before the fonts: one commit, no request, fonts untouched', async () => {
     const dir = aspomad()
     runDetect(dir, ['aspomad.se'])
     const net = aspomadNet()
-    const { code, output } = await runWire(dir, { dryRun: false, fetch: net, install: () => {} })
+    const { code, output } = await runWire(dir, { dryRun: false, fonts: false, fetch: net, install: () => {}, openPrs: noPrs })
     expect(code).toBe(0)
     expect(output).toContain(`committed on ${BRANCH}\n`)
     expect(git(dir, 'log', '-1', '--format=%s')).toBe(COMMIT_MESSAGE)
@@ -630,7 +630,8 @@ describe('run.ts wire: fonts as a second commit on consent-banner', () => {
     const dir = aspomad()
     const report = runDetect(dir, ['aspomad.se'])
     expect(report.fonts?.status).toBe('wire')
-    const { code, output } = await runWire(dir, { dryRun: false, fetch: aspomadNet(), fonts: true, now: DATE, install: () => {} })
+    // PR 3: no option needed, the fonts are self-hosted by default.
+    const { code, output } = await runWire(dir, { dryRun: false, fetch: aspomadNet(), now: DATE, install: () => {}, openPrs: noPrs })
     expect(code).toBe(0)
     expect(output).toContain(`committed on ${BRANCH} (2 commits)`)
     expect(git(dir, 'branch', '--show-current')).toBe(BRANCH)
@@ -649,12 +650,12 @@ describe('run.ts wire: fonts as a second commit on consent-banner', () => {
     expect(status(dir)).toBe('')
   })
 
-  test('with --fonts, a refused fonts plan refuses the whole wire (exit 3, nothing written) and says how to wire the banner alone', async () => {
+  test('a refused fonts plan refuses the whole wire (exit 3, nothing written) and says how to wire the banner alone', async () => {
     const dir = aspomad()
     runDetect(dir, ['aspomad.se'])
-    const { code, output } = await runWire(dir, { dryRun: false, fonts: true, fetch: aspomadNet({ [ASPOMAD_URL]: new Error('offline') }), install: () => {} })
+    const { code, output } = await runWire(dir, { dryRun: false, fetch: aspomadNet({ [ASPOMAD_URL]: new Error('offline') }), install: () => {}, openPrs: noPrs })
     expect(code).toBe(3)
-    expect(output).toContain('wire without --fonts')
+    expect(output).toContain('wire --no-fonts wires the banner alone')
     expect(git(dir, 'branch', '--show-current')).toBe('main')
     expect(status(dir)).toBe('')
   })
@@ -662,7 +663,7 @@ describe('run.ts wire: fonts as a second commit on consent-banner', () => {
   test('--dry-run shows the banner diff and the fonts diff, writes nothing', async () => {
     const dir = aspomad()
     runDetect(dir, ['aspomad.se'])
-    const { code, output } = await runWire(dir, { dryRun: true, fonts: true, fetch: aspomadNet(), now: DATE })
+    const { code, output } = await runWire(dir, { dryRun: true, fetch: aspomadNet(), now: DATE })
     expect(code).toBe(0)
     expect(output).toContain("+import ConsentBanner from '@visionmediahq/astro-consent/components/ConsentBanner.astro'")
     expect(output).toContain('+++ b/src/styles/fonts.css')
@@ -680,7 +681,7 @@ describe('review of #75: stale reports, files changed on disk, recovery', () => 
     // The repro: detect, wire the banner, that branch becomes main, fonts without re-detecting.
     const dir = checkout(treeOf(join(FIXTURES, 'aspomad', 'before')))
     runDetect(dir, ['aspomad.se'])
-    expect((await runWire(dir, { dryRun: false, install: () => {} })).code).toBe(0)
+    expect((await runWire(dir, { dryRun: false, fonts: false, install: () => {}, openPrs: noPrs })).code).toBe(0)
     git(dir, 'push', '-q', 'origin', `${BRANCH}:main`)
     git(dir, 'fetch', '-q', 'origin')
     git(dir, 'switch', '-q', 'main')
@@ -897,5 +898,54 @@ describe('review of #75: CSP, subsets per family, comments', () => {
     expect(out.includes(block)).toBe(!cut)
     expect(out.includes('// Google Fonts')).toBe(!cut)
     expect(out).not.toContain('fontHref')
+  })
+})
+
+describe('PR 3: wire refused while fonts-selfhost is open (the other direction of #75)', () => {
+  const aspomad = (): string => checkout(treeOf(join(FIXTURES, 'aspomad', 'before')))
+
+  test('refused (exit 3) while origin has a fonts-selfhost branch main does not have, or an open fonts-selfhost PR; nothing written', async () => {
+    const dir = aspomad()
+    runDetect(dir, ['aspomad.se'])
+    git(dir, 'switch', '-q', '-c', 'fonts-selfhost')
+    writeFileSync(join(dir, 'x.txt'), 'x')
+    git(dir, 'add', 'x.txt')
+    git(dir, 'commit', '-q', '-m', 'fonts')
+    git(dir, 'push', '-q', 'origin', 'fonts-selfhost')
+    git(dir, 'switch', '-q', 'main')
+    git(dir, 'branch', '-q', '-D', 'fonts-selfhost')
+    git(dir, 'update-ref', '-d', 'refs/remotes/origin/fonts-selfhost')
+    const asked: string[] = []
+    const branch = await runWire(dir, { dryRun: false, fonts: false, install: () => {}, openPrs: async (_r, b) => (asked.push(b), []) })
+    expect(branch.code).toBe(3)
+    expect(branch.output).toMatch(/origin has a fonts-selfhost branch \([0-9a-f]{7}\) that is not in origin\/main: .*merge or close the fonts first\. Then detect and wire again/)
+    expect(asked).toEqual(['fonts-selfhost'])
+    expect(git(dir, 'branch', '--show-current')).toBe('main')
+
+    git(dir, 'push', '-q', 'origin', '--delete', 'fonts-selfhost')
+    const pr = await runWire(dir, { dryRun: false, fonts: false, install: () => {}, openPrs: async () => ['https://github.com/visionmediahq/site/pull/12'] })
+    expect(pr.code).toBe(3)
+    expect(pr.output).toContain('open fonts-selfhost PR https://github.com/visionmediahq/site/pull/12: merge or close it first, then detect and wire again')
+    expect(status(dir)).toBe('')
+    expect(git(dir, 'branch', '--list', 'consent-banner')).toBe('')
+  })
+
+  test('a fonts-selfhost branch main already has is no obstacle; a dry run does not ask GitHub at all', async () => {
+    const dir = aspomad()
+    runDetect(dir, ['aspomad.se'])
+    git(dir, 'push', '-q', 'origin', 'main:fonts-selfhost')
+    let asked = 0
+    const openPrs = async () => (asked++, ['https://github.com/visionmediahq/site/pull/12'])
+    expect((await runWire(dir, { dryRun: true, fonts: false, openPrs })).code).toBe(0)
+    expect(asked).toBe(0)
+    expect((await runWire(dir, { dryRun: false, fonts: false, install: () => {}, openPrs: noPrs })).code).toBe(0)
+  })
+
+  test('runFonts asks GitHub about consent-banner only', async () => {
+    const dir = checkout(knutTree())
+    runDetect(dir, ['knutssonsbil.se'])
+    const asked: string[] = []
+    await runFonts(dir, { dryRun: true, fetch: network(), now: DATE, openPrs: async (_r, b) => (asked.push(b), []) })
+    expect(asked).toEqual(['consent-banner'])
   })
 })

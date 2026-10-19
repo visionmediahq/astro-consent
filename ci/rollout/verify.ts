@@ -1,9 +1,12 @@
-// The verify stage (spec C3): eight checks on a wired site's consent-banner branch, run in order,
-// stopping at the first failure. Each step writes .rollout/evidence/<n>-<name>.txt, and the whole
-// result goes to .rollout/verify.json.
+// The verify stage (spec C3): the checks of a wired site's branch, run in order, stopping at the
+// first failure. The branch picks the flow (flows.ts): consent-banner runs every step but 8 (fonts
+// only when the branch self-hosts them), fonts-selfhost skips the banner-only 4 and 6. Each step
+// writes .rollout/evidence-<branch>/<n>-<name>.txt, and the whole result goes to
+// .rollout/verify-<branch>.json.
 //
 //   1 lockfile    npm ci in both; package-lock diff against main within the allowlist, and
-//                 `npm ls astro vite @tailwindcss/vite` the same on both sides
+//                 `npm ls astro vite @tailwindcss/vite` the same on both sides. fonts-selfhost:
+//                 package.json and package-lock.json exactly main's, and only the fonts' files changed
 //   2 build       npm run build on the branch
 //   3 requests    main and branch previews over every built page: main RED (or noted green), the
 //                 branch shows the banner, requests nothing from the registry before consent and
@@ -17,13 +20,17 @@
 //   6 contrast    every banner button, PrivacyLinks row and embed placeholder text ≥ 4.5:1 and
 //                 determinate (Ruling 20, #46)
 //   7 screenshots banner and map placeholders at 360 and 1280 px
-//   8 docker      the pushed branch cloned clean, built with its Dockerfile, steps 3–4 against it
+//   8 fonts       self-hosted Google Fonts (checks/fonts.ts): no Google host in dist/, no request to
+//                 Google and every /fonts/*.woff2 200 at 360/1280 px, every face used loaded, every
+//                 character shown in a self-hosted family within its kept unicode-ranges
+//   9 docker      the pushed branch cloned clean, built with its Dockerfile, steps 3–4 (and 8's
+//                 requests) against it
 //
 // `main` is built in a git worktree beside the clone (`<clone>-main`), so its node_modules and dist
 // never sit inside the site where Tailwind's source scan or tsc could see them.
 //
 // Demo mode (`demo: true`, CI/self-test): `dir` is a built demo dist (demo/dist-consent); no git,
-// no npm, no Docker, no network. Steps 1, 2 and 8 are skipped and step 3 has no main side.
+// no npm, no Docker, no network. Steps 1, 2 and 9 are skipped and step 3 has no main side.
 import { existsSync, mkdirSync, readFileSync, realpathSync, rmSync, statfsSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import type { Browser } from '@playwright/test'
@@ -32,6 +39,18 @@ import { type RootStyles, checkRootStyles, diffRootStyles } from './checks/root-
 import { type ConsentPathResult, checkConsentPaths } from './checks/consent-paths'
 import { type ContrastRow, checkContrast } from './checks/contrast'
 import { checkEmbedBoxes, compareEmbedHeights, type EmbedBox } from './checks/embed-size'
+import {
+  checkCoverage,
+  checkFonts,
+  coverageLines,
+  coverageTexts,
+  css2UrlOf,
+  distMentions,
+  type FontsPage,
+  judgeFontsPage,
+  parseFontsCss,
+  shippedStrings,
+} from './checks/fonts'
 import { isCmsAdminRoute, listPages, MISSING_PREFIX } from './checks/pages'
 import { checkRequests, formatRequests, type RequestResult } from './checks/requests'
 import { shots } from './checks/shots'
@@ -40,9 +59,11 @@ import { dockerCheck } from './docker'
 import { type Exec, exec as realExec, tail } from './lib/exec'
 import { diffLock, diffPackageJson } from './lib/lockfile'
 import { isUp, type Preview, previewLog, ssrEntry, startPreview } from './preview'
+import { type Flow, FLOWS, flowOf, FONTS_MARKER, isToolFontsCss, readStatePath, statePath, STEPS, type StepName } from './flows'
 import type { Report, StepResult, VerifyResult } from './types'
 import type { ServiceSlug } from '../../src/services'
-import { BRANCH } from './wire/index'
+import { CHROME_UA, FONTS_BRANCH, FONTS_CSS, FONTS_DIR, type FontFetch, httpFetch } from './wire/fonts'
+import { type Face, parseCss2 } from './wire/fonts-css'
 
 export type { Exec } from './lib/exec'
 
@@ -66,6 +87,8 @@ export interface Checks {
   embedBoxes(base: string, paths: string[]): Promise<EmbedBox[]>
   contrast(base: string, paths: string[]): Promise<ContrastRow[]>
   shots(base: string, paths: string[], outDir: string): Promise<string[]>
+  /** Step 8: every path at `widths` (default 360 and 1280), Google Fonts blocked and counted. */
+  fonts(base: string, paths: string[], opts?: { widths?: number[] }): Promise<FontsPage[]>
   close(): Promise<void>
 }
 
@@ -79,6 +102,8 @@ export interface VerifyDeps {
   freeBytes: (dir: string) => number
   /** Whether anything still answers at `url` (main's preview, after a connection error). */
   isUp: (url: string) => Promise<boolean>
+  /** Step 8 asks Google's css2 URL (from fonts.css) which characters its faces offer; tests answer it. */
+  fontFetch: FontFetch
 }
 
 export interface VerifyOptions {
@@ -87,15 +112,17 @@ export interface VerifyOptions {
   minFreeGb?: number
   /** CI/self-test mode: `dir` is a built demo dist dir. */
   demo?: boolean
-  /** Where evidence and verify.json go; default `<dir>/.rollout`. */
+  /** Where evidence and the verify file (per branch, flows.ts) go; default `<dir>/.rollout`. */
   out?: string
 }
 
 /** Step 8 clones only Vision Media's own GitHub repos (Ruling 34b). */
 export const ORIGIN = /^(git@github\.com:|https:\/\/github\.com\/)visionmediahq\//
 
-/** The remote head of consent-banner verify last pushed, so a rerun may replace its own push. */
+/** The remote head of the branch verify last pushed, so a rerun may replace its own push (per branch, flows.ts). */
 export const PUSHED_FILE = 'pushed.txt'
+/** The result (per branch: verify-<branch>.json, flows.ts). */
+export const VERIFY_FILE = 'verify.json'
 
 const norm = (path: string): string => (path.length > 1 ? path.replace(/\/+$/, '') : path)
 
@@ -140,6 +167,7 @@ export function browserChecks(): Checks {
     embedBoxes: async (base, paths) => checkEmbedBoxes(await get(), base, paths, [360, 1280], { stub: true }),
     contrast: async (base, paths) => checkContrast(await get(), base, paths, { stub: true }),
     shots: async (base, paths, outDir) => shots(await get(), base, paths, outDir, [360, 1280], { stub: true }),
+    fonts: async (base, paths, opts) => checkFonts(await get(), base, paths, { stub: true, block: true, ...(opts?.widths ? { widths: opts.widths } : {}) }),
     async close() {
       if (browser) await (await browser).close()
     },
@@ -156,6 +184,7 @@ const realDeps = (): VerifyDeps => ({
     return s.bavail * s.bsize
   },
   isUp,
+  fontFetch: httpFetch,
 })
 
 const firstLine = (e: unknown): string => (e instanceof Error ? e.message : String(e)).split('\n')[0]!
@@ -226,13 +255,35 @@ interface Outcome {
   skipped?: boolean
 }
 
-const STEPS = ['lockfile', 'build', 'requests', 'consent-paths', 'clip', 'contrast', 'screenshots', 'docker'] as const
+/** Whether `pkg` (a package.json text) depends on astro-consent: the banner is on that side. */
+export function hasPackage(pkg: string): boolean {
+  try {
+    const json = JSON.parse(pkg) as Record<string, Record<string, unknown> | undefined>
+    return ['dependencies', 'devDependencies'].some((f) => Object.hasOwn(json[f] ?? {}, PKG))
+  } catch {
+    return false
+  }
+}
+
+/** The paths the fonts commit may change (fonts-selfhost step 1), from the report detect wrote on main. */
+export function fontsPaths(report: Report): (path: string) => boolean {
+  const files = new Set<string>([
+    FONTS_CSS,
+    ...(report.css.entry ? [report.css.entry] : []),
+    ...(report.fonts?.locations ?? []).map((l) => l.file),
+    ...(report.fonts?.csp ?? []).map((c) => c.file),
+  ])
+  return (path) => files.has(path) || path.startsWith(`${FONTS_DIR}/`)
+}
+
+/** Text of a fetch answer. */
+const utf8 = (body: Uint8Array): string => new TextDecoder().decode(body)
 
 /**
- * Runs C3 on the checkout `dir` (on branch consent-banner) for `report`. Pushes the branch first
- * (step 8 clones from GitHub), then runs steps 1–8 and stops at the first failure. Throws, before
- * any step, when the disk has less free space than `minFreeGb` (#23), when `dir` is not on
- * consent-banner, or when a stray `<dir>-main` is not one of its worktrees.
+ * Runs C3 on the checkout `dir` (on a branch of FLOWS) for `report`. Pushes the branch first
+ * (step 9 clones from GitHub), then runs the flow's steps and stops at the first failure. Throws,
+ * before any step, when the disk has less free space than `minFreeGb` (#23), when `dir` is not on
+ * a branch of FLOWS, or when a stray `<dir>-main` is not one of its worktrees.
  */
 export async function verify(dir: string, report: Report, opts: VerifyOptions = {}): Promise<VerifyResult> {
   const deps: VerifyDeps = { ...realDeps(), ...opts.deps }
@@ -251,10 +302,14 @@ export async function verify(dir: string, report: Report, opts: VerifyOptions = 
       )
     }
   }
-  const evidenceDir = join(out, 'evidence')
-  // Evidence and screenshots from an earlier run must not pass for this one's.
-  rmSync(evidenceDir, { recursive: true, force: true })
-  rmSync(join(out, 'shots'), { recursive: true, force: true })
+  const git = (...args: string[]) => exec('git', args, root)
+  const flow: Flow = demo ? FLOWS['consent-banner'] : flowOf((await git('rev-parse', '--abbrev-ref', 'HEAD')).out.trim(), 'verify', root)
+  const BRANCH = flow.branch
+  const evidenceDir = statePath(out, 'evidence', BRANCH)
+  const shotsDir = statePath(out, 'shots', BRANCH)
+  // Evidence and screenshots from an earlier run must not pass for this one's (nor those kept under
+  // the names used before the flows).
+  for (const d of [evidenceDir, shotsDir, ...(BRANCH === 'consent-banner' ? [join(out, 'evidence'), join(out, 'shots')] : [])]) rmSync(d, { recursive: true, force: true })
   mkdirSync(evidenceDir, { recursive: true })
 
   const steps: StepResult[] = []
@@ -267,18 +322,15 @@ export async function verify(dir: string, report: Report, opts: VerifyOptions = 
   const restarts: string[] = []
   const finish = (): VerifyResult => {
     const result: VerifyResult = { pass: steps.length > 0 && steps.every((s) => s.pass), sha, steps, ...(restarts.length ? { restarts } : {}) }
-    writeFileSync(join(out, 'verify.json'), `${JSON.stringify(result, null, 2)}\n`)
+    writeFileSync(statePath(out, VERIFY_FILE, BRANCH), `${JSON.stringify(result, null, 2)}\n`)
     return result
   }
-  const git = (...args: string[]) => exec('git', args, root)
   let sha: string | null = null
 
   const mainDir = demo ? null : `${root.replace(/\/+$/, '')}-main`
   /** Whether `mainDir` is listed by `git worktree list` as one of this clone's worktrees. */
   let staleWorktree = false
   if (!demo) {
-    const head = (await git('rev-parse', '--abbrev-ref', 'HEAD')).out.trim()
-    if (head !== BRANCH) throw new Error(`verify runs on branch ${BRANCH}; ${root} is on ${head || '(unknown)'}`)
     if (existsSync(mainDir!)) {
       const real = (p: string): string => {
         try {
@@ -307,8 +359,8 @@ export async function verify(dir: string, report: Report, opts: VerifyOptions = 
     // sees someone else's branch as origin/consent-banner, so --force-with-lease alone would not stop it).
     const local = (await git('rev-parse', 'HEAD')).out.trim()
     const remote = await git('ls-remote', '--heads', 'origin', `refs/heads/${BRANCH}`)
-    const remoteSha = headSha(remote.out)
-    const pushedPath = join(out, PUSHED_FILE)
+    const remoteSha = headSha(remote.out, BRANCH)
+    const pushedPath = readStatePath(out, PUSHED_FILE, BRANCH)
     const pushed = existsSync(pushedPath) ? readFileSync(pushedPath, 'utf8').trim() : ''
     if (remote.code !== 0) {
       record(0, 'push', { pass: false, lines: [`git ls-remote --heads origin refs/heads/${BRANCH} failed: cannot tell whether the branch on GitHub is ours`, tail(remote.out)] })
@@ -330,15 +382,26 @@ export async function verify(dir: string, report: Report, opts: VerifyOptions = 
       return finish()
     }
     sha = (await git('rev-parse', 'HEAD')).out.trim() || null
-    if (sha) writeFileSync(pushedPath, `${sha}\n`)
+    if (sha) writeFileSync(statePath(out, PUSHED_FILE, BRANCH), `${sha}\n`)
   }
+
+  // Step 8 runs on fonts-selfhost, and on consent-banner whenever the branch has the tool's fonts.css.
+  const fontsCss = demo || !existsSync(join(root, FONTS_CSS)) ? null : readFileSync(join(root, FONTS_CSS), 'utf8')
+  const selfHosts = isToolFontsCss(fontsCss)
+  const runs = (name: StepName): boolean => flow.steps.includes(name) || (name === 'fonts' && selfHosts)
+  // fonts-selfhost before the banner (a site without it on main): no banner is expected anywhere.
+  const bannerOnMain = demo || BRANCH !== FONTS_BRANCH || hasPackage((await git('show', 'origin/main:package.json')).out)
 
   const ssr = demo || report.astro.output === 'server'
   const known = embedRoutes(report)
   const filters = filterRoutes(report)
   const expectFilter = filters.size ? (p: string) => filters.get(norm(p)) ?? null : undefined
   // CMS admin shells (src/pages/admin/, or Decap's public/admin/ copied to dist/admin/) never get the banner.
-  const expectBanner = demo ? (p: string) => norm(p) !== '/utan-banner' && !p.startsWith(MISSING_PREFIX) : (p: string) => !isCmsAdminRoute(p)
+  const expectBanner = demo
+    ? (p: string) => norm(p) !== '/utan-banner' && !p.startsWith(MISSING_PREFIX)
+    : bannerOnMain
+      ? (p: string) => !isCmsAdminRoute(p)
+      : () => false
   const previews: Preview[] = []
   let checks = null as Checks | null
   const getChecks = async () => (checks ??= await deps.checks())
@@ -426,6 +489,34 @@ export async function verify(dir: string, report: Report, opts: VerifyOptions = 
         if (ci.code !== 0) return { pass: false, lines: [`npm ci failed on ${side}:`, tail(ci.out)] }
       }
       const branchPkg = readFileSync(join(root, 'package.json'), 'utf8')
+      if (BRANCH === FONTS_BRANCH) {
+        // The fonts commit installs nothing: package.json and the lockfile stay main's, byte for
+        // byte, and only the files the fonts plan writes or edits change.
+        const mainPkg = await git('show', 'origin/main:package.json')
+        const samePkg = mainPkg.code === 0 && mainPkg.out === branchPkg
+        const sameLock = readFileSync(join(mainDir!, 'package-lock.json'), 'utf8') === readFileSync(join(root, 'package-lock.json'), 'utf8')
+        const diff = await git('diff', '--name-only', 'origin/main...HEAD')
+        const allowed = fontsPaths(report)
+        const changed = diff.out.split('\n').filter(Boolean)
+        const extra = changed.filter((p) => !allowed(p))
+        lines.push(
+          `package.json, main → branch: ${samePkg ? 'same' : 'CHANGED (the fonts commit must not touch it)'}`,
+          `package-lock.json, main → branch: ${sameLock ? 'same' : 'CHANGED (the fonts commit must not touch it)'}`,
+          `changed files (${changed.length}): ${diff.code === 0 ? (extra.length ? 'NOT ONLY THE FONTS' : 'only the fonts') : 'git diff failed'}`,
+          ...extra.map((p) => `  UNKNOWN ${p}`),
+        )
+        const ls: Record<string, string[]> = {}
+        for (const [side, cwd] of [['main', mainDir!], ['branch', root]] as const) {
+          try {
+            ls[side] = lsVersions((await exec('npm', NPM_LS, cwd)).out)
+          } catch {
+            return { pass: false, lines: [...lines, `npm ls on ${side} gave no JSON`] }
+          }
+        }
+        const same = JSON.stringify(ls['main']) === JSON.stringify(ls['branch'])
+        lines.push(`npm ls astro vite @tailwindcss/vite: ${same ? 'same' : 'DIFFERENT'}`)
+        return { pass: samePkg && sameLock && diff.code === 0 && extra.length === 0 && same, lines }
+      }
       let site: Record<string, unknown> = {}
       try {
         site = JSON.parse(branchPkg) as Record<string, unknown>
@@ -518,6 +609,7 @@ export async function verify(dir: string, report: Report, opts: VerifyOptions = 
     },
 
     async clip() {
+      if (!bannerOnMain) return { pass: true, skipped: true, lines: ['skipped: main has no banner, so there is no banner button to measure'] }
       const c = await getChecks()
       const rows = await c.clip(branch!.url, [...new Set(['/', ...mapPages])])
       // A page that already scrolls sideways on main (a site's own wide hamburger) is not the
@@ -582,27 +674,68 @@ export async function verify(dir: string, report: Report, opts: VerifyOptions = 
 
     async screenshots() {
       const missing = paths.find((p) => p.startsWith(MISSING_PREFIX))
-      const files = await (await getChecks()).shots(branch!.url, [...new Set(['/', ...mapPages, ...(missing ? [missing] : [])])], join(out, 'shots'))
-      return { pass: files.length > 0, lines: [`${files.length} files in ${join(out, 'shots')}`, ...files] }
+      const files = await (await getChecks()).shots(branch!.url, [...new Set(['/', ...mapPages, ...(missing ? [missing] : [])])], shotsDir)
+      return { pass: files.length > 0, lines: [`${files.length} files in ${shotsDir}`, ...files] }
+    },
+
+    async fonts() {
+      if (!selfHosts || fontsCss === null) {
+        return { pass: false, lines: [`${FONTS_CSS} is missing or not this tool's (no "${FONTS_MARKER}" in its header): run.ts fonts writes it`] }
+      }
+      const declared = parseFontsCss(fontsCss)
+      const families = [...new Set(declared.map((f) => f.family))]
+      const lines = [`${FONTS_CSS}: ${declared.length} faces, ${families.join(', ') || 'no family'}`]
+      if (declared.length === 0) return { pass: false, lines: [...lines, 'no @font-face in it'] }
+      // a: nothing built still names Google Fonts (fonts.css's own header is a CSS comment).
+      const distDir = join(root, 'dist')
+      const mentions = distMentions(distDir)
+      lines.push(mentions.length ? 'dist/ names Google Fonts:' : 'dist/: no Google Fonts host outside comments', ...mentions.map((m) => `  ${m}`))
+      // b, c: every page at 360 and 1280 px, Google Fonts blocked and counted.
+      const pages = await (await getChecks()).fonts(branch!.url, paths)
+      const judged = pages.map((p) => judgeFontsPage(p, declared))
+      lines.push(...judged.flatMap((j) => j.lines))
+      // d: every character shown in a self-hosted family falls in its kept ranges. Google's whole
+      // answer tells a character it never had (a fallback on main too) from one left out.
+      let google: Face[] | null = null
+      const url = css2UrlOf(fontsCss)
+      try {
+        if (!url) throw new Error(`no css2 URL in the header of ${FONTS_CSS}`)
+        const res = await deps.fontFetch(url, { 'user-agent': CHROME_UA })
+        if (res.status !== 200) throw new Error(`${url} answered ${res.status}`)
+        google = parseCss2(utf8(res.body))
+      } catch (e) {
+        lines.push(`Google's faces unknown (${firstLine(e)}): every character outside the kept ranges counts`)
+      }
+      const client = ssr && existsSync(join(distDir, 'client')) ? join(distDir, 'client') : distDir
+      const coverage = checkCoverage(coverageTexts(pages, shippedStrings(client)), declared, google)
+      const covLines = coverageLines(coverage)
+      lines.push(covLines.length ? 'character coverage:' : 'character coverage: every character shown is in a kept face', ...covLines.map((l) => `  ${l}`))
+      return { pass: mentions.length === 0 && pages.length > 0 && judged.every((j) => j.ok) && coverage.missing.length === 0, lines }
     },
 
     async docker() {
       if (demo) return { pass: true, skipped: true, lines: ['skipped (demo)'] }
       const local = (await git('rev-parse', 'HEAD')).out.trim()
-      const remote = headSha((await git('ls-remote', 'origin', `refs/heads/${BRANCH}`)).out)
+      const remote = headSha((await git('ls-remote', 'origin', `refs/heads/${BRANCH}`)).out, BRANCH)
       if (!local || remote !== local) return { pass: false, lines: [`origin/${BRANCH} is ${remote || '(missing)'}, HEAD is ${local}: push the branch first`] }
       const repoUrl = (await git('remote', 'get-url', 'origin')).out.trim()
-      if (!ORIGIN.test(repoUrl)) return { pass: false, lines: [`origin is ${repoUrl || '(none)'}, not a github.com/visionmediahq repo: step 8 clones only from there`] }
+      if (!ORIGIN.test(repoUrl)) return { pass: false, lines: [`origin is ${repoUrl || '(none)'}, not a github.com/visionmediahq repo: step 9 clones only from there`] }
       const lines = [`origin/${BRANCH} = HEAD = ${local}`]
       const c = await getChecks()
       const result = await deps.docker(repoUrl, BRANCH, async (url) => {
         const results = await c.requests(url, paths, { baseline: rebase(url), expectBanner })
         lines.push('step 3 against the container:', ...formatRequests(results).map((l) => `  ${l}`))
         let pass = results.length > 0 && results.every((r) => r.ok)
-        if (mapPages.length) {
+        if (mapPages.length && runs('consent-paths')) {
           const r = consentPathLines(await c.consentPaths(url, mapPages, { expectFilter }))
           lines.push('step 4 against the container:', ...r.lines.map((l) => `  ${l}`))
           pass &&= r.pass
+        }
+        if (runs('fonts') && fontsCss !== null) {
+          // The container's own server answers the woff2 files now (Coolify serves this image).
+          const judged = (await c.fonts(url, paths, { widths: [1280] })).map((p) => judgeFontsPage(p, parseFontsCss(fontsCss)))
+          lines.push('step 8 requests against the container (1280 px):', ...judged.flatMap((j) => j.lines).map((l) => `  ${l}`))
+          pass &&= judged.length > 0 && judged.every((j) => j.ok)
         }
         return pass
       }, report.domains[0] ? { SITE_URL: `https://${report.domains[0]}` } : {})
@@ -626,6 +759,10 @@ export async function verify(dir: string, report: Report, opts: VerifyOptions = 
     }
     for (const [i, name] of STEPS.entries()) {
       let outcome: Outcome
+      if (!runs(name)) {
+        record(i + 1, name, { pass: true, skipped: true, lines: [`skipped: ${flow.skipWhy}`] })
+        continue
+      }
       try {
         outcome = await run[name]()
       } catch (e) {
@@ -653,11 +790,11 @@ export async function verify(dir: string, report: Report, opts: VerifyOptions = 
   }
 }
 
-/** The sha of exactly refs/heads/consent-banner in `git ls-remote` output ('' when absent). */
-function headSha(out: string): string {
+/** The sha of exactly refs/heads/<branch> in `git ls-remote` output ('' when absent). */
+function headSha(out: string, branch: string): string {
   for (const line of out.split('\n')) {
     const [sha, ref] = line.trim().split(/\s+/)
-    if (ref === `refs/heads/${BRANCH}`) return sha ?? ''
+    if (ref === `refs/heads/${branch}`) return sha ?? ''
   }
   return ''
 }

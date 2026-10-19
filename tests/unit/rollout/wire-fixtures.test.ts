@@ -499,8 +499,8 @@ describe('applyWire', () => {
 
 describe('run.ts wire', () => {
   test('parseWireArgs: a dir and an optional --dry-run', () => {
-    expect(parseWireArgs(['site'])).toEqual({ dir: 'site', dryRun: false })
-    expect(parseWireArgs(['--dry-run', 'site'])).toEqual({ dir: 'site', dryRun: true })
+    expect(parseWireArgs(['site'])).toEqual({ dir: 'site', dryRun: false, fonts: true })
+    expect(parseWireArgs(['--dry-run', 'site'])).toEqual({ dir: 'site', dryRun: true, fonts: true })
     expect(() => parseWireArgs([])).toThrow(/usage/)
     expect(() => parseWireArgs(['site', '--dry'])).toThrow(/--dry/)
     expect(() => parseWireArgs(['a', 'b'])).toThrow(/one site dir/)

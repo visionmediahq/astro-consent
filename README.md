@@ -202,8 +202,9 @@ Each choice also calls `window.umami?.track('consent', { choice })`.
 ## Behaviour worth knowing
 
 - **Umami is not gated.** It is cookie-free and first-party; the banner text says so.
-- **Not handled by this package:** Google Fonts, scripts from jsdelivr and reCAPTCHA still load on
-  sites that use them. (The rollout tool can self-host a site's Google Fonts; see "Rollout tool".)
+- **Not handled by this package:** scripts from jsdelivr and reCAPTCHA still load on sites that
+  use them. Google Fonts are not the banner's job either: the rollout tool self-hosts them on the
+  site itself (`wire` does by default, `fonts` for a site already live; see "Rollout tool").
 - **A one-off "Visa"** loads that one embed for that page view and stores nothing. Declining in the
   banner afterwards keeps it on screen and loads nothing else.
 - **Withdrawing** something that is loaded deletes its first-party cookies (`_ga*`, `_gid`, `_gcl_*`,
@@ -227,7 +228,7 @@ from a checkout of this repo with `npx tsx`:
 
 ```bash
 npx tsx ci/rollout/run.ts detect <site dir> --domain <host> [--domain <host>]...
-npx tsx ci/rollout/run.ts wire   <site dir> [--dry-run] [--fonts]
+npx tsx ci/rollout/run.ts wire   <site dir> [--dry-run] [--no-fonts]
 npx tsx ci/rollout/run.ts fonts  <site dir> [--dry-run]   # Google Fonts alone, on branch fonts-selfhost
 npx tsx ci/rollout/run.ts verify <site dir>
 npx tsx ci/rollout/run.ts verify --demo <dist dir>      # a built demo, no git/npm/Docker
@@ -238,13 +239,28 @@ npx tsx ci/rollout/run.ts help
 ```
 
 - `detect` reads the site and writes the report; `wire` plans every edit and either prints the
-  diff (`--dry-run`, writes nothing) or applies it all on branch `consent-banner` with one commit (with `--fonts`, a second for Google Fonts, below);
+  diff (`--dry-run`, writes nothing) or applies it all on branch `consent-banner`: one commit for
+  the banner and, when the site loads Google Fonts the tool can self-host, a second one for them
+  (`--no-fonts` skips it; below);
   `verify` runs the build and browser checks; `pr` opens the PR; `live baseline` records the live
   site before the merge; `merge` re-verifies if `main` moved, merges, waits for Coolify and runs
   `live post-merge`.
-- **State** lives in `<site dir>/.rollout/` (`report.json`, `verify.json`, `live-baseline.txt`,
-  `live-baseline-hosts.json`, `apps.json`, screenshots), which `detect` adds to the checkout's `.git/info/exclude`, so stages
-  can be rerun one at a time and nothing of it is committed. `verify --demo` writes to a temp folder.
+- **Flows.** `verify`, `pr`, `merge` and `live` read the clone's current branch and run its flow
+  (`FLOWS` in `ci/rollout/flows.ts`); any other branch is refused. `consent-banner` (from `wire`):
+  the banner, plus the fonts commit unless `--no-fonts`. `fonts-selfhost` (from `fonts`): the
+  Google Fonts commit alone, for a site whose banner is live. Each flow has its PR title and body
+  (`pr-body.sv.md`, `pr-body.fonts.sv.md`) and its verify steps. One flow at a time per site:
+  `wire` refuses while origin has a `fonts-selfhost` branch main does not contain or an open
+  `fonts-selfhost` PR, `fonts` the same for `consent-banner`, and `pr` refuses while the other
+  flow has an open PR.
+- **State** lives in `<site dir>/.rollout/`, per flow: `report.json`, and `verify-<branch>.json`,
+  `pushed-<branch>.txt`, `evidence-<branch>/`, `shots-<branch>/`, `pr-body-<branch>.md`,
+  `live-baseline-<branch>.txt`, `live-baseline-hosts-<branch>.json`, `apps-<branch>.json` and
+  `live-<mode>-<branch>.json`. On `consent-banner`, a file missing under its new name is read
+  under the name used before the flows (`verify.json`, `pushed.txt`, `shots/`, `live-baseline.txt`,
+  …), so clones verified before keep working; `fonts-selfhost` never reads those. `detect` adds
+  `.rollout/` to the checkout's `.git/info/exclude`, so stages can be rerun one at a time and
+  nothing of it is committed. `verify --demo` writes to a temp folder.
 - **Exit codes:** `0` ok (for `live baseline` also the expected RED), `1` error, a failed verify
   step or a live/merge STOP, `2` usage, `3` the wire (or fonts) plan was refused (dry run or not; nothing was
   written).
@@ -312,14 +328,14 @@ npx tsx ci/rollout/run.ts help
   expansion. After a passing `live post-merge` (which `merge` runs), the tool deletes the clone's
   `node_modules` and `dist`; a stop keeps them for the next verify.
 - If main's local preview stops answering mid-step (a dropped connection, and nothing answers on
-  its port), `verify` restarts it once and checks main again. The step output, `verify.json`
+  its port), `verify` restarts it once and checks main again. The step output, the verify file
   (`restarts`) and the summary say so. A second drop, any other error, or a crash of the branch's
   preview fails the step: a branch crash may be the wiring's doing.
 - Docker I/O errors (`input/output error`, `unable to lease content`): free disk first, then restart
   Docker fully (`docker desktop restart`, or quit Docker Desktop from its menu and start it again).
   No image or volume purge is needed. If a pull still fails, `docker pull` the base image by
   hand once, then rerun verify.
-- `verify` step 8 builds the site's Dockerfile with `--build-arg SITE_URL=https://<first domain>`,
+- `verify` step 9 builds the site's Dockerfile with `--build-arg SITE_URL=https://<first domain>`,
   as Coolify passes it: a Dockerfile with `ENV SITE_URL=$SITE_URL` otherwise builds with an empty one.
 - `live baseline` covers `report.domains` and every host of the Coolify apps that follow `main`,
   and records them in `live-baseline-hosts.json`. If `merge` stops because an app that follows
@@ -337,10 +353,40 @@ npx tsx ci/rollout/run.ts help
   `src/data/privacy.json` from `report.services`; an existing `privacy.json` that lacks one of them
   is refused. Pool rows without `services` are re-detected, and `select` strata are
   `consent`/`notice`.
-- **Self-hosting Google Fonts (`wire --fonts`, `fonts`; opt-in: `verify` and `live` do not check
-  it yet).** Without `--fonts`, `wire` leaves Google Fonts alone. With it, and when
-  `report.fonts.status` is `wire`, `wire` adds a second commit on `consent-banner` ("feat: Google
-  Fonts från sajten själv (self-hosted)"), and a refused fonts plan refuses the whole wire. For a
+- **Verify on the two flows.** The steps keep their numbers in both flows: 1 lockfile, 2 build,
+  3 requests, 4 consent-paths, 5 clip, 6 contrast, 7 screenshots, 8 fonts, 9 docker. On
+  `fonts-selfhost`, 4 and 6 (banner only) are recorded as skipped; step 1 requires `package.json`
+  and `package-lock.json` to be exactly main's and allows only the files the fonts commit writes or
+  edits (`src/styles/fonts.css`, `public/fonts/**`, the CSS entry, and the files `report.fonts`
+  found the loads and CSPs in); a site without the banner on main expects no banner and skips 5.
+  Step 8 runs on `fonts-selfhost`, and on `consent-banner` whenever the branch has the tool's
+  `src/styles/fonts.css` (else it is skipped):
+  - no `fonts.googleapis.com` / `fonts.gstatic.com` anywhere in the built `dist/` outside CSS
+    and HTML comments (fonts.css's own header names the css2 URL);
+  - every page at 360 and 1280 px with every Google Fonts request aborted and counted: none may be
+    attempted, and every `/fonts/*.woff2` must answer 200;
+  - every family of fonts.css a visible element renders with has the face CSS font matching picks
+    for its weight and style loaded in `document.fonts` (compared with fonts.css, not main: main
+    cannot load its fonts with Google blocked);
+  - every character the pages show in a family of fonts.css (DOM text, hidden elements included),
+    and the strings of the shipped JS (literal or `\u` escape, not the ends of a regex range) and
+    JSON in `/`'s body family, falls in that family's kept unicode-ranges. Verify asks Google's
+    css2 URL (from the header, by the tool, not the browser) which ranges Google has: a character
+    no face of Google's has is noted, not failed (main showed a fallback too). If that request
+    fails, every uncovered character fails. The failure lists the characters and the family.
+  Step 9 also runs step 8's request check at 1280 px against the container.
+  `tests/unit/rollout/fonts-fixtures.demo.ts` (CI e2e job) holds the browser negative controls.
+- **Live with the fonts.** `live post-merge` checks, when the merged main has the tool's fonts.css,
+  every page of every domain at 360 and 1280 px for zero Google Fonts requests (counted, never
+  blocked live), every `/fonts/*.woff2` 200 and every face used loaded, on top of the banner
+  checks. On `fonts-selfhost` the banner checks run when main has the package, otherwise only the
+  fonts and console errors are checked. `live baseline` checks the fonts too when origin/main
+  already has them, and stops if a host fails. `merge` works the same on both flows (the flow's
+  verify file, apps recorded per flow, squash, branch deleted, live post-merge).
+- **Self-hosting Google Fonts (`wire`, `fonts`).** When `report.fonts.status` is `wire`, `wire`
+  adds a second commit on `consent-banner` ("feat: Google Fonts från sajten själv (self-hosted)")
+  unless `--no-fonts`, and a refused fonts plan refuses the whole wire (`--no-fonts` wires the
+  banner alone). For a
   site whose banner is already live, `fonts <site dir>` makes the same commit alone on a new branch
   `fonts-selfhost` from origin/main (same checks as `wire`: clean checkout at origin/main, no such
   branch locally or on origin). It also refuses while origin has a `consent-banner` branch that
