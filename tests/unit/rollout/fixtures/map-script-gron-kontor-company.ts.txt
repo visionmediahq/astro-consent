@@ -1,0 +1,24 @@
+// Excerpt of gron-kontor src/data/company.ts at 9debb06c4: the address fields and the two map URLs only.
+export const company = {
+  name: 'Grön Kontorsmiljö',
+
+  address: {
+    street: 'Knut Påls Väg 1',
+    postalCode: '256 69',
+    city: 'Helsingborg',
+    country: 'SE',
+  },
+} as const
+
+export const mapsUrl =
+  'https://www.google.com/maps/search/?api=1&query=' +
+  encodeURIComponent(
+    `${company.address.street}, ${company.address.postalCode} ${company.address.city}`
+  )
+
+export const mapsEmbedUrl =
+  'https://maps.google.com/maps?q=' +
+  encodeURIComponent(
+    `${company.address.street}, ${company.address.postalCode} ${company.address.city}`
+  ) +
+  '&t=&z=15&ie=UTF8&iwloc=&output=embed'

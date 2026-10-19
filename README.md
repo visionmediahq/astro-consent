@@ -336,12 +336,17 @@ npx tsx ci/rollout/run.ts help
   `src/data/privacy.json` from `report.services`; an existing `privacy.json` that lacks one of them
   is refused. Pool rows without `services` are re-detected, and `select` strata are
   `consent`/`notice`.
-- **Script-built embeds.** A Maps or Calendar embed URL (`/maps/embed…`, `output=embed`,
-  `/calendar/embed`) outside an `<iframe>`, in a `<script>` or in an HTML element's attribute
-  (``data-map-src={`…&output=embed`}``; not `href`, not a component prop), is a home-made
-  click-to-load that ignores the banner: the site is needs-human with `script-built embed
-  google-maps in <file> (<attribute> | script)`, for a person to rewire as a `ConsentEmbed`
-  (arjangs-elmontage, stromsbacka). Other registry URLs in a script stay `tracker <service>`.
+- **Script-built embeds.** A Maps or Calendar embed URL (`/maps/embed…`, `/maps/d/embed`,
+  `output=embed`, `/calendar/embed`, `/calendar/u/0/embed`) outside an `<iframe>`, in a `<script>`
+  or in an HTML element's attribute (``data-map-src={`…&output=embed`}``; not `href`, not a
+  component prop), is a home-made click-to-load that ignores the banner: the site is needs-human
+  with `script-built embed google-maps in <file> (<attribute> | script)`, for a person to rewire as
+  a `ConsentEmbed` (arjangs-elmontage, stromsbacka). When the URL comes through a variable
+  (`data-src={mapSrc}`), a `.astro` file whose `<script>` calls `createElement('iframe')` gets
+  `(createElement)` if a Maps or Calendar host and an embed marker appear anywhere in the file
+  (outside literal `<iframe>` tags) or in a relative non-`.astro` module it imports, even split
+  over several literals (tranemoglas, gron-kontor). Other registry URLs in a script stay
+  `tracker <service>`.
 - **Elfsight.** Recognised only as one loader `<script>` (`https://elfsightcdn.com/platform.js` or
   `https://static.elfsight.com/platform/platform.js`; other attributes only `async` and `is:inline`)
   plus one or more empty `<div class="elfsight-app-<uuid>">` (other attribute only
