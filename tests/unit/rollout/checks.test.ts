@@ -6,7 +6,7 @@ import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { rememberCandidates, rememberOk, type RememberCounts } from '../../../ci/rollout/checks/consent-paths'
 import { diffRootStyles } from '../../../ci/rollout/checks/root-styles'
-import { contrastRows, coversBackground, measureContrast, type RawContrast } from '../../../ci/rollout/checks/contrast'
+import { type BgImage, contrastRows, coversBackground, formatContrast, gradientStops, measureContrast, type RawContrast } from '../../../ci/rollout/checks/contrast'
 import { compareEmbedHeights, type EmbedBox } from '../../../ci/rollout/checks/embed-size'
 import { extractLinks, listPages, MISSING_PREFIX } from '../../../ci/rollout/checks/pages'
 import { blockUmami, freshPage, isBlocked, isUmamiUrl, notRequested, umamiScriptSrcs } from '../../../ci/rollout/checks/requests'
@@ -225,6 +225,8 @@ describe('contrast', () => {
     images: [],
     ...over,
   })
+  /** A background-image on the element whose colour is layers[at] (above it), sized as a plain `background:` leaves it. */
+  const img = (value: string, at = 0, more: Partial<BgImage> = {}): BgImage => ({ value, at, size: 'auto', repeat: 'repeat', position: '0% 0%', ...more })
 
   it('oklab with alpha: text rasterised to rgba is blended over its background', async () => {
     // What the page's canvas returns for color: oklab(1 0 0 / 0.7) on a black footer.
@@ -246,7 +248,7 @@ describe('contrast', () => {
   })
 
   it('a background image or no opaque ancestor is indeterminate, not guessed silently', () => {
-    expect(contrastRows([raw({ images: ['linear-gradient(red, blue)'] })])[0]!.indeterminate).toMatch(/image/)
+    expect(contrastRows([raw({ images: [img('linear-gradient(red, blue)')] })])[0]!.indeterminate).toMatch(/image/)
     const [row] = contrastRows([raw({ fg: [0, 0, 0, 255], layers: [[0, 0, 0, 0]] })])
     expect(row!.indeterminate).toMatch(/opaque/)
     expect(row!.bg).toEqual({ r: 255, g: 255, b: 255 })
@@ -257,14 +259,14 @@ describe('contrast', () => {
     expect(coversBackground(`none, ${noise}`)).toBe(false)
     expect(coversBackground('none, none')).toBe(false)
     expect(coversBackground(`url("/bg.jpg"), ${noise}`)).toBe(true)
-    expect(contrastRows([raw({ images: [`none, ${noise}`] })])[0]!.indeterminate).toBeUndefined()
+    expect(contrastRows([raw({ images: [img(`none, ${noise}`)] })])[0]!.indeterminate).toBeUndefined()
   })
 
   it('ok is ratio ≥ 4.5 and determinate: indeterminate is never a pass', () => {
     const rows = contrastRows([
       raw({}),
       raw({ fg: [119, 119, 119, 255], layers: [[255, 255, 255, 255]] }),
-      raw({ images: ['url("/bg.jpg")'] }),
+      raw({ images: [img('url("/bg.jpg")')] }),
       raw({ layers: [] }),
     ])
     expect(rows.map((r) => r.ok)).toEqual([true, false, false, false])
@@ -276,6 +278,121 @@ describe('contrast', () => {
     const [row] = contrastRows([raw({ kind: 'placeholder', label: 'Knutssons Bil AB hämtas från Google Maps', fg: [218, 234, 245, 255], layers: [[248, 248, 248, 255]] })])
     expect(row).toMatchObject({ kind: 'placeholder', ok: false })
     expect(row!.ratio).toBeLessThan(1.5)
+  })
+
+  describe('gradients of solid colours (nanolfs-villan: the footer is a linear-gradient, the text white/70)', () => {
+    const PRIMARY = 'rgb(0, 75, 133)'
+    const DARK = 'rgb(0, 55, 95)'
+    const FOOTER = `linear-gradient(180deg, ${PRIMARY} 0%, ${DARK} 100%)`
+    const colours: RawContrast['colours'] = {
+      [PRIMARY]: [0, 75, 133, 255],
+      [DARK]: [0, 55, 95, 255],
+      'rgb(250, 250, 250)': [250, 250, 250, 255],
+      'rgba(0, 0, 0, 0.5)': [0, 0, 0, 128],
+      'rgb(0, 0, 0)': [0, 0, 0, 255],
+      'rgb(255, 0, 0)': [255, 0, 0, 255],
+      'rgb(0, 255, 0)': [0, 255, 0, 255],
+      'oklch(0.4 0.1 250)': [0, 75, 133, 255],
+      'oklch(0.3 0.1 250)': [0, 55, 95, 255],
+    }
+    const WHITE70: RawContrast['fg'] = [255, 255, 255, 179]
+    // The footer's own background-color is transparent; the body's white is the first opaque layer.
+    const footer = (value: string, more: Partial<RawContrast> = {}) => raw({ fg: WHITE70, layers: [[255, 255, 255, 255]], images: [img(value)], colours, ...more })
+    const vs = (fg: [number, number, number], bg: [number, number, number]) => {
+      const a = 179 / 255
+      const mixed = fg.map((c, i) => Math.round(a * c + (1 - a) * bg[i]!))
+      return wcagContrast({ r: mixed[0]!, g: mixed[1]!, b: mixed[2]! }, { r: bg[0], g: bg[1], b: bg[2] })
+    }
+
+    it('parses the computed value: prelude, stops with positions, hints, interpolation space', () => {
+      expect(gradientStops(FOOTER)).toEqual({ stops: [PRIMARY, DARK] })
+      expect(gradientStops('radial-gradient(circle at 50% 50%, rgba(0, 0, 0, 0.5), 30%, rgb(0, 0, 0) 40% 60%)')).toEqual({ stops: ['rgba(0, 0, 0, 0.5)', 'rgb(0, 0, 0)'] })
+      expect(gradientStops('repeating-linear-gradient(to right, rgb(0, 0, 0) 0px, rgb(255, 0, 0) 10px)')).toEqual({ stops: ['rgb(0, 0, 0)', 'rgb(255, 0, 0)'] })
+      expect(gradientStops('linear-gradient(in oklch 90deg, oklch(0.4 0.1 250), oklch(0.3 0.1 250))')).toEqual({ stops: ['oklch(0.4 0.1 250)', 'oklch(0.3 0.1 250)'], space: 'oklch' })
+      // Non-legacy stops interpolate in oklab by default (CSS Color 4).
+      expect(gradientStops('linear-gradient(oklch(0.4 0.1 250), oklch(0.3 0.1 250))')).toEqual({ stops: ['oklch(0.4 0.1 250)', 'oklch(0.3 0.1 250)'], space: 'oklab' })
+      for (const bad of ['url("/bg.jpg")', 'linear-gradient(currentcolor, rgb(0, 0, 0))', 'linear-gradient(rgb(0, 0, 0))', 'linear-gradient(var(--x), rgb(0, 0, 0))', 'image-set("a.png" 1x)', 'linear-gradient(rgb(0, 0, 0), rgb(0, 0, 0) foo)'])
+        expect(gradientStops(bad), bad).toBeUndefined()
+    })
+
+    it('a 2-stop gradient that is readable everywhere passes, measured against its worst stop', () => {
+      const [row] = contrastRows([footer(FOOTER)])
+      expect(row!.indeterminate).toBeUndefined()
+      expect(row!.ok).toBe(true)
+      expect(row!.note).toBe('gradient, worst stop')
+      expect(row!.ratio).toBeCloseTo(Math.min(vs([255, 255, 255], [0, 75, 133]), vs([255, 255, 255], [0, 55, 95])), 5)
+      expect(row!.bg).toEqual({ r: 0, g: 75, b: 133 })
+      expect(formatContrast({ path: '/', ...row! })).toBe(`/ links "Cookie-inställningar" ${row!.ratio.toFixed(2)}:1 ok (gradient, worst stop)`)
+    })
+
+    it('one stop too light fails the row: the minimum wins', () => {
+      const [row] = contrastRows([footer(`linear-gradient(${DARK}, rgb(250, 250, 250))`)])
+      expect(row).toMatchObject({ ok: false, bg: { r: 250, g: 250, b: 250 } })
+      expect(row!.indeterminate).toBeUndefined()
+      expect(row!.ratio).toBeLessThan(1.5)
+    })
+
+    it('a url() image with the gradient stays indeterminate', () => {
+      // A photo on top of the gradient, and nanolfs-villan's hero: a translucent gradient over a photo.
+      for (const value of [`url("/bg.jpg"), ${FOOTER}`, 'linear-gradient(rgba(0, 0, 0, 0.5), rgb(0, 0, 0) 100%), url("/hero.jpg")']) {
+        const [row] = contrastRows([footer(value)])
+        expect(row, value).toMatchObject({ ok: false, indeterminate: 'background image behind the text' })
+      }
+      // An opaque gradient painted over a photo hides it.
+      expect(contrastRows([footer(`${FOOTER}, url("/bg.jpg")`)])[0]).toMatchObject({ ok: true, note: 'gradient, worst stop' })
+    })
+
+    it('stops with alpha are composited over the background beneath', () => {
+      // Black text; a gradient from half-black to black over a red footer colour.
+      const [row] = contrastRows([raw({ fg: [255, 255, 255, 255], layers: [[255, 0, 0, 255]], images: [img('linear-gradient(rgba(0, 0, 0, 0.5), rgb(0, 0, 0))')], colours })])
+      expect(row!.indeterminate).toBeUndefined()
+      expect(row!.bg).toEqual({ r: 127, g: 0, b: 0 })
+      expect(row!.ratio).toBeCloseTo(wcagContrast({ r: 255, g: 255, b: 255 }, { r: 127, g: 0, b: 0 }), 5)
+    })
+
+    it('the worst point can lie between stops (red to green dips below both in luminance)', () => {
+      const [row] = contrastRows([raw({ fg: [0, 0, 0, 255], layers: [[255, 255, 255, 255]], images: [img('linear-gradient(rgb(255, 0, 0), rgb(0, 255, 0))')], colours })])
+      expect(row!.note).toBe('gradient, worst point between stops')
+      expect(row!.ratio).toBeLessThan(wcagContrast({ r: 0, g: 0, b: 0 }, { r: 255, g: 0, b: 0 }))
+    })
+
+    it('another interpolation space is sampled in sRGB and says so', () => {
+      const [row] = contrastRows([footer('linear-gradient(in oklch, oklch(0.4 0.1 250), oklch(0.3 0.1 250))')])
+      expect(row!.ok).toBe(true)
+      expect(row!.note).toBe('gradient, worst stop; interpolated in oklch, sampled in sRGB')
+    })
+
+    it('a stop the page could not rasterise is indeterminate', () => {
+      const [row] = contrastRows([footer('linear-gradient(rgb(1, 2, 3), rgb(0, 0, 0))')])
+      expect(row).toMatchObject({ ok: false, indeterminate: 'background image behind the text' })
+    })
+
+    it('an opaque gradient hides what is beneath it: no opaque colour needed, a body photo ignored', () => {
+      const [row] = contrastRows([raw({ fg: WHITE70, layers: [[255, 255, 255, 255]], images: [img(FOOTER, 0), img('url("/body.jpg")', 0)], colours })])
+      expect(row).toMatchObject({ ok: true, note: 'gradient, worst stop' })
+      const [none] = contrastRows([raw({ fg: WHITE70, layers: [], images: [img(FOOTER, 0)], colours })])
+      expect(none).toMatchObject({ ok: true, note: 'gradient, worst stop' })
+    })
+
+    it('a gradient that may not cover the box also counts the colour beneath', () => {
+      const [row] = contrastRows([footer(FOOTER, { images: [img(FOOTER, 0, { size: '50% 50%', repeat: 'no-repeat' })] })])
+      expect(row).toMatchObject({ ok: false, bg: { r: 255, g: 255, b: 255 } })
+    })
+
+    it('measureContrast rasterises the stops in the page (var() already resolved by computed style)', async () => {
+      const calls: string[] = []
+      const page = {
+        evaluate: async (src: string) => {
+          calls.push(src)
+          if (calls.length === 1) return [raw({ fg: WHITE70, layers: [[255, 255, 255, 255]], images: [img(FOOTER)] })]
+          expect(src).toContain(JSON.stringify([PRIMARY, DARK]))
+          return [[0, 75, 133, 255], [0, 55, 95, 255]]
+        },
+      }
+      const [row] = await measureContrast(page as never)
+      expect(calls).toHaveLength(2)
+      expect(row).toMatchObject({ ok: true, note: 'gradient, worst stop' })
+    })
   })
 
   it('labels each row with its kind and text', () => {

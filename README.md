@@ -305,6 +305,11 @@ npx tsx ci/rollout/run.ts help
   Visa button, "Visa alltid" label and "Öppna i" link. A dark theme that sets `--color-base-content`
   but not `--color-base-200` leaves light text on the light placeholder (knutssonsbil, about 1.2:1).
   `live post-merge` runs the same contrast check, so live sites are measured as well.
+- A background that is a gradient of colours (nanolfs-villan's footer: two brand blues) is measured,
+  not reported indeterminate: every stop and 16 points between each pair, alpha composited over what
+  is beneath, and the worst wins (`5.23:1 ok (gradient, worst stop)`). A `url()` image that shows,
+  or a stop the page cannot rasterise, stays indeterminate. A gradient interpolated in another space
+  (`in oklch`, or oklch stops) is still sampled in sRGB, and the line says so.
 - `verify` stops before any step when the disk holding the site has less than 15 GB free
   (`ROLLOUT_MIN_FREE_GB` changes the threshold; demo mode skips it). Each verify runs `npm ci` and a
   build twice and builds a Docker image, and Docker failed with I/O errors at 2.5 GB free during the

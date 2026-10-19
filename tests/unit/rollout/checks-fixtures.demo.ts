@@ -68,6 +68,8 @@ const placeholder = (style: string) =>
 // knutssonsbil's shape: a box whose height is padding (40 % of the width) plus a min-height (here
 // content-box, so 40 % + 320px; the shape, not knutssonsbil's numbers, is what matters).
 const ratioBox = (inner: string) => `<div style="position:relative;padding-bottom:40%;min-height:320px">${inner}</div>`
+const gradientFooter = (background: string) =>
+  `<style>:root{--color-primary:#004b85;--brand-dark:#00375f}footer{background:${background};color:#fff;padding:24px}</style><footer><div data-privacy-links style="color:rgb(255 255 255 / 0.7)"><button data-consent-open style="color:inherit;background:none;border:0">Cookie-inställningar</button> <a href="/integritet" style="color:inherit">Integritetspolicy</a></div></footer>`
 const widget = `<div data-consent-embed="elfsight" data-script="${ELFSIGHT}"><template data-payload><div class="elfsight-app-x"></div></template><button data-load>Visa</button><input type="checkbox" data-remember></div>`
 
 const LATE = `${banner()}<div style="height:10000px;position:relative"><div id="s" style="position:absolute;top:3000px;height:10px"></div></div>
@@ -110,6 +112,11 @@ const FIXTURES: Record<string, string> = {
   // #46: light text on the light placeholder (a dark theme without base-200), and a readable control.
   darkph: page(placeholder('background:#f8f8f8;color:#daeaf5')),
   okph: page(placeholder('background:#f8f8f8;color:#1f2937')),
+  // nanolfs-villan: a footer whose background is a gradient of two brand blues through var(), and
+  // PrivacyLinks in white/70. A gradient ending near white fails; a photo over the gradient is unknown.
+  gradfoot: page(gradientFooter('linear-gradient(180deg, var(--color-primary) 0%, var(--brand-dark) 100%)')),
+  gradfail: page(gradientFooter('linear-gradient(180deg, var(--brand-dark) 0%, #fafafa 100%)')),
+  gradphoto: page(gradientFooter('url("/photo.jpg"), linear-gradient(180deg, var(--color-primary) 0%, var(--brand-dark) 100%)')),
   // #46 (knutssonsbil): main's absolute iframe fills the ratio box; the in-flow 320px wrapper does
   // not (the map shrinks, an empty band below); absolute inset-0 fills it again.
   ratiomain: page(ratioBox(`<iframe src="${MAPS}" style="position:absolute;inset:0;width:100%;height:100%;border:0"></iframe>`)),
@@ -261,6 +268,15 @@ try {
     expect(dark.length === 4 && dark.filter((r) => r.button !== 'Visa').every((r) => !r.ok), '/darkph/ light text on the light placeholder: info text, label and open link fail (#46)', dark)
     const ok = await ph('/okph/')
     expect(ok.length === 4 && ok.every((r) => r.ok), '/okph/ control: a readable placeholder passes', ok)
+  }
+  {
+    const links = async (path: string) => (await checkContrast(browser, BASE, [path], { stub: true })).filter((r) => r.kind === 'links')
+    const foot = await links('/gradfoot/')
+    expect(foot.length === 2 && foot.every((r) => r.ok && !r.indeterminate && r.note === 'gradient, worst stop' && r.ratio > 5), '/gradfoot/ white/70 on a var() gradient of two blues passes against its worst stop (nanolfs-villan)', foot)
+    const light = await links('/gradfail/')
+    expect(light.length === 2 && light.every((r) => !r.ok && !r.indeterminate && r.ratio < 1.5), '/gradfail/ a gradient ending near white fails, determinately', light)
+    const photo = await links('/gradphoto/')
+    expect(photo.length === 2 && photo.every((r) => !r.ok && r.indeterminate === 'background image behind the text'), '/gradphoto/ a photo over the gradient stays indeterminate', photo)
   }
   {
     const boxes = (path: string) => checkEmbedBoxes(browser, BASE, [path], [360, 1280], { stub: true })
