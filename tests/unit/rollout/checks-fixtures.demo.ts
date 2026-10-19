@@ -190,7 +190,8 @@ const FIXTURES: Record<string, string> = {
   pshadow: page(`<style>${PF}footer::before{content:"";position:absolute;inset:0;box-shadow:inset 0 0 0 400px #fff}</style><footer>${whiteLink}</footer>`),
   // content-visibility: auto on an ancestor captures a fixed pseudo like contain: paint.
   cvfixed: page(`<style>section{content-visibility:auto}footer{background:#000;padding:24px}footer::before{content:"";position:fixed;left:0;top:0;width:100%;height:100%;background:#fff}</style><div style="height:1500px"></div><section><footer>${whiteLink}</footer></section>`),
-  // Round 5 (rr72f probe5). Faint grain adds up: four 0.2 grain layers pairs over the text.
+  // Round 5 (rr72f probe5). Faint grain adds up: eight 0.2 grain layers over the text (four
+  // elements, each with a ::before and an ::after).
   grainstack: page(`<style>${PF}.w{position:relative}${['footer', '.a', '.b', '.c'].map((n) => `${n}::before,${n}::after{content:"";position:absolute;inset:0;opacity:.2;background-image:${BLACK_GRAIN}}`).join('')}</style><footer><div class="w a"><div class="w b"><div class="w c">${whiteLink}</div></div></div></footer>`),
   // A pseudo moved by its own zoom or offset-path; an absolute one under an ancestor's offset-path.
   pzoom: page(`<style>${PF}footer::before{content:"";position:absolute;left:0;top:0;width:10px;height:10px;background:#fff;zoom:30}</style><footer>${whiteLink}</footer>`),
@@ -210,6 +211,8 @@ const FIXTURES: Record<string, string> = {
   pbackdrop: page(`<style>${PF}footer::before{content:"";position:absolute;inset:0;backdrop-filter:brightness(0)}</style><footer>${whiteLink}</footer>`),
   // An absolute pseudo whose containing block is an inline element broken over two lines.
   inlinewrap: page(`<style>footer{background:#000;padding:24px;color:#fff}.e{position:relative}.e::before{content:"";position:absolute;left:0;top:0;width:100px;height:30px;background:#fff}</style><footer><div data-privacy-links style="width:420px;font:16px/20px sans-serif">Leading words here <span class="e"><a href="/integritet" style="color:#fff">Integritetspolicy</a> and then many more words to wrap onto the next line</span></div></footer>`),
+  // A positioned display: contents element has no box (its rect is 0,0): its pseudo's box is unknown.
+  contentsbox: page(`<style>footer{position:relative;background:#000;margin-top:300px}.c{display:contents;position:relative}.c::before{content:"";position:absolute;top:0;height:100px;width:100%;background:#fff}</style><footer><div class="c">${whiteLink}</div></footer>`),
   // Tailwind's resting box-shadow (0 0 #0000) paints nothing: a 1px bar at the top stays clear of the text.
   pclearshadow: page(`<style>${PF}footer::before{content:"";position:absolute;left:0;top:0;width:100%;height:1px;background:#333;box-shadow:0 0 #0000}</style><footer>${whiteLink}</footer>`),
   // Above the opaque footer: a backdrop-filter cannot reach the text; an identity filter on the footer.
@@ -440,6 +443,7 @@ try {
       ['/pcontenturl/', 'a url() content image overflowing a 1px box'],
       ['/pbackdrop/', 'a backdrop-filter that blacks out the background'],
       ['/inlinewrap/', 'an absolute pseudo of an inline element broken over two lines'],
+      ['/contentsbox/', 'an absolute pseudo of a positioned display: contents element'],
     ] as const) {
       const rows = await links(path)
       expect(rows.length === 1 && rows.every((r) => !r.ok && r.indeterminate === 'effect on the text or its background: positioned ::before with a background'), `${path} ${what}: indeterminate`, rows)

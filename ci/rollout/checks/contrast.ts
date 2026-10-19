@@ -114,7 +114,7 @@ const MEASURE = `(() => {
     if (p.backdropFilter && p.backdropFilter !== 'none') return 'box'
     if (p.outlineStyle !== 'none' && px(p.outlineWidth) > 0 && shows(p.outlineColor)) return 'beyond'
     const border = ['Top', 'Right', 'Bottom', 'Left'].some((side) => px(p['border' + side + 'Width']) > 0 && !/none|hidden/.test(p['border' + side + 'Style']) && shows(p['border' + side + 'Color']))
-    if (shows(p.backgroundColor) || border || /url\\(|image-set\\(|gradient\\(/.test(p.content)) return 'box'
+    if (shows(p.backgroundColor) || border) return 'box'
     const image = p.backgroundImage
     if (!image || image === 'none') return 'none'
     let grain = true
@@ -138,7 +138,8 @@ const MEASURE = `(() => {
     let x0, y0
     if (p.position === 'absolute') {
       const s = getComputedStyle(e)
-      if (s.position === 'static' || e.scrollTop || e.scrollLeft || (s.display === 'inline' && e.getClientRects().length > 1)) return true
+      // display: contents has no box (its rect is 0,0), whatever its position says.
+      if (s.position === 'static' || s.display === 'contents' || e.scrollTop || e.scrollLeft || (s.display === 'inline' && e.getClientRects().length > 1)) return true
       for (let a = e; a; a = a.parentElement) {
         const t = getComputedStyle(a)
         if (!flat(t.transform) || t.scale !== 'none' || t.rotate !== 'none' || zoomed(t) || t.offsetPath !== 'none') return true
