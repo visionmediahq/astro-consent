@@ -1,8 +1,8 @@
 // The verify stage (spec C3): the checks of a wired site's branch, run in order, stopping at the
 // first failure. The branch picks the flow (flows.ts): consent-banner runs every step but 8 (fonts
 // only when the branch self-hosts them), fonts-selfhost skips the banner-only 4 and 6. Each step
-// writes .rollout/evidence-<branch>/<n>-<name>.txt, and the whole result goes to
-// .rollout/verify-<branch>.json.
+// writes .rollout/evidence/<n>-<name>.txt, and the whole result goes to .rollout/verify.json (on
+// fonts-selfhost with the branch in each name: evidence-fonts-selfhost/, verify-fonts-selfhost.json).
 //
 //   1 lockfile    npm ci in both; package-lock diff against main within the allowlist, and
 //                 `npm ls astro vite @tailwindcss/vite` the same on both sides. fonts-selfhost:
@@ -43,13 +43,15 @@ import {
   checkCoverage,
   checkFonts,
   coverageLines,
-  coverageTexts,
   css2UrlOf,
   distMentions,
   type FontsPage,
   judgeFontsPage,
+  pageTexts,
   parseFontsCss,
+  shippedNotes,
   shippedStrings,
+  shippedTexts,
 } from './checks/fonts'
 import { isCmsAdminRoute, listPages, MISSING_PREFIX } from './checks/pages'
 import { checkRequests, formatRequests, type RequestResult } from './checks/requests'
@@ -59,7 +61,7 @@ import { dockerCheck } from './docker'
 import { type Exec, exec as realExec, tail } from './lib/exec'
 import { diffLock, diffPackageJson } from './lib/lockfile'
 import { isUp, type Preview, previewLog, ssrEntry, startPreview } from './preview'
-import { type Flow, FLOWS, flowOf, FONTS_MARKER, isToolFontsCss, readStatePath, statePath, STEPS, type StepName } from './flows'
+import { type Flow, FLOWS, flowOf, FONTS_MARKER, isToolFontsCss, statePath, STEPS, type StepName } from './flows'
 import type { Report, StepResult, VerifyResult } from './types'
 import type { ServiceSlug } from '../../src/services'
 import { CHROME_UA, FONTS_BRANCH, FONTS_CSS, FONTS_DIR, type FontFetch, httpFetch } from './wire/fonts'
@@ -121,7 +123,7 @@ export const ORIGIN = /^(git@github\.com:|https:\/\/github\.com\/)visionmediahq\
 
 /** The remote head of the branch verify last pushed, so a rerun may replace its own push (per branch, flows.ts). */
 export const PUSHED_FILE = 'pushed.txt'
-/** The result (per branch: verify-<branch>.json, flows.ts). */
+/** The result (fonts-selfhost: verify-fonts-selfhost.json, flows.ts stateName). */
 export const VERIFY_FILE = 'verify.json'
 
 const norm = (path: string): string => (path.length > 1 ? path.replace(/\/+$/, '') : path)
@@ -307,9 +309,8 @@ export async function verify(dir: string, report: Report, opts: VerifyOptions = 
   const BRANCH = flow.branch
   const evidenceDir = statePath(out, 'evidence', BRANCH)
   const shotsDir = statePath(out, 'shots', BRANCH)
-  // Evidence and screenshots from an earlier run must not pass for this one's (nor those kept under
-  // the names used before the flows).
-  for (const d of [evidenceDir, shotsDir, ...(BRANCH === 'consent-banner' ? [join(out, 'evidence'), join(out, 'shots')] : [])]) rmSync(d, { recursive: true, force: true })
+  // Evidence and screenshots from an earlier run must not pass for this one's.
+  for (const d of [evidenceDir, shotsDir]) rmSync(d, { recursive: true, force: true })
   mkdirSync(evidenceDir, { recursive: true })
 
   const steps: StepResult[] = []
@@ -360,7 +361,7 @@ export async function verify(dir: string, report: Report, opts: VerifyOptions = 
     const local = (await git('rev-parse', 'HEAD')).out.trim()
     const remote = await git('ls-remote', '--heads', 'origin', `refs/heads/${BRANCH}`)
     const remoteSha = headSha(remote.out, BRANCH)
-    const pushedPath = readStatePath(out, PUSHED_FILE, BRANCH)
+    const pushedPath = statePath(out, PUSHED_FILE, BRANCH)
     const pushed = existsSync(pushedPath) ? readFileSync(pushedPath, 'utf8').trim() : ''
     if (remote.code !== 0) {
       record(0, 'push', { pass: false, lines: [`git ls-remote --heads origin refs/heads/${BRANCH} failed: cannot tell whether the branch on GitHub is ours`, tail(remote.out)] })
@@ -390,7 +391,15 @@ export async function verify(dir: string, report: Report, opts: VerifyOptions = 
   const selfHosts = isToolFontsCss(fontsCss)
   const runs = (name: StepName): boolean => flow.steps.includes(name) || (name === 'fonts' && selfHosts)
   // fonts-selfhost before the banner (a site without it on main): no banner is expected anywhere.
-  const bannerOnMain = demo || BRANCH !== FONTS_BRANCH || hasPackage((await git('show', 'origin/main:package.json')).out)
+  let bannerOnMain = true
+  if (!demo && BRANCH === FONTS_BRANCH) {
+    const pkg = await git('show', 'origin/main:package.json')
+    if (pkg.code !== 0) {
+      record(0, 'main', { pass: false, lines: ['git show origin/main:package.json failed, so whether main has the banner is unknown:', tail(pkg.out)] })
+      return finish()
+    }
+    bannerOnMain = hasPackage(pkg.out)
+  }
 
   const ssr = demo || report.astro.output === 'server'
   const known = embedRoutes(report)
@@ -726,8 +735,9 @@ export async function verify(dir: string, report: Report, opts: VerifyOptions = 
         lines.push(`Google's faces unknown (${firstLine(e)}): every character outside the kept ranges counts`)
       }
       const client = ssr && existsSync(join(distDir, 'client')) ? join(distDir, 'client') : distDir
-      const coverage = checkCoverage(coverageTexts(pages, shippedStrings(client)), declared, google)
-      const covLines = coverageLines(coverage)
+      // The DOM is strict; the shipped JS/JSON strings are notes (a library string may never show).
+      const coverage = checkCoverage(pageTexts(pages), declared, google)
+      const covLines = [...coverageLines(coverage), ...shippedNotes(checkCoverage(shippedTexts(pages, shippedStrings(client)), declared, google))]
       lines.push(covLines.length ? 'character coverage:' : 'character coverage: every character shown is in a kept face', ...covLines.map((l) => `  ${l}`))
       return { pass: mentions.length === 0 && pages.length > 0 && judged.every((j) => j.ok) && coverage.missing.length === 0, lines }
     },

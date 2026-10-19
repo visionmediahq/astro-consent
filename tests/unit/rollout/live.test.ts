@@ -170,7 +170,7 @@ describe('live baseline', () => {
     const d = deps({ checks })
     const r = await live(dir, 'baseline', undefined, { deps: d.deps })
     expect(r.status).toBe('red')
-    expect(readFileSync(join(dir, '.rollout/live-baseline-consent-banner.txt'), 'utf8')).toBe('Failed to load https://{host}/a.js\n')
+    expect(readFileSync(join(dir, '.rollout/live-baseline.txt'), 'utf8')).toBe('Failed to load https://{host}/a.js\n')
     expect(calls.filter((c) => c.what === 'requests').map((c) => c.base)).toEqual(['https://nhrk.se'])
     expect(calls.some((c) => c.what === 'consentPaths')).toBe(false)
     expect(d.sleeps).toEqual([])
@@ -195,12 +195,12 @@ describe('live baseline', () => {
     const r = await live(dir, 'baseline', undefined, { deps: d.deps })
     expect(r.status).toBe('red')
     expect(calls.filter((c) => c.what === 'requests').map((c) => c.base)).toEqual(['https://nhrk.se', 'https://www.nhrk.se'])
-    expect(JSON.parse(readFileSync(join(dir, '.rollout/live-baseline-hosts-consent-banner.json'), 'utf8'))).toEqual({
+    expect(JSON.parse(readFileSync(join(dir, '.rollout/live-baseline-hosts.json'), 'utf8'))).toEqual({
       head: MAIN,
       hosts: ['nhrk.se', 'www.nhrk.se'],
       apps: [{ uuid: 'web', name: 'Website', fqdns: ['nhrk.se', 'www.nhrk.se'] }],
     })
-    expect(readFileSync(join(dir, '.rollout/live-baseline-consent-banner.txt'), 'utf8')).toBe('Failed to load https://{host}/a.js\n')
+    expect(readFileSync(join(dir, '.rollout/live-baseline.txt'), 'utf8')).toBe('Failed to load https://{host}/a.js\n')
   })
 
   test('pre-run: rev-parse origin/main failing → stop with its reason, no baseline written', async () => {
@@ -212,7 +212,7 @@ describe('live baseline', () => {
     expect(r.status).toBe('stop')
     expect(r.reason).toMatch(/git rev-parse origin\/main failed/)
     expect(r.reason).toMatch(/ambiguous argument/)
-    expect(existsSync(join(dir, '.rollout/live-baseline-consent-banner.txt'))).toBe(false)
+    expect(existsSync(join(dir, '.rollout/live-baseline.txt'))).toBe(false)
   })
 
   test('finding 5: Coolify unreadable → stop, no baseline written', async () => {
@@ -225,8 +225,8 @@ describe('live baseline', () => {
     const r = await live(dir, 'baseline', undefined, { deps: d.deps })
     expect(r.status).toBe('stop')
     expect(r.reason).toMatch(/401/)
-    expect(existsSync(join(dir, '.rollout/live-baseline-consent-banner.txt'))).toBe(false)
-    expect(existsSync(join(dir, '.rollout/live-baseline-hosts-consent-banner.json'))).toBe(false)
+    expect(existsSync(join(dir, '.rollout/live-baseline.txt'))).toBe(false)
+    expect(existsSync(join(dir, '.rollout/live-baseline-hosts.json'))).toBe(false)
   })
 
   test('finding 3: CMS admin pages expect no banner and do not stop the site being "already green"', async () => {
@@ -270,7 +270,7 @@ describe('live post-merge', () => {
     // consent paths on map pages, contrast over the pages
     expect(calls.find((c) => c.what === 'consentPaths')!.paths).toEqual(['/kontakt'])
     expect(calls.find((c) => c.what === 'contrast')!.paths).toEqual(['/', '/kontakt', '/finns-inte-x'])
-    expect(existsSync(join(dir, '.rollout/live-post-merge-consent-banner.json'))).toBe(true)
+    expect(existsSync(join(dir, '.rollout/live-post-merge.json'))).toBe(true)
   })
 
   test('finding 3: post-merge checks CMS admin pages without expecting a banner and leaves them out of the consent paths', async () => {
@@ -367,7 +367,7 @@ describe('live post-merge', () => {
   })
 
   test('without the apps recorded before the merge, or without a baseline, it stops', async () => {
-    expect((await live(siteDir({}), 'post-merge', SHA, { deps: deps().deps })).reason).toMatch(/apps-consent-banner\.json/)
+    expect((await live(siteDir({}), 'post-merge', SHA, { deps: deps().deps })).reason).toMatch(/apps\.json/)
     expect((await live(siteDir({ apps: NHRK, baseline: null }), 'post-merge', SHA, { deps: deps().deps })).reason).toMatch(/live-baseline/)
   })
 })
@@ -390,6 +390,9 @@ function mergeExec(o: { moved?: boolean; head: { sha: string }; rebaseFails?: bo
       return { code: 0, out: JSON.stringify({ state: o.state ?? 'OPEN', headRefName: 'consent-banner' }) }
     if (line.startsWith('gh pr merge 7 ')) return { code: 0, out: '' }
     if (line === 'gh pr view 7 -R visionmediahq/nhrk --json mergeCommit') return { code: 0, out: JSON.stringify({ mergeCommit: { oid: SHA } }) }
+    // No fonts-selfhost branch or PR on GitHub.
+    if (line === 'git ls-remote --heads origin refs/heads/fonts-selfhost') return { code: 0, out: '' }
+    if (line === 'gh pr list -R visionmediahq/nhrk --head fonts-selfhost --state open --json url,title') return { code: 0, out: '[]' }
     return { code: 1, out: `unexpected: ${line}` }
   }
   return { exec, calls }
@@ -471,7 +474,7 @@ describe('merge', () => {
     const dir = siteDir({ verify: VERIFIED(HEAD) })
     const g = mergeExec({ head })
     await merge(dir, 7, { deps: mergeDeps(g.exec, head).deps })
-    const rec = JSON.parse(readFileSync(join(dir, '.rollout/apps-consent-banner.json'), 'utf8')) as RecordedApps
+    const rec = JSON.parse(readFileSync(join(dir, '.rollout/apps.json'), 'utf8')) as RecordedApps
     expect(rec.head).toBe(MAIN)
     expect(rec.apps.map((a) => [a.uuid, a.autoDeploy, a.lastDeployed])).toEqual([
       ['web', true, MAIN],
@@ -506,7 +509,7 @@ describe('merge', () => {
         },
       ],
       // Ruling 37: a baseline from before the hosts were recorded.
-      [{ verify: VERIFIED(HEAD), baselined: null }, { head: { sha: HEAD } }, /live-baseline-hosts-consent-banner\.json[\s\S]*live <dir> baseline/],
+      [{ verify: VERIFIED(HEAD), baselined: null }, { head: { sha: HEAD } }, /live-baseline-hosts\.json[\s\S]*live <dir> baseline/],
     ]
     for (const [site, git, reason, tweak] of cases) {
       const dir = siteDir(site)

@@ -4,12 +4,10 @@
 //                   site's Google Fonts
 //   fonts-selfhost  fonts: the Google Fonts commit alone, for a site whose banner is already live
 //
-// verify, pr, merge and live read the clone's current branch and refuse one that is not here. Each
-// flow keeps its own state in .rollout/ (`verify-<branch>.json`, `pushed-<branch>.txt`, …), so a
-// fonts verify never overwrites a banner verify. consent-banner falls back to the names used before
-// the flows (`verify.json`, `pushed.txt`, …) when its own file is missing, so existing clones keep
-// working.
-import { existsSync } from 'node:fs'
+// verify, pr, merge and live read the clone's current branch and refuse one that is not here.
+// consent-banner keeps the state names it always had in .rollout/ (`verify.json`, `pushed.txt`,
+// `pr-body.md`, …), which the operator's scripts read; fonts-selfhost has its own
+// (`verify-fonts-selfhost.json`, …), so a fonts run never overwrites or reads the banner's.
 import { join } from 'node:path'
 import { type Exec, tail } from './lib/exec'
 import { FONTS_BRANCH, FONTS_CSS } from './wire/fonts'
@@ -76,26 +74,17 @@ export async function currentFlow(exec: Exec, root: string, stage: string): Prom
 }
 
 /**
- * The per-branch name of a state file or folder in .rollout/: `verify.json` → `verify-<branch>.json`,
- * `evidence` → `evidence-<branch>`. Written under this name in every flow.
+ * The name of a state file or folder in .rollout/ for `branch`: consent-banner's as it always was
+ * (`verify.json`); any other flow's with its branch (`verify-fonts-selfhost.json`, `evidence-fonts-selfhost`).
  */
 export function stateName(name: string, branch: FlowBranch): string {
+  if (branch === BRANCH) return name
   const dot = name.lastIndexOf('.')
   return dot > 0 ? `${name.slice(0, dot)}-${branch}${name.slice(dot)}` : `${name}-${branch}`
 }
 
-/** Where a stage writes state `name` of `branch` in the folder `rollout` (`<site>/.rollout`). */
+/** Where a stage reads and writes state `name` of `branch` in the folder `rollout` (`<site>/.rollout`). */
 export const statePath = (rollout: string, name: string, branch: FlowBranch): string => join(rollout, stateName(name, branch))
-
-/**
- * Where a stage reads state `name` of `branch`: the per-branch file; for consent-banner, when that
- * is missing and the name used before the flows exists, that one.
- */
-export function readStatePath(rollout: string, name: string, branch: FlowBranch): string {
-  const own = statePath(rollout, name, branch)
-  const legacy = join(rollout, name)
-  return branch === BRANCH && !existsSync(own) && existsSync(legacy) ? legacy : own
-}
 
 /** The marker in the header of a fonts.css this tool wrote (wire/fonts planFonts). */
 export const FONTS_MARKER = 'by the astro-consent rollout tool'
@@ -114,4 +103,33 @@ export async function openPrsFrom(exec: Exec, root: string, repo: string, branch
   const r = await exec('gh', ['pr', 'list', '-R', repo, '--head', branch, '--state', 'open', '--json', 'url,title'], root)
   if (r.code !== 0) throw new Error(`gh pr list failed, so whether a ${branch} PR is open is unknown:\n${tail(r.out)}`)
   return JSON.parse(r.out || '[]') as { url: string; title: string }[]
+}
+
+/**
+ * Why origin's `branch` would conflict: it exists and origin/main does not contain it (squash
+ * merges delete the branch on GitHub, so one left there is unmerged work). null when there is
+ * none or it is merged. Throws when git cannot tell, so "no obstacle" is never a guess.
+ */
+export async function unmergedBranch(exec: Exec, root: string, branch: FlowBranch): Promise<string | null> {
+  const git = (...args: string[]) => exec('git', args, root)
+  const listed = await git('ls-remote', '--heads', 'origin', `refs/heads/${branch}`)
+  if (listed.code !== 0) throw new Error(`git ls-remote --heads origin refs/heads/${branch} failed, so whether origin has a ${branch} branch is unknown:\n${tail(listed.out)}`)
+  const sha = listed.out.split('\n').map((l) => l.trim().split(/\s+/)).find(([, ref]) => ref === `refs/heads/${branch}`)?.[0]
+  if (!sha) return null
+  // Both tips as GitHub has them now.
+  const fetched = await git('fetch', '-q', 'origin', 'main', branch)
+  if (fetched.code !== 0) throw new Error(`git fetch origin main ${branch} failed:\n${tail(fetched.out)}`)
+  const merged = await git('merge-base', '--is-ancestor', sha, 'origin/main')
+  if (merged.code === 0) return null
+  if (merged.code !== 1) throw new Error(`git merge-base --is-ancestor ${sha.slice(0, 7)} origin/main failed:\n${tail(merged.out)}`)
+  return `origin has a ${branch} branch (${sha.slice(0, 7)}) that is not in origin/main: merge or close that flow first (if it was squash-merged already, delete the branch on GitHub)`
+}
+
+/** Both obstacles from the other flow's `branch` (merge): an unmerged branch on origin, an open PR. */
+export async function flowObstacles(exec: Exec, root: string, repo: string, branch: FlowBranch): Promise<string[]> {
+  const out: string[] = []
+  const unmerged = await unmergedBranch(exec, root, branch)
+  if (unmerged) out.push(unmerged)
+  for (const pr of await openPrsFrom(exec, root, repo, branch)) out.push(`open ${branch} PR ${pr.url}: merge or close it first`)
+  return out
 }

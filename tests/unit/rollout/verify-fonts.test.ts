@@ -167,7 +167,7 @@ describe('verify on fonts-selfhost', () => {
     expect(JSON.parse(readFileSync(join(dir, '.rollout/verify-fonts-selfhost.json'), 'utf8'))).toEqual(r)
     expect(readFileSync(join(dir, '.rollout/pushed-fonts-selfhost.txt'), 'utf8')).toBe(`${SHA}\n`)
     expect(readFileSync(join(dir, '.rollout/verify.json'), 'utf8')).toBe('{"banner":true}')
-    expect(existsSync(join(dir, '.rollout/pushed-consent-banner.txt'))).toBe(false)
+    expect(existsSync(join(dir, '.rollout/pushed.txt'))).toBe(false)
     expect(evidence(dir, 'fonts-selfhost', '4-consent-paths.txt')).toMatch(/banner-only check: not run on fonts-selfhost/)
     expect(evidence(dir, 'fonts-selfhost', '1-lockfile.txt')).toMatch(/package\.json, main → branch: same[\s\S]*package-lock\.json, main → branch: same[\s\S]*changed files \(5\): only the fonts/)
     expect(evidence(dir, 'fonts-selfhost', '8-fonts.txt')).toMatch(/src\/styles\/fonts\.css: \d+ faces, Figtree[\s\S]*dist\/: no Google Fonts host[\s\S]*\/ 360px: ok[\s\S]*every character shown is in a kept face/)
@@ -293,10 +293,10 @@ describe('step 8 on consent-banner', () => {
     expect(steps(r).map((s) => s[1])).toEqual(['lockfile', 'build', 'requests', 'consent-paths', 'clip', 'contrast', 'screenshots', 'fonts', 'docker'])
     expect(steps(r).filter((s) => s[2] === 'skipped')).toEqual([])
     expect(f.called).toContain('fonts http://127.0.0.1:4399 360,1280')
-    expect(existsSync(join(dir, '.rollout/verify-consent-banner.json'))).toBe(true)
+    expect(existsSync(join(dir, '.rollout/verify.json'))).toBe(true)
   })
 
-  test('the legacy pushed.txt still names our last push: a rerun may replace it (existing clones)', async () => {
+  test('consent-banner: pushed.txt (the name it always had) names our last push: a rerun may replace it', async () => {
     const dir = siteDir({})
     mkdirSync(join(dir, '.rollout'), { recursive: true })
     const ours = 'b'.repeat(40)
@@ -305,12 +305,72 @@ describe('step 8 on consent-banner', () => {
     const r = await verify(dir, report(), { deps: f.deps })
     expect(f.calls).toContain('git push --force-with-lease origin consent-banner')
     expect(r.steps[0]).toMatchObject({ step: 1 })
-    expect(readFileSync(join(dir, '.rollout/pushed-consent-banner.txt'), 'utf8')).toBe(`${SHA}\n`)
+    expect(readFileSync(join(dir, '.rollout/pushed.txt'), 'utf8')).toBe(`${SHA}\n`)
   })
 
   test('any other branch is refused before anything runs', async () => {
     const f = fake({ branch: 'main' })
     await expect(verify(siteDir(), report(), { deps: f.deps })).rejects.toThrow('verify runs on branch consent-banner or fonts-selfhost')
     expect(f.calls.some((c) => c.startsWith('git push') || c.startsWith('npm'))).toBe(false)
+  })
+})
+
+// ── review of #76 ────────────────────────────────────────────────────────────────────────────
+
+const MAPS = 'https://maps.google.com/maps?q=x&output=embed'
+/** Requests answered per side: `main` and `branch` map a path to the registry URLs it requests. */
+const sides =
+  (main: Record<string, string[]>, branch: Record<string, string[]>, banner: boolean): Checks['requests'] =>
+  async (base, paths) =>
+    paths.map((p) => {
+      const blocked = (base.includes(':4398') ? main : branch)[p] ?? []
+      const shows = banner && !base.includes(':4398')
+      return { path: p, banner: shows, banners: shows ? 1 : 0, blocked, errors: [], known: [], ok: blocked.length === 0 && shows === banner }
+    })
+
+describe('review of #76: the banner property and fail-closed edges', () => {
+  test('M2: on consent-banner, a registry URL requested before consent fails step 3 even when main requests the same URL on the same page', async () => {
+    const dir = siteDir({})
+    const f = fake({ branch: 'consent-banner', checks: { requests: sides({ '/om': [MAPS] }, { '/om': [MAPS] }, true) } })
+    const r = await verify(dir, report(), { deps: f.deps })
+    expect(steps(r).at(-1)).toEqual([3, 'requests', 'FAIL'])
+    const text = readFileSync(join(dir, '.rollout/evidence/3-requests.txt'), 'utf8')
+    expect(text).toMatch(/\/om: banner=true blocked=1 errors=0 \(baseline 0\) FAIL\n {4}BLOCKED https:\/\/maps\.google\.com/)
+    expect(text).not.toMatch(/main makes too/)
+  })
+
+  test('M2: on fonts-selfhost with the banner on main, the same holds: main requesting it too excuses nothing', async () => {
+    const dir = siteDir()
+    const r = await verify(dir, report(), { deps: fake({ checks: { requests: sides({ '/om': [MAPS] }, { '/om': [MAPS] }, true) } }).deps })
+    expect(steps(r).at(-1)).toEqual([3, 'requests', 'FAIL'])
+  })
+
+  test('M25: without the banner on main, a registry URL main requests only on another page is not excused', async () => {
+    const noBanner = JSON.stringify({ name: 'site' })
+    const dir = siteDir({ 'src/styles/fonts.css': FONTS_CSS, 'package.json': noBanner })
+    const r = await verify(dir, report(), { deps: fake({ mainPkg: noBanner, checks: { requests: sides({ '/': [MAPS] }, { '/om': [MAPS] }, false) } }).deps })
+    expect(steps(r).at(-1)).toEqual([3, 'requests', 'FAIL'])
+    expect(evidence(dir, 'fonts-selfhost', '3-requests.txt')).toMatch(/\/om: banner=false blocked=1 .*FAIL/)
+  })
+
+  test("main's package.json unreadable on fonts-selfhost: a STOP before any step, not \"no banner\"", async () => {
+    const dir = siteDir()
+    const f = fake({ exec: { 'git show origin/main:package.json': { code: 128, out: "fatal: invalid object name 'origin/main'" } } })
+    const r = await verify(dir, report(), { deps: f.deps })
+    expect(r.pass).toBe(false)
+    expect(r.steps).toEqual([expect.objectContaining({ step: 0, name: 'main', pass: false })])
+    expect(r.steps[0]!.evidence).toMatch(/git show origin\/main:package\.json failed[\s\S]*invalid object name/)
+    expect(f.calls.some((c) => c.startsWith('npm'))).toBe(false)
+  })
+
+  test('coverage: a character outside the kept ranges in the shipped JS/JSON is a note (a library string may never show); in the DOM, hidden or not, it fails', async () => {
+    const js = { 'src/styles/fonts.css': FONTS_CSS, 'dist/_astro/lib.js': 'const re=/[Ѐ-ӿ]/,msg="Привет"', 'dist/data.json': '{"t":"Привет"}' }
+    const ok = siteDir(js)
+    const r = await verify(ok, report(), { deps: fake({ fontFetch: withCyrillic }).deps })
+    expect(r.pass).toBe(true)
+    expect(evidence(ok, 'fonts-selfhost', '8-fonts.txt')).toMatch(/note: characters in the shipped JS\/JSON outside Figtree's kept unicode-ranges[^\n]*U\+041F П[^\n]*_astro\/lib\.js/)
+    const dom = siteDir()
+    const hidden = fake({ fontFetch: withCyrillic, checks: { fonts: async (_b, paths) => paths.map((p) => okPage(p, 1280, { chars: { Figtree: 'Hej Привет' }, used: [] })) } })
+    expect(steps(await verify(dom, report(), { deps: hidden.deps })).at(-1)).toEqual([8, 'fonts', 'FAIL'])
   })
 })

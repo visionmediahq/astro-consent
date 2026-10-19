@@ -9,7 +9,7 @@
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { parseFontsCss } from './checks/fonts'
-import { currentFlow, FLOWS, fontsCssAt, openPrsFrom, readStatePath, statePath } from './flows'
+import { currentFlow, FLOWS, fontsCssAt, openPrsFrom, statePath, unmergedBranch } from './flows'
 import { type Exec, exec as realExec, tail } from './lib/exec'
 import { normaliseReport } from './lib/report'
 import { SERVICES, type ServiceSlug } from '../../src/services'
@@ -163,6 +163,8 @@ export async function openPr(dir: string, opts: PrOptions): Promise<PrResult> {
   if (others.length) {
     throw new Error(`an open ${flow.other} PR (${others.map((p) => p.url).join(', ')}) would conflict with ${branch}: merge or close it first`)
   }
+  const unmerged = await unmergedBranch(exec, root, flow.other)
+  if (unmerged) throw new Error(`${unmerged}; it would conflict with ${branch}`)
 
   const fetched = await git('fetch', 'origin', 'main')
   if (fetched.code !== 0) throw new Error(`git fetch origin main failed:\n${tail(fetched.out)}`)
@@ -180,7 +182,7 @@ export async function openPr(dir: string, opts: PrOptions): Promise<PrResult> {
   // Only a passing verify run of this exact commit counts; verify wipes the flow's shots when it
   // starts, so the screenshots below always belong to that run.
   const current = (await git('rev-parse', 'HEAD')).out.trim()
-  const verifyPath = readStatePath(rollout, VERIFY_FILE, branch)
+  const verifyPath = statePath(rollout, VERIFY_FILE, branch)
   const stored = existsSync(verifyPath) ? readJson<Partial<VerifyResult>>(verifyPath, '') : null
   let result: VerifyResult
   if (!rebased && stored?.pass === true && stored.sha && stored.sha === current) {
@@ -191,7 +193,7 @@ export async function openPr(dir: string, opts: PrOptions): Promise<PrResult> {
     if (result.sha !== current) throw new Error(`verify ran for ${result.sha ?? '(no commit)'}, HEAD is ${current}`)
   }
 
-  const shotsDir = readStatePath(rollout, 'shots', branch)
+  const shotsDir = statePath(rollout, 'shots', branch)
   const names = existsSync(shotsDir) ? readdirSync(shotsDir).filter((f) => f.endsWith('.png')).sort() : []
   const files = names.map((n) => ({ from: join(shotsDir, n), to: `${opts.screenshotsDir.replace(/\/+$/, '')}/${n}` }))
 

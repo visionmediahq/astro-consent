@@ -160,7 +160,7 @@ function fake(
   return { deps, calls, called }
 }
 
-const evidence = (dir: string, file: string) => readFileSync(join(dir, '.rollout/evidence-consent-banner', file), 'utf8')
+const evidence = (dir: string, file: string) => readFileSync(join(dir, '.rollout/evidence', file), 'utf8')
 
 // The disk guard reads ROLLOUT_MIN_FREE_GB; a value set in the shell must not change these tests.
 beforeEach(() => void vi.stubEnv('ROLLOUT_MIN_FREE_GB', ''))
@@ -174,7 +174,7 @@ describe('verify', () => {
       f.deps.freeBytes = () => 10.4e9
       await expect(verify(dir, report(), { deps: f.deps })).rejects.toThrow(/10\.4 GB free on .*, verify needs 15 GB.*node_modules/s)
       expect(f.calls.some((c) => c.startsWith('npm') || c.startsWith('git push'))).toBe(false)
-      expect(existsSync(join(dir, '.rollout/verify-consent-banner.json'))).toBe(false)
+      expect(existsSync(join(dir, '.rollout/verify.json'))).toBe(false)
     })
 
     test('at or over the threshold: runs; the threshold is configurable', async () => {
@@ -218,13 +218,13 @@ describe('verify', () => {
     expect(f.calls).toContain('stop 4398')
     expect(f.calls).toContain('stop 4399')
     expect(f.called.has('close')).toBe(true)
-    const written = JSON.parse(readFileSync(join(dir, '.rollout/verify-consent-banner.json'), 'utf8')) as typeof result
+    const written = JSON.parse(readFileSync(join(dir, '.rollout/verify.json'), 'utf8')) as typeof result
     expect(written).toEqual(result)
     expect(result.sha).toBe(SHA)
     for (const name of ['1-lockfile', '2-build', '3-requests', '4-consent-paths', '5-clip', '6-contrast', '7-screenshots', '8-fonts', '9-docker']) {
-      expect(existsSync(join(dir, '.rollout/evidence-consent-banner', `${name}.txt`)), name).toBe(true)
+      expect(existsSync(join(dir, '.rollout/evidence', `${name}.txt`)), name).toBe(true)
     }
-    expect(readFileSync(join(dir, '.rollout/evidence-consent-banner/8-fonts.txt'), 'utf8')).toMatch(/skipped: no self-hosted fonts/)
+    expect(readFileSync(join(dir, '.rollout/evidence/8-fonts.txt'), 'utf8')).toMatch(/skipped: no self-hosted fonts/)
     expect(f.called.has('fonts http://127.0.0.1:4399')).toBe(false)
   })
 
@@ -768,8 +768,8 @@ describe('verify', () => {
       ['/utan-banner', false],
       ['/finns-inte-x', false],
     ])
-    expect(existsSync(join(out, 'verify-consent-banner.json'))).toBe(true)
-    expect(JSON.parse(readFileSync(join(out, 'verify-consent-banner.json'), 'utf8')).sha).toBeNull()
+    expect(existsSync(join(out, 'verify.json'))).toBe(true)
+    expect(JSON.parse(readFileSync(join(out, 'verify.json'), 'utf8')).sha).toBeNull()
     // Step 4 clicks the banner: the bannerless page is left out.
     expect(consentPages).toEqual(['/karta', '/karta-efter-widget'])
   })
@@ -784,7 +784,7 @@ describe('verify: final review fixes', () => {
     expect(result.steps).toEqual([expect.objectContaining({ step: 0, name: 'clean', pass: false })])
     expect(result.steps[0]!.evidence).toContain('commit your changes, then rerun verify')
     expect(result.steps[0]!.evidence).toContain('src/layouts/Base.astro')
-    expect(JSON.parse(readFileSync(join(dir, '.rollout/verify-consent-banner.json'), 'utf8'))).toEqual(result)
+    expect(JSON.parse(readFileSync(join(dir, '.rollout/verify.json'), 'utf8'))).toEqual(result)
     expect(f.calls.some((c) => c.startsWith('git push') || c.startsWith('npm'))).toBe(false)
   })
 

@@ -5,7 +5,8 @@ import { afterEach, describe, expect, test } from 'vitest'
 import {
   checkCoverage,
   coverageLines,
-  coverageTexts,
+  pageTexts,
+  shippedTexts,
   css2UrlOf,
   type DeclaredFace,
   distMentions,
@@ -145,14 +146,14 @@ describe('checkCoverage (d)', () => {
     )
     expect(c).toEqual({ missing: [], notes: [] })
   })
-  test("coverageTexts: page characters per family, shipped strings in / 's body family", () => {
-    const texts = coverageTexts([page({ path: '/om/', bodyFamily: 'Arial' }), page({ chars: { Figtree: 'a', Arial: 'b' } })], [{ file: '_astro/x.js', text: 'Привет' }])
-    expect(texts).toEqual([
+  test("pageTexts: page characters per family; shippedTexts: shipped strings in / 's body family (checked apart: notes only)", () => {
+    const pages = [page({ path: '/om/', bodyFamily: 'Arial' }), page({ chars: { Figtree: 'a', Arial: 'b' } })]
+    expect(pageTexts(pages)).toEqual([
       { family: 'Figtree', text: 'Hej på dig', from: '/om/' },
       { family: 'Figtree', text: 'a', from: '/' },
       { family: 'Arial', text: 'b', from: '/' },
-      { family: 'Figtree', text: 'Привет', from: '_astro/x.js' },
     ])
+    expect(shippedTexts(pages, [{ file: '_astro/x.js', text: 'Привет' }])).toEqual([{ family: 'Figtree', text: 'Привет', from: '_astro/x.js' }])
   })
 })
 
@@ -168,6 +169,18 @@ describe('dist scan (a) and shipped strings', () => {
     writeFileSync(join(dist, 'om.html'), '<link href="https://fonts.googleapis.com/css2?family=X" rel="stylesheet">')
     writeFileSync(join(dist, '_astro/b.js'), 'const u="https://fonts.gstatic.com/s/x.woff2"')
     expect(distMentions(dist).map((m) => m.split(':')[0])).toEqual(['_astro/b.js', 'om.html'])
+  })
+
+  test('M11: a Google host outside a comment in a built .css (a leftover @import) is reported', () => {
+    const dist = tree({ '_astro/index.css': '/* fonts */@import url(https://fonts.googleapis.com/css2?family=X);body{color:red}' })
+    expect(distMentions(dist).map((m) => m.split(':')[0])).toEqual(['_astro/index.css'])
+  })
+
+  test('an HTML <style>: CSS comments in it are skipped, a host outside them is reported', () => {
+    const ok = tree({ 'index.html': '<style>/* was https://fonts.googleapis.com/css2 */body{}</style><p>hej</p>' })
+    expect(distMentions(ok)).toEqual([])
+    const bad = tree({ 'index.html': '<style>/* a */@import url("https://fonts.googleapis.com/css2?family=X");</style>' })
+    expect(distMentions(bad).map((m) => m.split(':')[0])).toEqual(['index.html'])
   })
 
   test('shipped strings: literal characters and \\u escapes of JS, string values of JSON; a regex range like \\u0400-\\u04FF is skipped', () => {

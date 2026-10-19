@@ -36,7 +36,7 @@ function siteDir(state: Record<string, string> = {}): string {
 const APPS: RecordedApps = { head: MAIN, apps: [{ uuid: 'web', name: 'web', repo: 'nhrk', branch: 'main', fqdns: ['nhrk.se'], autoDeploy: true, lastDeployed: MAIN }] }
 
 /** git and gh: the branch, and main's fonts.css and package.json at `ref` (a commit or origin/main). */
-function git(o: { branch?: string; fonts?: boolean; banner?: boolean } = {}) {
+function git(o: { branch?: string; fonts?: boolean; banner?: boolean; pkgFails?: boolean } = {}) {
   const calls: string[] = []
   const exec: Exec = async (cmd, args) => {
     const line = [cmd, ...args].join(' ')
@@ -46,7 +46,7 @@ function git(o: { branch?: string; fonts?: boolean; banner?: boolean } = {}) {
     if (line === 'git rev-parse origin/main') return { code: 0, out: `${MAIN}\n` }
     if (line === 'git remote get-url origin') return { code: 0, out: 'git@github.com:visionmediahq/nhrk.git\n' }
     if (/^git show \S+:src\/styles\/fonts\.css$/.test(line)) return o.fonts === false ? { code: 128, out: 'fatal: path' } : { code: 0, out: FONTS_CSS }
-    if (/^git show \S+:package\.json$/.test(line)) return { code: 0, out: o.banner === false ? '{}' : BANNER_PKG }
+    if (/^git show \S+:package\.json$/.test(line)) return o.pkgFails ? { code: 128, out: 'fatal: bad object' } : { code: 0, out: o.banner === false ? '{}' : BANNER_PKG }
     return { code: 1, out: `unexpected ${line}` }
   }
   return { exec, calls }
@@ -143,6 +143,15 @@ describe('live post-merge with the fonts on main', () => {
     expect(r).toMatchObject({ status: 'stop', reason: '.rollout/apps-fonts-selfhost.json not found: merge records the apps before merging' })
   })
 
+  test("main's package.json unreadable (fonts-selfhost): a STOP, not \"no banner\"", async () => {
+    const dir = siteDir({ 'apps-fonts-selfhost.json': JSON.stringify(APPS), 'live-baseline-fonts-selfhost.txt': '' })
+    const c = checks()
+    const r = await live(dir, 'post-merge', SHA, { deps: liveDeps(c.checks, git({ pkgFails: true }).exec) })
+    expect(r.status).toBe('stop')
+    expect(r.reason).toMatch(/git show \S+:package\.json failed, so whether main has the banner is unknown/)
+    expect(c.calls).toEqual([])
+  })
+
   test('another branch is refused', async () => {
     await expect(live(siteDir(), 'post-merge', SHA, { deps: liveDeps(checks().checks, git({ branch: 'main' }).exec) })).rejects.toThrow('live runs on branch consent-banner or fonts-selfhost')
   })
@@ -161,12 +170,13 @@ describe('live baseline with the fonts on main', () => {
     expect(JSON.parse(readFileSync(join(dir, '.rollout/live-baseline-hosts-fonts-selfhost.json'), 'utf8')).hosts).toEqual(['nhrk.se'])
   })
 
-  test('main self-hosts the fonts but the live site asks Google: STOP (the baseline is still written)', async () => {
+  test('main self-hosts the fonts but the live site asks Google: STOP, and no baseline is written (merge would trust it)', async () => {
     const dir = siteDir()
     const c = checks({ fonts: (_b, p) => p.map((x) => fontsPage(x, { google: ['https://fonts.gstatic.com/s/x.woff2'] })) })
     const r = await live(dir, 'baseline', undefined, { deps: liveDeps(c.checks, git().exec, following.apps, following.deployments) })
     expect(r).toMatchObject({ status: 'stop', reason: 'main self-hosts the fonts, but nhrk.se failed the fonts check live' })
-    expect(existsSync(join(dir, '.rollout/live-baseline-fonts-selfhost.txt'))).toBe(true)
+    expect(existsSync(join(dir, '.rollout/live-baseline-fonts-selfhost.txt'))).toBe(false)
+    expect(existsSync(join(dir, '.rollout/live-baseline-hosts-fonts-selfhost.json'))).toBe(false)
   })
 
   test('main without the fonts: no fonts check (Google is expected before the merge)', async () => {
@@ -177,7 +187,7 @@ describe('live baseline with the fonts on main', () => {
 })
 
 describe('merge on fonts-selfhost', () => {
-  function mergeExec(o: { head?: string; headRefName?: string } = {}) {
+  function mergeExec(o: { head?: string; headRefName?: string; otherBranch?: 'merged' | 'unmerged'; otherPr?: boolean } = {}) {
     const calls: string[] = []
     const exec: Exec = async (cmd, args) => {
       const line = [cmd, ...args].join(' ')
@@ -191,6 +201,11 @@ describe('merge on fonts-selfhost', () => {
       if (line === 'gh pr view 7 -R visionmediahq/nhrk --json state,headRefName') return { code: 0, out: JSON.stringify({ state: 'OPEN', headRefName: o.headRefName ?? 'fonts-selfhost' }) }
       if (line.startsWith('gh pr merge 7 ')) return { code: 0, out: '' }
       if (line === 'gh pr view 7 -R visionmediahq/nhrk --json mergeCommit') return { code: 0, out: JSON.stringify({ mergeCommit: { oid: SHA } }) }
+      if (line === 'git ls-remote --heads origin refs/heads/consent-banner') return { code: 0, out: o.otherBranch ? `${'d'.repeat(40)}\trefs/heads/consent-banner\n` : '' }
+      if (line === 'git fetch -q origin main consent-banner') return { code: 0, out: '' }
+      if (line === `git merge-base --is-ancestor ${'d'.repeat(40)} origin/main`) return { code: o.otherBranch === 'merged' ? 0 : 1, out: '' }
+      if (line === 'gh pr list -R visionmediahq/nhrk --head consent-banner --state open --json url,title')
+        return { code: 0, out: JSON.stringify(o.otherPr ? [{ url: 'https://github.com/visionmediahq/nhrk/pull/3', title: 'Samtyckesbanner (astro-consent)' }] : []) }
       return { code: 1, out: `unexpected: ${line}` }
     }
     return { exec, calls }
@@ -225,6 +240,20 @@ describe('merge on fonts-selfhost', () => {
     const rec = JSON.parse(readFileSync(join(dir, '.rollout/apps-fonts-selfhost.json'), 'utf8')) as RecordedApps
     expect(rec.apps.map((a) => [a.uuid, a.autoDeploy])).toEqual([['web', true]])
     expect(existsSync(join(dir, '.rollout/apps.json'))).toBe(false)
+  })
+
+  test('refused while origin has an unmerged consent-banner branch or an open consent-banner PR; a merged one is no obstacle', async () => {
+    for (const [o, why] of [
+      [{ otherBranch: 'unmerged' }, /origin has a consent-banner branch \(ddddddd\) that is not in origin\/main/],
+      [{ otherPr: true }, /open consent-banner PR https:\/\/github\.com\/visionmediahq\/nhrk\/pull\/3/],
+    ] as const) {
+      const g = mergeExec(o)
+      const r = await merge(ready(), 7, { deps: deps(g.exec, []) })
+      expect(r.status).toBe('stop')
+      expect(r.reason).toMatch(why)
+      expect(g.calls.some((c) => c.startsWith('gh pr merge'))).toBe(false)
+    }
+    expect((await merge(ready(), 7, { deps: deps(mergeExec({ otherBranch: 'merged' }).exec, []) })).status).toBe('done')
   })
 
   test("a PR from consent-banner, or the banner's baseline only: STOP, nothing merged", async () => {

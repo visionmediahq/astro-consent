@@ -11,7 +11,6 @@ import {
   isFlowBranch,
   isToolFontsCss,
   openPrsFrom,
-  readStatePath,
   stateName,
   statePath,
   STEPS,
@@ -66,31 +65,22 @@ describe('branch detection', () => {
 })
 
 describe('state files', () => {
-  test('per branch: verify.json → verify-<branch>.json, evidence → evidence-<branch>', () => {
-    expect(stateName('verify.json', 'fonts-selfhost')).toBe('verify-fonts-selfhost.json')
-    expect(stateName('pushed.txt', 'consent-banner')).toBe('pushed-consent-banner.txt')
-    expect(stateName('live-baseline-hosts.json', 'fonts-selfhost')).toBe('live-baseline-hosts-fonts-selfhost.json')
-    expect(stateName('evidence', 'fonts-selfhost')).toBe('evidence-fonts-selfhost')
-    expect(statePath('/s/.rollout', 'apps.json', 'consent-banner')).toBe('/s/.rollout/apps-consent-banner.json')
+  test("consent-banner keeps the names the operator's scripts read (publish-evidence.sh, site-pr.sh): unchanged", () => {
+    const names = ['verify.json', 'pushed.txt', 'evidence', 'shots', 'pr-body.md', 'live-baseline.txt', 'live-baseline-hosts.json', 'apps.json', 'live-baseline.json', 'live-post-merge.json']
+    for (const name of names) expect(stateName(name, 'consent-banner'), name).toBe(name)
+    expect(statePath('/s/.rollout', 'verify.json', 'consent-banner')).toBe('/s/.rollout/verify.json')
+    expect(statePath('/s/.rollout', 'pr-body.md', 'consent-banner')).toBe('/s/.rollout/pr-body.md')
   })
 
-  test('fallback: consent-banner reads the name used before the flows when its own file is missing; fonts-selfhost never does', () => {
-    const r = rolloutDir()
-    writeFileSync(join(r, 'verify.json'), '{}')
-    writeFileSync(join(r, 'pushed.txt'), 'a\n')
-    mkdirSync(join(r, 'shots'))
-    expect(readStatePath(r, 'verify.json', 'consent-banner')).toBe(join(r, 'verify.json'))
-    expect(readStatePath(r, 'pushed.txt', 'consent-banner')).toBe(join(r, 'pushed.txt'))
-    expect(readStatePath(r, 'shots', 'consent-banner')).toBe(join(r, 'shots'))
-    // The banner's old verify.json is never read as a fonts verify.
-    expect(readStatePath(r, 'verify.json', 'fonts-selfhost')).toBe(join(r, 'verify-fonts-selfhost.json'))
-    // Once the flow's own file exists, it wins.
-    writeFileSync(join(r, 'verify-consent-banner.json'), '{}')
-    expect(readStatePath(r, 'verify.json', 'consent-banner')).toBe(join(r, 'verify-consent-banner.json'))
-    // Neither: the flow's own name (where the stage will write).
-    expect(readStatePath(r, 'apps.json', 'consent-banner')).toBe(join(r, 'apps-consent-banner.json'))
+  test('fonts-selfhost: its own names, so a fonts run never overwrites or reads the banner state', () => {
+    expect(stateName('verify.json', 'fonts-selfhost')).toBe('verify-fonts-selfhost.json')
+    expect(stateName('pushed.txt', 'fonts-selfhost')).toBe('pushed-fonts-selfhost.txt')
+    expect(stateName('live-baseline-hosts.json', 'fonts-selfhost')).toBe('live-baseline-hosts-fonts-selfhost.json')
+    expect(stateName('evidence', 'fonts-selfhost')).toBe('evidence-fonts-selfhost')
+    expect(statePath('/s/.rollout', 'apps.json', 'fonts-selfhost')).toBe('/s/.rollout/apps-fonts-selfhost.json')
   })
 })
+
 
 describe('the fonts commit', () => {
   test('isToolFontsCss: only a fonts.css with the header this tool writes', () => {

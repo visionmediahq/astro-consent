@@ -161,7 +161,7 @@ describe('openPr', () => {
     expect(create).toContain('-R visionmediahq/kund')
     expect(create).toContain('-H consent-banner')
     expect(create).toContain('-B main')
-    const body = readFileSync(join(dir, '.rollout/pr-body-consent-banner.md'), 'utf8')
+    const body = readFileSync(join(dir, '.rollout/pr-body.md'), 'utf8')
     expect(body).toContain('Visa Google Maps')
     expect(body).toContain('src/layouts/Base.astro')
     expect(body).toContain('docs/rollout/2026-10-06-astro-consent/kund/home-360-open.png')
@@ -279,7 +279,7 @@ describe('openPr', () => {
       writeFileSync(join(dir, '.rollout/report.json'), JSON.stringify(report({ classification: 'needs-human', reasons: ['several layouts and no single shared one: a, b'] })))
       const f = fake({ 'git show HEAD:src/data/privacy.json': { code: 0, out: privacy } })
       expect((await openPr(dir, opts(f))).url).toBe('https://github.com/visionmediahq/kund/pull/9')
-      const body = readFileSync(join(dir, '.rollout/pr-body-consent-banner.md'), 'utf8')
+      const body = readFileSync(join(dir, '.rollout/pr-body.md'), 'utf8')
       expect(body.includes('Visa Google Maps'), privacy).toBe(maps)
     }
   })
@@ -287,7 +287,7 @@ describe('openPr', () => {
   test('a branch privacy.json listing elfsight and google-maps names both in the PR body', async () => {
     const dir = siteDir()
     await openPr(dir, opts(fake({ 'git show HEAD:src/data/privacy.json': { code: 0, out: '{"services":["elfsight","google-maps"]}' } })))
-    const body = readFileSync(join(dir, '.rollout/pr-body-consent-banner.md'), 'utf8')
+    const body = readFileSync(join(dir, '.rollout/pr-body.md'), 'utf8')
     expect(body).toContain('Google Maps och Elfsight')
     expect(body).toContain('Visa Elfsight')
     expect(body).not.toMatch(/\{\{/)
@@ -296,7 +296,7 @@ describe('openPr', () => {
   test('finding 4: a maps report but a branch privacy.json without google-maps gets the notice text', async () => {
     const dir = siteDir()
     await openPr(dir, opts(fake({ 'git show HEAD:src/data/privacy.json': { code: 0, out: '{"services":[]}' } })))
-    expect(readFileSync(join(dir, '.rollout/pr-body-consent-banner.md'), 'utf8')).not.toContain('Visa Google Maps')
+    expect(readFileSync(join(dir, '.rollout/pr-body.md'), 'utf8')).not.toContain('Visa Google Maps')
   })
 
   test('finding 4: no privacy.json on the branch, or one that is not JSON: refused', async () => {
@@ -440,7 +440,7 @@ describe('openPr on consent-banner with the fonts commit', () => {
       'git show HEAD:src/styles/fonts.css': { code: 0, out: FONTS_CSS },
     })
     await openPr(dir, opts(f))
-    const body = readFileSync(join(dir, '.rollout/pr-body-consent-banner.md'), 'utf8')
+    const body = readFileSync(join(dir, '.rollout/pr-body.md'), 'utf8')
     expect(body).toContain('- Typsnitten (Figtree och Oswald) laddas från sajten själv i stället för från Google Fonts, i en egen commit')
     expect(body).toMatch(/^4\. Klicka "Cookie-inställningar".*\n5\. Öppna webbläsarens nätverksflik och ladda om sidan: inga anrop till `fonts\.googleapis\.com`/m)
     expect(body).not.toMatch(/\{\{|\}\}/)
@@ -450,8 +450,21 @@ describe('openPr on consent-banner with the fonts commit', () => {
     const dir = siteDir()
     const f = fake()
     await openPr(dir, opts(f))
-    expect(readFileSync(join(dir, '.rollout/pr-body-consent-banner.md'), 'utf8')).not.toContain('Typsnitten')
+    expect(readFileSync(join(dir, '.rollout/pr-body.md'), 'utf8')).not.toContain('Typsnitten')
     expect(f.calls.some((c) => c.includes('fonts.css'))).toBe(false)
+  })
+
+  test('refused while origin has a fonts-selfhost branch main does not contain; a merged one is no obstacle', async () => {
+    const other = 'd'.repeat(40)
+    const answers = (merged: boolean) => ({
+      'git ls-remote --heads origin refs/heads/fonts-selfhost': { code: 0, out: `${other}\trefs/heads/fonts-selfhost\n` },
+      [`git merge-base --is-ancestor ${other} origin/main`]: { code: merged ? 0 : 1, out: '' },
+    })
+    const f = fake(answers(false))
+    await expect(openPr(siteDir(), opts(f))).rejects.toThrow(/origin has a fonts-selfhost branch \(ddddddd\) that is not in origin\/main/)
+    expect(f.calls).toContain('git fetch -q origin main fonts-selfhost')
+    expect(f.calls.some((c) => c.startsWith('gh pr create'))).toBe(false)
+    expect((await openPr(siteDir(), opts(fake(answers(true))))).url).toBe('https://github.com/visionmediahq/kund/pull/9')
   })
 
   test('refused while a fonts-selfhost PR is open', async () => {

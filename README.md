@@ -251,16 +251,16 @@ npx tsx ci/rollout/run.ts help
   Google Fonts commit alone, for a site whose banner is live. Each flow has its PR title and body
   (`pr-body.sv.md`, `pr-body.fonts.sv.md`) and its verify steps. One flow at a time per site:
   `wire` refuses while origin has a `fonts-selfhost` branch main does not contain or an open
-  `fonts-selfhost` PR, `fonts` the same for `consent-banner`, and `pr` refuses while the other
-  flow has an open PR.
-- **State** lives in `<site dir>/.rollout/`, per flow: `report.json`, and `verify-<branch>.json`,
-  `pushed-<branch>.txt`, `evidence-<branch>/`, `shots-<branch>/`, `pr-body-<branch>.md`,
-  `live-baseline-<branch>.txt`, `live-baseline-hosts-<branch>.json`, `apps-<branch>.json` and
-  `live-<mode>-<branch>.json`. On `consent-banner`, a file missing under its new name is read
-  under the name used before the flows (`verify.json`, `pushed.txt`, `shots/`, `live-baseline.txt`,
-  …), so clones verified before keep working; `fonts-selfhost` never reads those. `detect` adds
-  `.rollout/` to the checkout's `.git/info/exclude`, so stages can be rerun one at a time and
-  nothing of it is committed. `verify --demo` writes to a temp folder.
+  `fonts-selfhost` PR, `fonts` the same for `consent-banner`, and `pr` and `merge` refuse the
+  same (the other flow's unmerged branch on origin or open PR).
+- **State** lives in `<site dir>/.rollout/`: `report.json`, and per flow `verify.json`,
+  `pushed.txt`, `evidence/`, `shots/`, `pr-body.md`, `live-baseline.txt`,
+  `live-baseline-hosts.json`, `apps.json` and `live-<mode>.json`. `consent-banner` uses exactly
+  these names (the operator's scripts read them); `fonts-selfhost` adds its branch to each
+  (`verify-fonts-selfhost.json`, `evidence-fonts-selfhost/`, …), so a fonts run never reads or
+  overwrites the banner's. `detect` adds `.rollout/` to the checkout's `.git/info/exclude`, so
+  stages can be rerun one at a time and nothing of it is committed. `verify --demo` writes to a
+  temp folder.
 - **Exit codes:** `0` ok (for `live baseline` also the expected RED), `1` error, a failed verify
   step or a live/merge STOP, `2` usage, `3` the wire (or fonts) plan was refused (dry run or not; nothing was
   written).
@@ -370,12 +370,13 @@ npx tsx ci/rollout/run.ts help
   - every family of fonts.css a visible element renders with has the face CSS font matching picks
     for its weight and style loaded in `document.fonts` (compared with fonts.css, not main: main
     cannot load its fonts with Google blocked);
-  - every character the pages show in a family of fonts.css (DOM text, hidden elements included),
-    and the strings of the shipped JS (literal or `\u` escape, not the ends of a regex range) and
-    JSON in `/`'s body family, falls in that family's kept unicode-ranges. Verify asks Google's
-    css2 URL (from the header, by the tool, not the browser) which ranges Google has: a character
-    no face of Google's has is noted, not failed (main showed a fallback too). If that request
-    fails, every uncovered character fails. The failure lists the characters and the family.
+  - every character the pages show in a family of fonts.css (DOM text, hidden elements included)
+    falls in that family's kept unicode-ranges. Verify asks Google's css2 URL (from the header, by
+    the tool, not the browser) which ranges Google has: a character no face of Google's has is
+    noted, not failed (main showed a fallback too). If that request fails, every uncovered
+    character fails. The failure lists the characters and the family. Characters in the strings
+    of the shipped JS and JSON (checked in `/`'s body family) are only noted: a library string
+    may never be shown, and wire could not change it.
   Step 9 also runs step 8's request check at 1280 px against the container.
   `tests/unit/rollout/fonts-fixtures.demo.ts` (CI e2e job) holds the browser negative controls.
 - **Live with the fonts.** `live post-merge` checks, when the merged main has the tool's fonts.css,

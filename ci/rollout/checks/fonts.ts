@@ -9,10 +9,11 @@
 //                one CSS font matching picks for the element's weight and style) loaded in
 //                document.fonts; main is not compared, since Google is blocked here
 //   d  coverage  every character the pages show in a family of fonts.css (DOM text, hidden
-//                elements included), and the strings of the shipped JS and JSON (in the body's
-//                family of `/`), falls in that family's kept unicode-ranges. When Google's css2
+//                elements included) falls in that family's kept unicode-ranges. When Google's css2
 //                answer is at hand, a character outside every face Google has for the family is
-//                noted, not failed: main showed it in a fallback font too.
+//                noted, not failed: main showed it in a fallback font too. The strings of the
+//                shipped JS and JSON (in the body's family of `/`) are only noted: a library string
+//                may never be shown, and wire could not change it anyway.
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import type { Browser, Page } from '@playwright/test'
@@ -98,6 +99,8 @@ export interface FontsPage {
   width: number
   /** Requests to fonts.googleapis.com / fonts.gstatic.com (blocked in local runs, so attempts). */
   google: string[]
+  /** How many of those the browser aborted (blocked locally: net::ERR_BLOCKED_BY_CLIENT). */
+  googleAborted?: number
   /** Every same-origin /fonts/*.woff2 answer; status 0 for a request that failed. */
   woff2: { url: string; status: number }[]
   /** document.fonts after document.fonts.ready. */
@@ -166,6 +169,7 @@ export async function checkFonts(
       try {
         if (opts.block) await context.route((url) => isGoogleFonts(url.href), (route) => route.abort('blockedbyclient'))
         const google: string[] = []
+        let googleAborted = 0
         const woff2: { url: string; status: number }[] = []
         page.on('request', (r) => {
           if (isGoogleFonts(r.url())) google.push(r.url())
@@ -174,12 +178,13 @@ export async function checkFonts(
           if (sameOriginWoff2(r.url(), base)) woff2.push({ url: r.url(), status: r.status() })
         })
         page.on('requestfailed', (r) => {
+          if (isGoogleFonts(r.url()) && /ERR_BLOCKED_BY_CLIENT/.test(r.failure()?.errorText ?? '')) googleAborted++
           // A 404 also fails the request: its answer is already counted.
           if (sameOriginWoff2(r.url(), base) && !woff2.some((w) => w.url === r.url())) woff2.push({ url: r.url(), status: 0 })
         })
         await open(page, base, path)
         const got = (await (page as Page).evaluate(PAGE_FONTS)) as Omit<FontsPage, 'path' | 'width' | 'google' | 'woff2'>
-        out.push({ path, width, google, woff2, ...got })
+        out.push({ path, width, google, ...(opts.block ? { googleAborted } : {}), woff2, ...got })
       } finally {
         await context.close()
       }
@@ -353,7 +358,11 @@ export function distMentions(dist: string): string[] {
     let text = readFileSync(join(dist, file), 'utf8')
     if (text.includes('\u0000')) continue
     if (/\.css$/i.test(file)) text = text.replace(/\/\*[\s\S]*?\*\//g, '')
-    if (/\.html?$/i.test(file)) text = text.replace(/<!--[\s\S]*?-->/g, '')
+    if (/\.html?$/i.test(file)) {
+      text = text
+        .replace(/<!--[\s\S]*?-->/g, '')
+        .replace(/(<style\b[^>]*>)([\s\S]*?)(<\/style>)/gi, (_, open: string, css: string, close: string) => `${open}${css.replace(/\/\*[\s\S]*?\*\//g, '')}${close}`)
+    }
     const m = HOSTS.exec(text)
     if (m) out.push(`${file}: ${text.slice(Math.max(0, m.index - 40), m.index + 60).replace(/\s+/g, ' ')}`)
   }
@@ -361,9 +370,9 @@ export function distMentions(dist: string): string[] {
 }
 
 /**
- * The characters of the shipped JS (literal, and \u escapes that are not the ends of a range like
- * `Ѐ-ӿ`) and the string values of shipped JSON, per file. `dist` is what the browser
- * gets (dist/client for a server build).
+ * The characters of the shipped JS (literal, and `\u` escapes that are not the ends of a range like
+ * `Ѐ-ӿ`) and the string values of shipped JSON, per file, for the notes of check d.
+ * `dist` is what the browser gets (dist/client for a server build).
  */
 export function shippedStrings(dist: string): { file: string; text: string }[] {
   const out: { file: string; text: string }[] = []
@@ -397,10 +406,19 @@ export function shippedStrings(dist: string): { file: string; text: string }[] {
   return out
 }
 
-/** The texts for checkCoverage from the browser pages and the shipped strings (in `/`'s body family). */
-export function coverageTexts(pages: FontsPage[], shipped: { file: string; text: string }[]): { family: string; text: string; from: string }[] {
-  const texts = pages.flatMap((p) => Object.entries(p.chars).map(([family, text]) => ({ family, text, from: p.path })))
-  const body = pages.find((p) => p.path === '/')?.bodyFamily ?? pages[0]?.bodyFamily
-  if (body) for (const s of shipped) texts.push({ family: body, text: s.text, from: s.file })
-  return texts
+/** Check d's texts from the browser pages: per family as the page names it, hidden elements included. */
+export function pageTexts(pages: FontsPage[]): { family: string; text: string; from: string }[] {
+  return pages.flatMap((p) => Object.entries(p.chars).map(([family, text]) => ({ family, text, from: p.path })))
 }
+
+/** The shipped strings as texts in `/`'s body family, for checkCoverage: notes only (shippedNotes). */
+export function shippedTexts(pages: FontsPage[], shipped: { file: string; text: string }[]): { family: string; text: string; from: string }[] {
+  const body = pages.find((p) => p.path === '/')?.bodyFamily ?? pages[0]?.bodyFamily
+  return body ? shipped.map((s) => ({ family: body, text: s.text, from: s.file })) : []
+}
+
+/** checkCoverage of the shipped strings as note lines: a library string may never be shown. */
+export const shippedNotes = (c: Coverage): string[] => [
+  ...c.missing.map((m) => `note: characters in the shipped JS/JSON outside ${m.family}'s kept unicode-ranges (not checked: a script string may never be shown): ${show(m.codePoints)}; in ${m.from.join(', ')}`),
+  ...c.notes,
+]

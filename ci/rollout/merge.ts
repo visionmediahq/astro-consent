@@ -2,9 +2,9 @@
 //
 //   1. The live baseline must exist (live post-merge compares console errors against it).
 //   2. git fetch. If origin/main is not in HEAD (main moved since the verify), rebase onto it; if
-//      HEAD is not the commit of a passing verify-<branch>.json, verify again in full (verify pushes the
+//      HEAD is not the commit of a passing verify file of the flow, verify again in full (verify pushes the
 //      branch first). Repeated until main holds still, at most three rounds.
-//   3. Record which Coolify apps follow main (Ruling 14) in .rollout/apps-<branch>.json, before the merge.
+//   3. Record which Coolify apps follow main (Ruling 14) in .rollout/apps.json (per flow), before the merge.
 //      STOP if one of them serves a host live baseline did not record: it has no baseline
 //      (Rulings 36, 37). Detect is never re-run on the wired branch; live baseline is.
 //   4. gh pr merge --squash --delete-branch, pinned to the verified commit; read the merge commit.
@@ -18,7 +18,7 @@ import { originRepo } from './pr'
 import { normaliseReport } from './lib/report'
 import type { Report, VerifyResult } from './types'
 import { VERIFY_FILE, verify as realVerify } from './verify'
-import { currentFlow, readStatePath, stateName, statePath } from './flows'
+import { currentFlow, flowObstacles, stateName, statePath } from './flows'
 
 const ROUNDS = 3
 
@@ -62,8 +62,8 @@ export async function merge(dir: string, pr: number | string, opts: { deps?: Par
     const BRANCH = flow.branch
     const rollout = join(root, '.rollout')
     const name = (file: string) => `.rollout/${stateName(file, BRANCH)}`
-    if (!existsSync(readStatePath(rollout, BASELINE_FILE, BRANCH))) return stop(`${name(BASELINE_FILE)} not found: run the live baseline before the merge`)
-    const hostsPath = readStatePath(rollout, BASELINE_HOSTS_FILE, BRANCH)
+    if (!existsSync(statePath(rollout, BASELINE_FILE, BRANCH))) return stop(`${name(BASELINE_FILE)} not found: run the live baseline before the merge`)
+    const hostsPath = statePath(rollout, BASELINE_HOSTS_FILE, BRANCH)
     if (!existsSync(hostsPath)) return stop(`${name(BASELINE_HOSTS_FILE)} not found: rerun \`live <dir> baseline\`, which records the hosts it baselined`)
     const baselined = (JSON.parse(readFileSync(hostsPath, 'utf8')) as { hosts?: unknown }).hosts
     if (!Array.isArray(baselined)) return stop(`${name(BASELINE_HOSTS_FILE)} has no hosts list: rerun \`live <dir> baseline\``)
@@ -78,9 +78,12 @@ export async function merge(dir: string, pr: number | string, opts: { deps?: Par
       return stop(`PR #${pr} is ${state.state}, not OPEN${hint}`)
     }
     if (state.headRefName !== BRANCH) return stop(`PR #${pr} is from ${state.headRefName}, not ${BRANCH}`)
+    // The other flow's work on GitHub would conflict with this merge (site-factory#220).
+    const obstacles = await flowObstacles(deps.exec, root, repo, flow.other)
+    if (obstacles.length) return stop(`${flow.other} would conflict with ${BRANCH}: ${obstacles.join('; ')}`)
 
     // Spec C4: if main moved, verify again in full right before the merge.
-    const verifyPath = readStatePath(rollout, VERIFY_FILE, BRANCH)
+    const verifyPath = statePath(rollout, VERIFY_FILE, BRANCH)
     const stored = existsSync(verifyPath) ? (JSON.parse(readFileSync(verifyPath, 'utf8')) as Partial<VerifyResult>) : null
     let verified = stored?.pass === true && stored.sha ? stored.sha : null
     let head = ''

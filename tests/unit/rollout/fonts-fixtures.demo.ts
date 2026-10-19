@@ -9,7 +9,7 @@ import { createServer } from 'node:http'
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 import { chromium } from '@playwright/test'
-import { checkCoverage, checkFonts, coverageTexts, judgeFontsPage, parseFontsCss } from '../../../ci/rollout/checks/fonts'
+import { checkCoverage, checkFonts, judgeFontsPage, pageTexts, parseFontsCss } from '../../../ci/rollout/checks/fonts'
 import { type Face, parseUnicodeRange } from '../../../ci/rollout/wire/fonts-css'
 
 /** The first .ttf under playwright-core (its trace viewer's icon font). */
@@ -84,13 +84,15 @@ try {
     const pages = await run('/clean/')
     const judged = pages.map((p) => judgeFontsPage(p, declared))
     expect(pages.length === 2 && judged.every((j) => j.ok), '/clean/ control at 360 and 1280: no Google, woff2 200, face loaded', judged)
-    const cov = checkCoverage(coverageTexts(pages, []), declared, GOOGLE)
+    const cov = checkCoverage(pageTexts(pages), declared, GOOGLE)
     expect(cov.missing.length === 0, '/clean/ control: every character in a kept face', cov)
   }
   {
     const pages = await run('/google/')
     const judged = pages.map((p) => judgeFontsPage(p, declared))
     expect(pages.every((p) => p.google.length > 0) && judged.every((j) => !j.ok && j.lines.some((l) => /request\(s\) to Google Fonts/.test(l))), '/google/ a page that asks Google Fonts fails', judged)
+    // The blocking itself: every Google request failed with the abort's own reason, none was sent.
+    expect(pages.every((p) => p.googleAborted === p.google.length), '/google/ every Google Fonts request aborted (net::ERR_BLOCKED_BY_CLIENT), not sent', pages.map((p) => [p.google.length, p.googleAborted]))
   }
   {
     const judged = (await run('/bold/')).map((p) => judgeFontsPage(p, declared))
@@ -98,14 +100,14 @@ try {
   }
   {
     const pages = await run('/cyrillic/')
-    const cov = checkCoverage(coverageTexts(pages, []), declared, GOOGLE)
+    const cov = checkCoverage(pageTexts(pages), declared, GOOGLE)
     expect(cov.missing.length === 1 && cov.missing[0]!.family === 'Fixture Sans' && cov.missing[0]!.codePoints.includes(0x41f), '/cyrillic/ a character outside the kept ranges fails, family and characters listed', cov)
-    const strict = checkCoverage(coverageTexts(pages, []), declared, null)
+    const strict = checkCoverage(pageTexts(pages), declared, null)
     expect(strict.missing.length === 1, '/cyrillic/ without Google\'s answer: fails too', strict)
   }
   {
     const pages = await run('/emoji/')
-    const cov = checkCoverage(coverageTexts(pages, []), declared, GOOGLE)
+    const cov = checkCoverage(pageTexts(pages), declared, GOOGLE)
     expect(cov.missing.length === 0 && cov.notes.some((n) => /U\+260E/.test(n)), '/emoji/ control: a character Google never had is noted, not failed', cov)
   }
 } finally {

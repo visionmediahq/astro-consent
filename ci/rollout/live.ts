@@ -5,12 +5,12 @@
 //
 //   baseline    before the merge: expected RED. Against report.domains and every host of the
 //               Coolify apps that follow main (Ruling 37, read-only). Writes the console-error
-//               baseline to .rollout/live-baseline-<branch>.txt (one error per line, the domain's
+//               baseline to .rollout/live-baseline.txt (one error per line, the domain's
 //               host as {host}, newlines as \n) and the hosts it covered to
-//               .rollout/live-baseline-hosts-<branch>.json, which merge checks the following apps
+//               .rollout/live-baseline-hosts.json, which merge checks the following apps
 //               against. When origin/main already self-hosts the fonts (the tool's fonts.css), every
 //               host must also pass the fonts requests check, or it is a STOP.
-//   post-merge  the apps recorded in .rollout/apps-<branch>.json before the merge (merge writes
+//   post-merge  the apps recorded in .rollout/apps.json before the merge (merge writes
 //               it; Ruling 14 decides which follow main). For each app that follows main, wait for
 //               its deployment of the merge commit (`sha`): failed, cancelled or a timeout is a
 //               STOP. An app that does not follow main gets an issue "<fqdn> redeployar inte från
@@ -24,7 +24,7 @@
 //               checked again after 30 s; a second failure is a STOP. A pass deletes the clone's
 //               node_modules and dist (#23).
 //
-// The result goes to .rollout/live-<mode>-<branch>.json.
+// The result goes to .rollout/live-<mode>.json (fonts-selfhost: each name with -fonts-selfhost).
 import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import type { Browser } from '@playwright/test'
@@ -34,14 +34,14 @@ import { checkFonts, type DeclaredFace, type FontsPage, judgeFontsPage, parseFon
 import { isCmsAdminRoute, listPages } from './checks/pages'
 import { checkRequests, formatRequests, type RequestResult } from './checks/requests'
 import { type App, appsFor, type Deployment, type DeployStatus, followsMain, listApps, listDeployments, waitDeployed } from './coolify'
-import { currentFlow, fontsCssAt, readStatePath, statePath } from './flows'
+import { currentFlow, fontsCssAt, statePath } from './flows'
 import { type Exec, exec as realExec, tail } from './lib/exec'
 import { originRepo } from './pr'
 import { normaliseReport } from './lib/report'
 import type { Report } from './types'
 import { embedPagesByFetch, hasPackage } from './verify'
 
-/** State names in .rollout/, per branch (flows.ts statePath; consent-banner reads the old names too). */
+/** State names in .rollout/ (flows.ts statePath: as they are on consent-banner, with -fonts-selfhost on fonts-selfhost). */
 export const BASELINE_FILE = 'live-baseline.txt'
 /** `{ head, hosts, apps }`: every host live baseline checked, and the apps following main then (Ruling 37). */
 export const BASELINE_HOSTS_FILE = 'live-baseline-hosts.json'
@@ -262,7 +262,12 @@ export async function live(
   /** What main at `ref` asks of each domain: the banner unless fonts-selfhost has none; the fonts when main self-hosts them. */
   const domainChecks = async (ref: string): Promise<DomainChecks> => {
     const css = await fontsCssAt(deps.exec, root, ref)
-    const banner = branch !== 'fonts-selfhost' || hasPackage((await git('show', `${ref}:package.json`)).out)
+    let banner = true
+    if (branch === 'fonts-selfhost') {
+      const pkg = await git('show', `${ref}:package.json`)
+      if (pkg.code !== 0) throw new Error(`git show ${ref}:package.json failed, so whether main has the banner is unknown:\n${tail(pkg.out)}`)
+      banner = hasPackage(pkg.out)
+    }
     return { banner, fonts: css === null ? null : parseFontsCss(css) }
   }
 
@@ -304,19 +309,20 @@ export async function live(
           if (!f.pass) fontsFailed.push(host)
         }
       }
+      // A STOP writes no baseline: merge would take it as this flow's.
+      if (fontsFailed.length) return done({ reason: `main self-hosts the fonts, but ${fontsFailed.join(', ')} failed the fonts check live` })
       const text = encodeBaseline(entries)
       const baselinePath = statePath(rollout, BASELINE_FILE, branch)
       writeFileSync(baselinePath, text)
       writeFileSync(statePath(rollout, BASELINE_HOSTS_FILE, branch), `${JSON.stringify({ head: mainHead, hosts, apps: following }, null, 2)}\n`)
       result.lines.push(`console baseline: ${text.split('\n').filter(Boolean).length} errors → ${baselinePath}`, `hosts baselined: ${hosts.join(', ')}`)
-      if (fontsFailed.length) return done({ reason: `main self-hosts the fonts, but ${fontsFailed.join(', ')} failed the fonts check live` })
       if (green) result.lines.push('live site already green: shows the banner and requests nothing from the registry (noted, not a failure)')
       return done({ status: green ? 'pass' : 'red' })
     }
 
-    const appsPath = readStatePath(rollout, APPS_FILE, branch)
+    const appsPath = statePath(rollout, APPS_FILE, branch)
     if (!existsSync(appsPath)) return done({ reason: `${statePath('.rollout', APPS_FILE, branch)} not found: merge records the apps before merging` })
-    const baselinePath = readStatePath(rollout, BASELINE_FILE, branch)
+    const baselinePath = statePath(rollout, BASELINE_FILE, branch)
     if (!existsSync(baselinePath)) return done({ reason: `${statePath('.rollout', BASELINE_FILE, branch)} not found: run live baseline before the merge` })
     const baselineText = readFileSync(baselinePath, 'utf8')
     const recorded = readJson<RecordedApps>(appsPath)
