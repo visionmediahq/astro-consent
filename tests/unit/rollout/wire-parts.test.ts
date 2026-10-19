@@ -484,6 +484,42 @@ describe('wireLinks', () => {
       expect(plain).toContain('    <p class="text-sm text-white/50">© Firma</p>\n    <PrivacyLinks class="text-white justify-start! mt-2" />\n  </div>')
     })
 
+    const unwrapped = (mark: string, style = ''): void => {
+      const text = wire([wireLinks], site(`<footer class="text-white">\n  <div class="grid"><p>a</p><p>b</p></div>\n  <div class="border-t">\n    ${mark}\n  </div>\n</footer>\n${style}`), 'src/components/Footer.astro')
+      expect(text).toContain(`  <div class="border-t">\n    ${mark}\n    <PrivacyLinks class="text-white justify-start! mt-2" />\n  </div>`)
+    }
+
+    test('#65 review: a © element that scoped CSS names (tag, class or id) is not wrapped: the rule would lose it', () => {
+      for (const style of [
+        '<style>\n  p.copy { color: red; }\n</style>\n',
+        '<style>\n  .border-t > p { margin: 0; }\n</style>\n',
+        '<style>\n  .copy { padding: 1rem; }\n</style>\n',
+        '<style>\n  @media (min-width: 40rem) { #rights { text-align: right; } }\n</style>\n',
+      ]) unwrapped('<p id="rights" class="copy px-4">© Firma</p>', style)
+      // A rule for something else does not stop it.
+      const text = wire([wireLinks], site('<footer class="text-white">\n  <div class="grid"><p>a</p><p>b</p></div>\n  <div class="border-t">\n    <p class="copy px-4">© Firma</p>\n  </div>\n</footer>\n<style>\n  .copyright, .grid span, #copy-x { color: red; }\n</style>\n'), 'src/components/Footer.astro')
+      expect(text).toContain('<div class="copy px-4">\n      <p>© Firma</p>')
+    })
+
+    test('#65 review: a <span> or <small> needs a container, max-w-* or mx-auto; padding alone is inline spacing', () => {
+      unwrapped('<span class="px-2">© Firma</span>')
+      unwrapped('<small class="py-1 text-xs">© Firma</small>')
+      const text = wire([wireLinks], site('<footer class="text-white">\n  <div class="grid"><p>a</p><p>b</p></div>\n  <div class="border-t">\n    <small class="mx-auto px-2">© Firma</small>\n  </div>\n</footer>\n'), 'src/components/Footer.astro')
+      expect(text).toContain('<div class="mx-auto px-2">\n      <small>© Firma</small>')
+    })
+
+    test('#65 review: under white-space pre*, the © element is wrapped but not re-indented', () => {
+      for (const ws of ['whitespace-pre-line', 'whitespace-pre', 'md:whitespace-pre-wrap']) {
+        const text = wire([wireLinks], site(`<footer class="text-white">\n  <div class="grid"><p>a</p><p>b</p></div>\n  <div class="border-t">\n    <p class="container ${ws}">\n      © Firma\n    </p>\n  </div>\n</footer>\n`), 'src/components/Footer.astro')
+        expect(text).toContain(`    <div class="container ${ws}">\n      <p>\n      © Firma\n    </p>\n      <PrivacyLinks`)
+      }
+      const inline = wire([wireLinks], site('<footer class="text-white">\n  <div class="grid"><p>a</p><p>b</p></div>\n  <div class="border-t">\n    <p class="container" style="white-space: pre-wrap">\n      © Firma\n    </p>\n  </div>\n</footer>\n'), 'src/components/Footer.astro')
+      expect(inline).toContain('      <p style="white-space: pre-wrap">\n      © Firma\n    </p>\n      <PrivacyLinks')
+      // Otherwise re-indented, as for lhiab.
+      const plain = wire([wireLinks], site('<footer class="text-white">\n  <div class="grid"><p>a</p><p>b</p></div>\n  <div class="border-t">\n    <p class="container">\n      © Firma\n    </p>\n  </div>\n</footer>\n'), 'src/components/Footer.astro')
+      expect(plain).toContain('      <p>\n        © Firma\n      </p>\n      <PrivacyLinks')
+    })
+
     test('re-review of #63: a © line straight in the footer container: no deep search in the link columns', () => {
       const text = wire(
         [wireLinks],

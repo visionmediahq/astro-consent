@@ -487,7 +487,7 @@ function inFooter(
     const justify = laidOutRow(deep.parent, rules) ? [] : blockJustify(chainTo(footer, deep.parent), rules)
     return { hit: { start: deep.link.start, end: deep.link.end }, text: linksTag(name, [here, ...justify]) }
   }
-  if (boxed(bar.mark)) return wrapMark(text, root, footer, bar, name, info, rules)
+  if (boxed(bar.mark, every)) return wrapMark(text, root, footer, bar, name, info, rules)
   return afterNode(text, bar.mark, tag)
 }
 
@@ -500,20 +500,51 @@ const WRAPPABLE = new Set(['p', 'span', 'small'])
 /**
  * A layout class: a container, padding, a max width or auto side margins (lhiab:
  * `site-container py-5`). With one, the © element is the bar's box, and links beside it would sit
- * outside the box, against the viewport edge.
+ * outside the box, against the viewport edge. A `<span>` or `<small>` with padding only is inline
+ * spacing (`<span class="px-2">© Firma</span> | …`): it needs a box class.
  */
-const LAYOUT_CLASS = /^(?:[\w-]+:)*(?:container|[\w-]+-container|container-[\w-]+|p[xytrblse]?-\S+|mx-auto|max-w-\S+)$/
+const BOX_CLASS = /^(?:[\w-]+:)*(?:container|[\w-]+-container|container-[\w-]+|mx-auto|max-w-\S+)$/
+const PADDING_CLASS = /^(?:[\w-]+:)*p[xytrblse]?-\S+$/
 
-/** The © element is phrasing whose own quoted classes include a layout class (#65, lhiab). */
-const boxed = (mark: AstroNode): boolean =>
-  mark.type === 'element' && WRAPPABLE.has(mark.name ?? '') && attr(mark, 'class')?.kind === 'quoted' && classesOf(mark).some((c) => LAYOUT_CLASS.test(c))
+const escapeRe = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
+/** A scoped rule (`@media` too) names `el` by its tag, one of its classes or its id, anywhere in a selector. */
+function namedBy(el: AstroNode, rules: CssRule[]): boolean {
+  const id = attr(el, 'id')
+  const names = [
+    `(?:^|[\\s>+~,(])${escapeRe(el.name ?? '')}`,
+    ...classesOf(el).map((c) => `\\.${escapeRe(c)}`),
+    ...(id?.kind === 'quoted' && id.value ? [`#${escapeRe(id.value)}`] : []),
+  ]
+  const re = new RegExp(`(?:${names.join('|')})(?![\\w-])`, 'i')
+  return rules.some((r) => re.test(r.selector))
+}
+
+/**
+ * The © element is phrasing whose own quoted classes include a layout class (#65, lhiab), and no
+ * scoped rule names it: moving its classes to a wrapper would lose `p.copy {…}` or `.bar > p {…}`.
+ */
+function boxed(mark: AstroNode, rules: CssRule[]): boolean {
+  if (mark.type !== 'element' || !WRAPPABLE.has(mark.name ?? '') || attr(mark, 'class')?.kind !== 'quoted') return false
+  const cls = classesOf(mark)
+  const layout = cls.some((c) => BOX_CLASS.test(c)) || (mark.name === 'p' && cls.some((c) => PADDING_CLASS.test(c)))
+  return layout && !namedBy(mark, rules)
+}
+
+/** White space is kept as written somewhere in `chain` (a whitespace-pre* class, an inline white-space: pre*), so a re-indent would show. */
+const keepsWhitespace = (chain: AstroNode[]): boolean =>
+  chain.some((el) => {
+    if (classesOf(el).some((c) => /(?:^|:)whitespace-pre(?:-wrap|-line)?$/.test(c))) return true
+    const style = attr(el, 'style')
+    return style?.kind === 'quoted' && declarations(style.value).some((d) => d.prop === 'white-space' && /^pre/i.test(d.value.trim()))
+  })
 
 /**
  * #65 (lhiab, hand fix b7a90fa): a `<div>` takes over the © element's classes and holds it and the
  * links, so the links sit in the same box. The links' classes are those of a © bar row with the
  * © element's classes as the row: nothing in a flex or grid box, else the block row's justify-*
  * and `mt-2`. Each line of the © element after the first moves one indent deeper, unless it holds
- * a template literal, whose text a re-indent would change.
+ * a template literal or keeps its white space (whitespace-pre*), where a re-indent would change the text.
  */
 function wrapMark(
   text: string,
@@ -538,7 +569,7 @@ function wrapMark(
   const eol = eolOf(text)
   const indent = indentAt(text, mark.start)
   const step = indent.includes('\t') ? '\t' : '  '
-  const body = bare.includes('`') ? bare : bare.replace(/\n(?=[^\r\n])/g, `\n${step}`)
+  const body = bare.includes('`') || keepsWhitespace(chainTo(footer, mark)) ? bare : bare.replace(/\n(?=[^\r\n])/g, `\n${step}`)
   return { hit, text: `${open}${eol}${indent}${step}${body}${eol}${indent}${step}${tag}${eol}${indent}</div>` }
 }
 
