@@ -1,0 +1,24 @@
+import { defineConfig, fontProviders } from 'astro/config'
+import node from '@astrojs/node'
+
+export default defineConfig({
+  output: 'server',
+  adapter: node({
+    mode: 'standalone',
+  }),
+
+  // Self-hosted so no request leaves for fonts.googleapis.com.
+  // Bebas Neue carries the display voice, Mulish the body — both inherited
+  // from the client's previous site.
+  fonts: [
+    {
+      name: 'Bebas Neue',
+      cssVariable: '--font-bebas',
+      provider: fontProviders.google(),
+      weights: [400],
+      styles: ['normal'],
+      subsets: ['latin'],
+      fallbacks: ['Impact', 'sans-serif'],
+    },
+  ],
+})

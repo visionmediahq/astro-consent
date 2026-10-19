@@ -336,6 +336,20 @@ npx tsx ci/rollout/run.ts help
   `src/data/privacy.json` from `report.services`; an existing `privacy.json` that lacks one of them
   is refused. Pool rows without `services` are re-detected, and `select` strata are
   `consent`/`notice`.
+- **Google Fonts (detect only, so far).** `detect` also writes `report.fonts`, separate from the
+  banner: it never changes `classification` or `reasons`, and `wire`, `verify` and `live` do not
+  act on it yet. `status` is `wire` for exactly one literal `fonts.googleapis.com/css2` URL loaded
+  only by `<link rel="stylesheet">`, `<link rel="preload" as="style">` (any attribute order, split
+  over lines, `media="print" onload`), a `<noscript>` holding only such links, a frontmatter
+  `const` used only as their `href`, or a CSS `@import`, plus preconnect/dns-prefetch links;
+  `locations` lists each element or statement with its offsets, `url` the URL. `csp` lists every
+  CSP that mentions the Google hosts (a `<meta http-equiv>`, a `_headers` line, a module's directive
+  strings). `self-hosted`: no Google reference but local font files, `@font-face`, `@fontsource` or
+  the Astro `fonts` config; `none`: neither. Everything else is `needs-human` with `reasons`: an
+  expression or env-built URL, several URLs, the css v1 or icon APIs, `text=`, any other mention
+  outside comments (a module, a `<script>`, a data file, `public/`, `.env*`), an Astro `fonts`
+  config, an existing `src/styles/fonts.css` or `public/fonts/`, a CSP whose `font-src` or
+  `style-src` (or `default-src`) lacks `'self'`, or a layout that does not import the Tailwind entry.
 - **Elfsight.** Recognised only as one loader `<script>` (`https://elfsightcdn.com/platform.js` or
   `https://static.elfsight.com/platform/platform.js`; other attributes only `async` and `is:inline`)
   plus one or more empty `<div class="elfsight-app-<uuid>">` (other attribute only

@@ -63,6 +63,48 @@ export interface FooterInfo {
   centred: boolean
 }
 
+/**
+ * How the site loads Google Fonts. `wire` means exactly one literal css2 URL, loaded only in the
+ * ways the tool recognises, so every location can be removed and the faces self-hosted.
+ * `self-hosted`: no Google Fonts reference, but local font files, @font-face, @fontsource or the
+ * Astro `fonts` config. `none`: neither. `needs-human`: anything else, with `reasons`.
+ */
+export type FontsStatus = 'none' | 'self-hosted' | 'wire' | 'needs-human'
+
+export interface FontLocation {
+  file: string
+  /**
+   * link: `<link rel="stylesheet">`; preload: `<link rel="preload" as="style">`; preconnect: also
+   * dns-prefetch; noscript: a whole `<noscript>` holding only such links; const: the frontmatter
+   * `const` statement whose string is used only as their href; import: a CSS `@import` statement.
+   */
+  kind: 'link' | 'preconnect' | 'preload' | 'noscript' | 'const' | 'import'
+  /** The element or statement, where wire splices. */
+  start: number
+  end: number
+}
+
+export interface FontCsp {
+  file: string
+  /** meta: a `<meta http-equiv="Content-Security-Policy">` element; headers: the CSP line of a `_headers` file; module: a CSP string literal in a .ts/.js module. */
+  kind: 'meta' | 'headers' | 'module'
+  start: number
+  end: number
+}
+
+export interface FontsInfo {
+  status: FontsStatus
+  /** The css2 URL to self-host (`&amp;` decoded); null unless status is `wire`. */
+  url: string | null
+  /** Every distinct Google Fonts stylesheet URL found, in file order, whatever the status. */
+  urls: string[]
+  locations: FontLocation[]
+  /** CSPs that mention fonts.googleapis.com or fonts.gstatic.com, whatever the status. */
+  csp: FontCsp[]
+  /** Why the site is `needs-human`; empty otherwise. */
+  reasons: string[]
+}
+
 export interface Report {
   site: string
   domains: string[]
@@ -82,6 +124,11 @@ export interface Report {
   /** Every service the site embeds, sorted: see `servicesOf`. */
   services: ServiceSlug[]
   widgets: WidgetInfo[]
+  /**
+   * Google Fonts, separate from the banner rollout: it never changes `classification` or
+   * `reasons`. Missing in reports stored before fonts detection; detect always sets it.
+   */
+  fonts?: FontsInfo
   classification: Classification
   reasons: string[]
 }
