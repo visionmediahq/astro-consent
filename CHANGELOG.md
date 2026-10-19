@@ -7,7 +7,7 @@
   64px wide on gron-kontor (#64).
 - The banner is `z-[99]` instead of `z-50`, so a fixed site bar at z-index 50–98 (a mobile call
   bar on hkc-fitness and aspokarlsson) no longer covers its buttons (#64). It stays below 100, so
-  astro-starter's focused skip link (`focus:z-[100]`, ahead of the banner in the DOM) is still on
+  client sites' focused skip link (`focus:z-[100]`, ahead of the banner in the DOM) is still on
   top when a tall banner reaches the top of a small phone.
 - The placeholder's "Öppna i …" link and the banner's "Läs mer" links are `text-base-content`, so
   a site's `a { color }` in `@layer base` can't lower their contrast (tfhydraulik, #64). This

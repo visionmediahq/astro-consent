@@ -56,7 +56,8 @@ test.describe('site styles', () => {
   })
 
   // hkc-fitness (#64): a fixed mobile call bar at z-index 60 covered the banner's buttons. The banner
-  // is z-99, not 100: starter sites' skip link is focus:z-[100] ahead of it and must stay on top.
+  // is z-99, not 100: client sites' skip link (aspomad, lhiab, dylta, ...) is focus:z-[100] ahead
+  // of it and must stay on top.
   test('a fixed site bar up to z-index 98 does not cover the banner', async ({ page, context }) => {
     await stub(context)
     await page.setViewportSize({ width: 360, height: 640 })
@@ -78,12 +79,12 @@ test.describe('site styles', () => {
     }
   })
 
-  test("a starter site's focused skip link at z-index 100 stays above the banner", async ({ page, context }) => {
+  test("a client site's focused skip link at z-index 100 stays above the banner", async ({ page, context }) => {
     await stub(context)
     await page.setViewportSize({ width: 360, height: 640 })
     await page.goto('/')
     await expect(banner(page)).toBeVisible()
-    // Ahead of the banner in the DOM, as in astro-starter's layout; placed where the banner is.
+    // Ahead of the banner in the DOM, as in client sites' Base.astro; placed where the banner is.
     const hit = await page.evaluate(() => {
       const skip = document.createElement('a')
       skip.href = '#main'
