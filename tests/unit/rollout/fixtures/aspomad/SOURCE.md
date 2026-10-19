@@ -36,7 +36,7 @@ Pages and components that hold a footer, an iframe or a map embed, reduced the s
 
 ## Replacements
 
-None. The contact details in these files are the business's own.
+- `src/data/kontakt.json` (before, expected and merged): the mobile number in `phone` replaced with `070-000 00 00`; it may be a person's own number. The other contact details are the business's own.
 
 ## Secret scan
 

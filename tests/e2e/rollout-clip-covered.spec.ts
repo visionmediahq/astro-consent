@@ -10,9 +10,9 @@ const banner = `<div data-consent-banner style="position:fixed;left:16px;right:1
   <div class="card-body"><p>Så mäter vi besök</p><button style="width:80px;height:44px">OK</button></div></div>`
 const PAGES: Record<string, string> = {
   // The bar comes after the banner with the same z-index, so it paints on top of the button.
-  '/covered': `${banner}<a style="position:fixed;left:0;right:0;bottom:0;z-index:50;height:56px;background:#ddd">0142-425 25</a>`,
+  '/covered': `${banner}<a style="position:fixed;left:0;right:0;bottom:0;z-index:50;height:56px;background:#ddd">000-000 00 00</a>`,
   // A bar that is there but lower than the banner.
-  '/below': `${banner}<a style="position:fixed;left:0;right:0;bottom:0;z-index:10;height:56px;background:#ddd">0142-425 25</a>`,
+  '/below': `${banner}<a style="position:fixed;left:0;right:0;bottom:0;z-index:10;height:56px;background:#ddd">000-000 00 00</a>`,
   // The button's own text in a span: hitting a child of the button is the button.
   '/child': banner.replace('>OK<', '><span>OK</span><'),
 }

@@ -10,6 +10,14 @@
 //   the min-height (`grid h-full min-h-[500px]`). The iframe's own inline min-height goes along too;
 // - a scoped rule that sets the iframe's height (`.box iframe { height: 100% }`) beats its height
 //   attribute and a layered Tailwind height, as in CSS (#43); an inline style still beats the rule;
+// - an iframe absolutely positioned to fill a `position: relative` parent (#45, knutssonsbil's
+//   padding-ratio box) becomes `absolute inset-0 grid` with `aspect="auto"`: the parent keeps sizing
+//   the box and nothing carries a min-height. An absolute iframe that does not fill, or whose parent is
+//   not relative, is a refusal, and so is a padding-ratio parent (`padding-bottom: 40%`) without one;
+// - an iframe that fills a parent holding only it and sized only by an aspect class (#65,
+//   champsoflogging: `aspect-video`) replaces that parent: `<ConsentEmbed … aspect="16 / 9">`, inside
+//   the parent's element with its other classes and attributes if it has any; the embed's own box
+//   grows with the placeholder where `grid h-full` inside the aspect box clipped it on phones;
 // - otherwise the classes go on the wrapper as they are and the component keeps its own aspect.
 // A grid wrapper keeps the iframe's other classes (Ruling 30); a scoped rule for one of them that sets
 // a `display` other than grid/none or a height that is not definite would beat `grid` or the height
@@ -246,7 +254,7 @@ function definiteHeight(parent: AstroNode, rules: CssRule[]): boolean {
   if (parent.type !== 'element') return false
   if ((classList(parent) ?? []).some((c) => FIXED_CLASS.test(c))) return true
   // #61 (champsoflogging): `aspect-video w-full` takes its height from its width. A variant is unsure.
-  if ((classList(parent) ?? []).some((c) => /^aspect-(?:video|square|\d+\/\d+|\[\d+(?:\.\d+)?\/\d+(?:\.\d+)?\])$/.test(c))) return true
+  if ((classList(parent) ?? []).some((c) => ASPECT_CLASS.test(c))) return true
   const isHeight = (d: CssDecl): boolean => d.prop === 'height' && sized(unimportant(d.value))
   const style = attr(parent, 'style')
   if (style?.kind === 'quoted' && declarations(style.value).some(isHeight)) return true
@@ -268,20 +276,29 @@ function ratioSized(parent: AstroNode, own: CssRule[], rules: CssRule[]): boolea
   if (!own.some((r) => !r.media && r.decls.some((d) => d.prop === 'aspect-ratio' && ratio(d.value)))) return false
   const style = attr(parent, 'style')
   if (style?.kind === 'quoted' && declarations(style.value).some((d) => d.prop === 'aspect-ratio' || d.prop === 'display')) return false
+  if ((classList(parent) ?? []).some(dropsBox)) return false
+  return namingRules(parent, rules).every((r) =>
+    r.decls.every((d) => (d.prop !== 'aspect-ratio' || ratio(d.value)) && (d.prop !== 'display' || BOX_DISPLAY.test(unimportant(d.value)))),
+  )
+}
+
+/** Scoped rules that name the element's class, element name or id anywhere in a selector. */
+function namingRules(el: AstroNode, rules: CssRule[]): CssRule[] {
   const esc = (x: string): string => x.replace(/[^\w-]/g, '\\$&')
-  const id = attr(parent, 'id')
+  const id = attr(el, 'id')
   const names = [
-    ...(classList(parent) ?? []).map((c) => new RegExp(`\\.${esc(c)}(?![\\w-])`)),
-    ...(parent.name ? [new RegExp(`(?:^|[\\s>+~,(])${esc(parent.name)}(?![\\w-])`, 'i')] : []),
+    ...(classList(el) ?? []).map((c) => new RegExp(`\\.${esc(c)}(?![\\w-])`)),
+    ...(el.name ? [new RegExp(`(?:^|[\\s>+~,(])${esc(el.name)}(?![\\w-])`, 'i')] : []),
     ...(id?.kind === 'quoted' ? [new RegExp(`#${esc(id.value.trim())}(?![\\w-])`)] : []),
   ]
-  // The utility after its variants, without Tailwind's important modifier (`!contents`, v4 `contents!`).
-  const utility = (c: string): string => c.slice(c.lastIndexOf(':') + 1).replace(/^!|!$/g, '')
-  const display = (c: string): boolean => /\[display:/i.test(c) || (DISPLAY_CLASS.test(utility(c)) && !BOX_DISPLAY.test(utility(c)))
-  if ((classList(parent) ?? []).some(display)) return false
-  const naming = rules.filter((r) => names.some((n) => n.test(r.selector)))
-  return naming.every((r) => r.decls.every((d) => (d.prop !== 'aspect-ratio' || ratio(d.value)) && (d.prop !== 'display' || BOX_DISPLAY.test(unimportant(d.value)))))
+  return rules.filter((r) => names.some((n) => n.test(r.selector)))
 }
+
+/** The utility after its variants, without Tailwind's important modifier (`!contents`, v4 `contents!`). */
+const utility = (c: string): string => c.slice(c.lastIndexOf(':') + 1).replace(/^!|!$/g, '')
+
+/** A display class (any variant, `!` included) that does not keep a block box. */
+const dropsBox = (c: string): boolean => /\[display:/i.test(c) || (DISPLAY_CLASS.test(utility(c)) && !BOX_DISPLAY.test(utility(c)))
 
 /** Tailwind's display utilities, and the display values that keep a block box with an aspect-ratio. */
 const DISPLAY_CLASS = /^(?:block|inline|inline-block|flex|inline-flex|grid|inline-grid|flow-root|contents|hidden|list-item|table(?:-[a-z-]+)?|inline-table)$/
@@ -294,6 +311,17 @@ function ratio(value: string): boolean {
 }
 
 const RATIO = /^(\d+(?:\.\d+)?)(?:\s*\/\s*(\d+(?:\.\d+)?))?$/
+
+/** Tailwind's aspect classes without a variant: `aspect-video`, `aspect-square`, `aspect-4/3`, `aspect-[4/3]`. */
+const ASPECT_CLASS = /^aspect-(?:video|square|\d+\/\d+|\[\d+(?:\.\d+)?\/\d+(?:\.\d+)?\])$/
+
+/** The ratio an aspect class sets, as ConsentEmbed's `aspect` takes it: `aspect-video` → `16 / 9`. */
+function aspectOfClass(c: string): string {
+  if (c === 'aspect-video') return '16 / 9'
+  if (c === 'aspect-square') return '1 / 1'
+  const m = /(\d+(?:\.\d+)?)\/(\d+(?:\.\d+)?)/.exec(c)!
+  return `${m[1]} / ${m[2]}`
+}
 
 const MIN_H_CLASS = /^(?:[\w-]+:)*min-h-(?:\d+(?:\.\d+)?|\[[^\]\s]+\]|screen|svh|dvh|lvh)$/
 
@@ -345,6 +373,26 @@ function ancestorsOf(root: AstroNode, node: AstroNode): AstroNode[] {
 }
 
 /**
+ * Whether one selector (no commas) is an `iframe` rule that applies to this map (see
+ * scopedIframeHeight); 'unsure' for an iframe rule wire does not follow.
+ */
+function iframeSelector(part: string, ancestors: AstroNode[]): boolean | 'unsure' {
+  const has = (el: AstroNode, type: string | undefined, classes: string[]): boolean =>
+    el.type === 'element' && (type === undefined || el.name === type) && classes.every((c) => (classList(el) ?? []).includes(c))
+  const m = /^(?:(.*?)(\s*>\s*|\s+))?iframe$/s.exec(part.trim())
+  // `:global(iframe)`, `iframe[src]`, `iframe:hover`: an iframe rule wire does not follow.
+  if (!m) return IFRAME_WORD.test(part) ? 'unsure' : false
+  const ancestor = (m[1] ?? '').trim()
+  if (ancestor === '') return true
+  const last = /([^\s>+~]+)$/.exec(ancestor)?.[1] ?? ''
+  const compound = /^([a-zA-Z][\w-]*)?((?:\.[\w-]+)*)$/.exec(last)
+  if (!compound || /[+~]/.test(ancestor)) return 'unsure'
+  const classes = (compound[2]!.match(/\.[\w-]+/g) ?? []).map((c) => c.slice(1))
+  const scope = (m[2] ?? '').trim() === '>' ? ancestors.slice(-1) : ancestors
+  return scope.some((el) => has(el, compound[1], classes))
+}
+
+/**
  * The height a scoped rule gives the iframe (#43): rules whose last compound is a bare `iframe`, with
  * no ancestor, or with one whose last compound is classes (and an optional element name) found on
  * the parent (`>`) or on an ancestor in this file: Astro scopes every compound to the component.
@@ -354,30 +402,12 @@ function ancestorsOf(root: AstroNode, node: AstroNode): AstroNode[] {
  */
 function scopedIframeHeight(ancestors: AstroNode[], rules: CssRule[]): string | undefined | Error {
   const values: string[] = []
-  const has = (el: AstroNode, type: string | undefined, classes: string[]): boolean =>
-    el.type === 'element' && (type === undefined || el.name === type) && classes.every((c) => (classList(el) ?? []).includes(c))
   for (const rule of rules) {
     const height = rule.media ? undefined : rule.decls.findLast((d) => d.prop === 'height')
     if (!height) continue
     for (const part of splitTop(rule.selector, /,/)) {
-      const m = /^(?:(.*?)(\s*>\s*|\s+))?iframe$/s.exec(part.trim())
-      if (!m) {
-        // `:global(iframe)`, `iframe[src]`, `iframe:hover`: an iframe rule wire does not follow.
-        if (IFRAME_WORD.test(part)) return new Error(`scoped CSS '${part.trim()}' sets an iframe height and wire cannot tell if it is this map's`)
-        continue
-      }
-      const ancestor = (m[1] ?? '').trim()
-      let applies = ancestor === ''
-      if (!applies) {
-        const last = /([^\s>+~]+)$/.exec(ancestor)?.[1] ?? ''
-        const compound = /^([a-zA-Z][\w-]*)?((?:\.[\w-]+)*)$/.exec(last)
-        if (!compound || /[+~]/.test(ancestor)) {
-          return new Error(`scoped CSS '${part.trim()}' sets an iframe height and wire cannot tell if it is this map's`)
-        }
-        const classes = (compound[2]!.match(/\.[\w-]+/g) ?? []).map((c) => c.slice(1))
-        const scope = (m[2] ?? '').trim() === '>' ? ancestors.slice(-1) : ancestors
-        applies = scope.some((el) => has(el, compound[1], classes))
-      }
+      const applies = iframeSelector(part, ancestors)
+      if (applies === 'unsure') return new Error(`scoped CSS '${part.trim()}' sets an iframe height and wire cannot tell if it is this map's`)
       if (applies) values.push(unimportant(height.value))
     }
   }
@@ -391,11 +421,139 @@ interface Box {
   aspect: boolean
   /** An inline `aspect-ratio` to carry over as `aspect="…"` when nothing fixes the height (#61). */
   ratio?: string
+  /** #65: the aspect-class parent the embed replaces; `classes` are what stays on its element. */
+  replace?: AstroNode
+}
+
+const POSITION_CLASS = /^(?:static|relative|absolute|fixed|sticky)$/
+const PLACED = new Set(['position', 'inset', 'top', 'left', 'width', 'height'])
+
+/**
+ * #45: where the iframe sits, as position, inset, top, left, width and height, from (weakest first)
+ * its width and height attributes, its utility classes, the scoped rules outside at-rules that apply
+ * to it (an `iframe` rule, as scopedIframeHeight reads them, or one for exactly one of its classes)
+ * and its inline style. An Error when a position class has a variant, or a rule wire cannot follow
+ * or one inside an at-rule sets a position: wire cannot tell where the map sits.
+ */
+function placement(node: AstroNode, ancestors: AstroNode[], rules: CssRule[], classes: string[]): Map<string, string> | Error {
+  const out = new Map<string, string>()
+  for (const name of ['width', 'height']) {
+    const a = attr(node, name)
+    if (a?.kind === 'quoted') out.set(name, a.value.trim())
+  }
+  for (const c of classes) {
+    if (c.includes(':') && POSITION_CLASS.test(utility(c))) return new Error(`the map iframe has a position class with a variant (${c})`)
+    if (POSITION_CLASS.test(c)) out.set('position', c)
+    else if (c === 'inset-0') out.set('inset', '0')
+    else if (c === 'top-0' || c === 'left-0') out.set(c.slice(0, -2), '0')
+    else if (/^[wh]-/.test(c)) out.set(c[0] === 'w' ? 'width' : 'height', c === 'w-full' || c === 'h-full' ? '100%' : c)
+  }
+  const own = (classList(node) ?? []).map((c) => `.${c}`)
+  for (const rule of rules) {
+    const parts = splitTop(rule.selector, /,/).map((part) => (own.includes(part.trim()) ? true : iframeSelector(part, ancestors)))
+    const position = rule.decls.some((d) => d.prop === 'position')
+    if (position && (parts.includes('unsure') || (rule.media && parts.includes(true)))) {
+      return new Error(`scoped CSS '${rule.selector}' sets an iframe position and wire cannot tell if it applies to this map`)
+    }
+    if (rule.media || !parts.includes(true)) continue
+    for (const d of rule.decls) if (PLACED.has(d.prop)) out.set(d.prop, unimportant(d.value))
+  }
+  const style = attr(node, 'style')
+  if (style?.kind === 'quoted') for (const d of declarations(style.value)) if (PLACED.has(d.prop)) out.set(d.prop, unimportant(d.value))
+  return out
+}
+
+/** The parent is `position: relative`: its inline style, else its own scoped rules, else a class. Unsure is no. */
+function relativeParent(parent: AstroNode, rules: CssRule[]): boolean {
+  if (parent.type !== 'element') return false
+  const style = attr(parent, 'style')
+  const inline = style?.kind === 'quoted' ? declarations(style.value).findLast((d) => d.prop === 'position') : undefined
+  if (inline) return unimportant(inline.value) === 'relative'
+  const own = ownRules(parent, rules).filter((r) => r.decls.some((d) => d.prop === 'position'))
+  if (own.some((r) => r.media)) return false
+  const ruled = own.flatMap((r) => r.decls.filter((d) => d.prop === 'position')).at(-1)
+  if (ruled) return unimportant(ruled.value) === 'relative'
+  const classes = (classList(parent) ?? []).filter((c) => POSITION_CLASS.test(utility(c)))
+  return classes.length > 0 && classes.every((c) => c === 'relative')
+}
+
+/** A padding-ratio parent (#45): a percentage padding-top or -bottom, as a class, inline or in its scoped rules. */
+function paddingRatio(parent: AstroNode, rules: CssRule[]): string | undefined {
+  if (parent.type !== 'element') return undefined
+  const cls = (classList(parent) ?? []).find((c) => /^p[tb]-\[\d+(?:\.\d+)?%\]$/.test(utility(c)))
+  if (cls) return cls
+  const pct = (d: CssDecl): boolean => (d.prop === 'padding-top' || d.prop === 'padding-bottom') && /%$/.test(unimportant(d.value))
+  const style = attr(parent, 'style')
+  const decl = [...(style?.kind === 'quoted' ? declarations(style.value) : []), ...ownRules(parent, rules).flatMap((r) => r.decls)].find(pct)
+  return decl ? `${decl.prop}: ${unimportant(decl.value)}` : undefined
+}
+
+const ZERO = /^0(?:\.0+)?(?:px|rem|em|%)?$/
+/** The iframe classes a box replacing the iframe drops: its position, offsets and size. */
+const PLACEMENT_CLASS = /^(?:static|relative|absolute|inset-0|inset-[xy]-0|top-0|left-0|right-0|bottom-0|(?:min-|max-)?[wh]-\S+|size-\S+)$/
+
+/** #45: an absolutely positioned iframe that fills its relative parent, or why it is refused. */
+function absoluteBox(node: AstroNode, parent: AstroNode, rules: CssRule[], classes: string[], placed: Map<string, string>, text: string): Box | Error {
+  const zero = (v: string | undefined): boolean => v !== undefined && ZERO.test(v)
+  const inset = placed.get('inset')
+  const offsets = (inset !== undefined && inset.split(/\s+/).every(zero)) || (zero(placed.get('top')) && zero(placed.get('left')))
+  // A replaced element keeps its own 300×150 under `inset: 0` unless its width and height are 100%.
+  if (!offsets || placed.get('width') !== '100%' || placed.get('height') !== '100%') {
+    return new Error('the map iframe is absolutely positioned but does not fill its parent')
+  }
+  if (!relativeParent(parent, rules)) return new Error('the map iframe fills its parent absolutely, but the parent is not position: relative')
+  // Review of #67: a background map under other content. The wrapper would sit under that content
+  // (Visa unclickable), and a box that takes its height from the content alone has none of its own.
+  if (!onlyChild(parent, node, text)) return new Error('the map iframe fills its parent absolutely, but the parent holds more than the map')
+  const limit = classes.find((c) => MIN_MAX_CLASS.test(utility(c)))
+  if (limit) return new Error(`the map iframe has a min/max size class (${limit}) that the absolute wrapper does not carry`)
+  return aspectParentBox(node, parent, rules, classes, text) ?? { classes: ['absolute', 'inset-0', 'grid', ...classes.filter((c) => !PLACEMENT_CLASS.test(c))], aspect: true }
+}
+
+const MIN_MAX_CLASS = /^(?:min|max)-[wh]-/
+
+/** `node` is the parent's only content: whitespace and comments aside. */
+function onlyChild(parent: AstroNode, node: AstroNode, text: string): boolean {
+  return parent.children.every((c) => c === node || c.type === 'comment' || (c.type === 'text' && text.slice(c.start, c.end).trim() === ''))
+}
+
+/** Review of #67: a flex or grid parent (any variant, `!` included) would shrink the embed, whose root has no width. */
+const LAYOUT_CLASS = /^(?:flex|inline-flex|grid|inline-grid|place-.+|items-.+|justify-.+)$/
+
+const SIZE_PROP = /^(?:height|min-height|max-height|block-size|min-block-size|max-block-size|aspect-ratio|display)$/
+/** What an iframe replaced with its aspect parent may carry: the embed's own iframe does the same. */
+const DROPPED_IFRAME_CLASS = /^(?:w-full|h-full|border-0|block|absolute|inset-0|top-0|left-0)$/
+const DROPPED_IFRAME_STYLE = new Set(['position', 'inset', 'top', 'left', 'width', 'height', 'border', 'border-width', 'border-style', 'display', 'filter'])
+
+/**
+ * #65 (champsoflogging): an iframe that fills a parent holding only it and sized only by an aspect
+ * class, with nothing on the iframe that the embed would lose: the embed replaces the parent with
+ * the class's ratio. Null when the parent has anything else that sizes it (another aspect, height,
+ * min/max-height or display class, an inline or scoped rule for it) or the iframe has a class other
+ * than its size, position, border and filter utilities, or another inline style.
+ */
+function aspectParentBox(node: AstroNode, parent: AstroNode, rules: CssRule[], classes: string[], text: string): Box | null {
+  if (parent.type !== 'element' || parent.name === 'span') return null
+  if (!onlyChild(parent, node, text)) return null
+  const written = classList(parent)
+  const aspects = (written ?? []).filter((c) => ASPECT_CLASS.test(c))
+  if (written === null || aspects.length !== 1) return null
+  const others = written.filter((c) => c !== aspects[0])
+  const sizing = (c: string): boolean =>
+    /^(?:aspect|h|min-h|max-h|size)-/.test(utility(c)) || LAYOUT_CLASS.test(utility(c)) || /\[(?:display|height|min-height|max-height|aspect-ratio):/i.test(c) || dropsBox(c)
+  if (others.some(sizing)) return null
+  const style = attr(parent, 'style')
+  if (style && (style.kind !== 'quoted' || declarations(style.value).some((d) => SIZE_PROP.test(d.prop)))) return null
+  if (namingRules(parent, rules).some((r) => r.decls.some((d) => SIZE_PROP.test(d.prop)))) return null
+  if (classes.some((c) => !DROPPED_IFRAME_CLASS.test(c) && !c.startsWith('[&_iframe]:'))) return null
+  const own = attr(node, 'style')
+  if (own && (own.kind !== 'quoted' || declarations(own.value).some((d) => !DROPPED_IFRAME_STYLE.has(d.prop)))) return null
+  return { classes: [...others, ...classes.filter((c) => c.startsWith('[&_iframe]:'))], aspect: false, ratio: aspectOfClass(aspects[0]!), replace: parent }
 }
 
 /** The wrapper's classes and whether the embed takes `aspect="auto"`, or the reason to refuse. */
-function boxOf(node: AstroNode, ancestors: AstroNode[], rules: CssRule[]): Box | Error {
-  const box = sizedBox(node, ancestors, rules)
+function boxOf(node: AstroNode, ancestors: AstroNode[], rules: CssRule[], text: string): Box | Error {
+  const box = sizedBox(node, ancestors, rules, text)
   if (box instanceof Error || !box.aspect) return box
   return keptClassConflict(box, rules) ?? box
 }
@@ -411,7 +569,8 @@ function boxOf(node: AstroNode, ancestors: AstroNode[], rules: CssRule[]): Box |
  * to verify step 4, which fails a loaded iframe under 100px.
  */
 function keptClassConflict(box: Box, rules: CssRule[]): Error | null {
-  const [, height, ...kept] = box.classes
+  // `absolute inset-0 grid` (#45) fills a box of definite height, as h-full does.
+  const [height, kept] = box.classes[0] === 'absolute' ? ['h-full', box.classes.slice(3)] : [box.classes[1], box.classes.slice(2)]
   const own = kept.filter((c) => /^[\w-]+$/.test(c))
   for (const rule of rules) {
     for (const sel of splitTop(rule.selector, /,/)) {
@@ -435,13 +594,18 @@ function keptClassConflict(box: Box, rules: CssRule[]): Error | null {
   return null
 }
 
-function sizedBox(node: AstroNode, ancestors: AstroNode[], rules: CssRule[]): Box | Error {
+function sizedBox(node: AstroNode, ancestors: AstroNode[], rules: CssRule[], text: string): Box | Error {
   const parent = ancestors.at(-1)!
   const written = classList(node)
   if (written === null) return new Error('iframe class is an expression')
   const varied = written.find((c) => c.includes(':') && FILTER_UTILITY.test(c.slice(c.lastIndexOf(':') + 1)))
   if (varied) return new Error(`iframe has a filter class with a variant (${varied})`)
   const classes = written.map((c) => (FILTER_UTILITY.test(c) ? `[&_iframe]:${c}` : c))
+  const placed = placement(node, ancestors, rules, classes)
+  if (placed instanceof Error) return placed
+  if (placed.get('position') === 'absolute') return absoluteBox(node, parent, rules, classes, placed, text)
+  const padded = paddingRatio(parent, rules)
+  if (padded) return new Error(`the map's parent is a padding-ratio box (${padded}) and the iframe does not fill it absolutely`)
   // Ruling 31: an inline style height beats the height attribute, as in CSS.
   const style = attr(node, 'style')
   const inlineHeight = style?.kind === 'quoted' ? declarations(style.value).findLast((d) => d.prop === 'height')?.value.trim() : undefined
@@ -467,6 +631,8 @@ function sizedBox(node: AstroNode, ancestors: AstroNode[], rules: CssRule[]): Bo
     inlineHeight === '100%' ||
     (inlineHeight === undefined && height?.kind === 'quoted' && height.value.trim() === '100%')
   if (fills) {
+    const replaced = aspectParentBox(node, parent, rules, classes, text)
+    if (replaced) return replaced
     const definite = definiteHeight(parent, rules)
     const min = minHeightOf(node, parent, rules, definite)
     if (min instanceof Error) return min
@@ -494,6 +660,20 @@ function ruleCopy(text: string, rule: CssRule, selector: string, decls: CssDecl[
   if (!/\n/.test(rule.body)) return `${eol}${indent}${selector} { ${decls.map((d) => d.source).join(' ')} }`
   const lines = decls.map((d) => `${indentAt(text, d.start)}${d.source}`)
   return `${eol}${eol}${indent}${selector} {${eol}${lines.join(eol)}${eol}${indent}}`
+}
+
+/**
+ * #65: the aspect parent `p` as written with `embed` in place of `iframe` and `classes` as its class
+ * (the attribute dropped when empty); just the embed when a bare div with no attributes would be left
+ * and no filter rule needs a div around it.
+ */
+function replacedParent(text: string, p: AstroNode, iframe: AstroNode, classes: string[], embed: string, needsDiv: boolean): string {
+  const cls = p.attributes.find((a) => a.name === 'class')!
+  if (classes.length === 0 && p.attributes.length === 1 && p.name === 'div' && !needsDiv) return embed
+  const before = text.slice(p.start, cls.start)
+  const after = text.slice(cls.end, iframe.start)
+  const head = classes.length > 0 ? `${before}class="${classes.join(' ')}"${after}` : `${before.trimEnd()}${after}`
+  return `${head}${embed}${text.slice(iframe.end, p.end)}`
 }
 
 function wireFile(planner: Planner, file: string, frames: IframeInfo[]): void {
@@ -559,7 +739,7 @@ function wireFile(planner: Planner, file: string, frames: IframeInfo[]): void {
         planner.refuse(file, target, 'iframe has no title')
         continue
       }
-      const box = boxOf(hit.node, ancestorsOf(tree.root, hit.node), rules)
+      const box = boxOf(hit.node, ancestorsOf(tree.root, hit.node), rules, text)
       if (box instanceof Error) {
         planner.refuse(file, target, box.message)
         continue
@@ -567,6 +747,12 @@ function wireFile(planner: Planner, file: string, frames: IframeInfo[]): void {
       const id = attrSource(text, hit.node, 'id')
       const props = [`service="${info.service}"`, attrSource(text, hit.node, 'src')!, title, ...(box.aspect ? ['aspect="auto"'] : box.ratio ? [`aspect="${box.ratio}"`] : []), ...(id ? [id] : [])]
       const embed = `<${name} ${props.join(' ')} />`
+      if (box.replace) {
+        const p = box.replace
+        const out = replacedParent(text, p, hit.node, box.classes, needsDiv && p.name !== 'div' ? `<div>${embed}</div>` : embed, needsDiv)
+        spliceTarget(planner, target, file, () => false, () => [{ hit: { start: p.start, end: p.end }, text: out }], 'replace')
+        continue
+      }
       const wrapped = box.classes.length > 0 ? `<div class="${box.classes.join(' ')}">${embed}</div>` : needsDiv ? `<div>${embed}</div>` : embed
       spliceTarget(planner, target, file, () => false, () => at.map((a) => ({ hit: { start: a.node.start, end: a.node.end }, text: wrapped })), 'replace')
     } else {

@@ -14,7 +14,13 @@ import type { Report, VerifyResult } from './types'
 import { ORIGIN, verify as realVerify } from './verify'
 import { BRANCH } from './wire/index'
 
-export const TITLE = 'Samtyckesbanner (astro-consent 1.0)'
+/**
+ * No version (#51): the range wire installs moves with each release (1.0 named a ^1.1.2 install),
+ * and the PR's package.json diff shows it exactly.
+ */
+export const TITLE = 'Samtyckesbanner (astro-consent)'
+/** Titles this tool gave its PRs before; an open PR with one of them is still its own. */
+const OWN_TITLES = new Set([TITLE, 'Samtyckesbanner (astro-consent 1.0)'])
 export const TEMPLATE_PATH = join(import.meta.dirname, 'pr-body.sv.md')
 
 export interface BodyInput {
@@ -122,8 +128,8 @@ const readJson = <T>(path: string, what: string): T => {
 
 /**
  * Opens the PR for the site in `dir` (on consent-banner, verified). Rebases onto origin/main first
- * if it moved and verifies again in full. An open PR from consent-banner titled TITLE is returned as
- * it is; one with another title is someone else's and is refused.
+ * if it moved and verifies again in full. An open PR from consent-banner titled TITLE (or an earlier
+ * title of this tool's) is returned as it is; one with another title is someone else's and is refused.
  */
 export async function openPr(dir: string, opts: PrOptions): Promise<PrResult> {
   const exec = opts.exec ?? realExec
@@ -172,7 +178,7 @@ export async function openPr(dir: string, opts: PrOptions): Promise<PrResult> {
   const existing = await exec('gh', ['pr', 'list', '-R', repo, '--head', BRANCH, '--state', 'open', '--json', 'url,title'], root)
   if (existing.code !== 0) throw new Error(`gh pr list failed:\n${tail(existing.out)}`)
   const open = (JSON.parse(existing.out || '[]') as { url: string; title: string }[])[0]
-  if (open && open.title !== TITLE) {
+  if (open && !OWN_TITLES.has(open.title)) {
     throw new Error(`an open PR from ${BRANCH} is not this tool's: ${open.url} "${open.title}" (expected "${TITLE}"); resolve it by hand`)
   }
   if (open) return { url: open.url, files }

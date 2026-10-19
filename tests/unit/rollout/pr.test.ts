@@ -156,7 +156,8 @@ describe('openPr', () => {
     expect(r.url).toBe('https://github.com/visionmediahq/kund/pull/9')
     const create = f.calls.find((c) => c.startsWith('gh pr create'))!
     expect(create).toContain(`-t ${TITLE}`)
-    expect(TITLE).toBe('Samtyckesbanner (astro-consent 1.0)')
+    // No version (#51): the range wire installs changes with each release, the diff shows it.
+    expect(TITLE).toBe('Samtyckesbanner (astro-consent)')
     expect(create).toContain('-R visionmediahq/kund')
     expect(create).toContain('-H consent-banner')
     expect(create).toContain('-B main')
@@ -178,6 +179,15 @@ describe('openPr', () => {
 
   test('an open PR from consent-banner is returned instead of a new one', async () => {
     const f = fake({ 'gh pr list': { code: 0, out: JSON.stringify([{ url: 'https://github.com/visionmediahq/kund/pull/5', title: TITLE }]) } })
+    const r = await openPr(siteDir(), opts(f))
+    expect(r.url).toBe('https://github.com/visionmediahq/kund/pull/5')
+    expect(f.calls.some((c) => c.startsWith('gh pr create'))).toBe(false)
+  })
+
+  test('an open PR with the title the tool used before #51 is still ours: returned, nothing created', async () => {
+    const f = fake({
+      'gh pr list': { code: 0, out: JSON.stringify([{ url: 'https://github.com/visionmediahq/kund/pull/5', title: 'Samtyckesbanner (astro-consent 1.0)' }]) },
+    })
     const r = await openPr(siteDir(), opts(f))
     expect(r.url).toBe('https://github.com/visionmediahq/kund/pull/5')
     expect(f.calls.some((c) => c.startsWith('gh pr create'))).toBe(false)
