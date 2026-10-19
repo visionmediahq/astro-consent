@@ -340,3 +340,61 @@ describe('detect: fonts is a separate field', () => {
     expect(broken.reasons).toEqual(r.reasons)
   })
 })
+
+// Probes from the review of #74: none of the first set may come out `wire`; the second set is
+// wireable as it stands.
+describe('detectFonts: review probes', () => {
+  const U = 'https://fonts.googleapis.com/css2?family=Oswald:wght@400;700&display=swap'
+  const L = `<link rel="stylesheet" href="${U}" />`
+  const pg = (head: string, fm = "import '../styles/global.css'", body = '<slot />'): string =>
+    `---\n${fm}\n---\n<html><head>${head}</head><body>${body}</body></html>\n`
+  const base = (head = L, extra: Record<string, string> = {}, fm?: string, body?: string): SiteFiles =>
+    withFiles(null, { 'src/layouts/Base.astro': pg(head, fm, body), 'src/styles/global.css': TW, ...extra })
+  const css = (text: string, head = ''): SiteFiles => withFiles(null, { 'src/layouts/Base.astro': pg(head), 'src/styles/global.css': text })
+  const pkg = (dep: string): string => JSON.stringify({ dependencies: { astro: '^6.1.6', [dep]: '^1.0.0' } })
+
+  test.each<[string, SiteFiles, string]>([
+    ['a module string with a directive and a <link>', base(L, { 'src/lib/head.ts': `export const h = "font-src 'self'; <link rel=stylesheet href=${U}>"` }), 'src/lib/head.ts'],
+    ['a module template with a CSP meta and a <link>', base(L, { 'src/middleware.ts': "export const html = `<meta content=\"default-src 'self'; style-src 'self' https://fonts.googleapis.com\"><link rel=stylesheet href=\"" + U + "\">`" }), 'src/middleware.ts'],
+    ['a .md file outside src/', base(L, { 'content/blog/a.md': `<link rel="stylesheet" href="${U}">` }), 'content/blog/a.md'],
+    ['a module outside src/', base(L, { 'integrations/fonts.ts': `export default { hooks: { 'astro:config:setup': ({ injectScript }) => injectScript('head-inline', "document.head.insertAdjacentHTML('beforeend','<link rel=stylesheet href=${U}>')") } }` }), 'integrations/fonts.ts'],
+    ['an .astro file outside src/', base(L, { 'lib/Head.astro': `${L}\n` }), 'lib/Head.astro'],
+    ['the Web Font Loader script', base(L, {}, undefined, '<script is:inline src="https://ajax.googleapis.com/ajax/libs/webfont/1.6.26/webfont.js"></script>'), 'Web Font Loader'],
+    ['WebFont.load with no host', base(L, { 'src/scripts/fonts.ts': "WebFont.load({ google: { families: ['Oswald'] } })\n" }), 'WebFont.load'],
+    ['a webfontloader dependency', base(L, { 'package.json': pkg('webfontloader') }), 'webfontloader'],
+    ['an unplugin-fonts dependency', base('', { 'package.json': pkg('unplugin-fonts') }), 'unplugin-fonts'],
+    ['an astro-font dependency', base(L, { 'package.json': pkg('astro-font') }), 'astro-font'],
+    ['an astro-google-fonts-optimizer dependency', base(L, { 'package.json': pkg('astro-google-fonts-optimizer') }), 'astro-google-fonts-optimizer'],
+    ['@import text inside a CSS string', css(`${TW}.a::before { content: "@import url(${U});" }\n`), 'outside'],
+    ['@import inside @media braces', css(`${TW}@media print { @import url(${U}); }\n`), 'outside'],
+    ['the href const also spread', base('<link rel="stylesheet" href={f} /><div {...f}></div>', {}, `import '../styles/global.css'\nconst f = '${U}'`), 'const f'],
+    ['an HTML file named .ico (lannabilcenter)', base(L, { 'public/favicon.ico': `<!doctype html><link rel="stylesheet" href="${U}">\n` }), 'public/favicon.ico'],
+    ["a second CSP string whose font-src lacks 'self'", base(L, { 'src/middleware.ts': `export const A = "font-src 'self' https://fonts.gstatic.com"\nexport const B = "font-src https://fonts.gstatic.com"\n` }), 'font-src'],
+    ['a CSP meta inside an expression', base(`{csp && <meta http-equiv="Content-Security-Policy" content="default-src 'self'; font-src 'self' https://fonts.gstatic.com" />}${L}`, {}, "import '../styles/global.css'\nconst csp = true"), 'expression'],
+    ['a <style> in a component', base(L, { 'src/components/X.astro': `<style is:global>@import url('${U}');</style>` }), 'src/components/X.astro'],
+    ['a .mdx page', base(L, { 'src/content/a.mdx': `<link rel="stylesheet" href="${U}" />` }), 'src/content/a.mdx'],
+    ['a vite plugin in astro.config', base(L, { 'astro.config.mjs': `export default { vite: { plugins: [{ transformIndexHtml: () => '<link href="${U}">' }] } }` }), 'astro.config.mjs'],
+    ['set:html', base(L, {}, undefined, `<Fragment set:html={'<link rel="stylesheet" href="${U}">'} />`), 'expression'],
+    ['a <link> in a page slotted into the layout without its own CSS import', base(L, { 'src/pages/i.astro': `---\nimport B from '../layouts/Base.astro'\n---\n<B>${L}</B>` }), 'does not import'],
+    ['is:inline on the link', base(`<link is:inline rel="stylesheet" href="${U}" />`), 'is:inline'],
+    ['an upper-case <LINK> (a component)', base(`<LINK rel="stylesheet" href="${U}" />`), 'outside'],
+    ['a let href', base('<link rel="stylesheet" href={f} />', {}, `import '../styles/global.css'\nlet f = '${U}'`), 'outside'],
+    ['the const in define:vars', base('<link rel="stylesheet" href={f} /><script define:vars={{ f }}>console.log(f)</script>', {}, `import '../styles/global.css'\nconst f = '${U}'`), 'const f'],
+    ['an exported const', base('<link rel="stylesheet" href={f} />', {}, `import '../styles/global.css'\nexport const f = '${U}'`), 'const f'],
+    ['a Link header in _headers', base(L, { _headers: `/*\n  Link: <${U}>; rel=preload; as=style\n` }), '_headers'],
+    ['is:raw content', base(L, {}, undefined, `<div is:raw><link rel="stylesheet" href="${U}"></div>`), 'outside'],
+    ['a JS comment in a template expression', base(L, {}, undefined, `{/* ${U} */}`), 'outside'],
+    ['a url() to fonts.gstatic.com in @font-face', css(`${TW}@font-face{font-family:X;src:url(https://fonts.gstatic.com/s/x.woff2)}\n`, L), 'outside'],
+  ])('%s is needs-human', (_name, files, fragment) => needsHuman(fonts(files), fragment))
+
+  test.each<[string, SiteFiles]>([
+    ['the layout and a component that both import the entry', base(L, { 'src/components/Head.astro': `---\nimport '../styles/global.css'\n---\n${L}` })],
+    ['void links without a slash', base(`<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>\n<link rel="stylesheet" href="${U}">\n<meta name="x" content="y">`)],
+    ['the same @import twice', css(`@import url(${U});@import url(${U});\n${TW}`)],
+    ['a scout/ folder (site-factory metadata, not served)', base(L, { 'scout/brief.json': `{ "fonts": "${U}" }\n` })],
+  ])('%s is wire', (_name, files) => {
+    const r = fonts(files)
+    expect(r.reasons).toEqual([])
+    expect(r.status).toBe('wire')
+  })
+})

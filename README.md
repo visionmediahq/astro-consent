@@ -347,9 +347,15 @@ npx tsx ci/rollout/run.ts help
   strings). `self-hosted`: no Google reference but local font files, `@font-face`, `@fontsource` or
   the Astro `fonts` config; `none`: neither. Everything else is `needs-human` with `reasons`: an
   expression or env-built URL, several URLs, the css v1 or icon APIs, `text=`, any other mention
-  outside comments (a module, a `<script>`, a data file, `public/`, `.env*`), an Astro `fonts`
-  config, an existing `src/styles/fonts.css` or `public/fonts/`, a CSP whose `font-src` or
-  `style-src` (or `default-src`) lacks `'self'`, or a layout that does not import the Tailwind entry.
+  outside comments (a module string that is not a bare CSP source token, a `<script>`, a data
+  file, `public/`, `.env*`, and `.astro`/`.md`/`.mdx`/CSS/module files anywhere outside
+  `node_modules`, `dist`, `.astro`, `.rollout` and `scout/`), the Web Font Loader (its script or
+  `WebFont.load`) or a font-loading dependency (`webfontloader`, `unplugin-fonts`, `astro-font`,
+  `*google-fonts*`), an Astro `fonts` config, an existing `src/styles/fonts.css` or `public/fonts/`,
+  a CSP whose `font-src` or `style-src` (or `default-src`) lacks `'self'`, or a layout that does not
+  import the Tailwind entry. Binary files are skipped by a NUL byte, not by name. Not read: CSPs in
+  `netlify.toml`, `vercel.json` or nginx config, HTML-entity-encoded hosts, and a `<link>` inside a
+  `<template>` is treated like any other.
 - **Elfsight.** Recognised only as one loader `<script>` (`https://elfsightcdn.com/platform.js` or
   `https://static.elfsight.com/platform/platform.js`; other attributes only `async` and `is:inline`)
   plus one or more empty `<div class="elfsight-app-<uuid>">` (other attribute only

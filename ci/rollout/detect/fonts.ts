@@ -18,8 +18,19 @@ import { packageDeps } from './scripts'
 
 const HOST = /fonts\.(?:googleapis|gstatic)\.com/gi
 const ORIGINS = new Set(['https://fonts.googleapis.com', 'https://fonts.gstatic.com'])
-/** Binary files; svg is text and read. */
-const BINARY = /\.(?:png|jpe?g|gif|webp|avif|ico|bmp|tiff?|woff2?|ttf|otf|eot|pdf|mp[34]|webm|ogg|wav|mov|zip|gz)$/i
+/** Folders never read: build output, tool state, site-factory metadata (`scout/`, not served). */
+const SKIP = /^(?:scout|\.rollout)\/|(?:^|\/)(?:node_modules|\.git|dist|\.astro)\//
+/** Read anywhere in the checkout; outside src/ and public/ only these (and root `_headers`, `.env*`) are read. */
+const ANYWHERE = /\.(?:astro|mdx?|css|[cm]?[jt]s|[jt]sx)$/
+/** A host name as a bare CSP source token: `https://fonts.gstatic.com`, `fonts.googleapis.com/`. */
+const SOURCE_TOKEN = /(?<=\s)(?:https?:\/\/)?fonts\.(?:googleapis|gstatic)\.com\/?(?=[\s;]|$)/gi
+/** Font loaders that need no literal Google Fonts host in the site's own files. */
+const LOADERS: [RegExp, string][] = [
+  [/ajax\.googleapis\.com\/ajax\/libs\/webfont/i, 'Web Font Loader script (ajax.googleapis.com/ajax/libs/webfont)'],
+  [/\bWebFont\s*\.\s*load\b/, 'WebFont.load (Web Font Loader)'],
+]
+/** Dependencies that load or rewrite web fonts at build or run time. */
+const LOADER_DEPS = /^(?:(?:@types\/)?webfontloader|unplugin-fonts|astro-font|vite-plugin-webfont-dl|vite-plugin-fonts|.*google-?fonts.*)$/i
 const MODULE = /\.(?:[cm]?[jt]s|[jt]sx)$/
 /** Attributes a recognised Google Fonts `<link>` may carry; wire removes the whole element. */
 const LINK_ATTRS = new Set(['rel', 'href', 'as', 'media', 'onload', 'crossorigin', 'type', 'fetchpriority', 'referrerpolicy'])
@@ -50,16 +61,19 @@ function urlProblem(url: string): string | null {
   return null
 }
 
-/** What in a policy would stop self-hosted fonts loading, or null. */
-function cspProblem(policy: string): string | null {
-  const dirs = new Map<string, string[]>()
-  for (const d of policy.split(';')) {
-    const [name, ...values] = d.trim().split(/\s+/)
-    if (name && !dirs.has(name.toLowerCase())) dirs.set(name.toLowerCase(), values)
-  }
+/**
+ * What in a policy (or a module's directive strings) would stop self-hosted fonts loading, or
+ * null. Every font-src / style-src found must allow 'self'; where there is none, every default-src.
+ */
+function cspProblem(policies: string[]): string | null {
+  const entries = policies
+    .flatMap((p) => p.split(';'))
+    .map((d) => d.trim().split(/\s+/))
+    .flatMap(([name, ...values]) => (name ? [{ name: name.toLowerCase(), values }] : []))
   for (const d of ['font-src', 'style-src']) {
-    const values = dirs.get(d) ?? dirs.get('default-src')
-    if (values && !values.includes("'self'")) return `${d} (or default-src) lacks 'self'`
+    const own = entries.filter((e) => e.name === d)
+    const used = own.length > 0 ? own : entries.filter((e) => e.name === 'default-src')
+    if (used.some((e) => !e.values.includes("'self'"))) return `${d} (or default-src) lacks 'self'`
   }
   return null
 }
@@ -95,26 +109,42 @@ function stringNodes(sf: ts.SourceFile): ts.Node[] {
   return out
 }
 
-/** Comment spans of a CSS text (strings respected), and the text with comments blanked out. */
-function cssComments(text: string): { spans: Span[]; blanked: string } {
+/**
+ * A CSS text read once: comment spans, the text with comments blanked out, and whether an offset
+ * is at the top level (outside strings, comments and `{…}` blocks such as `@media`).
+ */
+function scanCss(text: string): { spans: Span[]; blanked: string; topLevel: (at: number) => boolean } {
   const spans: Span[] = []
+  const strings: Span[] = []
+  const depth = new Int32Array(text.length + 1)
   let quote: string | null = null
+  let quoteStart = 0
+  let d = 0
   for (let i = 0; i < text.length; i++) {
     const c = text[i]!
+    depth[i] = d
     if (quote) {
-      if (c === '\\') i++
-      else if (c === quote || c === '\n') quote = null
-    } else if (c === '"' || c === "'") quote = c
-    else if (c === '/' && text[i + 1] === '*') {
+      if (c === '\\') depth[++i] = d
+      else if (c === quote || c === '\n') {
+        quote = null
+        strings.push({ start: quoteStart, end: i + 1 })
+      }
+    } else if (c === '"' || c === "'") {
+      quote = c
+      quoteStart = i
+    } else if (c === '/' && text[i + 1] === '*') {
       const close = text.indexOf('*/', i + 2)
       const end = close < 0 ? text.length : close + 2
       spans.push({ start: i, end })
+      depth.fill(d, i, end)
       i = end - 1
-    }
+    } else if (c === '{') d++
+    else if (c === '}') d = Math.max(0, d - 1)
   }
+  if (quote) strings.push({ start: quoteStart, end: text.length })
   let blanked = text
   for (const s of spans) blanked = blanked.slice(0, s.start) + ' '.repeat(s.end - s.start) + blanked.slice(s.end)
-  return { spans, blanked }
+  return { spans, blanked, topLevel: (at) => depth[at] === 0 && !inside(strings, at) && !inside(spans, at) }
 }
 
 const CSS_IMPORT = /@import\s+(?:url\(\s*(["']?)([^"')\s]*)\1\s*\)|(["'])([^"'\n]*)\3)([^;]*);/g
@@ -141,9 +171,17 @@ class Collector {
     if (problem) this.reason(`${file}: ${problem}`)
   }
 
-  policy(file: string, policy: string): void {
-    const problem = cspProblem(policy)
+  policy(file: string, policies: string[]): void {
+    const problem = cspProblem(policies)
     if (problem) this.reason(`${file}: Content-Security-Policy ${problem}`)
+  }
+
+  /** Loaders found by name, comments included: a false hit only costs a look. */
+  loaders(file: string, text: string): void {
+    for (const [re, name] of LOADERS) {
+      const m = re.exec(text)
+      if (m) this.reason(`${file}:${lineOf(text, m.index)}: ${name}`)
+    }
   }
 }
 
@@ -275,7 +313,8 @@ function astroFile(files: SiteFiles, file: string, c: Collector): void {
         if (content?.kind === 'quoted' && hostsIn(content.value).length > 0) {
           accounted.push(node)
           c.csp.push({ file, kind: 'meta', start: node.start, end: node.end })
-          c.policy(file, decode(content.value))
+          if (inExpression) c.reason(`${file}:${lineOf(text, node.start)}: Content-Security-Policy <meta> inside an expression`)
+          c.policy(file, [decode(content.value)])
         }
         return
       }
@@ -310,7 +349,8 @@ function astroFile(files: SiteFiles, file: string, c: Collector): void {
   for (const [name, k] of consts) {
     if (k.uses === 0) continue
     const inFrontmatter = sf ? countIdentifiers(sf, name) - 1 : 0
-    const inTemplate = [...template.matchAll(new RegExp(`(?<![\\w$.])${name.replace(/\$/g, '\\$')}(?![\\w$])`, 'g'))].length
+    // Every mention counts, `obj.name` and a spread `{...name}` included.
+    const inTemplate = [...template.matchAll(new RegExp(`(?<![\\w$])${name.replace(/\$/g, '\\$')}(?![\\w$])`, 'g'))].length
     accounted.push(k.span)
     if (!k.ok || inFrontmatter !== 0 || inTemplate !== k.uses) {
       c.reason(`${file}: const ${name} holds a Google Fonts url and is used for more than a <link> href`)
@@ -350,14 +390,15 @@ function hrefExpressionAt(root: AstroNode, at: number): boolean {
 
 function cssFile(files: SiteFiles, file: string, c: Collector): void {
   const text = files.read(file)
-  const { spans, blanked } = cssComments(text)
+  const { spans, blanked, topLevel } = scanCss(text)
   if (blanked.includes('@font-face')) c.selfHosted = true
   const hosts = hostsIn(text)
   if (hosts.length === 0) return
   const accounted: Span[] = []
   for (const m of blanked.matchAll(CSS_IMPORT)) {
     const url = m[2] ?? m[4] ?? ''
-    if (hostsIn(url).length === 0) continue
+    // An @import inside a string or a block (`@media { … }`) is not one: its host stays unaccounted.
+    if (hostsIn(url).length === 0 || !topLevel(m.index)) continue
     const span = { start: m.index, end: m.index + m[0].length }
     accounted.push(span)
     if (m[5]!.trim() !== '') {
@@ -378,25 +419,33 @@ function moduleFile(files: SiteFiles, file: string, c: Collector): void {
   const hosts = hostsIn(text)
   if (hosts.length === 0) return
   const sf = parseModule(text)
-  let csp = false
+  const outside = (at: number): void => c.reason(`${file}:${lineOf(text, at)}: Google Fonts host outside a recognised <link>, @import or CSP`)
+  /** String nodes holding a mention, each once. */
+  const strings = new Map<ts.Node, number>()
   for (const at of hosts) {
     const { node, trivia } = nodeAt(sf, at)
     if (trivia) continue
-    if (isStringNode(node) && DIRECTIVE.test(node.text)) {
+    if (isStringNode(node)) {
+      if (!strings.has(node)) strings.set(node, at)
+    } else outside(at)
+  }
+  let csp = false
+  for (const [node, at] of strings) {
+    const value = (node as ts.LiteralLikeNode).text
+    // A CSP string: a directive, and every mention a bare source token (not inside markup or a URL path).
+    const tokens = [...value.matchAll(SOURCE_TOKEN)].length
+    if (DIRECTIVE.test(value) && tokens === hostsIn(value).length) {
       csp = true
-      const span = { start: node.getStart(sf), end: node.end }
-      if (!c.csp.some((x) => x.file === file && x.start === span.start)) c.csp.push({ file, kind: 'module', ...span })
-      continue
-    }
-    c.reason(`${file}:${lineOf(text, at)}: Google Fonts host outside a recognised <link>, @import or CSP`)
+      c.csp.push({ file, kind: 'module', start: node.getStart(sf), end: node.end })
+    } else outside(at)
   }
   if (csp) {
+    // Each directive string of the module counts, not only those that name Google.
     c.policy(
       file,
       stringNodes(sf)
         .map((n) => (n as ts.LiteralLikeNode).text)
-        .filter((s) => DIRECTIVE.test(s))
-        .join('; '),
+        .filter((s) => DIRECTIVE.test(s)),
     )
   }
 }
@@ -414,7 +463,7 @@ function headersFile(files: SiteFiles, file: string, c: Collector): void {
       continue
     }
     c.csp.push({ file, kind: 'headers', start, end: start + line.replace(/\r$/, '').length })
-    c.policy(file, m[1]!)
+    c.policy(file, [m[1]!])
   }
 }
 
@@ -440,20 +489,27 @@ function astroFontsConfig(files: SiteFiles): string | null {
  */
 export function detectFonts(files: SiteFiles, cssEntry: string | null): FontsInfo {
   const c = new Collector()
-  const textFiles = [...new Set([...files.list('src/**'), ...files.list('public/**')])].filter((f) => !BINARY.test(f))
-  const rootFiles = files.list('*').filter((f) => MODULE.test(f) || f === '_headers' || /^\.env(?:\..+)?$/.test(f))
-  for (const file of [...rootFiles, ...textFiles].sort()) {
+  // Everything under src/ and public/; elsewhere markup, Markdown, CSS and modules (an integration,
+  // a content folder), root `_headers` and `.env*`. Binary files are told by a NUL byte, not by
+  // name: an HTML file saved as favicon.ico is still read.
+  const read = files
+    .list('**')
+    .filter((f) => !SKIP.test(f))
+    .filter((f) => /^(?:src|public)\//.test(f) || ANYWHERE.test(f) || f === '_headers' || /^\.env(?:\..+)?$/.test(f))
+  for (const file of read) {
+    const text = files.read(file)
+    if (text.includes('\u0000')) continue
+    c.loaders(file, text)
     if (file.endsWith('.astro')) astroFile(files, file, c)
-    else if (file.endsWith('.css') && file.startsWith('src/')) cssFile(files, file, c)
+    else if (file.endsWith('.css') && !file.startsWith('public/')) cssFile(files, file, c)
     else if (MODULE.test(file) && !file.startsWith('public/')) moduleFile(files, file, c)
     else if (file === '_headers' || file === 'public/_headers') headersFile(files, file, c)
     else {
-      const text = files.read(file)
-      if (text.includes('\u0000')) continue
       const at = hostsIn(text)[0]
       if (at !== undefined) c.reason(`${file}:${lineOf(text, at)}: Google Fonts host mentioned`)
     }
   }
+  for (const dep of packageDeps(files).filter((d) => LOADER_DEPS.test(d))) c.reason(`package.json: dependency ${dep} loads web fonts`)
   for (const d of c.dynamic) if (d.fontish || c.locations.length > 0 || c.reasons.length > 0) c.reason(d.reason)
 
   const byPlace = (a: { file: string; start: number }, b: { file: string; start: number }): number =>
