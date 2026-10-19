@@ -240,7 +240,7 @@ export const ownRules = (el: AstroNode, rules: CssRule[]): CssRule[] => {
 
 /**
  * The parent has a definite height (Ruling 25): a fixed h- class, an aspect class (#61), an inline
- * height, or a scoped CSS height for one of its classes. A min-height is not one: a percentage height against it is auto.
+ * height, or a scoped CSS height or aspect-ratio for one of its classes. A min-height is not one: a percentage height against it is auto.
  */
 function definiteHeight(parent: AstroNode, rules: CssRule[]): boolean {
   if (parent.type !== 'element') return false
@@ -250,8 +250,50 @@ function definiteHeight(parent: AstroNode, rules: CssRule[]): boolean {
   const isHeight = (d: CssDecl): boolean => d.prop === 'height' && sized(unimportant(d.value))
   const style = attr(parent, 'style')
   if (style?.kind === 'quoted' && declarations(style.value).some(isHeight)) return true
-  return ownRules(parent, rules).some((r) => r.decls.some(isHeight))
+  const own = ownRules(parent, rules)
+  if (own.some((r) => r.decls.some(isHeight))) return true
+  return ratioSized(parent, own, rules)
 }
+
+/**
+ * ahatrafikskola: `.frame { aspect-ratio: 4 / 5 }`, 4 / 3 on phones. A plain ratio for one of the
+ * parent's classes outside an at-rule, and nothing else that could switch it off: no rule naming
+ * the class, the element or its id in any selector (`.wrap .frame`, `.frame:hover`, `div`, inside
+ * an at-rule) with another aspect-ratio value or a display other than a block-level one, no display
+ * class that is not one (variants and `!` included), no inline aspect-ratio or display at all, and
+ * not a span. Attribute selectors (`[class~=frame]`) are not seen, as in ownRules.
+ */
+function ratioSized(parent: AstroNode, own: CssRule[], rules: CssRule[]): boolean {
+  if (parent.type !== 'element' || parent.name === 'span') return false
+  if (!own.some((r) => !r.media && r.decls.some((d) => d.prop === 'aspect-ratio' && ratio(d.value)))) return false
+  const style = attr(parent, 'style')
+  if (style?.kind === 'quoted' && declarations(style.value).some((d) => d.prop === 'aspect-ratio' || d.prop === 'display')) return false
+  const esc = (x: string): string => x.replace(/[^\w-]/g, '\\$&')
+  const id = attr(parent, 'id')
+  const names = [
+    ...(classList(parent) ?? []).map((c) => new RegExp(`\\.${esc(c)}(?![\\w-])`)),
+    ...(parent.name ? [new RegExp(`(?:^|[\\s>+~,(])${esc(parent.name)}(?![\\w-])`, 'i')] : []),
+    ...(id?.kind === 'quoted' ? [new RegExp(`#${esc(id.value.trim())}(?![\\w-])`)] : []),
+  ]
+  // The utility after its variants, without Tailwind's important modifier (`!contents`, v4 `contents!`).
+  const utility = (c: string): string => c.slice(c.lastIndexOf(':') + 1).replace(/^!|!$/g, '')
+  const display = (c: string): boolean => /\[display:/i.test(c) || (DISPLAY_CLASS.test(utility(c)) && !BOX_DISPLAY.test(utility(c)))
+  if ((classList(parent) ?? []).some(display)) return false
+  const naming = rules.filter((r) => names.some((n) => n.test(r.selector)))
+  return naming.every((r) => r.decls.every((d) => (d.prop !== 'aspect-ratio' || ratio(d.value)) && (d.prop !== 'display' || BOX_DISPLAY.test(unimportant(d.value)))))
+}
+
+/** Tailwind's display utilities, and the display values that keep a block box with an aspect-ratio. */
+const DISPLAY_CLASS = /^(?:block|inline|inline-block|flex|inline-flex|grid|inline-grid|flow-root|contents|hidden|list-item|table(?:-[a-z-]+)?|inline-table)$/
+const BOX_DISPLAY = /^(?:block|flex|grid|flow-root)$/
+
+/** A plain, non-degenerate aspect-ratio value: `4 / 3`, `16/9`, `1.5`. */
+function ratio(value: string): boolean {
+  const m = RATIO.exec(unimportant(value))
+  return m !== null && Number(m[1]) > 0 && (m[2] === undefined || Number(m[2]) > 0)
+}
+
+const RATIO = /^(\d+(?:\.\d+)?)(?:\s*\/\s*(\d+(?:\.\d+)?))?$/
 
 const MIN_H_CLASS = /^(?:[\w-]+:)*min-h-(?:\d+(?:\.\d+)?|\[[^\]\s]+\]|screen|svh|dvh|lvh)$/
 
@@ -435,7 +477,7 @@ function sizedBox(node: AstroNode, ancestors: AstroNode[], rules: CssRule[]): Bo
   if (n) return { classes: ['grid', `h-[${n[1]}${n[2] || 'px'}]`, ...classes], aspect: true }
   // #61 (exakthaltagning): `aspect-ratio: 4/3; height: auto` would otherwise get the default 16:9.
   const ratio = style?.kind === 'quoted' && (inlineHeight === undefined || inlineHeight === 'auto') ? declarations(style.value).findLast((d) => d.prop === 'aspect-ratio')?.value.trim() : undefined
-  const r = ratio !== undefined ? /^(\d+(?:\.\d+)?)(?:\s*\/\s*(\d+(?:\.\d+)?))?$/.exec(ratio) : null
+  const r = ratio !== undefined ? RATIO.exec(ratio) : null
   return r ? { classes, aspect: false, ratio: r[2] ? `${r[1]} / ${r[2]}` : r[1]! } : { classes, aspect: false }
 }
 
