@@ -206,6 +206,28 @@ describe('verify on fonts-selfhost', () => {
     expect(hasPackage('not json')).toBe(false)
   })
 
+  test("main without the banner: the registry requests main makes on a page are the site's own (noted); one main does not make fails", async () => {
+    const MAPS = 'https://maps.google.com/maps?q=x&output=embed'
+    const noBanner = JSON.stringify({ name: 'site' })
+    const run = async (extra: string[]) => {
+      const dir = siteDir({ 'src/styles/fonts.css': FONTS_CSS, 'package.json': noBanner })
+      const requests: Checks['requests'] = async (base, paths) =>
+        paths.map((p) => {
+          const blocked = p === '/om' ? [MAPS, ...(base.includes(':4398') ? [] : extra)] : []
+          return { path: p, banner: false, banners: 0, blocked, errors: [], known: [], ok: blocked.length === 0 }
+        })
+      const r = await verify(dir, report(), { deps: fake({ mainPkg: noBanner, checks: { requests } }).deps })
+      return { r, text: evidence(dir, 'fonts-selfhost', '3-requests.txt') }
+    }
+    const same = await run([])
+    expect(same.r.pass).toBe(true)
+    expect(same.text).toContain('/om: 1 registry request(s) main makes too (no banner on main): noted, not the fonts commit\'s')
+    expect(same.text).not.toMatch(/detect miss/)
+    const more = await run(['https://www.googletagmanager.com/gtag/js?id=G-X'])
+    expect(steps(more.r).at(-1)).toEqual([3, 'requests', 'FAIL'])
+    expect(more.text).toMatch(/BLOCKED https:\/\/www\.googletagmanager\.com/)
+  })
+
   test("step 8 without the tool's fonts.css (missing, or hand-written): FAIL", async () => {
     for (const files of [{}, { 'src/styles/fonts.css': '@font-face { font-family: X; src: url(/x.woff2) }' }] as Record<string, string>[]) {
       const dir = siteDir(files)

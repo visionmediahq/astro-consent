@@ -193,7 +193,9 @@ async function checkDomain(c: LiveChecks, host: string, baseline: Set<string>, w
     lines.push(`  pages (${paths.length}): ${paths.join(' ')}`)
     const results = await c.requests(base, paths, { baseline, expectBanner: what.banner ? expectBanner : () => false })
     lines.push(...formatRequests(results).map((l) => `  ${l}`))
-    let pass = results.length > 0 && results.every((r) => r.ok)
+    // Without the banner (fonts-selfhost first), registry requests are the site's own: noted only.
+    let pass = results.length > 0 && results.every((r) => (what.banner ? r.ok : r.errors.length === 0 && r.banners === 0))
+    if (!what.banner && results.some((r) => r.blocked.length)) lines.push('  registry requests: the site has no banner yet, so they are its own (noted, not checked)')
     if (what.banner) {
       const mapPages = (await c.embedPages(base, paths)).filter(expectBanner)
       lines.push(`  pages with an embed: ${mapPages.join(' ') || '(none)'}`)

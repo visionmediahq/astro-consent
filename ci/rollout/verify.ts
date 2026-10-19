@@ -116,7 +116,7 @@ export interface VerifyOptions {
   out?: string
 }
 
-/** Step 8 clones only Vision Media's own GitHub repos (Ruling 34b). */
+/** Step 9 clones only Vision Media's own GitHub repos (Ruling 34b). */
 export const ORIGIN = /^(git@github\.com:|https:\/\/github\.com\/)visionmediahq\//
 
 /** The remote head of the branch verify last pushed, so a rerun may replace its own push (per branch, flows.ts). */
@@ -457,6 +457,23 @@ export async function verify(dir: string, report: Report, opts: VerifyOptions = 
   }
   let paths: string[] = []
   let mapPages: string[] = []
+  /** Registry requests main made, per page (step 3). */
+  const mainBlocked = new Map<string, Set<string>>()
+  /**
+   * fonts-selfhost on a site without the banner on main: the registry requests main makes on a page
+   * are the site's own, not the fonts commit's; they are noted and left out. Any other is still a
+   * failure. With the banner on main (every other case) the results are returned as they are.
+   */
+  const mainsOwn = (results: RequestResult[], lines: string[]): RequestResult[] => {
+    if (bannerOnMain) return results
+    return results.map((r) => {
+      const own = mainBlocked.get(norm(r.path)) ?? new Set<string>()
+      const blocked = r.blocked.filter((u) => !own.has(u))
+      if (blocked.length === r.blocked.length) return r
+      lines.push(`${r.path}: ${r.blocked.length - blocked.length} registry request(s) main makes too (no banner on main): noted, not the fonts commit's`)
+      return { ...r, blocked, ok: r.banner === expectBanner(r.path) && r.banners <= 1 && blocked.length === 0 && r.errors.length === 0 }
+    })
+  }
   // Demo mode has no main side to record a baseline: the one error main always has is the missing
   // URL's own 404 document, which Chromium logs without its URL.
   let baseline = new Set<string>(demo ? [DOCUMENT_404] : [])
@@ -585,12 +602,14 @@ export async function verify(dir: string, report: Report, opts: VerifyOptions = 
         if (green.length) lines.push(`main already green: ${green.join(', ')} (noted, not a failure)`)
         await main.stop()
       }
-      const results = await c.requests(branch.url, paths, { baseline, expectBanner })
+      for (const r of mainResults) mainBlocked.set(norm(r.path), new Set(r.blocked))
+      const results = mainsOwn(await c.requests(branch.url, paths, { baseline, expectBanner }), lines)
       lines.push('branch:', ...formatRequests(results).map((l) => `  ${l}`))
       // Step 4 clicks the banner, so a page meant to have none (demo: /utan-banner) is left out.
       mapPages = (await c.embedPages(branch.url, paths)).filter(expectBanner)
       const knownPages = new Set([...known, ...mapPages.map(norm)])
-      const misses = [...new Set([...mainResults, ...results].filter((r) => r.blocked.length > 0 && !knownPages.has(norm(r.path))).map((r) => r.path))]
+      // A detect miss is an embed the banner wiring left unwrapped: no banner, no wiring to miss.
+      const misses = bannerOnMain ? [...new Set([...mainResults, ...results].filter((r) => r.blocked.length > 0 && !knownPages.has(norm(r.path))).map((r) => r.path))] : []
       lines.push(`pages with an embed: ${mapPages.join(' ') || '(none)'}`, ...misses.map((p) => `detect miss: ${p}`))
       return { pass: results.length > 0 && results.every((r) => r.ok) && misses.length === 0, lines }
     },
@@ -723,7 +742,7 @@ export async function verify(dir: string, report: Report, opts: VerifyOptions = 
       const lines = [`origin/${BRANCH} = HEAD = ${local}`]
       const c = await getChecks()
       const result = await deps.docker(repoUrl, BRANCH, async (url) => {
-        const results = await c.requests(url, paths, { baseline: rebase(url), expectBanner })
+        const results = mainsOwn(await c.requests(url, paths, { baseline: rebase(url), expectBanner }), lines)
         lines.push('step 3 against the container:', ...formatRequests(results).map((l) => `  ${l}`))
         let pass = results.length > 0 && results.every((r) => r.ok)
         if (mapPages.length && runs('consent-paths')) {

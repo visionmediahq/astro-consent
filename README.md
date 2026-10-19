@@ -358,7 +358,9 @@ npx tsx ci/rollout/run.ts help
   `fonts-selfhost`, 4 and 6 (banner only) are recorded as skipped; step 1 requires `package.json`
   and `package-lock.json` to be exactly main's and allows only the files the fonts commit writes or
   edits (`src/styles/fonts.css`, `public/fonts/**`, the CSS entry, and the files `report.fonts`
-  found the loads and CSPs in); a site without the banner on main expects no banner and skips 5.
+  found the loads and CSPs in). A site without the banner on main expects no banner, skips 5,
+  and in step 3 notes the registry requests main makes on the same page instead of failing them
+  (they are the site's own; any other still fails).
   Step 8 runs on `fonts-selfhost`, and on `consent-banner` whenever the branch has the tool's
   `src/styles/fonts.css` (else it is skipped):
   - no `fonts.googleapis.com` / `fonts.gstatic.com` anywhere in the built `dist/` outside CSS

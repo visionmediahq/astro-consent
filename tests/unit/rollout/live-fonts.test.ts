@@ -114,9 +114,14 @@ describe('live post-merge with the fonts on main', () => {
 
   test('fonts-selfhost on a site without the banner on main: the fonts and console errors only, no banner expected', async () => {
     const dir = siteDir({ 'apps-fonts-selfhost.json': JSON.stringify(APPS), 'live-baseline-fonts-selfhost.txt': '' })
-    const c = checks({ requests: (p) => p.map((x) => req(x, { banner: false, banners: 0 })) })
+    // The map on /kontakt is the site's own without a banner: noted, not checked. A console error still fails.
+    const c = checks({ requests: (p) => p.map((x) => req(x, { banner: false, banners: 0, ok: false, ...(x === '/kontakt' ? { blocked: ['https://www.google.com/maps/embed?pb=x'] } : {}) })) })
     const r = await live(dir, 'post-merge', SHA, { deps: liveDeps(c.checks, git({ banner: false }).exec) })
     expect(r.status).toBe('pass')
+    expect(r.lines).toContain('  registry requests: the site has no banner yet, so they are its own (noted, not checked)')
+    const errors = checks({ requests: (p) => p.map((x) => req(x, { banner: false, banners: 0, errors: ['TypeError: x'] })) })
+    const failed = await live(siteDir({ 'apps-fonts-selfhost.json': JSON.stringify(APPS), 'live-baseline-fonts-selfhost.txt': '' }), 'post-merge', SHA, { deps: liveDeps(errors.checks, git({ banner: false }).exec) })
+    expect(failed.status).toBe('stop')
     expect(c.calls.map((x) => x.what)).toEqual(['requests', 'fonts'])
     expect(c.calls[0]!.expectBanner!('/')).toBe(false)
     expect(r.lines).toContain('checks: self-hosted fonts')
