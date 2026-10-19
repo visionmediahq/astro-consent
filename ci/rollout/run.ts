@@ -264,18 +264,34 @@ export async function openConsentPrs(root: string): Promise<string[]> {
 async function consentConflicts(root: string, openPrs: (root: string) => Promise<string[]>): Promise<string[]> {
   const out: string[] = []
   const git = (...args: string[]) => execFileSync('git', args, { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim()
-  const listed = git('ls-remote', '--heads', 'origin', `refs/heads/${BRANCH}`)
+  const unknown = (what: string, e: unknown) =>
+    new Error(`${what} failed, so whether origin has a ${BRANCH} branch is unknown; nothing written\n${(e as Error).message}`)
+  let listed: string
+  try {
+    listed = git('ls-remote', '--heads', 'origin', `refs/heads/${BRANCH}`)
+  } catch (e) {
+    throw unknown(`git ls-remote --heads origin refs/heads/${BRANCH}`, e)
+  }
   const sha = listed.split('\n').map((l) => l.trim().split(/\s+/)).find(([, ref]) => ref === `refs/heads/${BRANCH}`)?.[0]
   if (sha) {
-    let merged = false
+    // Both tips as GitHub has them now: main may have moved since the clone's last fetch.
     try {
-      git('fetch', '-q', 'origin', `refs/heads/${BRANCH}`)
+      git('fetch', '-q', 'origin', `+refs/heads/main:refs/remotes/origin/main`, `refs/heads/${BRANCH}`)
+    } catch (e) {
+      throw unknown(`git fetch origin main ${BRANCH}`, e)
+    }
+    let merged: boolean
+    try {
       git('merge-base', '--is-ancestor', sha, 'origin/main')
       merged = true
     } catch {
       merged = false
     }
-    if (!merged) out.push(`origin has a ${BRANCH} branch that main does not have (${sha.slice(0, 7)}): merge or close the banner first, then detect and fonts again`)
+    if (!merged) {
+      out.push(
+        `origin has a ${BRANCH} branch (${sha.slice(0, 7)}) that is not in origin/main: if it was already merged (squash), delete it on GitHub; otherwise merge or close the banner first. Then detect and fonts again`,
+      )
+    }
   }
   for (const url of await openPrs(root)) out.push(`open ${BRANCH} PR ${url}: merge or close it first, then detect and fonts again`)
   return out

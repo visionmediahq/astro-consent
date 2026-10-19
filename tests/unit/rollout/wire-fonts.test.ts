@@ -730,6 +730,17 @@ describe('review of #75: stale reports, files changed on disk, recovery', () => 
     writeFileSync(join(dir, 'stray.txt'), 'x')
     expect(() => commitFonts(dir, files, { onto: BRANCH })).toThrow(/the banner is committed on consent-banner, the fonts are not/)
   })
+
+  test('wire --fonts: a file changed since planning, after the banner commit, also gets the banner-is-committed recovery text', async () => {
+    const dir = checkout(knutTree())
+    runDetect(dir, ['knutssonsbil.se'])
+    const site = diskSite(dir)
+    const report = JSON.parse(readFileSync(join(dir, '.rollout/report.json'), 'utf8')) as { fonts: FontsInfo; css: { entry: string | null } }
+    const files = fontsFiles((p) => site.read(p), ok(await planFonts(site, report, { fetch: network(), now: DATE })))
+    writeFileSync(join(dir, 'src/layouts/Base.astro'), `${site.read('src/layouts/Base.astro')}\n`)
+    expect(() => commitFonts(dir, files, { onto: BRANCH })).toThrow(/changed since it was planned[\s\S]*the banner is committed on consent-banner, the fonts are not/)
+    expect(existsSync(join(dir, 'public/fonts'))).toBe(false)
+  })
 })
 
 describe('review of #75: run.ts fonts and consent-banner', () => {
@@ -753,13 +764,40 @@ describe('review of #75: run.ts fonts and consent-banner', () => {
     git(dir, 'update-ref', '-d', 'refs/remotes/origin/consent-banner')
     const branch = await runFonts(dir, { dryRun: false, fetch: network(), now: DATE, openPrs: noPrs })
     expect(branch.code).toBe(3)
-    expect(branch.output).toMatch(/origin has a consent-banner branch that main does not have/)
+    expect(branch.output).toMatch(/origin has a consent-banner branch \([0-9a-f]{7}\) that is not in origin\/main: if it was already merged \(squash\), delete it on GitHub/)
     expect(git(dir, 'branch', '--show-current')).toBe('main')
 
     git(dir, 'push', '-q', 'origin', '--delete', 'consent-banner')
     const pr = await runFonts(dir, { dryRun: false, fetch: network(), now: DATE, openPrs: async () => ['https://github.com/visionmediahq/site/pull/9'] })
     expect(pr.code).toBe(3)
     expect(pr.output).toContain('open consent-banner PR https://github.com/visionmediahq/site/pull/9')
+    expect(status(dir)).toBe('')
+  })
+
+  test('main moved on GitHub since the last fetch: a branch merged there is still seen as merged', async () => {
+    const dir = checkout(knutTree())
+    runDetect(dir, ['knutssonsbil.se'])
+    // Someone else merges a banner branch on GitHub: origin's main and consent-banner move, the clone has not fetched.
+    const other = temp('fonts-other-')
+    git(other, 'clone', '-q', git(dir, 'remote', 'get-url', 'origin'), 'o')
+    const o = join(other, 'o')
+    git(o, 'config', 'user.name', 't')
+    git(o, 'config', 'user.email', 't@example.se')
+    writeFileSync(join(o, 'x.txt'), 'x')
+    git(o, 'add', 'x.txt')
+    git(o, 'commit', '-q', '-m', 'banner')
+    git(o, 'push', '-q', 'origin', 'HEAD:main', 'HEAD:consent-banner')
+    const r = await runFonts(dir, { dryRun: true, fetch: network(), now: DATE, openPrs: noPrs })
+    expect(r.output).not.toMatch(/consent-banner branch/)
+  })
+
+  test('origin unreachable: an error that says whether a consent-banner branch exists is unknown, nothing written', async () => {
+    const dir = checkout(knutTree())
+    runDetect(dir, ['knutssonsbil.se'])
+    git(dir, 'remote', 'set-url', 'origin', join(tmpdir(), 'no-such-origin-for-fonts-test'))
+    await expect(runFonts(dir, { dryRun: false, fetch: network(), now: DATE, openPrs: noPrs })).rejects.toThrow(
+      /whether origin has a consent-banner branch is unknown; nothing written/,
+    )
     expect(status(dir)).toBe('')
   })
 })
@@ -785,6 +823,13 @@ describe('review of #75: CSP, subsets per family, comments', () => {
     const out = applyEdits(files.read('src/layouts/Base.astro'), plan.edits.filter((e) => e.file === 'src/layouts/Base.astro'))
     expect(out).toContain("font-src\n        'self'")
     expect(out).not.toContain('gstatic')
+  })
+
+  test('a Google host alone on the line after the other sources is cut with its line break: font-src \'self\';', async () => {
+    const files = withMeta("default-src 'self'; font-src 'self'\n        https://fonts.gstatic.com; img-src 'self'")
+    const plan = ok(await planFonts(files, reportOf(files), { fetch: network(), now: DATE }))
+    const out = applyEdits(files.read('src/layouts/Base.astro'), plan.edits.filter((e) => e.file === 'src/layouts/Base.astro'))
+    expect(out).toContain(`content="default-src 'self'; font-src 'self'; img-src 'self'"`)
   })
 
   test('subsets per family: ₫ is in A\'s latin-ext but B has only latin and vietnamese, so B keeps vietnamese', () => {
@@ -817,6 +862,8 @@ describe('review of #75: CSP, subsets per family, comments', () => {
     ['    <!-- Typography: Oswald (headings) + Barlow (body) -->', true],
     ['    <!-- DO NOT remove the meta viewport: the fonts scale with it -->', false],
     ['    <!-- Google Fonts:\n         Oswald + Barlow -->', false],
+    ['    <!-- Font Awesome icons -->', false],
+    ['    <!-- Fonts: Font Awesome + Oswald -->', false],
   ])('comment right above the links: %j removed %s', async (comment, removed) => {
     const out = await layoutWith(comment).out()
     expect(out.includes(comment)).toBe(!removed)
@@ -836,5 +883,19 @@ describe('review of #75: CSP, subsets per family, comments', () => {
     const out = applyEdits(text, plan.edits.filter((e) => e.file === 'src/layouts/Base.astro'))
     const want = treeOf(join(WIRE, 'expected', 'arjangs-elmontage')).get('src/layouts/Base.astro')!.replace("import '../styles/global.css'\n", "import '../styles/global.css'\n// site helpers\n")
     expect(out).toBe(want)
+  })
+
+  test.each([
+    ['// Google Fonts\n// Fonts: Kanit + Open Sans\n', true],
+    ['// Google Fonts\n// keep this url in sync with the brand guide\n', false],
+  ])('a contiguous // block above the const goes only when every line is a fonts comment: %j', async (block, cut) => {
+    const base = CASES['arjangs-elmontage']!()
+    const text = base.read('src/layouts/Base.astro').replace('const fontHref =\n', `${block}const fontHref =\n`)
+    const files = withFiles(base, { 'src/layouts/Base.astro': text })
+    const plan = ok(await planFonts(files, reportOf(files), { fetch: network(), now: DATE }))
+    const out = applyEdits(text, plan.edits.filter((e) => e.file === 'src/layouts/Base.astro'))
+    expect(out.includes(block)).toBe(!cut)
+    expect(out.includes('// Google Fonts')).toBe(!cut)
+    expect(out).not.toContain('fontHref')
   })
 })

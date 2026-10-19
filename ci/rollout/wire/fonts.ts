@@ -49,7 +49,9 @@ const FONT_PHRASE = /^(?:(?:google|brand)\s+)?(?:fonts?|typsnitt|typography|typo
  * a fonts phrase ("Google Fonts", "Fonts: …", "Typography: …", "Typsnitt"). A multi-line comment or
  * one that merely mentions fonts ("DO NOT remove the meta viewport: the fonts…") stays.
  */
-export const isFontComment = (inner: string): boolean => !/[\r\n]/.test(inner) && FONT_PHRASE.test(inner.trim())
+export const isFontComment = (inner: string): boolean => !/[\r\n]/.test(inner) && FONT_PHRASE.test(inner.trim()) && !OTHER_FONT_PRODUCT.test(inner)
+/** Comments that name another font product are about that, not the Google Fonts block. */
+const OTHER_FONT_PRODUCT = /\bfont\s*-?awesome\b|\bfontsource\b|\bicon\s*fonts?\b|\btypekit\b|\badobe\s+fonts\b/i
 const SV_JSON = join(import.meta.dirname, '../../../src/text/sv.json')
 
 export interface FetchAnswer {
@@ -181,13 +183,20 @@ function constSpan(text: string, s: Span): Span {
   let { start, end } = s
   const trailing = /^[ \t]*\/\/[^\r\n]*/.exec(text.slice(end))
   if (trailing) end += trailing[0].length
+  // The contiguous `//` block right above: cut only when every line of it is a fonts comment.
   const line = lineAt(text, start)
-  if (text.slice(line.start, start).trim() === '' && line.start > 0) {
-    const prev = lineAt(text, line.start - 1)
+  if (text.slice(line.start, start).trim() !== '') return { start, end }
+  let top: number | null = null
+  let at = line.start
+  while (at > 0) {
+    const prev = lineAt(text, at - 1)
     const m = /^[ \t]*\/\/(.*?)\r?$/.exec(text.slice(prev.start, prev.end))
-    if (m && isFontComment(m[1]!)) start = prev.start + text.slice(prev.start, prev.end).indexOf('//')
+    if (!m) break
+    if (!isFontComment(m[1]!)) return { start, end }
+    top = prev.start + text.slice(prev.start, prev.end).indexOf('//')
+    at = prev.start
   }
-  return { start, end }
+  return { start: top ?? start, end }
 }
 
 /** The policy text of a CSP span: a meta's content value, a `_headers` line after its colon, a module string's content. */
@@ -427,19 +436,24 @@ export function fontsTargetsTaken(root: string): string | null {
  */
 export function commitFonts(dir: string, files: readonly FontsFile[], opts: { branch?: string; onto?: string } = {}): void {
   const root = resolve(dir)
+  // After the banner commit (wire --fonts) every failure, a check or a write, leaves that commit.
+  const onto = opts.onto
+    ? `the banner is committed on ${opts.onto}, the fonts are not: git reset --hard && git clean -fd drops the fonts and keeps the banner commit (self-host them later with run.ts fonts); to start over: git reset --hard && git clean -fd && git switch main && git branch -D ${opts.onto}`
+    : null
+  const fail = (message: string): never => {
+    throw new Error(onto ? `${message}\n${onto}` : message)
+  }
   const taken = fontsTargetsTaken(root)
-  if (taken) throw new Error(taken)
+  if (taken) fail(taken)
   for (const f of files) {
-    if (f.before !== null && readFileSync(join(root, f.path), 'utf8') !== f.before) throw new Error(`${f.path} changed since it was planned, nothing written: run detect and the command again`)
+    if (f.before !== null && readFileSync(join(root, f.path), 'utf8') !== f.before) fail(`${f.path} changed since it was planned, nothing written: run detect and the command again`)
   }
   if (opts.branch) startBranch(root, opts.branch)
   try {
     writeFiles(root, files.map((f) => ({ path: f.path, data: f.after })))
     commitAllowed(root, new Set(files.map((f) => f.path)), FONTS_COMMIT_MESSAGE)
   } catch (e) {
-    const how = opts.onto
-      ? `the banner is committed on ${opts.onto}, the fonts are not: git reset --hard && git clean -fd drops the fonts and keeps the banner commit (self-host them later with run.ts fonts); to start over: git reset --hard && git clean -fd && git switch main && git branch -D ${opts.onto}`
-      : recovery(opts.branch ?? execFileSync('git', ['branch', '--show-current'], { cwd: root, encoding: 'utf8' }).trim())
+    const how = onto ?? recovery(opts.branch ?? execFileSync('git', ['branch', '--show-current'], { cwd: root, encoding: 'utf8' }).trim())
     throw new Error(`${(e as Error).message}\n${how}`)
   }
 }
