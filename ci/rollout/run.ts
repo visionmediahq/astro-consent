@@ -2,7 +2,8 @@
 // through .git/info/exclude, so stages can be rerun one at a time.
 //
 //   tsx ci/rollout/run.ts detect <site dir> --domain <d> [--domain <d2>]
-//   tsx ci/rollout/run.ts wire   <site dir> [--dry-run]
+//   tsx ci/rollout/run.ts wire   <site dir> [--dry-run] [--no-fonts]
+//   tsx ci/rollout/run.ts fonts  <site dir> [--dry-run]       Google Fonts alone, branch fonts-selfhost
 //   tsx ci/rollout/run.ts verify <site dir>
 //   tsx ci/rollout/run.ts verify --demo <dist dir>   CI/self-test: a built demo, no git/npm/Docker
 //   tsx ci/rollout/run.ts pr     <site dir> --shots-dir <path> --shots-base <url> [--issue <url>]...
@@ -24,10 +25,12 @@ import { formatLive, live } from './live'
 import { merge } from './merge'
 import { openPr } from './pr'
 import { formatVerify, verify } from './verify'
+import { commitFonts, FONTS_BRANCH, type FontFetch, type FontsFile, fontsFiles, fontsTargetsTaken, planFonts } from './wire/fonts'
 import { applyWire, BRANCH, planFiles, planWire, refusalLines } from './wire/index'
 
 const DETECT_USAGE = 'usage: tsx ci/rollout/run.ts detect <site dir> --domain <domain> [--domain <domain>]'
-const WIRE_USAGE = 'usage: tsx ci/rollout/run.ts wire <site dir> [--dry-run]'
+const WIRE_USAGE = 'usage: tsx ci/rollout/run.ts wire <site dir> [--dry-run] [--no-fonts]'
+const FONTS_USAGE = 'usage: tsx ci/rollout/run.ts fonts <site dir> [--dry-run]'
 const VERIFY_USAGE = 'usage: tsx ci/rollout/run.ts verify <site dir> | verify --demo <dist dir>'
 const PR_USAGE =
   'usage: tsx ci/rollout/run.ts pr <site dir> --shots-dir <path in site-factory> --shots-base <github url of that folder> [--issue <url>]... [--domain <d>]'
@@ -36,6 +39,7 @@ const MERGE_USAGE = 'usage: tsx ci/rollout/run.ts merge <site dir> <pr number>'
 export const USAGE = [
   DETECT_USAGE,
   WIRE_USAGE,
+  FONTS_USAGE,
   VERIFY_USAGE,
   PR_USAGE,
   LIVE_USAGE,
@@ -48,7 +52,7 @@ export const USAGE = [
   '  0  ok (live baseline: also the expected RED)',
   '  1  error, a failed verify step, or a live/merge STOP',
   '  2  usage: bad command or arguments',
-  '  3  wire: the plan was refused (dry run or not); nothing was written',
+  '  3  wire, fonts: the plan was refused (dry run or not); nothing was written',
 ].join('\n')
 /** Exit code of a refused wire plan (Ruling 32). */
 export const EXIT_REFUSED = 3
@@ -124,17 +128,59 @@ export function summary(report: Report): string {
   return lines.join('\n')
 }
 
-export function parseWireArgs(args: string[]): { dir: string; dryRun: boolean } {
+export function parseWireArgs(args: string[]): { dir: string; dryRun: boolean; fonts?: false } {
   let dir: string | null = null
   let dryRun = false
+  let fonts = true
   for (const arg of args) {
     if (arg === '--dry-run') dryRun = true
+    else if (arg === '--no-fonts') fonts = false
     else if (arg.startsWith('-')) throw new Error(`unknown option ${arg}\n${WIRE_USAGE}`)
     else if (dir === null) dir = arg
     else throw new Error(`one site dir only\n${WIRE_USAGE}`)
   }
   if (dir === null) throw new Error(WIRE_USAGE)
+  return { dir, dryRun, ...(fonts ? {} : { fonts: false as const }) }
+}
+
+export function parseFontsArgs(args: string[]): { dir: string; dryRun: boolean } {
+  let dir: string | null = null
+  let dryRun = false
+  for (const arg of args) {
+    if (arg === '--dry-run') dryRun = true
+    else if (arg.startsWith('-')) throw new Error(`unknown option ${arg}\n${FONTS_USAGE}`)
+    else if (dir === null) dir = arg
+    else throw new Error(`one site dir only\n${FONTS_USAGE}`)
+  }
+  if (dir === null) throw new Error(FONTS_USAGE)
   return { dir, dryRun }
+}
+
+/** Unified diffs of text files; a line for each other file (woff2, licences). */
+function diffOf(files: { path: string; before: string | null; after: string | Uint8Array }[], showNew: (path: string) => boolean = () => true): string {
+  return files
+    .filter((f) => typeof f.after === 'string' && (f.before !== null || showNew(f.path)))
+    .map((f) =>
+      createTwoFilesPatch(f.before === null ? '/dev/null' : `a/${f.path}`, `b/${f.path}`, f.before ?? '', f.after as string, undefined, undefined, {
+        context: 3,
+        headerOptions: FILE_HEADERS_ONLY,
+      }),
+    )
+    .join('')
+}
+
+const fileLines = (files: FontsFile[]): string[] =>
+  files.map((f) => (f.before === null ? `  new  ${f.path}${typeof f.after === 'string' && f.path.endsWith('.css') ? '' : ` (${typeof f.after === 'string' ? Buffer.byteLength(f.after) : f.after.length} bytes)`}` : `  edit ${f.path}`))
+
+export interface WireRunOptions {
+  dryRun: boolean
+  /** false: the banner alone, Google Fonts left as they are (--no-fonts). */
+  fonts?: boolean
+  /** The network for the fonts; real fetch unless a test injects recordings. */
+  fetch?: FontFetch
+  now?: Date
+  /** The npm install of the package; real unless a test injects its own. */
+  install?: (dir: string) => void
 }
 
 function readReport(root: string): Report {
@@ -148,33 +194,79 @@ function readReport(root: string): Report {
  * report summary, the plan summary, the unified diff and any refusals, and writes nothing at all
  * (spec C2). Otherwise the plan is applied and committed on branch consent-banner. Exit code 3
  * when the plan is refused, dry run or not (Ruling 32).
+ *
+ * When `report.fonts.status` is `wire` (and not `fonts: false`), the site's Google Fonts are
+ * self-hosted too, planned in full (network included) before anything is written, and committed as
+ * a second commit on consent-banner. A refused fonts plan refuses the whole wire.
  */
-export function runWire(dir: string, opts: { dryRun: boolean }): { code: number; output: string } {
+export async function runWire(dir: string, opts: WireRunOptions): Promise<{ code: number; output: string }> {
   const root = resolve(dir)
   const report = readReport(root)
   const site = diskSite(root)
   const plan = planWire(site, report)
   const lines = [summary(report)]
+  const nothing = `nothing ${opts.dryRun ? 'would be' : 'was'} written`
   if (!plan.ok) {
-    lines.push(`wire: refused, nothing ${opts.dryRun ? 'would be' : 'was'} written`, ...refusalLines(plan).map((l) => `  ${l}`))
+    lines.push(`wire: refused, ${nothing}`, ...refusalLines(plan).map((l) => `  ${l}`))
     return { code: EXIT_REFUSED, output: `${lines.join('\n')}\n` }
   }
-  const files = planFiles((path) => site.read(path), plan)
+  const read = (path: string) => site.read(path)
+  const files = planFiles(read, plan)
+  let fonts: FontsFile[] | null = null
+  let fontNotes: string[] = []
+  if (opts.fonts !== false && report.fonts?.status === 'wire') {
+    const refusedFonts = (reasons: string[]) => {
+      lines.push(`wire: google fonts refused, ${nothing} (wire --no-fonts wires the banner alone)`, ...reasons.map((l) => `  ${l}`))
+      return { code: EXIT_REFUSED, output: `${lines.join('\n')}\n` }
+    }
+    const taken = fontsTargetsTaken(root)
+    if (taken) return refusedFonts([taken])
+    const fp = await planFonts(site, report, { ...(opts.fetch ? { fetch: opts.fetch } : {}), ...(opts.now ? { now: opts.now } : {}) })
+    if (!fp.ok) return refusedFonts(refusalLines(fp))
+    try {
+      fonts = fontsFiles(read, fp, plan.edits)
+    } catch (e) {
+      return refusedFonts([(e as Error).message])
+    }
+    fontNotes = fp.notes
+  }
   lines.push(
     `wire: ${plan.edits.length} edits in ${new Set(plan.edits.map((e) => e.file)).size} files, ${plan.newFiles.length} new files, ${plan.skipped.length} skipped`,
     ...files.map((f) => `  ${f.before === null ? 'new ' : 'edit'} ${f.path}`),
     ...plan.skipped.map((t) => `  skip ${t}`),
   )
+  if (fonts) lines.push(...fontNotes, ...fileLines(fonts))
   if (opts.dryRun) {
-    const diff = files.map((f) =>
-      createTwoFilesPatch(f.before === null ? '/dev/null' : `a/${f.path}`, `b/${f.path}`, f.before ?? '', f.after, undefined, undefined, {
-        context: 3,
-        headerOptions: FILE_HEADERS_ONLY,
-      }),
-    )
-    return { code: 0, output: `${lines.join('\n')}\n\n${diff.join('')}` }
+    const diff = diffOf(files)
+    const fontsDiff = fonts ? diffOf(fonts, (p) => p.endsWith('.css')) : ''
+    return { code: 0, output: `${lines.join('\n')}\n\n${diff}${fontsDiff}` }
   }
-  lines.push(...applyWire(root, plan, { commit: true }), `committed on ${BRANCH}`)
+  lines.push(...applyWire(root, plan, { commit: true, ...(opts.install ? { install: opts.install } : {}) }))
+  if (fonts) commitFonts(root, fonts)
+  lines.push(`committed on ${BRANCH}${fonts ? ' (2 commits)' : ''}`)
+  return { code: 0, output: `${lines.join('\n')}\n` }
+}
+
+/**
+ * fonts <site dir>: self-hosts the Google Fonts of a site whose banner is already live, on a new
+ * branch fonts-selfhost from origin/main with one commit. A dry run prints the diff and writes
+ * nothing. Exit code 3 when the plan is refused.
+ */
+export async function runFonts(dir: string, opts: { dryRun: boolean; fetch?: FontFetch; now?: Date }): Promise<{ code: number; output: string }> {
+  const root = resolve(dir)
+  const report = readReport(root)
+  const site = diskSite(root)
+  const lines = [summary(report)]
+  const fp = await planFonts(site, report, { ...(opts.fetch ? { fetch: opts.fetch } : {}), ...(opts.now ? { now: opts.now } : {}) })
+  if (!fp.ok) {
+    lines.push(`fonts: refused, nothing ${opts.dryRun ? 'would be' : 'was'} written`, ...refusalLines(fp).map((l) => `  ${l}`))
+    return { code: EXIT_REFUSED, output: `${lines.join('\n')}\n` }
+  }
+  const files = fontsFiles((path) => site.read(path), fp)
+  lines.push(...fp.notes, ...fileLines(files))
+  if (opts.dryRun) return { code: 0, output: `${lines.join('\n')}\n\n${diffOf(files, (p) => p.endsWith('.css'))}` }
+  commitFonts(root, files, { branch: FONTS_BRANCH })
+  lines.push(`committed on ${FONTS_BRANCH}`)
   return { code: 0, output: `${lines.join('\n')}\n` }
 }
 
@@ -331,8 +423,8 @@ async function mainMerge(rest: string[]): Promise<number> {
   return r.status === 'done' ? 0 : 1
 }
 
-function mainWire(rest: string[]): number {
-  let args: { dir: string; dryRun: boolean }
+async function mainWire(rest: string[]): Promise<number> {
+  let args: ReturnType<typeof parseWireArgs>
   try {
     args = parseWireArgs(rest)
   } catch (e) {
@@ -340,7 +432,25 @@ function mainWire(rest: string[]): number {
     return 2
   }
   try {
-    const { code, output } = runWire(args.dir, { dryRun: args.dryRun })
+    const { code, output } = await runWire(args.dir, { dryRun: args.dryRun, ...(args.fonts === false ? { fonts: false } : {}) })
+    process.stdout.write(output)
+    return code
+  } catch (e) {
+    console.error((e as Error).message)
+    return 1
+  }
+}
+
+async function mainFonts(rest: string[]): Promise<number> {
+  let args: ReturnType<typeof parseFontsArgs>
+  try {
+    args = parseFontsArgs(rest)
+  } catch (e) {
+    console.error((e as Error).message)
+    return 2
+  }
+  try {
+    const { code, output } = await runFonts(args.dir, { dryRun: args.dryRun })
     process.stdout.write(output)
     return code
   } catch (e) {
@@ -356,6 +466,7 @@ export async function main(argv: string[]): Promise<number> {
     return 0
   }
   if (command === 'wire') return mainWire(rest)
+  if (command === 'fonts') return mainFonts(rest)
   if (command === 'verify') return mainVerify(rest)
   if (command === 'pr') return mainPr(rest)
   if (command === 'live') return mainLive(rest)

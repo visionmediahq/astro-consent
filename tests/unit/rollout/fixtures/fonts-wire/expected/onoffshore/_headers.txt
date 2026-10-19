@@ -1,0 +1,4 @@
+/*
+  X-Frame-Options: DENY
+  X-Content-Type-Options: nosniff
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' cdn.jsdelivr.net www.google.com www.gstatic.com elfsightcdn.com https:; style-src 'self' 'unsafe-inline' elfsightcdn.com https:; font-src 'self' data: https:; img-src 'self' data: https:; connect-src 'self' https:; frame-src www.google.com elfsightcdn.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self';

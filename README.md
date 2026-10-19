@@ -203,7 +203,7 @@ Each choice also calls `window.umami?.track('consent', { choice })`.
 
 - **Umami is not gated.** It is cookie-free and first-party; the banner text says so.
 - **Not handled by this package:** Google Fonts, scripts from jsdelivr and reCAPTCHA still load on
-  sites that use them.
+  sites that use them. (The rollout tool can self-host a site's Google Fonts; see "Rollout tool".)
 - **A one-off "Visa"** loads that one embed for that page view and stores nothing. Declining in the
   banner afterwards keeps it on screen and loads nothing else.
 - **Withdrawing** something that is loaded deletes its first-party cookies (`_ga*`, `_gid`, `_gcl_*`,
@@ -227,7 +227,8 @@ from a checkout of this repo with `npx tsx`:
 
 ```bash
 npx tsx ci/rollout/run.ts detect <site dir> --domain <host> [--domain <host>]...
-npx tsx ci/rollout/run.ts wire   <site dir> [--dry-run]
+npx tsx ci/rollout/run.ts wire   <site dir> [--dry-run] [--no-fonts]
+npx tsx ci/rollout/run.ts fonts  <site dir> [--dry-run]   # Google Fonts alone, on branch fonts-selfhost
 npx tsx ci/rollout/run.ts verify <site dir>
 npx tsx ci/rollout/run.ts verify --demo <dist dir>      # a built demo, no git/npm/Docker
 npx tsx ci/rollout/run.ts pr     <site dir> --shots-dir <path> --shots-base <url> [--issue <url>]...
@@ -237,7 +238,7 @@ npx tsx ci/rollout/run.ts help
 ```
 
 - `detect` reads the site and writes the report; `wire` plans every edit and either prints the
-  diff (`--dry-run`, writes nothing) or applies it all on branch `consent-banner` with one commit;
+  diff (`--dry-run`, writes nothing) or applies it all on branch `consent-banner` with one commit (a second for Google Fonts, below);
   `verify` runs the build and browser checks; `pr` opens the PR; `live baseline` records the live
   site before the merge; `merge` re-verifies if `main` moved, merges, waits for Coolify and runs
   `live post-merge`.
@@ -245,7 +246,7 @@ npx tsx ci/rollout/run.ts help
   `live-baseline-hosts.json`, `apps.json`, screenshots), which `detect` adds to the checkout's `.git/info/exclude`, so stages
   can be rerun one at a time and nothing of it is committed. `verify --demo` writes to a temp folder.
 - **Exit codes:** `0` ok (for `live baseline` also the expected RED), `1` error, a failed verify
-  step or a live/merge STOP, `2` usage, `3` the wire plan was refused (dry run or not; nothing was
+  step or a live/merge STOP, `2` usage, `3` the wire (or fonts) plan was refused (dry run or not; nothing was
   written).
 - If `wire` fails after it switched to `consent-banner`, it leaves the checkout uncommitted and
   says how to retry: `git reset --hard && git clean -fd && git switch main && git branch -D
@@ -336,9 +337,32 @@ npx tsx ci/rollout/run.ts help
   `src/data/privacy.json` from `report.services`; an existing `privacy.json` that lacks one of them
   is refused. Pool rows without `services` are re-detected, and `select` strata are
   `consent`/`notice`.
-- **Google Fonts (detect only, so far).** `detect` also writes `report.fonts`, separate from the
-  banner: it never changes `classification` or `reasons`, and `wire`, `verify` and `live` do not
-  act on it yet. `status` is `wire` for exactly one literal `fonts.googleapis.com/css2` URL loaded
+- **Self-hosting Google Fonts (`wire`, `fonts`; `verify` and `live` do not check it yet).** When
+  `report.fonts.status` is `wire`, `wire` adds a second commit on `consent-banner` ("feat: Google
+  Fonts från sajten själv (self-hosted)"); `wire --no-fonts` leaves the fonts alone. For a site
+  whose banner is already live, `fonts <site dir>` makes the same commit alone on a new branch
+  `fonts-selfhost` from origin/main (same checks as `wire`: clean checkout at origin/main, no such
+  branch locally or on origin). Everything is planned before anything is written; a failed request,
+  an unexpected answer or an existing `src/styles/fonts.css` or `public/fonts/` refuses the whole
+  plan (exit 3), and a refused fonts plan refuses `wire` too. What it does:
+  - fetches the css2 URL once with a pinned Chrome User-Agent (`CHROME_UA` in `wire/fonts.ts`),
+    so Google answers with woff2 and a unicode-range per subset; anything else is refused;
+  - keeps `latin` and `latin-ext`, plus any other subset whose unicode-range covers a character in
+    the site's `src/` (literal, HTML entity, JS or CSS escape) that latin and latin-ext do not:
+    the only faces a browser could have fetched from Google (an arrow `→` keeps Open Sans
+    `symbols` and `math`);
+  - writes each woff2 once (a variable font serves several weights) as
+    `public/fonts/<family>-<style>-<weight>-<subset>-<sha256:8>.woff2`, each family's licence as
+    `public/fonts/LICENSE-<family>.txt` (google/fonts' `ofl/<family>/OFL.txt`, else
+    `apache/…/LICENSE.txt` or `ufl/…/UFL.txt`, copyright line included), and
+    `src/styles/fonts.css`: a header naming the URL, the date, the subsets and the licences, then
+    Google's `@font-face` blocks verbatim with local urls (`font-display: swap` added where absent);
+  - adds `@import "./fonts.css";` right after `@import "tailwindcss"` in `report.css.entry`;
+  - removes every location (whole lines; a font comment on the line right above goes with them;
+    no double blank line is left) and cuts `fonts.googleapis.com` / `fonts.gstatic.com` source
+    tokens from each CSP, refusing if that would leave a directive empty.
+- **Google Fonts detection.** `detect` also writes `report.fonts`, separate from the
+  banner: it never changes `classification` or `reasons`. `status` is `wire` for exactly one literal `fonts.googleapis.com/css2` URL loaded
   only by `<link rel="stylesheet">`, `<link rel="preload" as="style">` (any attribute order, split
   over lines, `media="print" onload`), a `<noscript>` holding only such links, a frontmatter
   `const` used only as their `href`, or a CSS `@import`, plus preconnect/dns-prefetch links;

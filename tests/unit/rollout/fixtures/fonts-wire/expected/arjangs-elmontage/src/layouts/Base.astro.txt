@@ -1,0 +1,12 @@
+---
+import SEO from '../components/SEO.astro'
+import '../styles/global.css'
+
+const umamiScriptUrl = import.meta.env.UMAMI_SCRIPT_URL
+---
+<html lang="sv">
+  <head>
+    {umamiScriptUrl && <script is:inline defer src={umamiScriptUrl}></script>}
+  </head>
+  <body><slot /></body>
+</html>

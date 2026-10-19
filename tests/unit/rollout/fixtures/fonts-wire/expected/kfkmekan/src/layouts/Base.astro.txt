@@ -1,0 +1,17 @@
+---
+import SEO from '../components/SEO.astro'
+import '../styles/global.css'
+---
+<html lang="sv">
+  <head>
+    <!--
+      With a manual <meta> and no hashes, 'unsafe-inline' is respected as intended.
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline' https://browser.sentry-cdn.com https://www.google.com https://www.gstatic.com; font-src 'self'; img-src 'self' data: https://www.gstatic.com; media-src 'self' blob:; connect-src 'self' https:; frame-src 'self' https://www.google.com https://recaptcha.google.com; frame-ancestors 'self'; form-action 'self'; object-src 'none'; base-uri 'self'; worker-src 'none'; upgrade-insecure-requests"
+    />
+    <link rel="icon" href="/favicon.webp" />
+  </head>
+  <body><slot /></body>
+</html>
