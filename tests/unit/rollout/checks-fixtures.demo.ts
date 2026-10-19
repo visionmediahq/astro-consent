@@ -149,6 +149,20 @@ const FIXTURES: Record<string, string> = {
   // white text; a near-white overlay on a positioned section around a non-positioned black footer.
   pseudoneg: page(`<style>footer{background:#000;position:relative;isolation:isolate;padding:24px}footer::before{content:'';position:absolute;inset:0;background:#fff;z-index:-1}</style><footer><div data-privacy-links><a href="/integritet" style="color:#fff">Integritetspolicy</a></div></footer>`),
   pseudoup: page(`<style>section{position:relative}section::before{content:'';position:absolute;inset:0;background:rgba(255,255,255,.95)}footer{background:#000;padding:24px}</style><section><footer><div data-privacy-links><a href="/integritet" style="color:#fff">Integritetspolicy</a></div></footer></section>`),
+  // Round 3. ernstedt: a fixed feTurbulence grain over everything at z-index 1, under a z-50 banner.
+  grain: page(`<style>body::after{content:'';position:fixed;inset:0;z-index:1;pointer-events:none;opacity:.055;mix-blend-mode:multiply;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}</style>${banner('position:fixed;bottom:0;left:0;right:0;background:#fff;padding:8px;z-index:50')}<footer style="background:#000;padding:24px"><div data-privacy-links><a href="/integritet" style="color:#fff">Integritetspolicy</a></div></footer>`),
+  // A solid fixed overlay at z-index 1: the z-50 banner paints above it, a footer below the fold does
+  // not (the overlay is fixed: it is over the footer whenever the footer is scrolled to).
+  overlay: page(`<style>body::after{content:'';position:fixed;inset:0;z-index:1;background:rgba(255,255,255,.9)}</style>${banner('position:fixed;top:0;left:0;right:0;background:#fff;padding:8px;z-index:50')}<div style="height:2000px"></div><footer style="background:#000;padding:24px"><div data-privacy-links><a href="/integritet" style="color:#fff">Integritetspolicy</a></div></footer>`),
+  // Individual transform properties (Tailwind v4): a white sheet moved over the text with translate,
+  // a 2px bar scaled over it, and an ancestor's translate capturing a fixed pseudo.
+  translated: page(`<style>footer{position:relative;background:#000;padding:24px}footer::before{content:'';position:absolute;top:-300px;left:0;right:0;height:100%;background:#fff;translate:0 300px}</style><div style="height:320px"></div><footer><div data-privacy-links><a href="/integritet" style="color:#fff">Integritetspolicy</a></div></footer>`),
+  scaled: page(`<style>footer{position:relative;background:#000;padding:24px 24px 120px}footer::before{content:'';position:absolute;bottom:0;left:0;right:0;height:2px;background:#fff;scale:1 80}</style><footer><div data-privacy-links><a href="/integritet" style="color:#fff">Integritetspolicy</a></div></footer>`),
+  captured: page(`<style>section{translate:0 0}footer{background:#000;padding:24px 24px 24px 60px}footer::before{content:'';position:fixed;top:0;left:0;width:10px;height:100%;background:#fff}</style><section><footer><div data-privacy-links><a href="/integritet" style="color:#fff">Integritetspolicy</a></div></footer></section>`),
+  // The opaque footer sits at z-index -2, below a z-index -1 overlay on the section around it.
+  negstack: page(`<style>section{position:relative}section::before{content:'';position:absolute;inset:0;background:rgba(255,255,255,.95);z-index:-1}footer{background:#000;position:relative;z-index:-2;padding:24px}</style><section><footer><div data-privacy-links><a href="/integritet" style="color:#fff">Integritetspolicy</a></div></footer></section>`),
+  // A scrolled box: its ::before scrolls with the content, over the text, though unscrolled maths miss it.
+  scrolled: page(`<style>.box{position:relative;overflow:auto;height:100px;background:#000}.box::before{content:'';position:absolute;top:60px;left:0;right:0;height:24px;background:#fff}</style><div class="box"><div style="height:60px"></div><div data-privacy-links><a href="/integritet" style="color:#fff">Integritetspolicy</a></div><div style="height:300px"></div></div><script>document.querySelector('.box').scrollTop = 50</script>`),
   // Above the opaque footer: a backdrop-filter cannot reach the text; an identity filter on the footer.
   backdropup: page(`<style>section{backdrop-filter:blur(4px)}footer{background:#000;padding:24px;filter:grayscale(0)}</style><section><footer><div data-privacy-links><a href="/integritet" style="color:#fff">Integritetspolicy</a></div></footer></section>`),
   // #46 (knutssonsbil): main's absolute iframe fills the ratio box; the in-flow 320px wrapper does
@@ -336,6 +350,27 @@ try {
     for (const [path, what] of [['/pseudoneg/', 'a z-index -1 ::before inside an isolated footer'], ['/pseudoup/', 'an overlay ::before on a positioned ancestor above the opaque footer']] as const) {
       const rows = await links(path)
       expect(rows.length === 1 && rows.every((r) => !r.ok && r.indeterminate === 'effect on the text or its background: positioned ::before with a background'), `${path} ${what} is over the text: indeterminate`, rows)
+    }
+    {
+      const all = await checkContrast(browser, BASE, ['/grain/'], { stub: true })
+      expect(all.filter((r) => r.kind === 'banner').length === 2 && all.filter((r) => r.kind === 'links').length === 1 && all.every((r) => r.ok && !r.indeterminate), '/grain/ a fixed feTurbulence grain at z-index 1 under a z-50 banner does not count (ernstedt)', all)
+    }
+    {
+      const all = await checkContrast(browser, BASE, ['/overlay/'], { stub: true })
+      const ban = all.filter((r) => r.kind === 'banner')
+      const lk = all.filter((r) => r.kind === 'links')
+      expect(ban.length === 2 && ban.every((r) => r.ok && !r.indeterminate), '/overlay/ a z-50 banner paints above a z-index 1 fixed overlay', ban)
+      expect(lk.length === 1 && lk.every((r) => !r.ok && r.indeterminate === 'effect on the text or its background: positioned ::after with a background'), '/overlay/ a fixed overlay is over a footer below the fold too', lk)
+    }
+    for (const [path, what] of [
+      ['/translated/', 'a sheet moved over the text with translate'],
+      ['/scaled/', 'a 2px bar scaled over the text'],
+      ['/captured/', "a fixed pseudo captured by an ancestor's translate"],
+      ['/negstack/', 'a z-index -1 overlay above an opaque footer at z-index -2'],
+      ['/scrolled/', "a pseudo in a scrolled box's content"],
+    ] as const) {
+      const rows = await links(path)
+      expect(rows.length === 1 && rows.every((r) => !r.ok && r.indeterminate === 'effect on the text or its background: positioned ::before with a background'), `${path} ${what}: indeterminate`, rows)
     }
     const up = await links('/backdropup/')
     expect(up.length === 1 && up.every((r) => r.ok && !r.indeterminate), '/backdropup/ backdrop-filter above the opaque layer and filter: grayscale(0) do not count', up)

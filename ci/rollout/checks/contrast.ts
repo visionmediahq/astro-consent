@@ -91,27 +91,52 @@ const MEASURE = `(() => {
   const flat = (t) => t === 'none' || /^matrix\\(1, 0, 0, 1, [-\\d.e]+, [-\\d.e]+\\)$/.test(t)
   const px = (v) => (/^-?[\\d.]+(?:e-?\\d+)?px$/.test(v) ? parseFloat(v) : NaN)
   const opacityRunning = (e) => e.getAnimations().some((a) => (a.playState === 'running' || a.playState === 'pending') && a.effect && a.effect.getKeyframes().some((k) => 'opacity' in k))
+  // transform, or Tailwind v4's individual translate/scale/rotate.
+  const moved = (s) => s.transform !== 'none' || s.translate !== 'none' || s.scale !== 'none' || s.rotate !== 'none'
+  // DaisyUI-style feTurbulence noise is decoration, as for backgrounds (coversBackground).
+  const NOISE = /url\\("data:image\\/svg\\+xml[^"]*feTurbulence[^"]*"\\)/g
+  const imagePainted = (v) => !!v && v.replace(NOISE, '').replace(/none|,|\\s/g, '') !== ''
+  const flexParent = (a) => a.parentElement && /flex|grid/.test(getComputedStyle(a.parentElement).display)
+  const contextOf = (a) => {
+    const s = getComputedStyle(a)
+    const explicit = s.zIndex !== 'auto' && (s.position !== 'static' || flexParent(a))
+    const forms = explicit || /fixed|sticky/.test(s.position) || Number(s.opacity) < 1 || moved(s) || !noFilter(s.filter) || (s.backdropFilter && s.backdropFilter !== 'none') || s.mixBlendMode !== 'normal' || s.isolation === 'isolate' || /paint|strict|content|layout/.test(s.contain) || /transform|opacity|filter|perspective/.test(s.willChange) || s.perspective !== 'none' || s.clipPath !== 'none' || (s.mask && s.mask !== 'none')
+    return forms ? { z: explicit ? parseInt(s.zIndex, 10) : undefined } : undefined
+  }
+  // The text paints above e's pseudo when the outermost stacking context around the text below e
+  // has an explicit z-index above the pseudo's (ernstedt: a z-50 banner over a z-index 1 grain).
+  const textAbove = (el, e, p) => {
+    let outer
+    for (let a = el; a && a !== e; a = a.parentElement) {
+      const c = contextOf(a)
+      if (c) outer = c
+    }
+    const zp = p.zIndex === 'auto' ? 0 : parseInt(p.zIndex, 10)
+    return !!outer && outer.z !== undefined && outer.z > zp
+  }
   // Whether e's positioned ::before/::after paints a background over the text's box. Its box is
-  // computed only when its containing block is known: e itself (positioned, no transform) for
-  // absolute, the viewport for fixed (no ancestor that would capture it); anything else counts.
-  // Above the opaque layer, a negative z-index paints below that layer's in-flow background.
-  const pseudoOver = (e, pseudo, text, above) => {
+  // computed only when its containing block is known: e itself (positioned, not scaled or rotated,
+  // not scrolled) for absolute, the viewport for fixed (no ancestor that would capture it); anything
+  // else counts. 'exempt': above the opaque layer with no z-index between, where a negative z-index
+  // paints below that layer's in-flow background.
+  const pseudoOver = (el, e, pseudo, text, exempt) => {
     const p = getComputedStyle(e, pseudo)
     if (p.content === 'none' || p.content === 'normal' || !/absolute|fixed/.test(p.position)) return false
-    if (above && parseInt(p.zIndex, 10) < 0) return false
-    if (!(rgba(p.backgroundColor)[3] > 0 || (p.backgroundImage && p.backgroundImage !== 'none'))) return false
-    if (p.transform !== 'none') return true
+    if (exempt && parseInt(p.zIndex, 10) < 0) return false
+    if (!(rgba(p.backgroundColor)[3] > 0 || imagePainted(p.backgroundImage))) return false
+    if (textAbove(el, e, p)) return false
+    if (moved(p) || p.direction === 'rtl') return true
     let x0, y0
     if (p.position === 'absolute') {
       const s = getComputedStyle(e)
-      if (s.position === 'static' || !flat(s.transform)) return true
+      if (s.position === 'static' || !flat(s.transform) || s.scale !== 'none' || s.rotate !== 'none' || e.scrollTop || e.scrollLeft) return true
       const r = e.getBoundingClientRect()
       x0 = r.left + px(s.borderLeftWidth)
       y0 = r.top + px(s.borderTopWidth)
     } else {
       for (let a = e; a; a = a.parentElement) {
         const s = getComputedStyle(a)
-        if (s.transform !== 'none' || !noFilter(s.filter) || s.perspective !== 'none' || (s.backdropFilter && s.backdropFilter !== 'none') || /paint|strict|content|layout/.test(s.contain) || /transform|filter|perspective/.test(s.willChange)) return true
+        if (moved(s) || !noFilter(s.filter) || s.perspective !== 'none' || (s.backdropFilter && s.backdropFilter !== 'none') || /paint|strict|content|layout/.test(s.contain) || /transform|filter|perspective/.test(s.willChange)) return true
       }
       x0 = 0
       y0 = 0
@@ -123,7 +148,8 @@ const MEASURE = `(() => {
     const h = px(p.height) + extra(p.paddingTop, p.paddingBottom, p.borderTopWidth, p.borderBottomWidth)
     if (![left, top, w, h].every(Number.isFinite)) return true
     const ix = Math.min(left + w, text.right) - Math.max(left, text.left)
-    const iy = Math.min(top + h, text.bottom) - Math.max(top, text.top)
+    // A fixed box is over the text whenever the text is scrolled to it: any height will do.
+    const iy = p.position === 'fixed' ? h : Math.min(top + h, text.bottom) - Math.max(top, text.top)
     return ix > 0 && iy > 0
   }
   const layersOf = (el) => {
@@ -135,13 +161,15 @@ const MEASURE = `(() => {
     let animating = false
     let below = false // a background has been seen below this element
     let reached = false // the first opaque background is behind us
+    let zSeen = false // a z-index on the opaque element or between it and the current element
     for (let e = el; e; e = e.parentElement) {
       const style = getComputedStyle(e)
       const opacity = Number(style.opacity)
       if (opacityRunning(e)) animating = true
       if (style.mixBlendMode !== 'normal') effects.push('mix-blend-mode')
       if (!noFilter(style.filter)) effects.push('filter')
-      for (const pseudo of ['::before', '::after']) if (pseudoOver(e, pseudo, text, reached)) effects.push('positioned ' + pseudo + ' with a background')
+      for (const pseudo of ['::before', '::after']) if (pseudoOver(el, e, pseudo, text, reached && !zSeen)) effects.push('positioned ' + pseudo + ' with a background')
+      if (reached && style.zIndex !== 'auto') zSeen = true
       if (reached) {
         if (opacity < 1) effects.push('opacity')
         continue
@@ -160,7 +188,10 @@ const MEASURE = `(() => {
       if (image) images.push({ value: style.backgroundImage, at: layers.length, size: style.backgroundSize, repeat: style.backgroundRepeat, position: style.backgroundPosition })
       if (c[3] > 0) layers.push(c)
       if (has) below = true
-      if (c[3] === 255) reached = true
+      if (c[3] === 255) {
+        reached = true
+        zSeen = style.zIndex !== 'auto'
+      }
     }
     return { layers, images, fade, animating, effects: [...new Set(effects)] }
   }
