@@ -1,5 +1,6 @@
 // Detects what a site loads or gates by script: trackers (registry services loaded by script or
-// import), existing consent banners, reCAPTCHA, and astro-consent wiring that is already there.
+// import), embeds a script builds (an embed URL in a `<script>` or an element attribute, #57),
+// existing consent banners, reCAPTCHA, and astro-consent wiring that is already there.
 //
 // Misreading goes one way only. A false hit sends a site to a human; a miss could wire a site that
 // loads a tracker before consent. So the text sweeps read whole files, comments included, and only
@@ -10,7 +11,19 @@ import { type AstroNode, attr, elements, parseAstro } from '../lib/astro-ast'
 import { importsOf, parseModule } from '../lib/ts-ast'
 import type { SiteFiles } from '../lib/site-files'
 
+/**
+ * An iframe embed URL (a map, a calendar) outside an `<iframe>`: a click-to-load the site built
+ * itself, which ignores the banner's consent and which wire cannot convert. `where` is the attribute
+ * that holds it (`data-map-src`) or `script`.
+ */
+export interface ScriptBuiltEmbed {
+  service: ServiceSlug
+  file: string
+  where: string
+}
+
 export type DetectedScripts = Pick<Report, 'trackers' | 'banners' | 'recaptcha' | 'alreadyWired'> & {
+  scriptBuilt: ScriptBuiltEmbed[]
   /** `.astro` files under src/ that did not parse; their text is still swept. */
   parseErrors: { file: string; message: string }[]
 }
@@ -112,13 +125,62 @@ function trackersInText(text: string): ServiceSlug[] {
   return out
 }
 
-/** Registry services a `<script>` element loads by its `src` or its inline body. JSON data is skipped. */
-function trackersInScript(node: AstroNode, text: string): ServiceSlug[] {
+/**
+ * The service whose iframe embed `url` is: a Google Maps embed (`/maps/embed…`, `output=embed`) or
+ * a Google Calendar embed (`/calendar/embed`). Links, the Maps JavaScript API and the rest are not.
+ */
+function embedServiceOfUrl(url: string): ServiceSlug | null {
+  const slug = serviceOfUrl(url)
+  if (slug !== 'google-maps' && slug !== 'google-calendar') return null
+  const parsed = new URL(url.startsWith('//') ? `https:${url}` : url)
+  if (slug === 'google-calendar') return /^\/calendar\/embed(?:\/|$)/.test(parsed.pathname) ? slug : null
+  return /^\/maps\/embed(?:\/|$)/.test(parsed.pathname) || parsed.searchParams.get('output') === 'embed' ? slug : null
+}
+
+/** Registry services a `<script>` element loads by its `src` or its inline body, and the embeds it builds. JSON data is skipped. */
+function servicesInScript(node: AstroNode, text: string): { trackers: ServiceSlug[]; embeds: ServiceSlug[] } {
   const type = attr(node, 'type')
-  if (type?.kind === 'quoted' && /json/i.test(type.value)) return []
+  if (type?.kind === 'quoted' && /json/i.test(type.value)) return { trackers: [], embeds: [] }
   const src = attr(node, 'src')
   const urls = [...(src && src.kind !== 'empty' ? [src.value, ...urlsIn(src.value)] : []), ...urlsIn(text.slice(node.start, node.end))]
-  return urls.flatMap((u) => serviceOfUrl(u) ?? []).filter((slug) => !WIDGET_ONLY.has(slug))
+  const trackers: ServiceSlug[] = []
+  const embeds: ServiceSlug[] = []
+  for (const u of urls) {
+    const embed = embedServiceOfUrl(u)
+    if (embed !== null) embeds.push(embed)
+    else {
+      const slug = serviceOfUrl(u)
+      if (slug !== null && !WIDGET_ONLY.has(slug)) trackers.push(slug)
+    }
+  }
+  return { trackers, embeds }
+}
+
+/** Attributes whose URL a visitor follows rather than the page loads. */
+const LINK_ATTRS = new Set(['href'])
+
+/**
+ * Embed URLs in the attributes of HTML elements other than `<iframe>` (detectIframes' job, lazy
+ * `data-src` included) and `<script>` (servicesInScript), template literals in expressions
+ * included: `data-map-src={`https://maps.google.com/maps?q=${q}&output=embed`}`. Component props
+ * are left out: `<Map src=…>` is followed to its iframe by detectIframes.
+ */
+function embedsInAttributes(root: AstroNode): { service: ServiceSlug; where: string }[] {
+  const out: { service: ServiceSlug; where: string }[] = []
+  const visit = (n: AstroNode): void => {
+    if (n.type === 'element' && n.name !== 'iframe' && n.name !== 'script') {
+      for (const a of n.attributes) {
+        if (a.kind === 'empty' || a.kind === 'spread' || LINK_ATTRS.has(a.name.toLowerCase())) continue
+        for (const u of [a.value, ...urlsIn(a.value)]) {
+          const service = embedServiceOfUrl(u)
+          if (service !== null) out.push({ service, where: a.name })
+        }
+      }
+    }
+    n.children.forEach(visit)
+  }
+  visit(root)
+  return out
 }
 
 function importedTrackers(specifiers: string[]): ServiceSlug[] {
@@ -144,6 +206,10 @@ export function packageDeps(files: SiteFiles): string[] {
 export function detectScripts(files: SiteFiles): DetectedScripts {
   const parseErrors: DetectedScripts['parseErrors'] = []
   const trackers = new Set<ServiceSlug>()
+  const scriptBuilt: ScriptBuiltEmbed[] = []
+  const addBuilt = (e: ScriptBuiltEmbed): void => {
+    if (!scriptBuilt.some((x) => x.service === e.service && x.file === e.file && x.where === e.where)) scriptBuilt.push(e)
+  }
   const banners: string[] = []
   const addBanner = (b: string): void => {
     if (!banners.includes(b)) banners.push(b)
@@ -189,7 +255,12 @@ export function detectScripts(files: SiteFiles): DetectedScripts {
       parseErrors.push({ file, message: e instanceof Error ? e.message : String(e) })
       continue
     }
-    for (const script of elements(tree.root, 'script')) for (const slug of trackersInScript(script, text)) trackers.add(slug)
+    for (const script of elements(tree.root, 'script')) {
+      const found = servicesInScript(script, text)
+      for (const slug of found.trackers) trackers.add(slug)
+      for (const service of found.embeds) addBuilt({ service, file, where: 'script' })
+    }
+    for (const e of embedsInAttributes(tree.root)) addBuilt({ ...e, file })
     const imports = tree.frontmatter ? importsOf(parseModule(tree.frontmatter.text)).map((i) => i.from) : []
     for (const slug of importedTrackers(imports)) trackers.add(slug)
     if (imports.some((from) => from === PACKAGE || from.startsWith(`${PACKAGE}/`))) componentsWired = true
@@ -202,5 +273,5 @@ export function detectScripts(files: SiteFiles): DetectedScripts {
   if (componentsWired) alreadyWired.push('components')
   if (files.exists('src/data/privacy.json')) alreadyWired.push('privacy.json')
 
-  return { trackers: [...trackers].sort(), banners, recaptcha, alreadyWired, parseErrors }
+  return { trackers: [...trackers].sort(), scriptBuilt, banners, recaptcha, alreadyWired, parseErrors }
 }

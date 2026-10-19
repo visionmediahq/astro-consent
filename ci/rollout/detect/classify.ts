@@ -3,6 +3,7 @@
 // counts as a problem, never as "probably fine".
 import { servicesOf } from '../lib/report'
 import type { ServiceSlug } from '../../../src/services'
+import type { ScriptBuiltEmbed } from './scripts'
 import type { Classification, IframeInfo, Report } from '../types'
 
 /** Everything detect found, plus what classify needs that the report does not keep. */
@@ -17,6 +18,8 @@ export type Findings = Omit<Report, 'classification' | 'reasons' | 'services'> &
   wired: ServiceSlug[]
   /** detectWidgets' reasons, each naming its file. */
   widgetReasons: string[]
+  /** Embed URLs outside an `<iframe>`, in a `<script>` or an element attribute (#57). */
+  scriptBuilt: ScriptBuiltEmbed[]
 }
 
 /** The Astro majors the package's peerDependencies accept. */
@@ -83,6 +86,7 @@ export function classify(f: Findings): { classification: Classification; reasons
     const r = iframeReason(frame, f.domains)
     if (r !== null) add(r)
   }
+  for (const e of f.scriptBuilt) add(`script-built embed ${e.service} in ${e.file} (${e.where})`)
   for (const t of f.trackers) add(`tracker ${t}: the batch wires notice and consent only`)
   for (const b of f.banners) add(`existing banner: ${b}`)
   for (const r of f.widgetReasons) add(r)
