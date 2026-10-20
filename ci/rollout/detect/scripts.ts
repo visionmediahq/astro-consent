@@ -223,11 +223,31 @@ const AGREED_SCRIPT_HOSTS: { host: string; path?: string; reason: string }[] = [
 /** CMS admin shells load their editor from a CDN and are never part of what a visitor sees. */
 const ADMIN_SHELL = /^(?:public|src\/pages)\/admin(?:\/|\.)/
 
-/** Remote modules a script body imports: `import 'https://…'`, `from "//…"`, `import('https://…')`. */
-const REMOTE_IMPORT = /\b(?:from|import)\s*\(?\s*(['"])((?:https?:)?\/\/[^'"]+)\1/g
+/**
+ * Remote modules a script body imports, at the start of a statement: `import 'https://…'`,
+ * `import a from "//…"`, `} from '…'` closing a multi-line list, `export * from '…'`,
+ * `await import('https://…')`. Block comments are cut first; a line comment or a string that only
+ * mentions an import does not start a statement.
+ */
+const REMOTE_IMPORTS = [
+  /^[ \t]*(?:(?:(?:const|let|var)\s+)?[\w$.]+\s*=\s*)?(?:await\s+)?import\s*\(?\s*(['"])((?:https?:)?\/\/[^'"]+)\1/gm,
+  /^[ \t]*(?:(?:import|export)\b[^'"\n]*|\}[^'"\n]*)\bfrom\s*(['"])((?:https?:)?\/\/[^'"]+)\1/gm,
+]
+const remoteImports = (body: string): string[] => {
+  const code = body.replace(/\/\*[\s\S]*?\*\//g, '')
+  return REMOTE_IMPORTS.flatMap((re) => [...code.matchAll(re)].map((m) => m[2]!))
+}
 
-/** `<script … src=…>` in a plain HTML file. */
-const HTML_SCRIPT_SRC = /<script\b[^>]*?\bsrc\s*=\s*["']?((?:https?:)?\/\/[^"'\s>]+)/gi
+/** `<script … src=…>` in a plain HTML file: the tag's attributes, once comments are cut. */
+const HTML_SCRIPT_TAG = /<script\b([^>]*)>/gi
+const HTML_COMMENT = /<!--[\s\S]*?-->/g
+const htmlScriptSrcs = (html: string): string[] =>
+  [...html.replace(HTML_COMMENT, '').matchAll(HTML_SCRIPT_TAG)].flatMap((m) => {
+    const attrs = m[1]!
+    if (/\btype\s*=\s*["']?[^"'\s>]*json/i.test(attrs)) return []
+    const src = /\bsrc\s*=\s*["']?((?:https?:)?\/\/[^"'\s>]+)/i.exec(attrs)
+    return src ? [src[1]!] : []
+  })
 
 /** The hosts, outside the registry and the agreed list, that these absolute URLs load scripts from. */
 function unregisteredHosts(urls: string[]): string[] {
@@ -254,7 +274,7 @@ function scriptLoadUrls(node: AstroNode, text: string): string[] {
   if (type?.kind === 'quoted' && /json/i.test(type.value)) return []
   const src = attr(node, 'src')
   const fromSrc = src && src.kind !== 'empty' ? urlsIn(src.value) : []
-  const fromBody = [...text.slice(node.start, node.end).matchAll(REMOTE_IMPORT)].map((m) => m[2]!)
+  const fromBody = remoteImports(text.slice(node.start, node.end))
   return [...fromSrc, ...fromBody]
 }
 
@@ -354,7 +374,7 @@ export function detectScripts(files: SiteFiles): DetectedScripts {
     }
     if (RECAPTCHA.test(text)) recaptcha = true
 
-    if (file.endsWith('.html')) addHosts(file, [...text.matchAll(HTML_SCRIPT_SRC)].map((m) => m[1]!))
+    if (file.endsWith('.html')) addHosts(file, htmlScriptSrcs(text))
     if (!file.endsWith('.astro')) continue
     let tree
     try {

@@ -91,6 +91,40 @@ describe('detectScripts: scripts from hosts outside the registry (#36)', () => {
     expect(hostsOf({ 'public/promo.html': '<script src="https://widget.example/x.js"></script>\n' })).toEqual(['widget.example public/promo.html'])
   })
 
+  test.each([
+    ['a line comment', '// import "https://x.example/a.js"'],
+    ['a block comment', '/* import "https://x.example/a.js" */'],
+    ['a string', 'const doc = "we import from \'https://x.example/doc\'"'],
+  ])('%s in a script body is not a remote import', (_, body) => {
+    expect(hostsOf({ 'src/components/W.astro': `<script>\n${body}\n</script>\n` })).toEqual([])
+  })
+
+  test.each([
+    ["import 'https://x.example/a.js'"],
+    ["import a from 'https://x.example/a.js'"],
+    ["import {\n  a,\n  b,\n} from 'https://x.example/a.js'"],
+    ["export * from 'https://x.example/a.js'"],
+    ["const m = await import('https://x.example/a.js')"],
+    ["import(\"//x.example/a.js\")"],
+  ])('a real remote import is listed: %s', (body) => {
+    expect(hostsOf({ 'src/components/W.astro': `<script>\n${body}\n</script>\n` })).toEqual(['x.example src/components/W.astro'])
+  })
+
+  test('a commented-out script in a plain HTML file is not listed', () => {
+    expect(hostsOf({ 'public/a.html': '<!-- <script src="https://x.example/a.js"></script> -->\n<p>hej</p>\n' })).toEqual([])
+    expect(hostsOf({ 'public/a.html': '<!--\n<script src="https://x.example/a.js"></script>\n-->\n<script src="https://y.example/b.js"></script>\n' })).toEqual([
+      'y.example public/a.html',
+    ])
+  })
+
+  test('a JSON data script in a plain HTML file is skipped', () => {
+    expect(hostsOf({ 'public/a.html': '<script type="application/ld+json" src="https://schema.example/x"></script>\n' })).toEqual([])
+  })
+
+  test('a nested admin path is a visitor path to the tool: listed, for a person to look at', () => {
+    expect(hostsOf({ 'src/pages/sv/admin/x.astro': '<script src="https://widget.example/x.js"></script>\n' })).toEqual(['widget.example src/pages/sv/admin/x.astro'])
+  })
+
   test('an agreed host is not listed: error reporting through Sentry\'s CDN', () => {
     expect(
       hostsOf({
@@ -153,6 +187,12 @@ describe('classify: unregistered script hosts', () => {
 
   test('a host that only ends in the domain is not the domain', () => {
     expect(classify(clean({ scriptHosts: [{ host: 'notexample.se', file: 'a.astro' }] })).classification).toBe('needs-human')
+  })
+
+  test('own host matching ignores case and the port, and a look-alike suffix is not own', () => {
+    const own = ['WWW.Example.se', 'example.se'].map((host) => ({ host: host.toLowerCase(), file: 'a.astro' }))
+    expect(classify(clean({ scriptHosts: own })).reasons).toEqual([])
+    expect(classify(clean({ scriptHosts: [{ host: 'evilexample.se', file: 'a.astro' }] })).reasons).toEqual(['unregistered script host evilexample.se in a.astro'])
   })
 
   test('one reason per host and file', () => {
