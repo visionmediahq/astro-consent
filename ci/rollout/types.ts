@@ -151,6 +151,22 @@ export type WirePlan =
   | { ok: true; edits: Edit[]; newFiles: { path: string; text: string }[]; skipped: string[] }
   | { ok: false; refusals: Refusal[] }
 
+/**
+ * Self-hosting a site's Google Fonts: text edits (offsets into the files as detect read them), new
+ * text files (fonts.css, licences) and the woff2 files, or only refusals.
+ */
+export type FontsPlan =
+  | {
+      ok: true
+      url: string
+      edits: Edit[]
+      newFiles: { path: string; text: string }[]
+      fontFiles: { path: string; bytes: Uint8Array }[]
+      /** One line each: subsets kept and left out, files, bytes. */
+      notes: string[]
+    }
+  | { ok: false; refusals: Refusal[] }
+
 export interface StepResult {
   step: number
   name: string

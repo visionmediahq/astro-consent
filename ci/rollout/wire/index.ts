@@ -67,10 +67,13 @@ function gitOk(dir: string, ...args: string[]): boolean {
 /** What the install may change besides the planned files. */
 const INSTALL_PATHS = ['package.json', 'package-lock.json']
 
-export const RECOVERY = `the checkout is left on ${BRANCH}, uncommitted; to retry: git reset --hard && git clean -fd && git switch main && git branch -D ${BRANCH}, or re-clone`
+/** How to get back to a clean checkout after a failure on `branch`. */
+export const recovery = (branch: string): string =>
+  `the checkout is left on ${branch}, uncommitted; to retry: git reset --hard && git clean -fd && git switch main && git branch -D ${branch}, or re-clone`
+export const RECOVERY = recovery(BRANCH)
 
 /** Every changed, deleted or untracked path (not ignored ones), from `git status --porcelain -z`. */
-function changedPaths(dir: string): string[] {
+export function changedPaths(dir: string): string[] {
   const out = execFileSync('git', ['status', '--porcelain=v1', '-z', '--untracked-files=all'], { cwd: dir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
   const fields = out.split('\0')
   const paths: string[] = []
@@ -82,6 +85,58 @@ function changedPaths(dir: string): string[] {
     if (entry[0] === 'R' || entry[0] === 'C') paths.push(fields[++i]!)
   }
   return paths
+}
+
+/**
+ * Switches the checkout at `root` to a new `branch` from origin/main, after refusing (throwing,
+ * nothing changed) a checkout that is not git, not clean, not at origin/main's tree, or that already
+ * has `branch` locally or on origin.
+ */
+export function startBranch(root: string, branch: string): void {
+  if (!gitOk(root, 'rev-parse', '--git-dir')) throw new Error(`${root} is not a git checkout`)
+  const dirty = git(root, 'status', '--porcelain', '--untracked-files=all')
+  if (dirty !== '') throw new Error(`the working tree is not clean, nothing written:\n${dirty}`)
+  if (gitOk(root, 'rev-parse', '--verify', '--quiet', `refs/heads/${branch}`)) {
+    throw new Error(`branch ${branch} already exists locally, nothing written (delete it by hand if it is stale)`)
+  }
+  // The branch on GitHub is someone's work (or an earlier run's): verify would push over it.
+  // A rerun after this tool's own push has the local branch, which is refused above anyway.
+  const tracking = gitOk(root, 'rev-parse', '--verify', '--quiet', `refs/remotes/origin/${branch}`) ? git(root, 'rev-parse', `refs/remotes/origin/${branch}`) : ''
+  let listed: string
+  try {
+    listed = git(root, 'ls-remote', '--heads', 'origin', `refs/heads/${branch}`)
+  } catch (e) {
+    throw new Error(`git ls-remote --heads origin refs/heads/${branch} failed, so whether GitHub has the branch is unknown; nothing written\n${(e as Error).message}`)
+  }
+  // The pattern matches by tail (feature/consent-banner too), so only the exact ref counts.
+  const remote = listed.split('\n').map((l) => l.trim().split(/\s+/)).find(([, ref]) => ref === `refs/heads/${branch}`)?.[0] ?? ''
+  for (const sha of [tracking, remote]) {
+    if (sha) {
+      throw new Error(`origin already has a ${branch} branch (${sha.slice(0, 7)}), nothing written: find out whose it is and delete it on GitHub by hand if it is stale`)
+    }
+  }
+  if (!gitOk(root, 'rev-parse', '--verify', '--quiet', 'origin/main^{tree}')) throw new Error('no origin/main to branch from')
+  // The plan was made on the working tree; branching from origin/main must not change it.
+  if (git(root, 'rev-parse', 'HEAD^{tree}') !== git(root, 'rev-parse', 'origin/main^{tree}')) {
+    throw new Error('HEAD is not origin/main, so the plan does not fit the branch; nothing written')
+  }
+  git(root, 'switch', '-c', branch, 'origin/main')
+}
+
+/** Writes each file (text or bytes) under `root`, creating its folders. */
+export function writeFiles(root: string, files: readonly { path: string; data: string | Uint8Array }[]): void {
+  for (const f of files) {
+    mkdirSync(dirname(join(root, f.path)), { recursive: true })
+    writeFileSync(join(root, f.path), f.data)
+  }
+}
+
+/** Ruling 32: commits only `allowed` paths; anything else changed refuses the commit (throws). */
+export function commitAllowed(root: string, allowed: ReadonlySet<string>, message: string): void {
+  const extra = changedPaths(root).filter((p) => !allowed.has(p)).sort()
+  if (extra.length) throw new Error(`changed paths not in the plan, nothing committed:\n${extra.map((p) => `  ${p}`).join('\n')}`)
+  git(root, 'add', '-A')
+  git(root, 'commit', '-q', '-m', message)
 }
 
 export interface ApplyOptions {
@@ -109,52 +164,16 @@ export function applyWire(dir: string, plan: WirePlan, opts: ApplyOptions): stri
     if (f.before === null && existsSync(join(root, f.path))) throw new Error(`${f.path} already exists, nothing written`)
   }
 
-  if (opts.commit) {
-    if (!gitOk(root, 'rev-parse', '--git-dir')) throw new Error(`${root} is not a git checkout`)
-    const dirty = git(root, 'status', '--porcelain', '--untracked-files=all')
-    if (dirty !== '') throw new Error(`the working tree is not clean, nothing written:\n${dirty}`)
-    if (gitOk(root, 'rev-parse', '--verify', '--quiet', `refs/heads/${BRANCH}`)) {
-      throw new Error(`branch ${BRANCH} already exists locally, nothing written (delete it by hand if it is stale)`)
-    }
-    // A consent-banner on GitHub is someone's work (or an earlier run's): verify would push over it.
-    // A rerun after this tool's own push has the local branch, which is refused above anyway.
-    const tracking = gitOk(root, 'rev-parse', '--verify', '--quiet', `refs/remotes/origin/${BRANCH}`) ? git(root, 'rev-parse', `refs/remotes/origin/${BRANCH}`) : ''
-    let listed: string
-    try {
-      listed = git(root, 'ls-remote', '--heads', 'origin', `refs/heads/${BRANCH}`)
-    } catch (e) {
-      throw new Error(`git ls-remote --heads origin refs/heads/${BRANCH} failed, so whether GitHub has the branch is unknown; nothing written\n${(e as Error).message}`)
-    }
-    // The pattern matches by tail (feature/consent-banner too), so only the exact ref counts.
-    const remote = listed.split('\n').map((l) => l.trim().split(/\s+/)).find(([, ref]) => ref === `refs/heads/${BRANCH}`)?.[0] ?? ''
-    for (const sha of [tracking, remote]) {
-      if (sha) {
-        throw new Error(`origin already has a ${BRANCH} branch (${sha.slice(0, 7)}), nothing written: find out whose it is and delete it on GitHub by hand if it is stale`)
-      }
-    }
-    if (!gitOk(root, 'rev-parse', '--verify', '--quiet', 'origin/main^{tree}')) throw new Error('no origin/main to branch from')
-    // The plan was made on the working tree; branching from origin/main must not change it.
-    if (git(root, 'rev-parse', 'HEAD^{tree}') !== git(root, 'rev-parse', 'origin/main^{tree}')) {
-      throw new Error('HEAD is not origin/main, so the plan does not fit the branch; nothing written')
-    }
-    git(root, 'switch', '-c', BRANCH, 'origin/main')
-  }
+  if (opts.commit) startBranch(root, BRANCH)
 
   try {
-    for (const f of files) {
-      mkdirSync(dirname(join(root, f.path)), { recursive: true })
-      writeFileSync(join(root, f.path), f.after)
-    }
+    writeFiles(root, files.map((f) => ({ path: f.path, data: f.after })))
 
     if (opts.commit) {
       ;(opts.install ?? npmInstall)(root)
       notes.push(...keepOrphans(root))
       // Ruling 32: commit only what the plan wrote and what the install may change.
-      const allowed = new Set([...files.map((f) => f.path), ...INSTALL_PATHS])
-      const extra = changedPaths(root).filter((p) => !allowed.has(p)).sort()
-      if (extra.length) throw new Error(`changed paths not in the plan, nothing committed:\n${extra.map((p) => `  ${p}`).join('\n')}`)
-      git(root, 'add', '-A')
-      git(root, 'commit', '-q', '-m', COMMIT_MESSAGE)
+      commitAllowed(root, new Set([...files.map((f) => f.path), ...INSTALL_PATHS]), COMMIT_MESSAGE)
     }
   } catch (e) {
     if (!opts.commit) throw e

@@ -1,0 +1,10 @@
+---
+import SEO from '../components/SEO.astro'
+import '../styles/global.css'
+---
+<html lang="sv">
+  <head>
+    <link rel="dns-prefetch" href="https://cdn.jsdelivr.net" />
+  </head>
+  <body><slot /></body>
+</html>

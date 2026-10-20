@@ -1,0 +1,9 @@
+---
+import SEO from '../components/SEO.astro'
+import '../styles/global.css'
+---
+<html lang="sv">
+  <head>
+  </head>
+  <body><slot /></body>
+</html>

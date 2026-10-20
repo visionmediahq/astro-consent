@@ -168,15 +168,15 @@ describe('the CLI (Task 23)', () => {
 })
 
 describe('stored reports', () => {
-  test('a report with classification maps and no services or widgets plans as it did', () => {
+  test('a report with classification maps and no services or widgets plans as it did', async () => {
     const dir = site()
     const report = runDetect(dir, ['a.se'])
     const write = (r: object) => writeFileSync(join(dir, '.rollout/report.json'), JSON.stringify(r))
     write({ ...report, classification: 'consent' })
-    const fresh = runWire(dir, { dryRun: true })
+    const fresh = await runWire(dir, { dryRun: true })
     const { services: _s, widgets: _w, ...old } = report
     write({ ...old, classification: 'maps' })
-    expect(runWire(dir, { dryRun: true })).toEqual(fresh)
+    expect(await runWire(dir, { dryRun: true })).toEqual(fresh)
   })
 
   test('the summary names the services after the classification', () => {
