@@ -23,8 +23,15 @@ export interface ScriptBuiltEmbed {
   where: string
 }
 
+/** A `<script src>` or remote `import` from a host the registry does not know (#36). */
+export interface ScriptHost {
+  host: string
+  file: string
+}
+
 export type DetectedScripts = Pick<Report, 'trackers' | 'banners' | 'recaptcha' | 'alreadyWired'> & {
   scriptBuilt: ScriptBuiltEmbed[]
+  scriptHosts: ScriptHost[]
   /** `.astro` files under src/ that did not parse; their text is still swept. */
   parseErrors: { file: string; message: string }[]
 }
@@ -202,6 +209,55 @@ function servicesInScript(node: AstroNode, text: string): { trackers: ServiceSlu
   return { trackers, embeds }
 }
 
+/**
+ * Script hosts that need no consent, agreed one by one; each with its reason. A path prefix narrows
+ * a shared CDN to the one package. Everything else outside the registry goes to a human.
+ */
+const AGREED_SCRIPT_HOSTS: { host: string; path?: string; reason: string }[] = [
+  // Error reporting (GlitchTip) through Sentry's browser bundle: whether it counts as a service is
+  // parked (memory glitchtip-consent-paused), so the 80-odd sites that carry it are not held up.
+  { host: 'browser.sentry-cdn.com', reason: 'error reporting bundle, consent decision parked' },
+  { host: 'cdn.jsdelivr.net', path: '/npm/@sentry/', reason: 'error reporting bundle, consent decision parked' },
+]
+
+/** CMS admin shells load their editor from a CDN and are never part of what a visitor sees. */
+const ADMIN_SHELL = /^(?:public|src\/pages)\/admin(?:\/|\.)/
+
+/** Remote modules a script body imports: `import 'https://…'`, `from "//…"`, `import('https://…')`. */
+const REMOTE_IMPORT = /\b(?:from|import)\s*\(?\s*(['"])((?:https?:)?\/\/[^'"]+)\1/g
+
+/** `<script … src=…>` in a plain HTML file. */
+const HTML_SCRIPT_SRC = /<script\b[^>]*?\bsrc\s*=\s*["']?((?:https?:)?\/\/[^"'\s>]+)/gi
+
+/** The hosts, outside the registry and the agreed list, that these absolute URLs load scripts from. */
+function unregisteredHosts(urls: string[]): string[] {
+  const out: string[] = []
+  for (const u of urls) {
+    // reCAPTCHA has its own report (`recaptcha`) and wire replaces it with spam-guard.
+    if (serviceOfUrl(u) !== null || RECAPTCHA.test(u)) continue
+    let parsed: URL
+    try {
+      parsed = new URL(u.startsWith('//') ? `https:${u}` : u)
+    } catch {
+      continue
+    }
+    const host = parsed.hostname.toLowerCase()
+    if (AGREED_SCRIPT_HOSTS.some((a) => a.host === host && (a.path === undefined || parsed.pathname.startsWith(a.path)))) continue
+    if (!out.includes(host)) out.push(host)
+  }
+  return out
+}
+
+/** Absolute URLs a `<script>` element loads by `src` or imports in its body; JSON data is skipped. */
+function scriptLoadUrls(node: AstroNode, text: string): string[] {
+  const type = attr(node, 'type')
+  if (type?.kind === 'quoted' && /json/i.test(type.value)) return []
+  const src = attr(node, 'src')
+  const fromSrc = src && src.kind !== 'empty' ? urlsIn(src.value) : []
+  const fromBody = [...text.slice(node.start, node.end).matchAll(REMOTE_IMPORT)].map((m) => m[2]!)
+  return [...fromSrc, ...fromBody]
+}
+
 /** Attributes whose URL a visitor follows rather than the page loads. */
 const LINK_ATTRS = new Set(['href'])
 
@@ -253,6 +309,11 @@ export function detectScripts(files: SiteFiles): DetectedScripts {
   const parseErrors: DetectedScripts['parseErrors'] = []
   const trackers = new Set<ServiceSlug>()
   const scriptBuilt: ScriptBuiltEmbed[] = []
+  const scriptHosts: ScriptHost[] = []
+  const addHosts = (file: string, urls: string[]): void => {
+    if (ADMIN_SHELL.test(file)) return
+    for (const host of unregisteredHosts(urls)) if (!scriptHosts.some((h) => h.host === host && h.file === file)) scriptHosts.push({ host, file })
+  }
   const addBuilt = (e: ScriptBuiltEmbed): void => {
     if (!scriptBuilt.some((x) => x.service === e.service && x.file === e.file && x.where === e.where)) scriptBuilt.push(e)
   }
@@ -293,6 +354,7 @@ export function detectScripts(files: SiteFiles): DetectedScripts {
     }
     if (RECAPTCHA.test(text)) recaptcha = true
 
+    if (file.endsWith('.html')) addHosts(file, [...text.matchAll(HTML_SCRIPT_SRC)].map((m) => m[1]!))
     if (!file.endsWith('.astro')) continue
     let tree
     try {
@@ -306,6 +368,7 @@ export function detectScripts(files: SiteFiles): DetectedScripts {
       const found = servicesInScript(script, text)
       for (const slug of found.trackers) trackers.add(slug)
       for (const service of found.embeds) addBuilt({ service, file, where: 'script' })
+      addHosts(file, scriptLoadUrls(script, text))
     }
     for (const e of embedsInAttributes(tree.root)) addBuilt({ ...e, file })
     // Only when the URL itself was not found above: one reason per map is enough.
@@ -324,5 +387,5 @@ export function detectScripts(files: SiteFiles): DetectedScripts {
   if (componentsWired) alreadyWired.push('components')
   if (files.exists('src/data/privacy.json')) alreadyWired.push('privacy.json')
 
-  return { trackers: [...trackers].sort(), scriptBuilt, banners, recaptcha, alreadyWired, parseErrors }
+  return { trackers: [...trackers].sort(), scriptBuilt, scriptHosts, banners, recaptcha, alreadyWired, parseErrors }
 }

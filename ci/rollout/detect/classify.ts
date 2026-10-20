@@ -3,7 +3,7 @@
 // counts as a problem, never as "probably fine".
 import { servicesOf } from '../lib/report'
 import type { ServiceSlug } from '../../../src/services'
-import type { ScriptBuiltEmbed } from './scripts'
+import type { ScriptBuiltEmbed, ScriptHost } from './scripts'
 import type { Classification, IframeInfo, Report } from '../types'
 
 /** Everything detect found, plus what classify needs that the report does not keep. */
@@ -20,6 +20,8 @@ export type Findings = Omit<Report, 'classification' | 'reasons' | 'services'> &
   widgetReasons: string[]
   /** Embed URLs outside an `<iframe>`, in a `<script>` or an element attribute (#57). */
   scriptBuilt: ScriptBuiltEmbed[]
+  /** Script hosts outside the registry and the agreed list (#36). */
+  scriptHosts: ScriptHost[]
 }
 
 /** The Astro majors the package's peerDependencies accept. */
@@ -30,6 +32,9 @@ const isRelative = (src: string): boolean => {
   const t = src.trim()
   return t !== '' && !t.startsWith('//') && !/^[a-z][a-z0-9+.-]*:/i.test(t)
 }
+
+/** The site's own domain, its www and its subdomains. */
+const isOwnHost = (host: string, domains: string[]): boolean => domains.some((d) => host === d.toLowerCase() || host.endsWith(`.${d.toLowerCase()}`))
 
 function iframeReason(frame: IframeInfo, domains: string[]): string | null {
   // Keyed on srcKind only: for an unresolved src, host and service are hints and decide nothing.
@@ -87,6 +92,7 @@ export function classify(f: Findings): { classification: Classification; reasons
     if (r !== null) add(r)
   }
   for (const e of f.scriptBuilt) add(`script-built embed ${e.service} in ${e.file} (${e.where})`)
+  for (const h of f.scriptHosts) if (!isOwnHost(h.host, f.domains)) add(`unregistered script host ${h.host} in ${h.file}`)
   for (const t of f.trackers) add(`tracker ${t}: the batch wires notice and consent only`)
   for (const b of f.banners) add(`existing banner: ${b}`)
   for (const r of f.widgetReasons) add(r)

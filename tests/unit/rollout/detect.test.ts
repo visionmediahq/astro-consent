@@ -446,6 +446,7 @@ function clean(over: Partial<Findings> = {}): Findings {
     wired: [],
     widgetReasons: [],
     scriptBuilt: [],
+    scriptHosts: [],
     ...over,
   }
 }
