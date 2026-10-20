@@ -352,6 +352,27 @@ import Bottom from '../components/SiteFooter.astro'
     expect(detectStructure(inline({ 'src/pages/om/dataskydd.md': page })).policyPage).toBe('/om/dataskydd')
   })
 
+  // #65: rules the earlier cases let a mutation through.
+  test('policyPage: the language prefix, depth and word order each decide on their own (#65)', () => {
+    const page = '<main />\n'
+    const pick = (...routes: string[]): string | null =>
+      detectStructure(inline(Object.fromEntries(routes.map((r) => [`src/pages/${r}.astro`, page])))).policyPage
+    // Same depth, word and length: only the prefix tells them apart (`/en/` sorts first by name).
+    expect(pick('en/integritetspolicy', 'om/integritetspolicy')).toBe('/om/integritetspolicy')
+    // Fewer segments beat a better word.
+    expect(pick('om/integritetspolicy', 'gdpr')).toBe('/gdpr')
+    // At the same depth a Swedish word beats gdpr, though gdpr is shorter.
+    expect(pick('gdpr', 'integritetspolicy')).toBe('/integritetspolicy')
+    // A cookie page, then a slug with the word only later, both after any page that starts with a privacy word, at any depth.
+    expect(pick('kopvillkor-och-integritetspolicy', 'cookies')).toBe('/cookies')
+    expect(pick('om-oss/integritetspolicy', 'cookies')).toBe('/om-oss/integritetspolicy')
+    expect(pick('om/integritetspolicy', 'villkor-och-integritetspolicy')).toBe('/om/integritetspolicy')
+    // Among those two, depth still comes first.
+    expect(pick('om/cookies', 'villkor-och-gdpr')).toBe('/villkor-och-gdpr')
+    // Swedish IT firms use /it/ as a folder: not Italian.
+    expect(pick('it/integritetspolicy', 'en/integritetspolicy')).toBe('/it/integritetspolicy')
+  })
+
   test('pages prefixed with _ are not routes', () => {
     const r = detectStructure(inline({ 'src/pages/_draft.astro': '<main />\n', 'src/pages/_privacy.astro': '<main />\n' }))
     expect(r.footerless).toEqual([])

@@ -9,8 +9,12 @@
 // last such child, descending into whichever child holds the line until the element that holds it
 // directly, and the links follow that element as its sibling, in its row. A link in that row to
 // the policy page that PrivacyLinks will render itself (policy_url) is replaced by the links; so is
-// the only such link deeper in the bar, unless it sits in phrasing content (#61). With no © bar,
-// the links are the slot's last child, as before.
+// the only such link deeper in the bar, unless it sits in phrasing content (#61). "Only" counts
+// every link to that page in the bar: in the © line, inside `{…}` and as a component (#65); wire
+// replaces none when there are two. When the © element is a `<p>`/`<span>`/`<small>` with layout
+// classes (a container, padding, a max width: lhiab), a `<div>` takes its classes and holds it and
+// the links, so they stay inside the box (#65). With no © bar, the links are the slot's last
+// child, as before.
 //
 // The colour class: the footer's own text colour class. With none, the nearest background from
 // where the links go up to the <footer> decides (its inline style, its scoped CSS rule, a Tailwind
@@ -180,40 +184,78 @@ function hrefPath(n: AstroNode, domains: readonly string[]): string | null {
   return m ? pathOf(m[2]!, domains) : null
 }
 
-/**
- * The bar's own link to `path` below the © row's siblings (#61: exakthaltagning's in a neighbouring
- * div, schloetter's in a `<ul>`), when there is exactly one in `row` outside `mark`, its parent is a
- * flow container that may hold a <nav>, and nothing between the row and it is phrasing, hidden or
- * decoration (Ruling 29; fail closed). With its parent, for the layout.
- */
-function deepPolicyLink(row: AstroNode, mark: AstroNode, path: string, domains: readonly string[]): { link: AstroNode; parent: AstroNode } | null {
-  const found: { link: AstroNode; parent: AstroNode; ok: boolean }[] = []
-  // `ok` stays true only through flow containers that are shown (re-review of #63: fail closed).
-  const visit = (n: AstroNode, parent: AstroNode, ok: boolean): void => {
-    if (n === mark || n.type !== 'element' || n.name === 'script' || n.name === 'style') return
-    if (n.name === 'a') {
-      if (hrefPath(n, domains) === path) found.push({ link: n, parent, ok })
-      return
-    }
-    for (const c of n.children) visit(c, n, ok && passes(n))
-  }
-  for (const c of row.children) visit(c, row, passes(row))
-  const only = found.length === 1 ? found[0]! : null
-  return only?.ok && holdsNav(only.parent) ? only : null
+/** A policy link in the bar, with its parent and whether wire may replace it. */
+interface Found {
+  link: AstroNode
+  parent: AstroNode
+  ok: boolean
 }
 
-/** Flow containers a <nav> may sit in. Anything else (phrasing, <pre>, <svg>, <address>, <dt>…) is refused. */
-const NAV_PARENTS = new Set(['div', 'li', 'dd', 'td', 'section', 'article', 'aside', 'nav', 'footer', 'header', 'main', 'figure', 'figcaption', 'details', 'form', 'fieldset', 'blockquote'])
+/**
+ * Every link to `path` in `row`: `<a>` elements and components with that href (`<Link href>`),
+ * including those inside the © element `mark` and inside `{…}` expressions (`{show && <a …>}`).
+ * Only a plain `<a>` reached through shown flow containers, outside `mark`, outside expressions
+ * and outside components, is `ok` (re-review of #63, #65: fail closed): wire never replaces a link
+ * that renders only sometimes, one whose markup is elsewhere, or one in the © line.
+ */
+function policyLinks(row: AstroNode, mark: AstroNode, path: string, domains: readonly string[], rules: CssRule[]): Found[] {
+  const found: Found[] = []
+  const visit = (n: AstroNode, parent: AstroNode, ok: boolean): void => {
+    if (n.type === 'element' && (n.name === 'script' || n.name === 'style')) return
+    if (n.type !== 'element' && n.type !== 'component' && n.type !== 'expression' && n.type !== 'fragment') return
+    const inside = ok && n !== mark
+    if ((n.type === 'element' && n.name === 'a') || n.type === 'component') {
+      if (hrefPath(n, domains) === path) {
+        found.push({ link: n, parent, ok: inside && n.type === 'element' })
+        return
+      }
+      if (n.type === 'element') return
+    }
+    const next = inside && n.type === 'element' && passes(n, rules)
+    for (const c of n.children) visit(c, n, next)
+  }
+  for (const c of row.children) visit(c, row, passes(row, rules))
+  return found
+}
 
-/** Hidden from everyone, or on some screens, or from assistive technology. */
-const hiddenEl = (n: AstroNode): boolean =>
-  isDecoration(n) || attr(n, 'hidden') !== null || classesOf(n).some((c) => /^(?:sr-only|invisible)$/.test(c) || /(?:^|:)hidden$/.test(c))
+/**
+ * The bar's own link to `path` below the © row's siblings (#61: exakthaltagning's in a neighbouring
+ * div, schloetter's in a `<ul>`), when it is the only link to `path` anywhere in `row` (#65: the ©
+ * line, conditionals and components counted), its parent is a flow container that may hold a
+ * <nav>, and nothing between the row and it is phrasing, hidden or decoration (Ruling 29; fail
+ * closed). With its parent, for the layout.
+ */
+function deepPolicyLink(found: Found[], rules: CssRule[]): Found | null {
+  const only = found.length === 1 ? found[0]! : null
+  return only?.ok && holdsNav(only.parent, rules) ? only : null
+}
 
-const holdsNav = (n: AstroNode): boolean => n.type === 'element' && NAV_PARENTS.has(n.name ?? '') && !hiddenEl(n)
+/** Flow containers a <nav> may sit in. Anything else (phrasing, <pre>, <svg>, <address>, <dt>, a closed <details>…) is refused. */
+const NAV_PARENTS = new Set(['div', 'li', 'dd', 'td', 'section', 'article', 'aside', 'nav', 'footer', 'header', 'main', 'figure', 'figcaption', 'form', 'fieldset', 'blockquote'])
+
+/** Declarations that hide an element (#65): display none, visibility hidden, opacity 0. */
+const hides = (d: CssDecl): boolean => {
+  const v = d.value.replace(/!\s*important\s*$/i, '').trim().toLowerCase()
+  return (d.prop === 'display' && v === 'none') || (d.prop === 'visibility' && v === 'hidden') || (d.prop === 'opacity' && /^0*(?:\.0*)?%?$/.test(v))
+}
+
+/**
+ * Hidden from everyone, or on some screens, or from assistive technology: `hidden`, sr-only,
+ * invisible, opacity-0 (any variant), an inline or scoped (`@media` too) rule that hides it, or a
+ * class wire cannot read (`class:list`, `class={…}`), which may hide it (#65).
+ */
+const hiddenEl = (n: AstroNode, rules: CssRule[]): boolean =>
+  isDecoration(n) ||
+  attr(n, 'hidden') !== null ||
+  n.attributes.some((a) => a.name === 'class:list' || (a.name === 'class' && a.kind !== 'quoted')) ||
+  classesOf(n).some((c) => /^(?:sr-only|invisible)$/.test(c) || /(?:^|:)(?:hidden|opacity-0)$/.test(c)) ||
+  ownDecls(n, rules).some(hides)
+
+const holdsNav = (n: AstroNode, rules: CssRule[]): boolean => n.type === 'element' && NAV_PARENTS.has(n.name ?? '') && !hiddenEl(n, rules)
 
 /** An ancestor the search may pass through: a flow container, or a list or table around one. */
-const passes = (n: AstroNode): boolean =>
-  n.type === 'element' && (NAV_PARENTS.has(n.name ?? '') || /^(?:ul|ol|dl|menu|table|thead|tbody|tfoot|tr)$/.test(n.name ?? '')) && !hiddenEl(n)
+const passes = (n: AstroNode, rules: CssRule[]): boolean =>
+  n.type === 'element' && (NAV_PARENTS.has(n.name ?? '') || /^(?:ul|ol|dl|menu|table|thead|tbody|tfoot|tr)$/.test(n.name ?? '')) && !hiddenEl(n, rules)
 
 /** `markup` right after `node`: on its own line at the node's indent when the node ends its line, inline otherwise. */
 function afterNode(text: string, node: AstroNode, markup: string): { hit: Hit; text: string } {
@@ -263,11 +305,11 @@ function white70Readable(bg: Rgb): boolean {
   return wcagContrast({ r: mix(bg.r), g: mix(bg.g), b: mix(bg.b) }, bg) >= 4.5
 }
 
+/** The file's scoped rules, at-rules included (#65: a rule that hides on some screens hides). */
+const allRules = (text: string, root: AstroNode): CssRule[] => scopedStyles(text, root).flatMap((s) => cssRules(text.slice(s.start, s.end), s.start))
+
 /** The file's scoped rules outside at-rules (an `@media` rule applies on some screens only). */
-const baseRules = (text: string, root: AstroNode): CssRule[] =>
-  scopedStyles(text, root)
-    .flatMap((s) => cssRules(text.slice(s.start, s.end), s.start))
-    .filter((r) => !r.media)
+const baseRules = (text: string, root: AstroNode): CssRule[] => allRules(text, root).filter((r) => !r.media)
 
 /** The declarations that style `el` itself: its scoped rules (and `footer {…}` for a footer), then its inline style. */
 function ownDecls(el: AstroNode, rules: CssRule[]): CssDecl[] {
@@ -334,7 +376,7 @@ const DAISY_SURFACE = /^(?:btn|badge|alert|card|kbd|toast|tooltip|modal-box|drop
 function whiteTextOn(surface: AstroNode, rules: CssRule[]): boolean {
   const visit = (n: AstroNode): boolean => {
     if (n.type !== 'element' || n.name === 'script' || n.name === 'style') return false
-    if (n !== surface && (ownBackground(n, rules) || hiddenEl(n))) return false
+    if (n !== surface && (ownBackground(n, rules) || hiddenEl(n, rules))) return false
     if (n !== surface && (classesOf(n).some((c) => /^text-white(?:\/\d+)?$/.test(c)) || lightText(ownDecls(n, rules)))) return true
     return n.children.some(visit)
   }
@@ -427,22 +469,108 @@ function inFooter(
   domains: readonly string[],
 ): { hit: Hit; text: string } {
   const rules = baseRules(text, root)
+  const every = allRules(text, root)
   const slot = footerSlot(footer)
   const bar = bottomBar(text, slot)
   const colour = info.textClass ?? linksColour(text, root, footer, bar ? bar.row : slot)
   if (!bar) return lastChildOf(text, slot, linksTag(name, [colour, info.alignment === 'left' && 'justify-start!']))
   const layout = laidOutRow(bar.row, rules) ? [] : [...blockJustify([bar.mark, ...chainTo(footer, bar.row)], rules), 'mt-2']
   const tag = linksTag(name, [colour, ...layout])
-  const own = policy === null ? [] : contentChildren(bar.row).filter((k) => k !== bar.mark && isLinkTo(text, k, policy, domains))
-  if (own.length === 1) return { hit: { start: own[0]!.start, end: own[0]!.end }, text: tag }
+  // #65: every link to the policy in the row, the © line's, conditional and component ones included.
   // Only in a real bar: when © sits straight in the slot, the "bar" is the whole footer (link columns too).
-  const deep = policy === null || bar.row === slot ? null : deepPolicyLink(bar.row, bar.mark, policy, domains)
+  const found = policy === null || bar.row === slot ? [] : policyLinks(bar.row, bar.mark, policy, domains, every)
+  const own = policy === null ? [] : contentChildren(bar.row).filter((k) => k !== bar.mark && isLinkTo(text, k, policy, domains))
+  if (own.length === 1 && found.filter((f) => !within(own[0]!, f.link)).length === 0) return { hit: { start: own[0]!.start, end: own[0]!.end }, text: tag }
+  const deep = deepPolicyLink(found, every)
   if (deep) {
     const here = info.textClass ?? linksColour(text, root, footer, deep.parent)
     const justify = laidOutRow(deep.parent, rules) ? [] : blockJustify(chainTo(footer, deep.parent), rules)
     return { hit: { start: deep.link.start, end: deep.link.end }, text: linksTag(name, [here, ...justify]) }
   }
+  if (boxed(bar.mark, every)) return wrapMark(text, root, footer, bar, name, info, rules)
   return afterNode(text, bar.mark, tag)
+}
+
+/** `inner` is `outer` or inside it. */
+const within = (outer: AstroNode, inner: AstroNode): boolean => inner.start >= outer.start && inner.end <= outer.end
+
+/** Elements that may hold the © line and be wrapped: phrasing that takes no <nav> itself. */
+const WRAPPABLE = new Set(['p', 'span', 'small'])
+
+/**
+ * A layout class: a container, padding, a max width or auto side margins (lhiab:
+ * `site-container py-5`). With one, the © element is the bar's box, and links beside it would sit
+ * outside the box, against the viewport edge. A `<span>` or `<small>` with padding only is inline
+ * spacing (`<span class="px-2">© Firma</span> | …`): it needs a box class.
+ */
+const BOX_CLASS = /^(?:[\w-]+:)*(?:container|[\w-]+-container|container-[\w-]+|mx-auto|max-w-\S+)$/
+const PADDING_CLASS = /^(?:[\w-]+:)*p[xytrblse]?-\S+$/
+
+const escapeRe = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
+/** A scoped rule (`@media` too) names `el` by its tag, one of its classes or its id, anywhere in a selector. */
+function namedBy(el: AstroNode, rules: CssRule[]): boolean {
+  const id = attr(el, 'id')
+  const names = [
+    `(?:^|[\\s>+~,(])${escapeRe(el.name ?? '')}`,
+    ...classesOf(el).map((c) => `\\.${escapeRe(c)}`),
+    ...(id?.kind === 'quoted' && id.value ? [`#${escapeRe(id.value)}`] : []),
+  ]
+  const re = new RegExp(`(?:${names.join('|')})(?![\\w-])`, 'i')
+  return rules.some((r) => re.test(r.selector))
+}
+
+/**
+ * The © element is phrasing whose own quoted classes include a layout class (#65, lhiab), and no
+ * scoped rule names it: moving its classes to a wrapper would lose `p.copy {…}` or `.bar > p {…}`.
+ */
+function boxed(mark: AstroNode, rules: CssRule[]): boolean {
+  if (mark.type !== 'element' || !WRAPPABLE.has(mark.name ?? '') || attr(mark, 'class')?.kind !== 'quoted') return false
+  const cls = classesOf(mark)
+  const layout = cls.some((c) => BOX_CLASS.test(c)) || (mark.name === 'p' && cls.some((c) => PADDING_CLASS.test(c)))
+  return layout && !namedBy(mark, rules)
+}
+
+/** White space is kept as written somewhere in `chain` (a whitespace-pre* class, an inline white-space: pre*), so a re-indent would show. */
+const keepsWhitespace = (chain: AstroNode[]): boolean =>
+  chain.some((el) => {
+    if (classesOf(el).some((c) => /(?:^|:)whitespace-pre(?:-wrap|-line)?$/.test(c))) return true
+    const style = attr(el, 'style')
+    return style?.kind === 'quoted' && declarations(style.value).some((d) => d.prop === 'white-space' && /^pre/i.test(d.value.trim()))
+  })
+
+/**
+ * #65 (lhiab, hand fix b7a90fa): a `<div>` takes over the © element's classes and holds it and the
+ * links, so the links sit in the same box. The links' classes are those of a © bar row with the
+ * © element's classes as the row: nothing in a flex or grid box, else the block row's justify-*
+ * and `mt-2`. Each line of the © element after the first moves one indent deeper, unless it holds
+ * a template literal or keeps its white space (whitespace-pre*), where a re-indent would change the text.
+ */
+function wrapMark(
+  text: string,
+  root: AstroNode,
+  footer: AstroNode,
+  bar: BottomBar,
+  name: string,
+  info: Pick<FooterInfo, 'textClass'>,
+  rules: CssRule[],
+): { hit: Hit; text: string } {
+  const { mark } = bar
+  const cls = mark.attributes.find((a) => a.name === 'class')!
+  const colour = info.textClass ?? linksColour(text, root, footer, mark)
+  const layout = laidOutRow(mark, rules) ? [] : [...blockJustify([mark, ...chainTo(footer, bar.row)], rules), 'mt-2']
+  const tag = linksTag(name, [colour, ...layout])
+  const attrStart = /\s*$/.exec(text.slice(mark.start, cls.start))!.index + mark.start
+  const bare = text.slice(mark.start, attrStart) + text.slice(cls.end, mark.end)
+  const open = `<div class="${cls.value}">`
+  const hit = { start: mark.start, end: mark.end }
+  const endsLine = /^[ \t]*(?:\r?\n|$)/.test(text.slice(mark.end))
+  if (!(startsLine(text, mark.start) && endsLine)) return { hit, text: `${open}${bare}${tag}</div>` }
+  const eol = eolOf(text)
+  const indent = indentAt(text, mark.start)
+  const step = indent.includes('\t') ? '\t' : '  '
+  const body = bare.includes('`') || keepsWhitespace(chainTo(footer, mark)) ? bare : bare.replace(/\n(?=[^\r\n])/g, `\n${step}`)
+  return { hit, text: `${open}${eol}${indent}${step}${body}${eol}${indent}${step}${tag}${eol}${indent}</div>` }
 }
 
 /** Where the links go on a footerless page (Rulings 16, 29). */
