@@ -443,7 +443,7 @@ npx tsx ci/rollout/run.ts help
   rerun is never blocked by "already exists". It is also runnable alone:
   `npx tsx ci/rollout/fonts-files.ts ...`. Its imports are node built-ins and relative files only
   (`wire/fonts-host.ts`, `wire/css-imports.ts`, `wire/fonts-css.ts`, `lib/site-files.ts`,
-  `wire/engine.ts`), so a checkout of this repo plus `tsx` is enough, with no `npm install` here;
+  `wire/engine.ts`, `lib/is-entry.ts`), so a checkout of this repo plus `tsx` is enough, with no `npm install` here;
   `tests/unit/rollout/fonts-files.test.ts` pins that list. Do not add a package import to those files.
 - **Self-hosting Google Fonts (`wire`, `fonts`).** When `report.fonts.status` is `wire`, `wire`
   adds a second commit on `consent-banner` ("feat: Google Fonts från sajten själv (self-hosted)")

@@ -6,7 +6,7 @@
 // It builds and clones nothing: candidates are built by hand, in this order, until the slots are
 // filled. pool.json holds client data and is never committed.
 import { readFileSync } from 'node:fs'
-import { pathToFileURL } from 'node:url'
+import { isEntryScript } from './lib/is-entry'
 import { normaliseReport } from './lib/report'
 import type { PoolRow, Report } from './types'
 
@@ -113,4 +113,4 @@ function main(argv: string[]): void {
   console.log(lines.join('\n'))
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main(process.argv.slice(2))
+if (isEntryScript(import.meta.url, process.argv[1])) main(process.argv.slice(2))

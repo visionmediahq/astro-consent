@@ -1,6 +1,6 @@
 import { readdirSync, readFileSync } from 'node:fs'
 import { join, relative } from 'node:path'
-import { pathToFileURL } from 'node:url'
+import { isEntryScript } from './lib/is-entry'
 
 export interface SecretHit {
   line: number
@@ -54,7 +54,7 @@ function files(dir: string): string[] {
 /** Shows enough of a hit to find it, never the whole value. */
 const redact = (match: string): string => (match.length > 12 ? `${match.slice(0, 8)}…` : match)
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (isEntryScript(import.meta.url, process.argv[1])) {
   const dirs = process.argv.slice(2)
   if (dirs.length === 0) {
     console.error('usage: tsx ci/rollout/scan-secrets.ts <dir>...')
