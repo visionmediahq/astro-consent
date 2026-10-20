@@ -186,6 +186,41 @@ describe('live baseline with the fonts on main', () => {
   })
 })
 
+describe('the fonts check live skips CMS admin shells (lj-trim)', () => {
+  const following = { apps: [{ uuid: 'web', name: 'web', repo: 'nhrk', branch: 'main', fqdns: ['nhrk.se'], autoDeploy: true }], deployments: { web: [{ id: 1, commit: MAIN, status: 'finished' as const, pullRequestId: 0 }] } }
+  const SKIP = '    /admin/: skipped (CMS admin shell, third-party editor fonts)'
+  /** Pages / and /admin/; Google Fonts requested on `bad` only (Sveltia CMS's editor UI on /admin/). */
+  function adminChecks(bad: string) {
+    const asked: string[][] = []
+    const c = checks({ fonts: (_b, p) => (asked.push(p), p.map((x) => fontsPage(x, x === bad ? { google: ['https://fonts.googleapis.com/css2?family=Merriweather+Sans'] } : {}))) })
+    c.checks.pages = async () => ['/', '/admin/']
+    return { ...c, asked }
+  }
+
+  test('post-merge: Google only on /admin/ passes, /admin/ skipped; on / it still fails', async () => {
+    const c = adminChecks('/admin/')
+    const r = await live(siteDir({ 'apps-fonts-selfhost.json': JSON.stringify(APPS), 'live-baseline-fonts-selfhost.txt': '' }), 'post-merge', SHA, { deps: liveDeps(c.checks, git().exec) })
+    expect(r.status).toBe('pass')
+    expect(c.asked).toEqual([['/']])
+    expect(r.lines).toContain(SKIP)
+    const bad = adminChecks('/')
+    const failed = await live(siteDir({ 'apps-fonts-selfhost.json': JSON.stringify(APPS), 'live-baseline-fonts-selfhost.txt': '' }), 'post-merge', SHA, { deps: liveDeps(bad.checks, git().exec) })
+    expect(failed.status).toBe('stop')
+  })
+
+  test('baseline: Google only on /admin/ passes and writes the baseline; on / it is a STOP', async () => {
+    const c = adminChecks('/admin/')
+    const dir = siteDir()
+    const r = await live(dir, 'baseline', undefined, { deps: liveDeps(c.checks, git().exec, following.apps, following.deployments) })
+    expect(r.status).toBe('pass')
+    expect(r.lines).toContain(SKIP)
+    expect(existsSync(join(dir, '.rollout/live-baseline-fonts-selfhost.txt'))).toBe(true)
+    const bad = adminChecks('/')
+    const stopped = await live(siteDir(), 'baseline', undefined, { deps: liveDeps(bad.checks, git().exec, following.apps, following.deployments) })
+    expect(stopped).toMatchObject({ status: 'stop', reason: 'main self-hosts the fonts, but nhrk.se failed the fonts check live' })
+  })
+})
+
 describe('merge on fonts-selfhost', () => {
   function mergeExec(o: { head?: string; headRefName?: string; otherBranch?: 'merged' | 'unmerged'; otherPr?: boolean } = {}) {
     const calls: string[] = []

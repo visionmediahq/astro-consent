@@ -405,7 +405,9 @@ npx tsx ci/rollout/run.ts help
   - no `fonts.googleapis.com` / `fonts.gstatic.com` anywhere in the built `dist/` outside CSS
     and HTML comments (fonts.css's own header names the css2 URL);
   - every page at 360 and 1280 px with every Google Fonts request aborted and counted: none may be
-    attempted, and every `/fonts/*.woff2` must answer 200;
+    attempted, and every `/fonts/*.woff2` must answer 200. A CMS admin shell (`/admin`,
+    `/admin/…`) is left out and listed as skipped, here, in step 9 and live: its editor (Sveltia
+    CMS from unpkg on lj-trim) loads Google Fonts for its own UI, which visitors never get;
   - every family of fonts.css a visible element renders with has the face CSS font matching picks
     for its weight and style loaded in `document.fonts` (compared with fonts.css, not main: main
     cannot load its fonts with Google blocked);

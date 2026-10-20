@@ -31,7 +31,7 @@ import type { Browser } from '@playwright/test'
 import { type ConsentPathResult, checkConsentPaths } from './checks/consent-paths'
 import { type ContrastRow, checkContrast, formatContrast } from './checks/contrast'
 import { checkFonts, type DeclaredFace, type FontsPage, judgeFontsPage, parseFontsCss } from './checks/fonts'
-import { isCmsAdminRoute, listPages } from './checks/pages'
+import { fontsCheckPaths, isCmsAdminRoute, listPages } from './checks/pages'
 import { checkRequests, formatRequests, type RequestResult } from './checks/requests'
 import { type App, appsFor, type Deployment, type DeployStatus, followsMain, listApps, listDeployments, waitDeployed } from './coolify'
 import { currentFlow, fontsCssAt, statePath } from './flows'
@@ -178,10 +178,11 @@ interface DomainChecks {
   fonts: DeclaredFace[] | null
 }
 
-/** Step 8's browser part on every page: no Google Fonts request, woff2 200, faces used loaded. */
+/** Step 8's browser part on every visitor page: no Google Fonts request, woff2 200, faces used loaded. */
 async function fontsLines(c: LiveChecks, base: string, paths: string[], declared: DeclaredFace[]): Promise<{ pass: boolean; lines: string[] }> {
-  const judged = (await c.fonts(base, paths)).map((p) => judgeFontsPage(p, declared))
-  return { pass: judged.length > 0 && judged.every((j) => j.ok), lines: ['  self-hosted fonts:', ...judged.flatMap((j) => j.lines).map((l) => `    ${l}`)] }
+  const visitor = fontsCheckPaths(paths)
+  const judged = (await c.fonts(base, visitor.paths)).map((p) => judgeFontsPage(p, declared))
+  return { pass: judged.length > 0 && judged.every((j) => j.ok), lines: ['  self-hosted fonts:', ...[...visitor.lines, ...judged.flatMap((j) => j.lines)].map((l) => `    ${l}`)] }
 }
 
 /** C3 steps 3, 4, 6 (and 8) on one live domain. */
