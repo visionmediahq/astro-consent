@@ -1,0 +1,44 @@
+## Vad ändras
+
+- Typsnitten (Figtree och Oswald) laddas från sajten själv i stället för från Google Fonts. Besökarens webbläsare skickar inga anrop till Google (`fonts.googleapis.com`, `fonts.gstatic.com`) när sidan visas, och texten ser ut som förut.
+- `public/fonts/`: typsnittsfilerna (woff2), precis som Google Fonts levererar dem, och varje familjs licens.
+- `src/styles/fonts.css`: typsnitten, importerad från sajtens CSS. Länkarna till Google Fonts är borttagna.
+
+Filer:
+
+- `public/fonts/LICENSE-figtree.txt`
+- `public/fonts/figtree.woff2`
+- `src/layouts/Base.astro`
+- `src/styles/fonts.css`
+- `src/styles/global.css`
+
+## Så testar du
+
+1. Öppna https://kund.se i ett privat fönster med webbläsarens nätverksflik öppen.
+2. Filtrera på `fonts.g`: inga anrop till Google.
+3. Filtrera på `woff2`: typsnitten hämtas från `/fonts/` och svarar 200.
+4. Jämför rubriker och brödtext med sajten före ändringen: samma typsnitt, å, ä och ö som förut.
+
+## Kontroller
+
+Kontrollerat lokalt med `ci/rollout` (astro-consent):
+
+- ok: 1. lockfile
+- ok: 2. build
+- ok: 3. requests
+- hoppades över: 4. consent-paths
+- ok: 5. clip
+- hoppades över: 6. contrast
+- ok: 7. screenshots
+- ok: 8. fonts
+- ok: 9. docker
+
+Skärmbilder (360/1280 px):
+
+- [home-1280-open.png](https://github.com/visionmediahq/site-factory/blob/main/docs/rollout/2026-10-06-astro-consent/kund/home-1280-open.png)
+
+**Mergas efter verifiering och livekontroll.**
+
+## Relaterade ärenden
+
+Inga

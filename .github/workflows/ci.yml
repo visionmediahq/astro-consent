@@ -54,6 +54,11 @@ jobs:
       - name: Rollout check fixtures
         run: npx tsx tests/unit/rollout/checks-fixtures.demo.ts
         timeout-minutes: 10
+      # verify step 8 (self-hosted fonts): a page asking Google, a 404 face and an uncovered
+      # character must fail; the clean page must pass. Google Fonts requests are aborted, never sent.
+      - name: Rollout fonts check fixtures
+        run: npx tsx tests/unit/rollout/fonts-fixtures.demo.ts
+        timeout-minutes: 5
       - name: Rollout checks on the consent demo
         run: npx tsx tests/unit/rollout/checks.demo.ts
         timeout-minutes: 5

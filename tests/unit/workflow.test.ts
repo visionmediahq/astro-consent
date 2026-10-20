@@ -23,3 +23,8 @@ test('CI runs the rollout browser checks on the built demo, right after the cons
   expect(build).toBeGreaterThan(steps.indexOf('- run: npx playwright install --with-deps chromium'))
   expect(steps[build + 1]).toBe('- run: npx tsx ci/rollout/run.ts verify --demo demo/dist-consent')
 })
+
+test('CI runs the fonts check fixtures (verify step 8) in the e2e job, after Chromium is installed', () => {
+  const job = workflow.slice(workflow.indexOf('  e2e:'), workflow.indexOf('  pack-install:'))
+  expect(job.indexOf('run: npx tsx tests/unit/rollout/fonts-fixtures.demo.ts')).toBeGreaterThan(job.indexOf('npx playwright install --with-deps chromium'))
+})

@@ -173,10 +173,10 @@ describe('stored reports', () => {
     const report = runDetect(dir, ['a.se'])
     const write = (r: object) => writeFileSync(join(dir, '.rollout/report.json'), JSON.stringify(r))
     write({ ...report, classification: 'consent' })
-    const fresh = await runWire(dir, { dryRun: true })
+    const fresh = await runWire(dir, { dryRun: true, fonts: false })
     const { services: _s, widgets: _w, ...old } = report
     write({ ...old, classification: 'maps' })
-    expect(await runWire(dir, { dryRun: true })).toEqual(fresh)
+    expect(await runWire(dir, { dryRun: true, fonts: false })).toEqual(fresh)
   })
 
   test('the summary names the services after the classification', () => {

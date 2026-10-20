@@ -178,7 +178,7 @@ describe('openPr', () => {
   })
 
   test('an open PR from consent-banner is returned instead of a new one', async () => {
-    const f = fake({ 'gh pr list': { code: 0, out: JSON.stringify([{ url: 'https://github.com/visionmediahq/kund/pull/5', title: TITLE }]) } })
+    const f = fake({ 'gh pr list -R visionmediahq/kund --head consent-banner': { code: 0, out: JSON.stringify([{ url: 'https://github.com/visionmediahq/kund/pull/5', title: TITLE }]) } })
     const r = await openPr(siteDir(), opts(f))
     expect(r.url).toBe('https://github.com/visionmediahq/kund/pull/5')
     expect(f.calls.some((c) => c.startsWith('gh pr create'))).toBe(false)
@@ -186,7 +186,7 @@ describe('openPr', () => {
 
   test('an open PR with the title the tool used before #51 is still ours: returned, nothing created', async () => {
     const f = fake({
-      'gh pr list': { code: 0, out: JSON.stringify([{ url: 'https://github.com/visionmediahq/kund/pull/5', title: 'Samtyckesbanner (astro-consent 1.0)' }]) },
+      'gh pr list -R visionmediahq/kund --head consent-banner': { code: 0, out: JSON.stringify([{ url: 'https://github.com/visionmediahq/kund/pull/5', title: 'Samtyckesbanner (astro-consent 1.0)' }]) },
     })
     const r = await openPr(siteDir(), opts(f))
     expect(r.url).toBe('https://github.com/visionmediahq/kund/pull/5')
@@ -264,7 +264,7 @@ describe('openPr', () => {
   })
 
   test('finding 2: an open PR from consent-banner with another title is not ours: refused, nothing created', async () => {
-    const f = fake({ 'gh pr list': { code: 0, out: JSON.stringify([{ url: 'https://github.com/visionmediahq/kund/pull/5', title: 'WIP: cookie banner' }]) } })
+    const f = fake({ 'gh pr list -R visionmediahq/kund --head consent-banner': { code: 0, out: JSON.stringify([{ url: 'https://github.com/visionmediahq/kund/pull/5', title: 'WIP: cookie banner' }]) } })
     await expect(openPr(siteDir(), opts(f))).rejects.toThrow(/pull\/5[\s\S]*WIP: cookie banner/)
     expect(f.calls.some((c) => c.startsWith('gh pr create'))).toBe(false)
     expect(f.calls.find((c) => c.startsWith('gh pr list'))).toContain('--json url,title')
@@ -346,5 +346,135 @@ describe('parsePrArgs', () => {
       shotsBase: 'b',
     })
     expect(() => parsePrArgs(['s'])).toThrow(/--shots-dir/)
+  })
+})
+
+// ── fonts (site-factory#220) ─────────────────────────────────────────────────────────────────
+
+const FONTS_CSS = `/*\n * Generated from https://fonts.googleapis.com/css2?family=Figtree&family=Oswald\n * on 2026-10-19 by the astro-consent rollout tool: Google's own faces, served from /fonts/.\n */\n/* latin */\n@font-face {\n  font-family: 'Figtree';\n  src: url(/fonts/figtree.woff2) format('woff2');\n}\n/* latin */\n@font-face {\n  font-family: 'Oswald';\n  src: url(/fonts/oswald.woff2) format('woff2');\n}\n`
+const FONTS_FILES = 'public/fonts/LICENSE-figtree.txt\npublic/fonts/figtree.woff2\nsrc/layouts/Base.astro\nsrc/styles/fonts.css\nsrc/styles/global.css\n'
+const GOLDEN = join(import.meta.dirname, 'fixtures/pr-body/fonts-selfhost.md.txt')
+const FONTS_PASS: VerifyResult = {
+  ...PASS,
+  steps: ['lockfile', 'build', 'requests', 'consent-paths', 'clip', 'contrast', 'screenshots', 'fonts', 'docker'].map((name, i) => ({
+    step: i + 1,
+    name,
+    pass: true,
+    evidence: 'SECRET-EVIDENCE-TEXT',
+    ...(name === 'consent-paths' || name === 'contrast' ? { skipped: true } : {}),
+  })),
+}
+
+/** A clone on fonts-selfhost with its own verify file and shots; the banner's old state beside it. */
+function fontsDir(): string {
+  const dir = siteDir()
+  writeFileSync(join(dir, '.rollout/verify.json'), JSON.stringify({ ...PASS, sha: 'c'.repeat(40) }))
+  writeFileSync(join(dir, '.rollout/verify-fonts-selfhost.json'), JSON.stringify(FONTS_PASS))
+  mkdirSync(join(dir, '.rollout/shots-fonts-selfhost'))
+  writeFileSync(join(dir, '.rollout/shots-fonts-selfhost/home-1280-open.png'), 'png')
+  return dir
+}
+const fontsFake = (more: Record<string, Answer> = {}) =>
+  fake({
+    'git rev-parse --abbrev-ref HEAD': { code: 0, out: 'fonts-selfhost\n' },
+    'git diff --name-only origin/main...HEAD': { code: 0, out: FONTS_FILES },
+    'git show HEAD:src/styles/fonts.css': { code: 0, out: FONTS_CSS },
+    'git show HEAD:src/data/privacy.json': { code: 1, out: 'fatal: no privacy.json' },
+    ...more,
+  })
+
+describe('openPr on fonts-selfhost', () => {
+  test('the fonts PR: its title, -H fonts-selfhost, its own verify file, shots and body file; the body matches the golden file', async () => {
+    const dir = fontsDir()
+    const f = fontsFake()
+    const noRerun = async (): Promise<VerifyResult> => {
+      throw new Error('the stored fonts verify is for HEAD: no rerun')
+    }
+    const r = await openPr(dir, opts(f, { verify: noRerun }))
+    expect(r.url).toBe('https://github.com/visionmediahq/kund/pull/9')
+    expect(r.files.map((x) => x.to)).toEqual(['docs/rollout/2026-10-06-astro-consent/kund/home-1280-open.png'])
+    const create = f.calls.find((c) => c.startsWith('gh pr create'))!
+    expect(create).toContain('-H fonts-selfhost')
+    expect(create).toContain('-t Google Fonts från sajten själv')
+    expect(create).toContain(join(dir, '.rollout/pr-body-fonts-selfhost.md'))
+    // The other flow's open PR is checked first.
+    expect(f.calls).toContain('gh pr list -R visionmediahq/kund --head consent-banner --state open --json url,title')
+    const body = readFileSync(join(dir, '.rollout/pr-body-fonts-selfhost.md'), 'utf8')
+    if (process.env['UPDATE_GOLDEN']) writeFileSync(GOLDEN, body)
+    expect(body).toBe(readFileSync(GOLDEN, 'utf8'))
+    expect(body).not.toContain('SECRET-EVIDENCE-TEXT')
+  })
+
+  test('refused while a consent-banner PR is open (the two would conflict); nothing created', async () => {
+    const f = fontsFake({ 'gh pr list -R visionmediahq/kund --head consent-banner': { code: 0, out: JSON.stringify([{ url: 'https://github.com/visionmediahq/kund/pull/3', title: TITLE }]) } })
+    await expect(openPr(fontsDir(), opts(f))).rejects.toThrow('an open consent-banner PR (https://github.com/visionmediahq/kund/pull/3) would conflict with fonts-selfhost')
+    expect(f.calls.some((c) => c.startsWith('gh pr create') || c.startsWith('git fetch'))).toBe(false)
+  })
+
+  test("refused without the tool's fonts.css on the branch", async () => {
+    const f = fontsFake({ 'git show HEAD:src/styles/fonts.css': { code: 128, out: 'fatal: path does not exist' } })
+    await expect(openPr(fontsDir(), opts(f))).rejects.toThrow(/src\/styles\/fonts\.css from this tool is not on the branch/)
+  })
+
+  test("an open fonts-selfhost PR with the flow's title is returned; another title is refused", async () => {
+    const own = fontsFake({ 'gh pr list -R visionmediahq/kund --head fonts-selfhost': { code: 0, out: JSON.stringify([{ url: 'https://github.com/visionmediahq/kund/pull/11', title: 'Google Fonts från sajten själv' }]) } })
+    expect((await openPr(fontsDir(), opts(own))).url).toBe('https://github.com/visionmediahq/kund/pull/11')
+    const other = fontsFake({ 'gh pr list -R visionmediahq/kund --head fonts-selfhost': { code: 0, out: JSON.stringify([{ url: 'https://github.com/visionmediahq/kund/pull/12', title: 'fonts' }]) } })
+    await expect(openPr(fontsDir(), opts(other))).rejects.toThrow(/pull\/12 "fonts" \(expected "Google Fonts från sajten själv"\)/)
+  })
+
+  test("the banner's verify.json is never read for fonts-selfhost: without its own, verify runs", async () => {
+    const dir = fontsDir()
+    rmSync(join(dir, '.rollout/verify-fonts-selfhost.json'))
+    let verifies = 0
+    await openPr(dir, opts(fontsFake(), { verify: async () => (verifies++, FONTS_PASS) }))
+    expect(verifies).toBe(1)
+  })
+})
+
+describe('openPr on consent-banner with the fonts commit', () => {
+  test('the body gets the fonts paragraph and a test step numbered after the banner steps', async () => {
+    const dir = siteDir()
+    const f = fake({
+      'git diff --name-only origin/main...HEAD': { code: 0, out: `src/data/privacy.json\n${FONTS_FILES}` },
+      'git show HEAD:src/styles/fonts.css': { code: 0, out: FONTS_CSS },
+    })
+    await openPr(dir, opts(f))
+    const body = readFileSync(join(dir, '.rollout/pr-body.md'), 'utf8')
+    expect(body).toContain('- Typsnitten (Figtree och Oswald) laddas från sajten själv i stället för från Google Fonts, i en egen commit')
+    expect(body).toMatch(/^4\. Klicka "Cookie-inställningar".*\n5\. Öppna webbläsarens nätverksflik och ladda om sidan: inga anrop till `fonts\.googleapis\.com`/m)
+    expect(body).not.toMatch(/\{\{|\}\}/)
+  })
+
+  test('without the fonts commit: no fonts paragraph, fonts.css not even read', async () => {
+    const dir = siteDir()
+    const f = fake()
+    await openPr(dir, opts(f))
+    expect(readFileSync(join(dir, '.rollout/pr-body.md'), 'utf8')).not.toContain('Typsnitten')
+    expect(f.calls.some((c) => c.includes('fonts.css'))).toBe(false)
+  })
+
+  test('refused while origin has a fonts-selfhost branch main does not contain; a merged one is no obstacle', async () => {
+    const other = 'd'.repeat(40)
+    const answers = (merged: boolean) => ({
+      'git ls-remote --heads origin refs/heads/fonts-selfhost': { code: 0, out: `${other}\trefs/heads/fonts-selfhost\n` },
+      [`git merge-base --is-ancestor ${other} origin/main`]: { code: merged ? 0 : 1, out: '' },
+    })
+    const f = fake(answers(false))
+    await expect(openPr(siteDir(), opts(f))).rejects.toThrow(/origin has a fonts-selfhost branch \(ddddddd\) that is not in origin\/main/)
+    expect(f.calls).toContain('git fetch -q origin main fonts-selfhost')
+    expect(f.calls.some((c) => c.startsWith('gh pr create'))).toBe(false)
+    expect((await openPr(siteDir(), opts(fake(answers(true))))).url).toBe('https://github.com/visionmediahq/kund/pull/9')
+  })
+
+  test('refused while a fonts-selfhost PR is open', async () => {
+    const f = fake({ 'gh pr list -R visionmediahq/kund --head fonts-selfhost': { code: 0, out: JSON.stringify([{ url: 'https://github.com/visionmediahq/kund/pull/4', title: 'Google Fonts från sajten själv' }]) } })
+    await expect(openPr(siteDir(), opts(f))).rejects.toThrow('an open fonts-selfhost PR (https://github.com/visionmediahq/kund/pull/4) would conflict with consent-banner')
+  })
+
+  test('renderBody: the notice block numbers the fonts step 4; the consent block after its services', () => {
+    const fonts = { families: ['Figtree'] }
+    expect(renderBody(template, { kind: 'notice', services: [], verify: PASS, issues: [], domain: 'kund.se', fonts })).toMatch(/^3\. Klicka "Cookie-inställningar"[^\n]*\n4\. Öppna webbläsarens nätverksflik/m)
+    expect(renderBody(template, { kind: 'consent', services: ['google-maps', 'elfsight'], verify: PASS, issues: [], domain: 'kund.se', fonts })).toMatch(/^5\. Klicka "Cookie-inställningar"[^\n]*\n6\. Öppna webbläsarens nätverksflik/m)
   })
 })

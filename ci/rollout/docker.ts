@@ -1,4 +1,4 @@
-// Verify step 8 (spec C3.8), ported from the pilot kit's dk.sh: the pushed branch cloned clean the
+// Verify step 9 (spec C3.8), ported from the pilot kit's dk.sh: the pushed branch cloned clean the
 // way Coolify gets it, the site's own Dockerfile built (no git in the image) and run with PORT set,
 // the checks run against the container, then the container, image, build cache and clone deleted.
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'

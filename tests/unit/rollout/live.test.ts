@@ -5,6 +5,7 @@ import { afterEach, describe, expect, test } from 'vitest'
 import type { ConsentPathResult } from '../../../ci/rollout/checks/consent-paths'
 import type { ContrastRow } from '../../../ci/rollout/checks/contrast'
 import type { RequestResult } from '../../../ci/rollout/checks/requests'
+import type { FontsPage } from '../../../ci/rollout/checks/fonts'
 import type { App, Deployment } from '../../../ci/rollout/coolify'
 import type { Exec } from '../../../ci/rollout/lib/exec'
 import { decodeBaseline, encodeBaseline, issueTitle, type LiveChecks, type LiveResult, live, type RecordedApps } from '../../../ci/rollout/live'
@@ -96,6 +97,7 @@ function fakeChecks(answers: ((base: string, paths: string[]) => RequestResult[]
     },
     consentPaths: async (base, p) => (calls.push({ what: 'consentPaths', base, paths: p }), p.map((x) => paths(x))),
     contrast: async (base, p) => (calls.push({ what: 'contrast', base, paths: p }), p.map((x) => row({ path: x }))),
+    fonts: async (base, p) => (calls.push({ what: 'fonts', base, paths: p }), p.map((x): FontsPage => ({ path: x, width: 1280, google: [], woff2: [], loaded: [], used: [], chars: {}, bodyFamily: 'Arial' }))),
     close: async () => undefined,
   }
   return { checks, calls }
@@ -112,6 +114,7 @@ function fakeGh(issues: { title: string; url: string }[] = []) {
     if (line === 'git fetch origin main') return { code: 0, out: '' }
     if (line === 'git rev-parse origin/main') return { code: 0, out: `${MAIN}\n` }
     if (line === 'git remote get-url origin') return { code: 0, out: 'git@github.com:visionmediahq/nhrk.git\n' }
+    if (line === 'git rev-parse --abbrev-ref HEAD') return { code: 0, out: 'consent-banner\n' }
     return { code: 1, out: `unexpected ${cmd} ${args.join(' ')}` }
   }
   return { exec, calls }
@@ -387,6 +390,9 @@ function mergeExec(o: { moved?: boolean; head: { sha: string }; rebaseFails?: bo
       return { code: 0, out: JSON.stringify({ state: o.state ?? 'OPEN', headRefName: 'consent-banner' }) }
     if (line.startsWith('gh pr merge 7 ')) return { code: 0, out: '' }
     if (line === 'gh pr view 7 -R visionmediahq/nhrk --json mergeCommit') return { code: 0, out: JSON.stringify({ mergeCommit: { oid: SHA } }) }
+    // No fonts-selfhost branch or PR on GitHub.
+    if (line === 'git ls-remote --heads origin refs/heads/fonts-selfhost') return { code: 0, out: '' }
+    if (line === 'gh pr list -R visionmediahq/nhrk --head fonts-selfhost --state open --json url,title') return { code: 0, out: '[]' }
     return { code: 1, out: `unexpected: ${line}` }
   }
   return { exec, calls }
