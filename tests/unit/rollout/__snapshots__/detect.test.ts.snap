@@ -29,6 +29,41 @@ exports[`detect > pilot a-tak: needs-human, matching the committed snapshot 1`] 
   "domains": [
     "a-tak.se",
   ],
+  "fonts": {
+    "csp": [],
+    "locations": [
+      {
+        "end": 1679,
+        "file": "src/layouts/Base.astro",
+        "kind": "preconnect",
+        "start": 1618,
+      },
+      {
+        "end": 1754,
+        "file": "src/layouts/Base.astro",
+        "kind": "preconnect",
+        "start": 1684,
+      },
+      {
+        "end": 1975,
+        "file": "src/layouts/Base.astro",
+        "kind": "link",
+        "start": 1759,
+      },
+      {
+        "end": 2183,
+        "file": "src/layouts/Base.astro",
+        "kind": "noscript",
+        "start": 1980,
+      },
+    ],
+    "reasons": [],
+    "status": "wire",
+    "url": "https://fonts.googleapis.com/css2?family=Questrial&family=Red+Hat+Display:wght@400;500;600;700;800;900&display=swap",
+    "urls": [
+      "https://fonts.googleapis.com/css2?family=Questrial&family=Red+Hat+Display:wght@400;500;600;700;800;900&display=swap",
+    ],
+  },
   "footerless": [
     "src/pages/404.astro",
   ],
@@ -115,6 +150,35 @@ exports[`detect > pilot aspomad: consent, matching the committed snapshot 1`] = 
   "domains": [
     "aspomad.se",
   ],
+  "fonts": {
+    "csp": [],
+    "locations": [
+      {
+        "end": 1537,
+        "file": "src/layouts/Base.astro",
+        "kind": "preconnect",
+        "start": 1476,
+      },
+      {
+        "end": 1612,
+        "file": "src/layouts/Base.astro",
+        "kind": "preconnect",
+        "start": 1542,
+      },
+      {
+        "end": 1763,
+        "file": "src/layouts/Base.astro",
+        "kind": "link",
+        "start": 1617,
+      },
+    ],
+    "reasons": [],
+    "status": "wire",
+    "url": "https://fonts.googleapis.com/css2?family=Montserrat:wght@100;200;300;400&family=Poppins:wght@300;400&display=swap",
+    "urls": [
+      "https://fonts.googleapis.com/css2?family=Montserrat:wght@100;200;300;400&family=Poppins:wght@300;400&display=swap",
+    ],
+  },
   "footerless": [],
   "footers": [
     {
@@ -197,6 +261,35 @@ exports[`detect > pilot domeijstapetserarverkstad: consent, matching the committ
   "domains": [
     "domeijstapetserarverkstad.se",
   ],
+  "fonts": {
+    "csp": [],
+    "locations": [
+      {
+        "end": 1873,
+        "file": "src/layouts/Base.astro",
+        "kind": "preconnect",
+        "start": 1812,
+      },
+      {
+        "end": 1948,
+        "file": "src/layouts/Base.astro",
+        "kind": "preconnect",
+        "start": 1878,
+      },
+      {
+        "end": 2123,
+        "file": "src/layouts/Base.astro",
+        "kind": "link",
+        "start": 1953,
+      },
+    ],
+    "reasons": [],
+    "status": "wire",
+    "url": "https://fonts.googleapis.com/css2?family=Gloock&family=Raleway:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap",
+    "urls": [
+      "https://fonts.googleapis.com/css2?family=Gloock&family=Raleway:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap",
+    ],
+  },
   "footerless": [
     "src/pages/404.astro",
   ],
@@ -276,6 +369,14 @@ exports[`detect > pilot munkforstradgardstjanst: notice, matching the committed 
   "domains": [
     "munkforstradgardstjanst.se",
   ],
+  "fonts": {
+    "csp": [],
+    "locations": [],
+    "reasons": [],
+    "status": "none",
+    "url": null,
+    "urls": [],
+  },
   "footerless": [
     "src/pages/404.astro",
   ],
@@ -342,6 +443,41 @@ exports[`detect > pilot nhrk: needs-human, matching the committed snapshot 1`] =
   "domains": [
     "nhrk.se",
   ],
+  "fonts": {
+    "csp": [],
+    "locations": [
+      {
+        "end": 2022,
+        "file": "src/layouts/Base.astro",
+        "kind": "preconnect",
+        "start": 1961,
+      },
+      {
+        "end": 2097,
+        "file": "src/layouts/Base.astro",
+        "kind": "preconnect",
+        "start": 2027,
+      },
+      {
+        "end": 2345,
+        "file": "src/layouts/Base.astro",
+        "kind": "preload",
+        "start": 2102,
+      },
+      {
+        "end": 2542,
+        "file": "src/layouts/Base.astro",
+        "kind": "noscript",
+        "start": 2350,
+      },
+    ],
+    "reasons": [],
+    "status": "wire",
+    "url": "https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700;800&family=Nunito:wght@400;500;600;700&display=swap",
+    "urls": [
+      "https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700;800&family=Nunito:wght@400;500;600;700&display=swap",
+    ],
+  },
   "footerless": [
     "src/pages/404.astro",
   ],
@@ -426,6 +562,35 @@ exports[`detect > pilot traforadling: consent, matching the committed snapshot 1
   "domains": [
     "traforadling.se",
   ],
+  "fonts": {
+    "csp": [],
+    "locations": [
+      {
+        "end": 1457,
+        "file": "src/layouts/Base.astro",
+        "kind": "preconnect",
+        "start": 1396,
+      },
+      {
+        "end": 1532,
+        "file": "src/layouts/Base.astro",
+        "kind": "preconnect",
+        "start": 1462,
+      },
+      {
+        "end": 1681,
+        "file": "src/layouts/Base.astro",
+        "kind": "link",
+        "start": 1537,
+      },
+    ],
+    "reasons": [],
+    "status": "wire",
+    "url": "https://fonts.googleapis.com/css2?family=Raleway:wght@400;500;600;700;800&family=Lato:wght@400;700&display=swap",
+    "urls": [
+      "https://fonts.googleapis.com/css2?family=Raleway:wght@400;500;600;700;800&family=Lato:wght@400;700&display=swap",
+    ],
+  },
   "footerless": [
     "src/pages/404.astro",
     "src/pages/index.astro",
@@ -532,6 +697,35 @@ exports[`detect > pilot vasshallakatthotell: consent, matching the committed sna
   "domains": [
     "vasshallakatthotell.se",
   ],
+  "fonts": {
+    "csp": [],
+    "locations": [
+      {
+        "end": 1418,
+        "file": "src/layouts/Base.astro",
+        "kind": "preconnect",
+        "start": 1357,
+      },
+      {
+        "end": 1493,
+        "file": "src/layouts/Base.astro",
+        "kind": "preconnect",
+        "start": 1423,
+      },
+      {
+        "end": 1725,
+        "file": "src/layouts/Base.astro",
+        "kind": "link",
+        "start": 1498,
+      },
+    ],
+    "reasons": [],
+    "status": "wire",
+    "url": "https://fonts.googleapis.com/css2?family=Eczar:wght@400;600;700;800&family=Literata:opsz,wght@7..72,400;7..72,500;7..72,700;7..72,800&family=Nunito+Sans:wght@300;400;500;600;700;800&display=swap",
+    "urls": [
+      "https://fonts.googleapis.com/css2?family=Eczar:wght@400;600;700;800&family=Literata:opsz,wght@7..72,400;7..72,500;7..72,700;7..72,800&family=Nunito+Sans:wght@300;400;500;600;700;800&display=swap",
+    ],
+  },
   "footerless": [
     "src/pages/404.astro",
   ],
@@ -539,7 +733,7 @@ exports[`detect > pilot vasshallakatthotell: consent, matching the committed sna
     {
       "alignment": "left",
       "centred": false,
-      "end": 7482,
+      "end": 7468,
       "file": "src/components/Footer.astro",
       "kind": "component",
       "start": 100,
@@ -549,14 +743,14 @@ exports[`detect > pilot vasshallakatthotell: consent, matching the committed sna
   "iframes": [
     {
       "classes": null,
-      "end": 4488,
+      "end": 4474,
       "file": "src/components/ContactSection.astro",
       "height": "100%",
       "host": "maps.google.com",
       "service": "google-maps",
       "src": "https://maps.google.com/maps?q=57.698734,13.042359&hl=sv&z=15&output=embed",
       "srcKind": "literal",
-      "start": 4110,
+      "start": 4096,
       "style": "border:0;",
       "title": "Karta till Vasshalla Katthotell i Gånghester",
     },

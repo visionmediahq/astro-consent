@@ -371,3 +371,43 @@ describe('banner and footer markup', () => {
     expect(consentBuild.html('index.html').querySelector('.form-control')).toBeNull()
   })
 })
+
+// gron-kontor (#64): a site's @theme with its own --spacing-<size> scale. Tailwind 4 resolves
+// max-w-<size> through --spacing-<size> before --container-<size>, so max-w-2xl became 64px there.
+describe('site theme tokens', () => {
+  const SIZES = ['3xs', '2xs', 'xs', 'sm', 'md', 'lg', 'xl', '2xl', '3xl', '4xl', '5xl', '6xl', '7xl']
+  const escapeRegExp = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
+  /** Every stylesheet the page links or inlines, as one string. */
+  function pageCss(build: BuildResult, path: string): string {
+    const page = build.html(path)
+    const linked = page
+      .querySelectorAll('link[rel="stylesheet"]')
+      .map((link) => readFileSync(join(build.dir, 'dist/client', link.getAttribute('href')!), 'utf8'))
+    return [...linked, ...page.querySelectorAll('style').map((style) => style.text)].join('\n')
+  }
+
+  /** The values a class sets for a property in the compiled CSS. Tailwind escapes `[`, `]` and `/` in selectors. */
+  function declared(css: string, className: string, property: string): string[] {
+    const selector = '.' + className.replace(/[^a-zA-Z0-9_-]/g, (c) => `\\${c}`)
+    const rule = new RegExp(`${escapeRegExp(selector)}\\s*\\{[^}]*?${property}\\s*:\\s*([^;}]+)`, 'g')
+    return [...css.matchAll(rule)].map((m) => m[1]!.trim())
+  }
+
+  test('the banner is at most 42rem wide whatever the site sets for --spacing-<size>', TIMEOUT, () => {
+    const build = buildDemo('consent', (dir) => {
+      const cssPath = join(dir, 'src/styles/global.css')
+      const tokens = SIZES.map((size) => `  --spacing-${size}: 4rem;`).join('\n')
+      writeFileSync(cssPath, `${readFileSync(cssPath, 'utf8')}\n@theme {\n${tokens}\n}\n`)
+      // A site element with max-w-2xl: proves the theme took effect the way it did on gron-kontor.
+      writeFileSync(join(dir, 'src/pages/probe.astro'), '<div class="max-w-2xl">probe</div>\n')
+    })
+    expect(build.code).toBe(0)
+    const css = pageCss(build, 'index.html')
+    expect(css).toMatch(/--spacing-2xl:\s*4rem/)
+    expect(declared(css, 'max-w-2xl', 'max-width')).toEqual(['var(--spacing-2xl)'])
+    const banner = build.html('index.html').querySelector('[data-consent-banner]')!
+    const widths = [...banner.classList.values()].filter((c) => c.startsWith('max-w-'))
+    expect(widths.flatMap((c) => declared(css, c, 'max-width'))).toEqual(['42rem'])
+  })
+})

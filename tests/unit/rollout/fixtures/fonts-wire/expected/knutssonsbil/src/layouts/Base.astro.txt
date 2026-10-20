@@ -1,0 +1,10 @@
+---
+import SEO from '../components/SEO.astro'
+import '../styles/global.css'
+---
+<html lang="sv">
+  <head>
+    <link rel="icon" href="/favicon.webp" />
+  </head>
+  <body><slot /></body>
+</html>

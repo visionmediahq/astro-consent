@@ -6,6 +6,7 @@ import { servicesOf } from '../lib/report'
 import { classify } from './classify'
 import { detectConfig } from './config'
 import { detectAstroMajor, detectCss } from './css'
+import { detectFonts } from './fonts'
 import { detectIframes } from './iframes'
 import { detectScripts } from './scripts'
 import { detectStructure } from './structure'
@@ -37,6 +38,7 @@ export function detect(files: SiteFiles, site: string, domains: string[]): Repor
     alreadyWired: scripts.alreadyWired,
     widgets: widgets.widgets,
   }
+  const fonts = detectFonts(files, findings.css.entry)
   const { classification, reasons } = classify({
     ...findings,
     parseErrors: [...structure.parseErrors, ...frames.parseErrors, ...scripts.parseErrors, ...widgets.parseErrors],
@@ -47,5 +49,5 @@ export function detect(files: SiteFiles, site: string, domains: string[]): Repor
     widgetReasons: widgets.reasons,
     scriptBuilt: scripts.scriptBuilt,
   })
-  return { ...findings, services: servicesOf(findings, widgets.wired), classification, reasons }
+  return { ...findings, services: servicesOf(findings, widgets.wired), fonts, classification, reasons }
 }

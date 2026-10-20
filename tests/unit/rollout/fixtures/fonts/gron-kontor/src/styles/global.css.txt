@@ -1,0 +1,16 @@
+@import "tailwindcss";
+
+/* ── Self-hosted fonts ──────────────────────────────────────────────────
+   Previously loaded from fonts.googleapis.com, which blocked first paint for
+   ~786 ms and sent every visitor's IP to Google — a consent problem for a
+   Swedish client site. Served from our own origin instead; the woff2 files
+   live in public/fonts and are preloaded in Base.astro.
+   Both faces are variable, so one file per subset covers every weight. */
+
+@font-face {
+  font-family: 'Familjen Grotesk';
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url('/fonts/familjen-grotesk-latin.woff2') format('woff2');
+}

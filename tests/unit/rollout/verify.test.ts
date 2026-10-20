@@ -8,12 +8,14 @@ import type { EmbedBox } from '../../../ci/rollout/checks/embed-size'
 import type { ConsentPathResult } from '../../../ci/rollout/checks/consent-paths'
 import type { ContrastRow } from '../../../ci/rollout/checks/contrast'
 import type { RequestResult } from '../../../ci/rollout/checks/requests'
+import type { FontsPage } from '../../../ci/rollout/checks/fonts'
 import { dockerCheck } from '../../../ci/rollout/docker'
 import { ssrEntry, startPreview } from '../../../ci/rollout/preview'
 import type { Report } from '../../../ci/rollout/types'
 import { type Checks, embedRoutes, type Exec, filterRoutes, formatVerify, MIN_FREE_GB, minFreeGb, ORIGIN, type VerifyDeps, verify } from '../../../ci/rollout/verify'
 
 const PKG = '@visionmediahq/astro-consent'
+const STEP_NAMES = ['lockfile', 'build', 'requests', 'consent-paths', 'clip', 'contrast', 'screenshots', 'fonts', 'docker']
 const DEMO_REPORT = JSON.parse(readFileSync(join(import.meta.dirname, 'fixtures/demo-report.json'), 'utf8')) as Report
 const report = (over: Partial<Report> = {}): Report => ({ ...DEMO_REPORT, astro: { major: 7, output: 'static' }, ...over })
 
@@ -131,6 +133,10 @@ function fake(
       })))
     ),
     shots: async () => (called.add('shots'), ['/tmp/x.png']),
+    fonts: async (base, paths, o) => (
+      called.add(`fonts ${base}`),
+      paths.flatMap((path) => (o?.widths ?? [360, 1280]).map((width): FontsPage => ({ path, width, google: [], woff2: [], loaded: [], used: [], chars: {}, bodyFamily: 'Arial' })))
+    ),
     close: async () => void called.add('close'),
     ...opts.checks,
   }
@@ -198,11 +204,11 @@ describe('verify', () => {
     })
   })
 
-  test('all eight steps pass; pushes consent-banner and nothing else; the main worktree is removed', async () => {
+  test('all steps pass (8 fonts skipped: no fonts.css); pushes consent-banner and nothing else; the main worktree is removed', async () => {
     const dir = siteDir()
     const f = fake()
     const result = await verify(dir, report(), { deps: f.deps })
-    expect(result.steps.map((s) => [s.step, s.pass])).toEqual([1, 2, 3, 4, 5, 6, 7, 8].map((n) => [n, true]))
+    expect(result.steps.map((s) => [s.step, s.name, s.pass, s.skipped ?? false])).toEqual(STEP_NAMES.map((name, i) => [i + 1, name, true, name === 'fonts']))
     expect(result.pass).toBe(true)
     const pushes = f.calls.filter((c) => c.startsWith('git push'))
     expect(pushes).toEqual(['git push --force-with-lease origin consent-banner'])
@@ -215,9 +221,11 @@ describe('verify', () => {
     const written = JSON.parse(readFileSync(join(dir, '.rollout/verify.json'), 'utf8')) as typeof result
     expect(written).toEqual(result)
     expect(result.sha).toBe(SHA)
-    for (const name of ['1-lockfile', '2-build', '3-requests', '4-consent-paths', '5-clip', '6-contrast', '7-screenshots', '8-docker']) {
+    for (const name of ['1-lockfile', '2-build', '3-requests', '4-consent-paths', '5-clip', '6-contrast', '7-screenshots', '8-fonts', '9-docker']) {
       expect(existsSync(join(dir, '.rollout/evidence', `${name}.txt`)), name).toBe(true)
     }
+    expect(readFileSync(join(dir, '.rollout/evidence/8-fonts.txt'), 'utf8')).toMatch(/skipped: no self-hosted fonts/)
+    expect(f.called.has('fonts http://127.0.0.1:4399')).toBe(false)
   })
 
   test('stops at the first failing step: later steps are not run', async () => {
@@ -623,7 +631,7 @@ describe('verify', () => {
   test('step 8: the remote branch head must equal the local HEAD', async () => {
     const f = fake({ exec: { 'git ls-remote origin': { code: 0, out: `${'b'.repeat(40)}\trefs/heads/consent-banner\n` } } })
     const result = await verify(siteDir(), report(), { deps: f.deps })
-    expect(result.steps.at(-1)).toMatchObject({ step: 8, pass: false })
+    expect(result.steps.at(-1)).toMatchObject({ step: 9, name: 'docker', pass: false })
     expect(f.called.has('docker')).toBe(false)
   })
 
@@ -714,7 +722,7 @@ describe('verify', () => {
   test('step 8 (Ruling 34b): an origin outside github.com/visionmediahq fails before Docker', async () => {
     const f = fake({ exec: { 'git remote get-url origin': { code: 0, out: 'https://gitlab.com/someone/site.git\n' } } })
     const result = await verify(siteDir(), report(), { deps: f.deps })
-    expect(result.steps.at(-1)).toMatchObject({ step: 8, pass: false })
+    expect(result.steps.at(-1)).toMatchObject({ step: 9, name: 'docker', pass: false })
     expect(result.steps.at(-1)!.evidence).toContain('github.com/visionmediahq')
     expect(f.called.has('docker')).toBe(false)
   })
@@ -751,6 +759,7 @@ describe('verify', () => {
       [6, true, false],
       [7, true, false],
       [8, true, true],
+      [9, true, true],
     ])
     expect(expected).toEqual([
       ['/', true],
@@ -835,7 +844,7 @@ describe('verify: final review fixes', () => {
     }
     const result = await verify(siteDir(), report(), { deps: f.deps })
     expect(result.pass).toBe(false)
-    expect(result.steps.map((s) => [s.step, s.pass])).toEqual([...[1, 2, 3, 4, 5, 6, 7, 8].map((n) => [n, true]), [9, false]])
+    expect(result.steps.map((s) => [s.step, s.pass])).toEqual([...[1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => [n, true]), [10, false]])
     expect(result.steps.at(-1)).toMatchObject({ name: 'clean' })
     expect(result.steps.at(-1)!.evidence).toContain('.astro/types.d.ts')
     expect(result.steps.at(-1)!.evidence).toMatch(/\.gitignore/)
@@ -875,7 +884,7 @@ describe('verify: final review fixes', () => {
   test('finding 10: step 8 refuses an origin that only contains github.com/visionmediahq', async () => {
     const f = fake({ exec: { 'git remote get-url origin': { code: 0, out: 'https://evil/github.com/visionmediahq/x\n' } } })
     const result = await verify(siteDir(), report(), { deps: f.deps })
-    expect(result.steps.at(-1)).toMatchObject({ step: 8, pass: false })
+    expect(result.steps.at(-1)).toMatchObject({ step: 9, name: 'docker', pass: false })
     expect(f.called.has('docker')).toBe(false)
   })
 })

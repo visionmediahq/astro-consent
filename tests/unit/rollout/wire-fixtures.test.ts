@@ -15,7 +15,8 @@ import { applyEdits } from '../../../ci/rollout/wire/engine'
 import { applyWire, BRANCH, COMMIT_MESSAGE, INSTALL_SPEC, planWire } from '../../../ci/rollout/wire/index'
 
 const FIXTURES = join(import.meta.dirname, 'fixtures')
-const SITES = readdirSync(FIXTURES).filter((s) => statSync(join(FIXTURES, s)).isDirectory()).sort()
+// Each site fixture has a before/ tree; other folders (fonts/: detect-only fixtures) are not wire fixtures.
+const SITES = readdirSync(FIXTURES).filter((s) => existsSync(join(FIXTURES, s, 'before'))).sort()
 const REFUSED = (site: string) => join(FIXTURES, site, 'expected', 'REFUSED.md')
 const WIRED = SITES.filter((s) => !existsSync(REFUSED(s)))
 const NEEDS_HUMAN = SITES.filter((s) => existsSync(REFUSED(s)))
@@ -498,19 +499,19 @@ describe('applyWire', () => {
 
 describe('run.ts wire', () => {
   test('parseWireArgs: a dir and an optional --dry-run', () => {
-    expect(parseWireArgs(['site'])).toEqual({ dir: 'site', dryRun: false })
-    expect(parseWireArgs(['--dry-run', 'site'])).toEqual({ dir: 'site', dryRun: true })
+    expect(parseWireArgs(['site'])).toEqual({ dir: 'site', dryRun: false, fonts: true })
+    expect(parseWireArgs(['--dry-run', 'site'])).toEqual({ dir: 'site', dryRun: true, fonts: true })
     expect(() => parseWireArgs([])).toThrow(/usage/)
     expect(() => parseWireArgs(['site', '--dry'])).toThrow(/--dry/)
     expect(() => parseWireArgs(['a', 'b'])).toThrow(/one site dir/)
   })
 
-  test('--dry-run prints the summary and a unified diff, and writes nothing (spec C2)', () => {
+  test('--dry-run prints the summary and a unified diff, and writes nothing (spec C2)', async () => {
     const dir = checkout('aspomad')
     runDetect(dir, ['aspomad.se'])
     const rollout = readdirSync(join(dir, '.rollout'))
     const tree = diskTree(dir)
-    const { code, output } = runWire(dir, { dryRun: true })
+    const { code, output } = await runWire(dir, { dryRun: true, fonts: false })
     expect(code).toBe(0)
     expect(output).toContain('site (aspomad.se): consent')
     expect(output).toMatch(/edits in \d+ files/)
@@ -525,27 +526,27 @@ describe('run.ts wire', () => {
     expect(git(dir, 'status', '--porcelain', '--untracked-files=all')).toBe('')
   })
 
-  test('--dry-run of a needs-human site prints the refusals and exits 3 (Ruling 32)', () => {
+  test('--dry-run of a needs-human site prints the refusals and exits 3 (Ruling 32)', async () => {
     const dir = checkout('a-tak')
     runDetect(dir, ['a-tak.se'])
-    const { code, output } = runWire(dir, { dryRun: true })
+    const { code, output } = await runWire(dir, { dryRun: true, fonts: false })
     expect(code).toBe(3)
     for (const reason of refusedReasons('a-tak')) expect(output).toContain(reason)
     expect(output).not.toContain('+++')
   })
 
-  test('a refused plan without --dry-run also exits 3 and leaves the checkout alone (Ruling 32)', () => {
+  test('a refused plan without --dry-run also exits 3 and leaves the checkout alone (Ruling 32)', async () => {
     const dir = checkout('a-tak')
     runDetect(dir, ['a-tak.se'])
-    const { code, output } = runWire(dir, { dryRun: false })
+    const { code, output } = await runWire(dir, { dryRun: false, fonts: false })
     expect(code).toBe(3)
     expect(output).toContain('nothing was written')
     expect(git(dir, 'branch', '--show-current')).toBe('main')
     expect(git(dir, 'status', '--porcelain', '--untracked-files=all')).toBe('')
   })
 
-  test('without .rollout/report.json: an error that says to run detect first', () => {
+  test('without .rollout/report.json: an error that says to run detect first', async () => {
     const dir = checkout('aspomad')
-    expect(() => runWire(dir, { dryRun: true })).toThrow(/run detect first/)
+    await expect(runWire(dir, { dryRun: true })).rejects.toThrow(/run detect first/)
   })
 })

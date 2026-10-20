@@ -935,10 +935,11 @@ describe('wireEmbeds', () => {
     expect(refused(`<div class="min-h-[0px]">\n  ${map}\n</div>\n`)).toEqual(['map fills a parent of unknown height'])
     expect(refused(`<div class="md:min-h-[500px]">\n  ${map}\n</div>\n`)).toEqual(['map fills a parent of unknown height'])
     expect(refused(`<div style="min-height: 0">\n  ${map}\n</div>\n`)).toEqual(['map fills a parent of unknown height'])
-    // height: 0 with padding (the aspect-ratio hack) is no definite height either.
+    // height: 0 with padding (the aspect-ratio hack) is no definite height either; since #45 it is
+    // refused as a padding-ratio box without an absolute iframe filling it.
     expect(
       refused(`<div class="r">\n  <iframe src="https://www.google.com/maps/embed?pb=!1" height="100%" title="Karta"></iframe>\n</div>\n<style>\n  .r { padding-bottom: 56.25%; height: 0px; }\n</style>\n`),
-    ).toEqual(['map fills a parent of unknown height'])
+    ).toEqual(["the map's parent is a padding-ratio box (padding-bottom: 56.25%) and the iframe does not fill it absolutely"])
   })
 
   test("the iframe's own inline min-height goes on the wrapper (pdlmotor, bellevueconditori, ramsmora)", () => {
@@ -1058,15 +1059,151 @@ describe('wireEmbeds', () => {
     expect(embed(`<iframe src="https://www.google.com/maps/embed?pb=!1" style="aspect-ratio: var(--r)" title="Karta"></iframe>\n`)).toContain('title="Karta" />')
   })
 
-  test('a parent sized by an aspect class is definite (#61, champsoflogging: aspect-video)', () => {
+  test('an aspect-class parent with more in it is definite (#61): grid h-full inside it', () => {
     for (const aspect of ['aspect-video', 'aspect-square', 'aspect-[4/3]', 'aspect-4/3']) {
       expect(
-        embed(`<div class="${aspect} w-full">\n  <iframe src="https://www.google.com/maps/embed?pb=!1" width="100%" height="100%" style="border:0;" title="Karta"></iframe>\n</div>\n`),
-      ).toContain(`<div class="${aspect} w-full">\n  <div class="grid h-full"><ConsentEmbed service="google-maps" src="https://www.google.com/maps/embed?pb=!1" title="Karta" aspect="auto" /></div>\n</div>`)
+        embed(`<div class="${aspect} w-full">\n  <iframe src="https://www.google.com/maps/embed?pb=!1" width="100%" height="100%" style="border:0;" title="Karta"></iframe>\n  <span>Karta</span>\n</div>\n`),
+      ).toContain(`<div class="${aspect} w-full">\n  <div class="grid h-full"><ConsentEmbed service="google-maps" src="https://www.google.com/maps/embed?pb=!1" title="Karta" aspect="auto" /></div>\n  <span>Karta</span>\n</div>`)
     }
     // Only on some screens, or turned off: not definite.
     for (const aspect of ['md:aspect-video', 'aspect-auto']) {
       expect(refused(`<div class="${aspect}">\n  <iframe src="https://www.google.com/maps/embed?pb=!1" height="100%" title="Karta"></iframe>\n</div>\n`)).toEqual(['map fills a parent of unknown height'])
+    }
+  })
+
+  // #65 (champsoflogging): `grid h-full` inside the aspect box can't grow past it, and at 320px the
+  // 16:9 box clipped the placeholder's Visa button. The aspect parent itself becomes the embed, with
+  // that ratio; the embed's own box grows with its content. Deliberately replaces #61's output, which
+  // put `<div class="grid h-full">` inside the aspect parent.
+  test('a parent that holds only the map and is sized only by an aspect class becomes the embed with that aspect (#65)', () => {
+    const map = '<iframe src="https://www.google.com/maps/embed?pb=!1" width="100%" height="100%" style="border:0;" title="Karta"></iframe>'
+    const out = (props: string) => `<ConsentEmbed service="google-maps" src="https://www.google.com/maps/embed?pb=!1" title="Karta" ${props} />`
+    for (const [aspect, ratio] of [
+      ['aspect-video', '16 / 9'],
+      ['aspect-square', '1 / 1'],
+      ['aspect-[4/3]', '4 / 3'],
+      ['aspect-4/3', '4 / 3'],
+      ['aspect-[1.5/1]', '1.5 / 1'],
+    ] as const) {
+      expect(embed(`<div class="${aspect} w-full">\n  ${map}\n</div>\n`)).toBe(`---\n${IMPORT}\n---\n<div class="w-full">\n  ${out(`aspect="${ratio}"`)}\n</div>\n`)
+    }
+    // Only the aspect class: no wrapper at all. Other attributes stay on the wrapper as written.
+    expect(embed(`<section>\n  <div class="aspect-video">\n    ${map}\n  </div>\n</section>\n`)).toContain(`<section>\n  ${out('aspect="16 / 9"')}\n</section>`)
+    expect(embed(`<div id="karta" class="rounded-lg aspect-video overflow-hidden" data-animate>\n  ${map}\n</div>\n`)).toContain(
+      `<div id="karta" class="rounded-lg overflow-hidden" data-animate>\n  ${out('aspect="16 / 9"')}\n</div>`,
+    )
+    // An absolutely positioned iframe filling a relative aspect box, and a filter utility, go too.
+    expect(
+      embed(`<div class="relative aspect-video">\n  <iframe class="absolute inset-0 w-full h-full border-0 grayscale" src="https://www.google.com/maps/embed?pb=!1" title="Karta"></iframe>\n</div>\n`),
+    ).toContain(`<div class="relative [&_iframe]:grayscale">\n  ${out('aspect="16 / 9"')}\n</div>`)
+    // An inline filter needs a div around the embed for its `div :global(iframe)` rule.
+    expect(embed(`<div class="aspect-video">\n  <iframe src="https://www.google.com/maps/embed?pb=!1" height="100%" style="filter: grayscale(1)" title="Karta"></iframe>\n</div>\n`)).toContain(
+      `<div>\n  ${out('aspect="16 / 9"')}\n</div>`,
+    )
+  })
+
+  test('an aspect parent that holds more than the map, or is sized by more than the class, keeps #61 (grid h-full inside)', () => {
+    const map = '<iframe src="https://www.google.com/maps/embed?pb=!1" width="100%" height="100%" title="Karta"></iframe>'
+    const inside = (extra = '') =>
+      `<div class="grid h-full${extra}"><ConsentEmbed service="google-maps" src="https://www.google.com/maps/embed?pb=!1" title="Karta" aspect="auto" /></div>`
+    for (const parent of [
+      `<div class="aspect-video">\n  ${map}\n  <p>Hitta hit</p>\n</div>\n`,
+      `<div class="aspect-video min-h-[300px]">\n  ${map}\n</div>\n`,
+      `<div class="aspect-video md:aspect-square">\n  ${map}\n</div>\n`,
+      `<div class="aspect-video" style="max-height: 400px">\n  ${map}\n</div>\n`,
+      `<div class="aspect-video karta">\n  ${map}\n</div>\n<style>\n  .karta { max-height: 400px; }\n</style>\n`,
+      `<div class="aspect-video">\n  <iframe src="https://www.google.com/maps/embed?pb=!1" height="100%" style="border-radius: 8px" title="Karta"></iframe>\n</div>\n`,
+    ]) {
+      expect(embed(parent)).toContain(inside())
+    }
+    // Review of #67: a flex or grid parent would shrink the embed (ConsentEmbed's root has no
+    // width; 807×454 where main was 1280×720), with any variant or `!`.
+    for (const cls of ['flex', 'inline-flex', 'md:flex', 'grid', '!grid', 'lg:grid!', 'place-items-center', 'items-center', 'justify-center', 'md:justify-start']) {
+      expect(embed(`<div class="aspect-video w-full ${cls}">\n  ${map}\n</div>\n`)).toContain(`<div class="aspect-video w-full ${cls}">\n  ${inside()}\n</div>`)
+    }
+    expect(embed(`<div class="aspect-video">\n  <iframe class="w-full h-full map-frame" src="https://www.google.com/maps/embed?pb=!1" title="Karta"></iframe>\n</div>\n`)).toContain(
+      inside(' w-full map-frame'),
+    )
+  })
+
+  // #45 (knutssonsbil, MapSection.astro): the iframe was absolutely positioned and filled a
+  // padding-ratio box. An in-flow `grid h-full min-h-[320px]` wrapper left the map 320px tall with
+  // an empty band below; the wrapper takes the iframe's place instead, and the box keeps its size.
+  test('an absolute iframe that fills a position: relative padding-ratio box → wrapper "absolute inset-0 grid", no min-height (#45)', () => {
+    const knutssonsbil = `<div class="overflow-hidden" style="border: 1px solid var(--kb-line);" data-animate data-animate-delay="0.1">
+  <div style="position: relative; padding-bottom: 40%; min-height: 320px;">
+    <iframe
+      src="https://maps.google.com/maps?q=Bengt+Knutssons+Bil+AB%2C+H%C3%A4rlunda%2C+Skara&t=&z=13&ie=UTF8&iwloc=&output=embed"
+      style="position: absolute; inset: 0; width: 100%; height: 100%; border: 0; display: block; filter: grayscale(0.3) contrast(1.1);"
+      allowfullscreen
+      loading="lazy"
+      referrerpolicy="no-referrer-when-downgrade"
+      title="Knutssons Bil AB — Härlunda 1, Skara"
+    ></iframe>
+  </div>
+</div>
+`
+    const text = embed(knutssonsbil, 'src/components/MapSection.astro')
+    expect(text).toContain(
+      `  <div style="position: relative; padding-bottom: 40%; min-height: 320px;">\n    <div class="absolute inset-0 grid"><ConsentEmbed service="google-maps" src="https://maps.google.com/maps?q=Bengt+Knutssons+Bil+AB%2C+H%C3%A4rlunda%2C+Skara&t=&z=13&ie=UTF8&iwloc=&output=embed" title="Knutssons Bil AB — Härlunda 1, Skara" aspect="auto" /></div>\n  </div>`,
+    )
+    expect(text).toContain('div :global(iframe) {\n    filter: grayscale(0.3) contrast(1.1);\n  }')
+  })
+
+  test('absolute and filling via classes, a scoped rule, or top/left 0; the wrapper keeps the other classes (#45)', () => {
+    const wrapper = (cls: string) => `<div class="${cls}"><ConsentEmbed service="google-maps" src="https://www.google.com/maps/embed?pb=!1" title="Karta" aspect="auto" /></div>`
+    expect(
+      embed(`<div class="relative pb-[56.25%]">\n  <iframe class="absolute inset-0 w-full h-full rounded-lg" src="https://www.google.com/maps/embed?pb=!1" title="Karta"></iframe>\n</div>\n`),
+    ).toContain(`<div class="relative pb-[56.25%]">\n  ${wrapper('absolute inset-0 grid rounded-lg')}\n</div>`)
+    // The classic responsive embed: scoped rules on the box and its iframe, height: 0 included.
+    expect(
+      embed(
+        `<div class="map-wrap">\n  <iframe src="https://www.google.com/maps/embed?pb=!1" title="Karta"></iframe>\n</div>\n<style>\n  .map-wrap { position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; }\n  .map-wrap iframe { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }\n</style>\n`,
+      ),
+    ).toContain(`<div class="map-wrap">\n  ${wrapper('absolute inset-0 grid')}\n</div>`)
+    // The iframe's own min-height is not carried: the box sizes the wrapper. A definite-height box works too.
+    expect(
+      embed(`<div class="relative h-96">\n  <iframe src="https://www.google.com/maps/embed?pb=!1" width="100%" height="100%" style="position:absolute;top:0;left:0;min-height:300px" title="Karta"></iframe>\n</div>\n`),
+    ).toContain(`<div class="relative h-96">\n  ${wrapper('absolute inset-0 grid')}\n</div>`)
+  })
+
+  test('a padding-ratio box without an absolute filling iframe, an absolute iframe that does not fill, or a parent that is not relative: refused (#45)', () => {
+    const src = 'src="https://www.google.com/maps/embed?pb=!1" title="Karta"'
+    // knutssonsbil's box with an in-flow iframe: before #45 this became `grid h-full min-h-[320px]`.
+    expect(refused(`<div style="position: relative; padding-bottom: 40%; min-height: 320px;">\n  <iframe ${src} height="100%"></iframe>\n</div>\n`)).toEqual([
+      "the map's parent is a padding-ratio box (padding-bottom: 40%) and the iframe does not fill it absolutely",
+    ])
+    expect(refused(`<div class="relative pt-[75%]">\n  <iframe class="w-full" ${src} height="450"></iframe>\n</div>\n`)).toEqual([
+      "the map's parent is a padding-ratio box (pt-[75%]) and the iframe does not fill it absolutely",
+    ])
+    const notFilling = 'the map iframe is absolutely positioned but does not fill its parent'
+    expect(refused(`<div class="relative h-96">\n  <iframe class="absolute inset-0" ${src}></iframe>\n</div>\n`)).toEqual([notFilling])
+    expect(refused(`<div class="relative h-96">\n  <iframe class="absolute top-0 w-full h-full" ${src}></iframe>\n</div>\n`)).toEqual([notFilling])
+    expect(refused(`<div class="relative h-96">\n  <iframe style="position: absolute; inset: 1rem; width: 100%; height: 100%" ${src}></iframe>\n</div>\n`)).toEqual([notFilling])
+    expect(refused(`<div class="h-96">\n  <iframe class="absolute inset-0 w-full h-full" ${src}></iframe>\n</div>\n`)).toEqual([
+      'the map iframe fills its parent absolutely, but the parent is not position: relative',
+    ])
+    // A position that changes on some screens: wire cannot tell.
+    expect(refused(`<div class="relative h-96">\n  <iframe class="absolute md:static inset-0 w-full h-full" ${src}></iframe>\n</div>\n`)).toEqual([
+      'the map iframe has a position class with a variant (md:static)',
+    ])
+    expect(
+      refused(`<div class="relative h-96">\n  <iframe class="absolute inset-0 w-full h-full" ${src}></iframe>\n</div>\n<style>\n  @media (max-width: 640px) { iframe { position: static; } }\n</style>\n`),
+    ).toEqual(["scoped CSS 'iframe' sets an iframe position and wire cannot tell if it applies to this map"])
+    // Review of #67: a background map under other content in the box. The wrapper would sit under
+    // that content (Visa unclickable) and a 0px box would spill over what follows; main refused it.
+    expect(
+      refused(`<div class="relative">\n  <iframe class="absolute inset-0 w-full h-full" ${src}></iframe>\n  <div class="relative z-10 p-8"><h2>Hitta hit</h2></div>\n</div>\n`),
+    ).toEqual(['the map iframe fills its parent absolutely, but the parent holds more than the map'])
+    // A comment beside it is no content (aremaskin's KontaktSection holds only the iframe).
+    expect(embed(`<div class="relative min-h-[400px] lg:min-h-0" data-animate>\n  <!-- karta -->\n  <iframe class="absolute inset-0 w-full h-full" style="border: 0; display: block;" ${src}></iframe>\n</div>\n`)).toContain(
+      '<div class="absolute inset-0 grid"><ConsentEmbed',
+    )
+    // Review of #67: a min/max size class on the iframe is not dropped silently.
+    for (const cls of ['max-h-96', 'min-h-[300px]', 'md:max-w-xl']) {
+      expect(refused(`<div class="relative h-96">\n  <iframe class="absolute inset-0 w-full h-full ${cls}" ${src}></iframe>\n</div>\n`)).toEqual([
+        `the map iframe has a min/max size class (${cls}) that the absolute wrapper does not carry`,
+      ])
     }
   })
 

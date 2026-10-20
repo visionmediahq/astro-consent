@@ -202,8 +202,9 @@ Each choice also calls `window.umami?.track('consent', { choice })`.
 ## Behaviour worth knowing
 
 - **Umami is not gated.** It is cookie-free and first-party; the banner text says so.
-- **Not handled by this package:** Google Fonts, scripts from jsdelivr and reCAPTCHA still load on
-  sites that use them.
+- **Not handled by this package:** scripts from jsdelivr and reCAPTCHA still load on sites that
+  use them. Google Fonts are not the banner's job either: the rollout tool self-hosts them on the
+  site itself (`wire` does by default, `fonts` for a site already live; see "Rollout tool").
 - **A one-off "Visa"** loads that one embed for that page view and stores nothing. Declining in the
   banner afterwards keeps it on screen and loads nothing else.
 - **Withdrawing** something that is loaded deletes its first-party cookies (`_ga*`, `_gid`, `_gcl_*`,
@@ -227,7 +228,8 @@ from a checkout of this repo with `npx tsx`:
 
 ```bash
 npx tsx ci/rollout/run.ts detect <site dir> --domain <host> [--domain <host>]...
-npx tsx ci/rollout/run.ts wire   <site dir> [--dry-run]
+npx tsx ci/rollout/run.ts wire   <site dir> [--dry-run] [--no-fonts]
+npx tsx ci/rollout/run.ts fonts  <site dir> [--dry-run]   # Google Fonts alone, on branch fonts-selfhost
 npx tsx ci/rollout/run.ts verify <site dir>
 npx tsx ci/rollout/run.ts verify --demo <dist dir>      # a built demo, no git/npm/Docker
 npx tsx ci/rollout/run.ts pr     <site dir> --shots-dir <path> --shots-base <url> [--issue <url>]...
@@ -237,15 +239,30 @@ npx tsx ci/rollout/run.ts help
 ```
 
 - `detect` reads the site and writes the report; `wire` plans every edit and either prints the
-  diff (`--dry-run`, writes nothing) or applies it all on branch `consent-banner` with one commit;
+  diff (`--dry-run`, writes nothing) or applies it all on branch `consent-banner`: one commit for
+  the banner and, when the site loads Google Fonts the tool can self-host, a second one for them
+  (`--no-fonts` skips it; below);
   `verify` runs the build and browser checks; `pr` opens the PR; `live baseline` records the live
   site before the merge; `merge` re-verifies if `main` moved, merges, waits for Coolify and runs
   `live post-merge`.
-- **State** lives in `<site dir>/.rollout/` (`report.json`, `verify.json`, `live-baseline.txt`,
-  `live-baseline-hosts.json`, `apps.json`, screenshots), which `detect` adds to the checkout's `.git/info/exclude`, so stages
-  can be rerun one at a time and nothing of it is committed. `verify --demo` writes to a temp folder.
+- **Flows.** `verify`, `pr`, `merge` and `live` read the clone's current branch and run its flow
+  (`FLOWS` in `ci/rollout/flows.ts`); any other branch is refused. `consent-banner` (from `wire`):
+  the banner, plus the fonts commit unless `--no-fonts`. `fonts-selfhost` (from `fonts`): the
+  Google Fonts commit alone, for a site whose banner is live. Each flow has its PR title and body
+  (`pr-body.sv.md`, `pr-body.fonts.sv.md`) and its verify steps. One flow at a time per site:
+  `wire` refuses while origin has a `fonts-selfhost` branch main does not contain or an open
+  `fonts-selfhost` PR, `fonts` the same for `consent-banner`, and `pr` and `merge` refuse the
+  same (the other flow's unmerged branch on origin or open PR).
+- **State** lives in `<site dir>/.rollout/`: `report.json`, and per flow `verify.json`,
+  `pushed.txt`, `evidence/`, `shots/`, `pr-body.md`, `live-baseline.txt`,
+  `live-baseline-hosts.json`, `apps.json` and `live-<mode>.json`. `consent-banner` uses exactly
+  these names (the operator's scripts read them); `fonts-selfhost` adds its branch to each
+  (`verify-fonts-selfhost.json`, `evidence-fonts-selfhost/`, …), so a fonts run never reads or
+  overwrites the banner's. `detect` adds `.rollout/` to the checkout's `.git/info/exclude`, so
+  stages can be rerun one at a time and nothing of it is committed. `verify --demo` writes to a
+  temp folder.
 - **Exit codes:** `0` ok (for `live baseline` also the expected RED), `1` error, a failed verify
-  step or a live/merge STOP, `2` usage, `3` the wire plan was refused (dry run or not; nothing was
+  step or a live/merge STOP, `2` usage, `3` the wire (or fonts) plan was refused (dry run or not; nothing was
   written).
 - If `wire` fails after it switched to `consent-banner`, it leaves the checkout uncommitted and
   says how to retry: `git reset --hard && git clean -fd && git switch main && git branch -D
@@ -305,20 +322,59 @@ npx tsx ci/rollout/run.ts help
   Visa button, "Visa alltid" label and "Öppna i" link. A dark theme that sets `--color-base-content`
   but not `--color-base-200` leaves light text on the light placeholder (knutssonsbil, about 1.2:1).
   `live post-merge` runs the same contrast check, so live sites are measured as well.
+- A background that is one gradient of colours (nanolfs-villan's footer: two brand blues) is
+  measured, not reported indeterminate. Each segment between two stops is searched for its worst
+  point (a grid, refined around every local minimum), alpha composited over what is beneath:
+  `5.25:1 ok (gradient, worst stop)`. sRGB segments are interpolated by the tool; any other method
+  (`in oklch`, `in hsl longer hue`, the oklab default for oklch stops) is mixed by the page with
+  `color-mix()` in the same method, and the line names it. A `url()` image that shows, a second
+  gradient that shows, or a stop or mix the page cannot resolve stays indeterminate.
+- Effects the colours do not show are indeterminate: `background-blend-mode`, `background-clip:
+  text`, `opacity` on an element with a background or above it, `mix-blend-mode` or a filter that
+  changes something (`grayscale(0)` does not) on the text or any ancestor, and `backdrop-filter`
+  below the first opaque background. Opacity on the text or a background-less wrapper (`opacity-70`
+  on the links) fades the text colour and is measured.
+- A positioned `::before`/`::after` that paints (a background colour or image, a visible border, or a
+  `backdrop-filter`), on the text or any ancestor, counts only when its box overlaps the text's
+  (ahatrafikskola's 1px footer hairline and a width-0 link underline do not). A `box-shadow` with a
+  visible colour (Tailwind's resting `0 0 #0000` is not), an outline, a filter that changes
+  something (drop-shadow, blur) or any `content` other than `""` (text, glyphs, a url() image)
+  reaches outside the box and always counts. A fixed one counts on any horizontal overlap, wherever
+  the text is scrolled. Its box is computed when its containing block is its own element
+  (positioned, not scrolled, not an inline element broken over lines, and neither it nor any
+  ancestor scaled, rotated, zoomed or on an `offset-path`) or the viewport (fixed, no ancestor with a
+  transform, `translate`, `scale`, `rotate`, `zoom`, `offset-path`, any filter, `preserve-3d`,
+  `contain`, `content-visibility` or a matching `will-change` capturing it); any other containing
+  block, a transform, individual transform property, `zoom` or `offset-path` on the pseudo-element,
+  or `direction: rtl` on it is indeterminate.
+- Pseudo-elements that do not count: faint feTurbulence grain (ernstedt's fixed `body::after`: an SVG
+  whose every shape is drawn through a filter, with no other paint), while the grain opacities on a
+  row's path add up to 0.2 or less; and a negative z-index above the opaque background with no
+  z-index on or between them, which paints beneath it. The grain exemption is a bounded error, not
+  proof: up to 0.2 of white grain over a background can lift or lower a borderline ratio (white text
+  on #767676 measures 4.54:1 ok under 0.2 white grain that brightens it), so a row within a few
+  hundredths of 4.5 on a grain site deserves a look at the screenshot. A higher z-index around the text is not taken as proof that it paints above a
+  pseudo-element: a solid fixed overlay counts even under the z-50 banner. Scrolling elsewhere is
+  already in both boxes; the pseudo-element's own element scrolled is indeterminate.
+- The contrast step scrolls each page through and back (as step 3 does) and waits for finite
+  animations to finish: the starter's `[data-animate]` is `opacity: 0` until Motion's `inView` fades
+  it in, and about 25 sites wrap an embed in one. An opacity animation still running on the text or
+  an ancestor gets one more wait (5 s) and a second reading; after that the row is `animation not
+  settled`.
 - `verify` stops before any step when the disk holding the site has less than 15 GB free
   (`ROLLOUT_MIN_FREE_GB` changes the threshold; demo mode skips it). Each verify runs `npm ci` and a
   build twice and builds a Docker image, and Docker failed with I/O errors at 2.5 GB free during the
   expansion. After a passing `live post-merge` (which `merge` runs), the tool deletes the clone's
   `node_modules` and `dist`; a stop keeps them for the next verify.
 - If main's local preview stops answering mid-step (a dropped connection, and nothing answers on
-  its port), `verify` restarts it once and checks main again. The step output, `verify.json`
+  its port), `verify` restarts it once and checks main again. The step output, the verify file
   (`restarts`) and the summary say so. A second drop, any other error, or a crash of the branch's
   preview fails the step: a branch crash may be the wiring's doing.
 - Docker I/O errors (`input/output error`, `unable to lease content`): free disk first, then restart
   Docker fully (`docker desktop restart`, or quit Docker Desktop from its menu and start it again).
   No image or volume purge is needed. If a pull still fails, `docker pull` the base image by
   hand once, then rerun verify.
-- `verify` step 8 builds the site's Dockerfile with `--build-arg SITE_URL=https://<first domain>`,
+- `verify` step 9 builds the site's Dockerfile with `--build-arg SITE_URL=https://<first domain>`,
   as Coolify passes it: a Dockerfile with `ENV SITE_URL=$SITE_URL` otherwise builds with an empty one.
 - `live baseline` covers `report.domains` and every host of the Coolify apps that follow `main`,
   and records them in `live-baseline-hosts.json`. If `merge` stops because an app that follows
@@ -336,6 +392,95 @@ npx tsx ci/rollout/run.ts help
   `src/data/privacy.json` from `report.services`; an existing `privacy.json` that lacks one of them
   is refused. Pool rows without `services` are re-detected, and `select` strata are
   `consent`/`notice`.
+- **Verify on the two flows.** The steps keep their numbers in both flows: 1 lockfile, 2 build,
+  3 requests, 4 consent-paths, 5 clip, 6 contrast, 7 screenshots, 8 fonts, 9 docker. On
+  `fonts-selfhost`, 4 and 6 (banner only) are recorded as skipped; step 1 requires `package.json`
+  and `package-lock.json` to be exactly main's and allows only the files the fonts commit writes or
+  edits (`src/styles/fonts.css`, `public/fonts/**`, the CSS entry, and the files `report.fonts`
+  found the loads and CSPs in). A site without the banner on main expects no banner, skips 5,
+  and in step 3 notes the registry requests main makes on the same page instead of failing them
+  (they are the site's own; any other still fails).
+  Step 8 runs on `fonts-selfhost`, and on `consent-banner` whenever the branch has the tool's
+  `src/styles/fonts.css` (else it is skipped):
+  - no `fonts.googleapis.com` / `fonts.gstatic.com` anywhere in the built `dist/` outside CSS
+    and HTML comments (fonts.css's own header names the css2 URL);
+  - every page at 360 and 1280 px with every Google Fonts request aborted and counted: none may be
+    attempted, and every `/fonts/*.woff2` must answer 200;
+  - every family of fonts.css a visible element renders with has the face CSS font matching picks
+    for its weight and style loaded in `document.fonts` (compared with fonts.css, not main: main
+    cannot load its fonts with Google blocked);
+  - every character the pages show in a family of fonts.css (DOM text, hidden elements included)
+    falls in that family's kept unicode-ranges. Verify asks Google's css2 URL (from the header, by
+    the tool, not the browser) which ranges Google has: a character no face of Google's has is
+    noted, not failed (main showed a fallback too). If that request fails, every uncovered
+    character fails. The failure lists the characters and the family. Characters in the strings
+    of the shipped JS and JSON (checked in `/`'s body family) are only noted: a library string
+    may never be shown, and wire could not change it.
+  Step 9 also runs step 8's request check at 1280 px against the container.
+  `tests/unit/rollout/fonts-fixtures.demo.ts` (CI e2e job) holds the browser negative controls.
+- **Live with the fonts.** `live post-merge` checks, when the merged main has the tool's fonts.css,
+  every page of every domain at 360 and 1280 px for zero Google Fonts requests (counted, never
+  blocked live), every `/fonts/*.woff2` 200 and every face used loaded, on top of the banner
+  checks. On `fonts-selfhost` the banner checks run when main has the package, otherwise only the
+  fonts and console errors are checked. `live baseline` checks the fonts too when origin/main
+  already has them, and stops if a host fails. `merge` works the same on both flows (the flow's
+  verify file, apps recorded per flow, squash, branch deleted, live post-merge).
+- **Self-hosting Google Fonts (`wire`, `fonts`).** When `report.fonts.status` is `wire`, `wire`
+  adds a second commit on `consent-banner` ("feat: Google Fonts från sajten själv (self-hosted)")
+  unless `--no-fonts`, and a refused fonts plan refuses the whole wire (`--no-fonts` wires the
+  banner alone). For a
+  site whose banner is already live, `fonts <site dir>` makes the same commit alone on a new branch
+  `fonts-selfhost` from origin/main (same checks as `wire`: clean checkout at origin/main, no such
+  branch locally or on origin). It also refuses while origin has a `consent-banner` branch that
+  main does not contain, or an open `consent-banner` PR: the two would conflict. Everything is
+  planned before anything is written. A fresh detect must reproduce `report.fonts` exactly (the
+  edits cut at its offsets), otherwise: run `detect` again. A failed request, an unexpected answer,
+  an existing `src/styles/fonts.css` or `public/fonts/`, or an edited file that changed on disk
+  since planning refuses the whole plan (exit 3). What it does:
+  - fetches the css2 URL once with a pinned Chrome User-Agent (`CHROME_UA` in `wire/fonts.ts`),
+    so Google answers with woff2 and a unicode-range per subset; anything else is refused;
+  - keeps `latin` and `latin-ext`, plus any other subset whose unicode-range covers a character in
+    the site's `src/` (literal, HTML entity, JS or CSS escape) that the same family's latin and
+    latin-ext do not:
+    the only faces a browser could have fetched from Google (an arrow `→` keeps Open Sans
+    `symbols` and `math`);
+  - writes each woff2 once (a variable font serves several weights) as
+    `public/fonts/<family>-<style>-<weight>-<subset>-<sha256:8>.woff2`, each family's licence as
+    `public/fonts/LICENSE-<family>.txt` (google/fonts' `ofl/<family>/OFL.txt`, else
+    `apache/…/LICENSE.txt` or `ufl/…/UFL.txt`, copyright line included), and
+    `src/styles/fonts.css`: a header naming the URL, the date, the subsets and the licences, then
+    Google's `@font-face` blocks verbatim with local urls (`font-display: swap` added where absent);
+  - adds `@import "./fonts.css";` right after `@import "tailwindcss"` in `report.css.entry`;
+  - removes every location as whole lines, leaving no double blank line. A one-line comment right
+    above that starts with a fonts phrase ("Google Fonts", "Fonts: …", "Typography: …",
+    "Typsnitt"; HTML, or `//` above the const) goes with it; a multi-line comment or one that only
+    mentions fonts stays. A `// note` after the const on its line goes with the const;
+  - cuts `fonts.googleapis.com` / `fonts.gstatic.com` source tokens from each CSP, refusing if a
+    directive (split on `;`, then whitespace) would be left with no source.
+- **Google Fonts detection.** `detect` also writes `report.fonts`, separate from the
+  banner: it never changes `classification` or `reasons`. `status` is `wire` for exactly one literal `fonts.googleapis.com/css2` URL loaded
+  only by `<link rel="stylesheet">`, `<link rel="preload" as="style">` (any attribute order, split
+  over lines, `media="print" onload`), a `<noscript>` holding only such links, a frontmatter
+  `const` used only as their `href`, or a CSS `@import`, plus preconnect/dns-prefetch links;
+  `locations` lists each element or statement with its offsets, `url` the URL. `csp` lists every
+  CSP that mentions the Google hosts (a `<meta http-equiv>`, a `_headers` line, a module's directive
+  strings). `self-hosted`: no Google reference but local font files, `@font-face`, `@fontsource` or
+  the Astro `fonts` config; `none`: neither. Everything else is `needs-human` with `reasons`: an
+  expression or env-built URL, several URLs, the css v1 or icon APIs, `text=`, any other mention
+  outside comments (a module string that is not a bare CSP source token, a `<script>`, a data
+  file, `public/`, `.env*`, and `.astro`/`.md`/`.mdx`/CSS/module files anywhere outside
+  `node_modules`, `dist`, `.astro`, `.rollout` and `scout/`), the Web Font Loader (its script or
+  `WebFont.load`) or a font-loading dependency (`webfontloader`, `unplugin-fonts`, `astro-font`,
+  `*google-fonts*`), an Astro `fonts` config, an existing `src/styles/fonts.css` or `public/fonts/`,
+  a CSP whose `font-src` or `style-src` (or `default-src`) lacks `'self'`, or a layout that does not
+  import the Tailwind entry, the Web Font Loader by `WebFontConfig` or its script from any CDN, and
+  an `@import` after another rule (browsers ignore it). Every CSP found (meta, `_headers`, each
+  module directive string on its own) is checked for `'self'` in `font-src` and `style-src` (else
+  `default-src`), whether it names Google or not; `*.googleapis.com`/`*.gstatic.com` count as
+  mentions. A file with a NUL byte is binary and skipped, unless it names a Google host (a reason).
+  Not read: CSPs in `netlify.toml`, `vercel.json` or nginx config; HTML-entity-encoded hosts;
+  symlinks; `dist/` and `.astro/` at any depth; `.html`, `.json`, `.yaml` and `.scss` files outside
+  `src/` and `public/`. A `<link>` inside a `<template>` is treated like any other.
 - **Script-built embeds.** A Maps or Calendar embed URL (`/maps/embed…`, `/maps/d/embed`,
   `output=embed`, `/calendar/embed`, `/calendar/u/0/embed`) outside an `<iframe>`, in a `<script>`
   or in an HTML element's attribute (``data-map-src={`…&output=embed`}``; not `href`, not a
