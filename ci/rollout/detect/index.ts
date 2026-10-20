@@ -48,6 +48,7 @@ export function detect(files: SiteFiles, site: string, domains: string[]): Repor
     wired: widgets.wired,
     widgetReasons: widgets.reasons,
     scriptBuilt: scripts.scriptBuilt,
+    scriptHosts: scripts.scriptHosts,
   })
   return { ...findings, services: servicesOf(findings, widgets.wired), fonts, classification, reasons }
 }
