@@ -400,6 +400,126 @@ describe('wireLinks', () => {
       }
     })
 
+    // #65: the search refused too little.
+    const barWith = (deep: string, style = ''): Record<string, string> =>
+      site(`<footer class="text-white">\n  <div class="grid"><p>a</p><p>b</p></div>\n  <div class="flex">\n    <p>© Firma</p>\n    ${deep}\n  </div>\n</footer>\n${style}`, POLICY_PAGE)
+    const stays = (deep: string, style = ''): void => {
+      const text = wire([wireLinks], barWith(deep, style), 'src/components/Footer.astro')
+      expect(text).toContain(`    <p>© Firma</p>\n    <PrivacyLinks class="text-white" />\n    ${deep}`)
+    }
+
+    test('#65: a link in <details>, opacity-0, display:none (inline, scoped, @media) or class:list stays', () => {
+      for (const deep of [
+        '<details><summary>Mer</summary><a href="/integritetspolicy/">P</a></details>',
+        '<div class="opacity-0"><a href="/integritetspolicy/">P</a><span>x</span></div>',
+        '<div class="md:opacity-0"><a href="/integritetspolicy/">P</a><span>x</span></div>',
+        '<div style="display: none"><a href="/integritetspolicy/">P</a><span>x</span></div>',
+        '<div class:list={[\'flex\', { hidden: !open }]}><a href="/integritetspolicy/">P</a><span>x</span></div>',
+        '<div class="flex" class:list={[x]}><a href="/integritetspolicy/">P</a><span>x</span></div>',
+        '<div class={cls}><div><a href="/integritetspolicy/">P</a><span>x</span></div></div>',
+      ]) stays(deep)
+      // The hidden element is an ancestor of the link's parent: the search refuses to pass it.
+      const deep = '<div class="off"><div><a href="/integritetspolicy/">P</a><span>x</span></div></div>'
+      stays(deep, '<style>\n  .off { display: none; }\n</style>\n')
+      stays(deep, '<style>\n  @media (max-width: 640px) {\n    .off { display: none !important; }\n  }\n</style>\n')
+      // Shown: replaced as before.
+      const shown = wire([wireLinks], barWith(deep, '<style>\n  .off { display: flex; }\n</style>\n'), 'src/components/Footer.astro')
+      expect(shown).toContain('<div class="off"><div><PrivacyLinks class="text-white justify-start!" /><span>x</span></div></div>')
+    })
+
+    test('#65: a list or table row passes the search but never holds the links itself', () => {
+      for (const deep of ['<ul><a href="/integritetspolicy/">P</a><li>x</li></ul>', '<table><tbody><tr><a href="/integritetspolicy/">P</a><td>x</td></tr></tbody></table>']) stays(deep)
+      // Through them to a cell or an item it does.
+      const text = wire([wireLinks], barWith('<table><tbody><tr><td><a href="/integritetspolicy/">P</a></td><td>x</td></tr></tbody></table>'), 'src/components/Footer.astro')
+      expect(text).toContain('<tr><td><PrivacyLinks class="text-white justify-start!" /></td>')
+    })
+
+    test('#65: a second policy link (conditional, a component, inside the © line) keeps wire from replacing either', () => {
+      for (const second of ['{show && <a href="/integritetspolicy">B</a>}', '<Link href="/integritetspolicy/">B</Link>', '{show ? <a href="/integritetspolicy/">B</a> : null}']) {
+        stays(`<div class="flex"><a href="/integritetspolicy/">A</a>${second}</div>`)
+      }
+      // The © line's own link counts too, for a direct sibling of © as for a deeper one.
+      for (const deep of ['<div class="flex"><a href="/integritetspolicy/">A</a><span>x</span></div>', '<a href="/integritetspolicy/">A</a>']) {
+        const files = site(`<footer class="text-white">\n  <div class="grid"><p>a</p><p>b</p></div>\n  <div class="flex">\n    <p>© Firma · <a href="/integritetspolicy/">Integritet</a></p>\n    ${deep}\n  </div>\n</footer>\n`, POLICY_PAGE)
+        const text = wire([wireLinks], files, 'src/components/Footer.astro')
+        expect(text).toContain(`    <p>© Firma · <a href="/integritetspolicy/">Integritet</a></p>\n    <PrivacyLinks class="text-white" />\n    ${deep}`)
+      }
+    })
+
+    test('#65: a lone conditional or component policy link is not replaced (the links would render only when it does)', () => {
+      stays('<div class="flex">{show && <a href="/integritetspolicy/">B</a>}<span>x</span></div>')
+      stays('<div class="flex"><Link href="/integritetspolicy/">B</Link><span>x</span></div>')
+    })
+
+    test('#65: a link inside the © element is never the one replaced, even when the © element is a flow container', () => {
+      const text = wire(
+        [wireLinks],
+        site('<footer class="text-white">\n  <div class="grid"><p>a</p><p>b</p></div>\n  <div class="flex">\n    <div>© Firma <a href="/integritetspolicy/">P</a></div>\n    <p>VM</p>\n  </div>\n</footer>\n', POLICY_PAGE),
+        'src/components/Footer.astro',
+      )
+      expect(text).toContain('    <div>© Firma <a href="/integritetspolicy/">P</a></div>\n    <PrivacyLinks class="text-white" />\n    <p>VM</p>')
+    })
+
+    test('#65 (lhiab): a © paragraph that is itself the container: a div takes its classes and holds it and the links', () => {
+      const text = wire([wireLinks], site(real('lhiab'), POLICY_PAGE), 'src/components/Footer.astro')
+      expect(text).toContain(
+        '  <div class="border-t border-base-300">\n    <div class="site-container py-5 text-sm">\n      <p>\n        &copy; Copyright {new Date().getFullYear()}, Henriksson Ing. Byrå AB\n      </p>\n      <PrivacyLinks class="justify-start! mt-2" />\n    </div>\n  </div>\n</footer>',
+      )
+      expect(tags(text)).toBe(1)
+    })
+
+    test.each([
+      ['padding', '<p class="px-6 text-sm">© Firma</p>', '<div class="px-6 text-sm">\n      <p>© Firma</p>\n      <PrivacyLinks class="text-white justify-start! mt-2" />\n    </div>'],
+      ['a centred max-width box', '<p class="mx-auto max-w-6xl text-center">© Firma</p>', '<div class="mx-auto max-w-6xl text-center">\n      <p>© Firma</p>\n      <PrivacyLinks class="text-white mt-2" />\n    </div>'],
+      ['a flex container', '<p class="container flex gap-4">© Firma</p>', '<div class="container flex gap-4">\n      <p>© Firma</p>\n      <PrivacyLinks class="text-white" />\n    </div>'],
+      ['on one line', '<p class="container">© Firma</p>', '<div class="container"><p>© Firma</p><PrivacyLinks class="text-white justify-start! mt-2" /></div>', true],
+    ])('#65: a © element with layout classes (%s) is wrapped', (_name, mark, expected, inline = false) => {
+      const bar = inline ? `<div class="border-t">${mark}</div>` : `<div class="border-t">\n    ${mark}\n  </div>`
+      const text = wire([wireLinks], site(`<footer class="text-white">\n  <div class="grid"><p>a</p><p>b</p></div>\n  ${bar}\n</footer>\n`), 'src/components/Footer.astro')
+      expect(text).toContain(inline ? expected : `\n    ${expected}\n  </div>\n</footer>`)
+    })
+
+    test('#65: a © element with only text classes is not wrapped', () => {
+      const plain = wire([wireLinks], site('<footer class="text-white">\n  <div class="grid"><p>a</p><p>b</p></div>\n  <div class="border-t">\n    <p class="text-sm text-white/50">© Firma</p>\n  </div>\n</footer>\n'), 'src/components/Footer.astro')
+      expect(plain).toContain('    <p class="text-sm text-white/50">© Firma</p>\n    <PrivacyLinks class="text-white justify-start! mt-2" />\n  </div>')
+    })
+
+    const unwrapped = (mark: string, style = ''): void => {
+      const text = wire([wireLinks], site(`<footer class="text-white">\n  <div class="grid"><p>a</p><p>b</p></div>\n  <div class="border-t">\n    ${mark}\n  </div>\n</footer>\n${style}`), 'src/components/Footer.astro')
+      expect(text).toContain(`  <div class="border-t">\n    ${mark}\n    <PrivacyLinks class="text-white justify-start! mt-2" />\n  </div>`)
+    }
+
+    test('#65 review: a © element that scoped CSS names (tag, class or id) is not wrapped: the rule would lose it', () => {
+      for (const style of [
+        '<style>\n  p.copy { color: red; }\n</style>\n',
+        '<style>\n  .border-t > p { margin: 0; }\n</style>\n',
+        '<style>\n  .copy { padding: 1rem; }\n</style>\n',
+        '<style>\n  @media (min-width: 40rem) { #rights { text-align: right; } }\n</style>\n',
+      ]) unwrapped('<p id="rights" class="copy px-4">© Firma</p>', style)
+      // A rule for something else does not stop it.
+      const text = wire([wireLinks], site('<footer class="text-white">\n  <div class="grid"><p>a</p><p>b</p></div>\n  <div class="border-t">\n    <p class="copy px-4">© Firma</p>\n  </div>\n</footer>\n<style>\n  .copyright, .grid span, #copy-x { color: red; }\n</style>\n'), 'src/components/Footer.astro')
+      expect(text).toContain('<div class="copy px-4">\n      <p>© Firma</p>')
+    })
+
+    test('#65 review: a <span> or <small> needs a container, max-w-* or mx-auto; padding alone is inline spacing', () => {
+      unwrapped('<span class="px-2">© Firma</span>')
+      unwrapped('<small class="py-1 text-xs">© Firma</small>')
+      const text = wire([wireLinks], site('<footer class="text-white">\n  <div class="grid"><p>a</p><p>b</p></div>\n  <div class="border-t">\n    <small class="mx-auto px-2">© Firma</small>\n  </div>\n</footer>\n'), 'src/components/Footer.astro')
+      expect(text).toContain('<div class="mx-auto px-2">\n      <small>© Firma</small>')
+    })
+
+    test('#65 review: under white-space pre*, the © element is wrapped but not re-indented', () => {
+      for (const ws of ['whitespace-pre-line', 'whitespace-pre', 'md:whitespace-pre-wrap']) {
+        const text = wire([wireLinks], site(`<footer class="text-white">\n  <div class="grid"><p>a</p><p>b</p></div>\n  <div class="border-t">\n    <p class="container ${ws}">\n      © Firma\n    </p>\n  </div>\n</footer>\n`), 'src/components/Footer.astro')
+        expect(text).toContain(`    <div class="container ${ws}">\n      <p>\n      © Firma\n    </p>\n      <PrivacyLinks`)
+      }
+      const inline = wire([wireLinks], site('<footer class="text-white">\n  <div class="grid"><p>a</p><p>b</p></div>\n  <div class="border-t">\n    <p class="container" style="white-space: pre-wrap">\n      © Firma\n    </p>\n  </div>\n</footer>\n'), 'src/components/Footer.astro')
+      expect(inline).toContain('      <p style="white-space: pre-wrap">\n      © Firma\n    </p>\n      <PrivacyLinks')
+      // Otherwise re-indented, as for lhiab.
+      const plain = wire([wireLinks], site('<footer class="text-white">\n  <div class="grid"><p>a</p><p>b</p></div>\n  <div class="border-t">\n    <p class="container">\n      © Firma\n    </p>\n  </div>\n</footer>\n'), 'src/components/Footer.astro')
+      expect(plain).toContain('      <p>\n        © Firma\n      </p>\n      <PrivacyLinks')
+    })
+
     test('re-review of #63: a © line straight in the footer container: no deep search in the link columns', () => {
       const text = wire(
         [wireLinks],

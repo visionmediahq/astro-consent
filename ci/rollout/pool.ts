@@ -12,7 +12,7 @@ import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
-import { pathToFileURL } from 'node:url'
+import { isEntryScript } from './lib/is-entry'
 import { listApps, type App } from './coolify'
 import { detect } from './detect/index'
 import { classificationLine } from './lib/report'
@@ -312,7 +312,7 @@ async function main(argv: string[]): Promise<number> {
   return 0
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (isEntryScript(import.meta.url, process.argv[1])) {
   main(process.argv.slice(2)).then(
     (code) => process.exit(code),
     (e: unknown) => {

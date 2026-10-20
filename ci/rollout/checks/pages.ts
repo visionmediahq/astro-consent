@@ -13,6 +13,18 @@ export const MISSING_PREFIX = '/finns-inte-'
  */
 export const isCmsAdminRoute = (path: string): boolean => path === '/admin' || path.startsWith('/admin/')
 
+/**
+ * The pages step 8 (fonts) checks, verify and live: a CMS admin shell is left out, since its editor
+ * (Sveltia CMS from unpkg on lj-trim) loads Google Fonts of its own for the editor UI, which visitors
+ * never get. `lines` names each page left out, for the evidence.
+ */
+export function fontsCheckPaths(paths: string[]): { paths: string[]; lines: string[] } {
+  return {
+    paths: paths.filter((p) => !isCmsAdminRoute(p)),
+    lines: paths.filter(isCmsAdminRoute).map((p) => `${p}: skipped (CMS admin shell, third-party editor fonts)`),
+  }
+}
+
 /** Upper bound for the SSR crawl: a link loop or a calendar must not keep it going for ever. */
 const MAX_CRAWL = 200
 

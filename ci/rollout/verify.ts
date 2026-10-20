@@ -53,7 +53,7 @@ import {
   shippedStrings,
   shippedTexts,
 } from './checks/fonts'
-import { isCmsAdminRoute, listPages, MISSING_PREFIX } from './checks/pages'
+import { fontsCheckPaths, isCmsAdminRoute, listPages, MISSING_PREFIX } from './checks/pages'
 import { checkRequests, formatRequests, type RequestResult } from './checks/requests'
 import { shots } from './checks/shots'
 import { isRoute, routeOf } from './detect/structure'
@@ -720,10 +720,11 @@ export async function verify(dir: string, report: Report, opts: VerifyOptions = 
       const distDir = join(root, 'dist')
       const mentions = distMentions(distDir)
       lines.push(mentions.length ? 'dist/ names Google Fonts:' : 'dist/: no Google Fonts host outside comments', ...mentions.map((m) => `  ${m}`))
-      // b, c: every page at 360 and 1280 px, Google Fonts blocked and counted.
-      const pages = await (await getChecks()).fonts(branch!.url, paths)
+      // b, c: every visitor page at 360 and 1280 px, Google Fonts blocked and counted.
+      const visitor = fontsCheckPaths(paths)
+      const pages = await (await getChecks()).fonts(branch!.url, visitor.paths)
       const judged = pages.map((p) => judgeFontsPage(p, declared))
-      lines.push(...judged.flatMap((j) => j.lines))
+      lines.push(...visitor.lines, ...judged.flatMap((j) => j.lines))
       // d: every character shown in a self-hosted family falls in its kept ranges. Google's whole
       // answer tells a character it never had (a fallback on main too) from one left out.
       let google: Face[] | null = null
@@ -764,8 +765,9 @@ export async function verify(dir: string, report: Report, opts: VerifyOptions = 
         }
         if (runs('fonts') && fontsCss !== null) {
           // The container's own server answers the woff2 files now (Coolify serves this image).
-          const judged = (await c.fonts(url, paths, { widths: [1280] })).map((p) => judgeFontsPage(p, parseFontsCss(fontsCss)))
-          lines.push('step 8 requests against the container (1280 px):', ...judged.flatMap((j) => j.lines).map((l) => `  ${l}`))
+          const visitor = fontsCheckPaths(paths)
+          const judged = (await c.fonts(url, visitor.paths, { widths: [1280] })).map((p) => judgeFontsPage(p, parseFontsCss(fontsCss)))
+          lines.push('step 8 requests against the container (1280 px):', ...[...visitor.lines, ...judged.flatMap((j) => j.lines)].map((l) => `  ${l}`))
           pass &&= judged.length > 0 && judged.every((j) => j.ok)
         }
         return pass

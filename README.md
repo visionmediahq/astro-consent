@@ -230,6 +230,7 @@ from a checkout of this repo with `npx tsx`:
 npx tsx ci/rollout/run.ts detect <site dir> --domain <host> [--domain <host>]...
 npx tsx ci/rollout/run.ts wire   <site dir> [--dry-run] [--no-fonts]
 npx tsx ci/rollout/run.ts fonts  <site dir> [--dry-run]   # Google Fonts alone, on branch fonts-selfhost
+npx tsx ci/rollout/run.ts fonts-files <site dir> --url <css/css2 url> [--entry <css file>] [--dry-run]   # files only, see below
 npx tsx ci/rollout/run.ts verify <site dir>
 npx tsx ci/rollout/run.ts verify --demo <dist dir>      # a built demo, no git/npm/Docker
 npx tsx ci/rollout/run.ts pr     <site dir> --shots-dir <path> --shots-base <url> [--issue <url>]...
@@ -411,7 +412,9 @@ npx tsx ci/rollout/run.ts help
   - no `fonts.googleapis.com` / `fonts.gstatic.com` anywhere in the built `dist/` outside CSS
     and HTML comments (fonts.css's own header names the css2 URL);
   - every page at 360 and 1280 px with every Google Fonts request aborted and counted: none may be
-    attempted, and every `/fonts/*.woff2` must answer 200;
+    attempted, and every `/fonts/*.woff2` must answer 200. A CMS admin shell (`/admin`,
+    `/admin/…`) is left out and listed as skipped, here, in step 9 and live: its editor (Sveltia
+    CMS from unpkg on lj-trim) loads Google Fonts for its own UI, which visitors never get;
   - every family of fonts.css a visible element renders with has the face CSS font matching picks
     for its weight and style loaded in `document.fonts` (compared with fonts.css, not main: main
     cannot load its fonts with Google blocked);
@@ -431,6 +434,23 @@ npx tsx ci/rollout/run.ts help
   fonts and console errors are checked. `live baseline` checks the fonts too when origin/main
   already has them, and stops if a host fails. `merge` works the same on both flows (the flow's
   verify file, apps recorded per flow, squash, branch deleted, live post-merge).
+- **Fonts for a generated site (`fonts-files`).** site-factory's Builder generates new sites, so
+  there is no detect report, git branch or markup to cut. `fonts-files <site dir> --url <css or
+  css2 URL> [--entry <css file>] [--dry-run]` runs only the fetching half of the plan above and
+  writes `public/fonts/*.woff2`, the licences and `src/styles/fonts.css`, byte for byte what `wire`
+  writes for the same URL and site text. With `--entry` it adds `@import "./fonts.css";` after
+  `@import "tailwindcss"` in that stylesheet; nothing else is edited. An old `css?family=A:400|B`
+  URL works as well as `css2`. Refusals (not a Google Fonts URL, `fonts.css` or `public/fonts/`
+  already there, a failed request, a missing licence, an entry without exactly one
+  `@import "tailwindcss"`, an `--entry` that is absolute or contains `..`) exit 3 and write nothing.
+  An IO error (read-only folder or entry, full disk) exits 1 and also leaves nothing behind: the
+  font and licence files are written first, `fonts.css` and the entry last, and on any failure
+  every file and folder the run created is removed and the entry restored byte for byte, so a
+  rerun is never blocked by "already exists". It is also runnable alone:
+  `npx tsx ci/rollout/fonts-files.ts ...`. Its imports are node built-ins and relative files only
+  (`wire/fonts-host.ts`, `wire/css-imports.ts`, `wire/fonts-css.ts`, `lib/site-files.ts`,
+  `wire/engine.ts`, `lib/is-entry.ts`), so a checkout of this repo plus `tsx` is enough, with no `npm install` here;
+  `tests/unit/rollout/fonts-files.test.ts` pins that list. Do not add a package import to those files.
 - **Self-hosting Google Fonts (`wire`, `fonts`).** When `report.fonts.status` is `wire`, `wire`
   adds a second commit on `consent-banner` ("feat: Google Fonts från sajten själv (self-hosted)")
   unless `--no-fonts`, and a refused fonts plan refuses the whole wire (`--no-fonts` wires the
@@ -487,6 +507,17 @@ npx tsx ci/rollout/run.ts help
   Not read: CSPs in `netlify.toml`, `vercel.json` or nginx config; HTML-entity-encoded hosts;
   symlinks; `dist/` and `.astro/` at any depth; `.html`, `.json`, `.yaml` and `.scss` files outside
   `src/` and `public/`. A `<link>` inside a `<template>` is treated like any other.
+- **Script-built embeds.** A Maps or Calendar embed URL (`/maps/embed…`, `/maps/d/embed`,
+  `output=embed`, `/calendar/embed`, `/calendar/u/0/embed`) outside an `<iframe>`, in a `<script>`
+  or in an HTML element's attribute (``data-map-src={`…&output=embed`}``; not `href`, not a
+  component prop), is a home-made click-to-load that ignores the banner: the site is needs-human
+  with `script-built embed google-maps in <file> (<attribute> | script)`, for a person to rewire as
+  a `ConsentEmbed` (arjangs-elmontage, stromsbacka). When the URL comes through a variable
+  (`data-src={mapSrc}`), a `.astro` file whose `<script>` calls `createElement('iframe')` gets
+  `(createElement)` if a Maps or Calendar host and an embed marker appear anywhere in the file
+  (outside literal `<iframe>` tags) or in a relative non-`.astro` module it imports, even split
+  over several literals (tranemoglas, gron-kontor). Other registry URLs in a script stay
+  `tracker <service>`.
 - **Elfsight.** Recognised only as one loader `<script>` (`https://elfsightcdn.com/platform.js` or
   `https://static.elfsight.com/platform/platform.js`; other attributes only `async` and `is:inline`)
   plus one or more empty `<div class="elfsight-app-<uuid>">` (other attribute only
