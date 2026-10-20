@@ -4,6 +4,7 @@
 //   tsx ci/rollout/run.ts detect <site dir> --domain <d> [--domain <d2>]
 //   tsx ci/rollout/run.ts wire   <site dir> [--dry-run] [--no-fonts]
 //   tsx ci/rollout/run.ts fonts  <site dir> [--dry-run]       Google Fonts alone, branch fonts-selfhost
+//   tsx ci/rollout/run.ts fonts-files <site dir> --url <css2 url> [--entry <css>] [--dry-run]   files only, no git
 //   tsx ci/rollout/run.ts verify <site dir>
 //   tsx ci/rollout/run.ts verify --demo <dist dir>   CI/self-test: a built demo, no git/npm/Docker
 //   tsx ci/rollout/run.ts pr     <site dir> --shots-dir <path> --shots-base <url> [--issue <url>]...
@@ -27,12 +28,14 @@ import { formatLive, live } from './live'
 import { merge } from './merge'
 import { openPr, originRepo } from './pr'
 import { formatVerify, verify } from './verify'
+import { main as mainFontsFiles } from './fonts-files'
 import { commitFonts, FONTS_BRANCH, type FontFetch, type FontsFile, fontsFiles, fontsTargetsTaken, planFonts } from './wire/fonts'
 import { applyWire, BRANCH, planFiles, planWire, refusalLines } from './wire/index'
 
 const DETECT_USAGE = 'usage: tsx ci/rollout/run.ts detect <site dir> --domain <domain> [--domain <domain>]'
 const WIRE_USAGE = 'usage: tsx ci/rollout/run.ts wire <site dir> [--dry-run] [--no-fonts]'
 const FONTS_USAGE = 'usage: tsx ci/rollout/run.ts fonts <site dir> [--dry-run]'
+const FONTS_FILES_USAGE = 'usage: tsx ci/rollout/run.ts fonts-files <site dir> --url <css2 url> [--entry <css file>] [--dry-run]'
 const VERIFY_USAGE = 'usage: tsx ci/rollout/run.ts verify <site dir> | verify --demo <dist dir>'
 const PR_USAGE =
   'usage: tsx ci/rollout/run.ts pr <site dir> --shots-dir <path in site-factory> --shots-base <github url of that folder> [--issue <url>]... [--domain <d>]'
@@ -42,6 +45,7 @@ export const USAGE = [
   DETECT_USAGE,
   WIRE_USAGE,
   FONTS_USAGE,
+  FONTS_FILES_USAGE,
   VERIFY_USAGE,
   PR_USAGE,
   LIVE_USAGE,
@@ -54,7 +58,7 @@ export const USAGE = [
   '  0  ok (live baseline: also the expected RED)',
   '  1  error, a failed verify step, or a live/merge STOP',
   '  2  usage: bad command or arguments',
-  '  3  wire, fonts: the plan was refused (dry run or not); nothing was written',
+  '  3  wire, fonts, fonts-files: the plan was refused (dry run or not); nothing was written',
 ].join('\n')
 /** Exit code of a refused wire plan (Ruling 32). */
 export const EXIT_REFUSED = 3
@@ -541,6 +545,7 @@ export async function main(argv: string[]): Promise<number> {
   }
   if (command === 'wire') return mainWire(rest)
   if (command === 'fonts') return mainFonts(rest)
+  if (command === 'fonts-files') return mainFontsFiles(rest)
   if (command === 'verify') return mainVerify(rest)
   if (command === 'pr') return mainPr(rest)
   if (command === 'live') return mainLive(rest)

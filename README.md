@@ -230,6 +230,7 @@ from a checkout of this repo with `npx tsx`:
 npx tsx ci/rollout/run.ts detect <site dir> --domain <host> [--domain <host>]...
 npx tsx ci/rollout/run.ts wire   <site dir> [--dry-run] [--no-fonts]
 npx tsx ci/rollout/run.ts fonts  <site dir> [--dry-run]   # Google Fonts alone, on branch fonts-selfhost
+npx tsx ci/rollout/run.ts fonts-files <site dir> --url <css/css2 url> [--entry <css file>] [--dry-run]   # files only, see below
 npx tsx ci/rollout/run.ts verify <site dir>
 npx tsx ci/rollout/run.ts verify --demo <dist dir>      # a built demo, no git/npm/Docker
 npx tsx ci/rollout/run.ts pr     <site dir> --shots-dir <path> --shots-base <url> [--issue <url>]...
@@ -427,6 +428,19 @@ npx tsx ci/rollout/run.ts help
   fonts and console errors are checked. `live baseline` checks the fonts too when origin/main
   already has them, and stops if a host fails. `merge` works the same on both flows (the flow's
   verify file, apps recorded per flow, squash, branch deleted, live post-merge).
+- **Fonts for a generated site (`fonts-files`).** site-factory's Builder generates new sites, so
+  there is no detect report, git branch or markup to cut. `fonts-files <site dir> --url <css or
+  css2 URL> [--entry <css file>] [--dry-run]` runs only the fetching half of the plan above and
+  writes `public/fonts/*.woff2`, the licences and `src/styles/fonts.css`, byte for byte what `wire`
+  writes for the same URL and site text. With `--entry` it adds `@import "./fonts.css";` after
+  `@import "tailwindcss"` in that stylesheet; nothing else is edited. An old `css?family=A:400|B`
+  URL works as well as `css2`. Refusals (not a Google Fonts URL, `fonts.css` or `public/fonts/`
+  already there, a failed request, a missing licence, an entry without exactly one
+  `@import "tailwindcss"`) exit 3 and write nothing. It is also runnable alone:
+  `npx tsx ci/rollout/fonts-files.ts ...`. Its imports are node built-ins and relative files only
+  (`wire/fonts-host.ts`, `wire/css-imports.ts`, `wire/fonts-css.ts`, `lib/site-files.ts`,
+  `wire/engine.ts`), so a checkout of this repo plus `tsx` is enough, with no `npm install` here;
+  `tests/unit/rollout/fonts-files.test.ts` pins that list. Do not add a package import to those files.
 - **Self-hosting Google Fonts (`wire`, `fonts`).** When `report.fonts.status` is `wire`, `wire`
   adds a second commit on `consent-banner` ("feat: Google Fonts från sajten själv (self-hosted)")
   unless `--no-fonts`, and a refused fonts plan refuses the whole wire (`--no-fonts` wires the
