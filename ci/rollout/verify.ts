@@ -37,7 +37,7 @@ import type { Browser } from '@playwright/test'
 import { type ClipResult, checkClip } from './checks/clip'
 import { type RootStyles, checkRootStyles, diffRootStyles } from './checks/root-styles'
 import { type ConsentPathResult, checkConsentPaths } from './checks/consent-paths'
-import { type ContrastRow, checkContrast } from './checks/contrast'
+import { type ContrastRow, checkContrast, formatContrast } from './checks/contrast'
 import { checkEmbedBoxes, compareEmbedHeights, type EmbedBox } from './checks/embed-size'
 import {
   checkCoverage,
@@ -684,10 +684,7 @@ export async function verify(dir: string, report: Report, opts: VerifyOptions = 
 
     async contrast() {
       const rows = await (await getChecks()).contrast(branch!.url, paths)
-      const lines = rows.map(
-        (r) =>
-          `${r.path ?? ''} ${r.kind} "${r.button}" ${r.ratio.toFixed(2)}:1 ${r.ok ? 'ok' : 'FAIL'}${r.indeterminate ? ` (indeterminate: ${r.indeterminate})` : ''}`,
-      )
+      const lines = rows.map(formatContrast)
       // Ruling 20: every page that should show the banner has banner and PrivacyLinks rows. CMS admin
       // pages (Ruling 26) get neither and are left out by expectBanner.
       const missing: string[] = []

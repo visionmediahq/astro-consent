@@ -29,7 +29,7 @@ import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import type { Browser } from '@playwright/test'
 import { type ConsentPathResult, checkConsentPaths } from './checks/consent-paths'
-import { type ContrastRow, checkContrast } from './checks/contrast'
+import { type ContrastRow, checkContrast, formatContrast } from './checks/contrast'
 import { checkFonts, type DeclaredFace, type FontsPage, judgeFontsPage, parseFontsCss } from './checks/fonts'
 import { isCmsAdminRoute, listPages } from './checks/pages'
 import { checkRequests, formatRequests, type RequestResult } from './checks/requests'
@@ -210,11 +210,7 @@ async function checkDomain(c: LiveChecks, host: string, baseline: Set<string>, w
         }
       }
       const rows = await c.contrast(base, paths)
-      lines.push(
-        ...rows.map(
-          (r) => `  ${r.path ?? ''} ${r.kind} "${r.button}" ${r.ratio.toFixed(2)}:1 ${r.ok ? 'ok' : 'FAIL'}${r.indeterminate ? ` (indeterminate: ${r.indeterminate})` : ''}`,
-        ),
-      )
+      lines.push(...rows.map((r) => `  ${formatContrast(r)}`))
       if (!rows.some((r) => r.kind === 'banner')) lines.push('  no banner button measured')
       pass &&= rows.some((r) => r.kind === 'banner') && rows.every((r) => r.ok)
     }
