@@ -436,7 +436,11 @@ npx tsx ci/rollout/run.ts help
   `@import "tailwindcss"` in that stylesheet; nothing else is edited. An old `css?family=A:400|B`
   URL works as well as `css2`. Refusals (not a Google Fonts URL, `fonts.css` or `public/fonts/`
   already there, a failed request, a missing licence, an entry without exactly one
-  `@import "tailwindcss"`) exit 3 and write nothing. It is also runnable alone:
+  `@import "tailwindcss"`, an `--entry` that is absolute or contains `..`) exit 3 and write nothing.
+  An IO error (read-only folder or entry, full disk) exits 1 and also leaves nothing behind: the
+  font and licence files are written first, `fonts.css` and the entry last, and on any failure
+  every file and folder the run created is removed and the entry restored byte for byte, so a
+  rerun is never blocked by "already exists". It is also runnable alone:
   `npx tsx ci/rollout/fonts-files.ts ...`. Its imports are node built-ins and relative files only
   (`wire/fonts-host.ts`, `wire/css-imports.ts`, `wire/fonts-css.ts`, `lib/site-files.ts`,
   `wire/engine.ts`), so a checkout of this repo plus `tsx` is enough, with no `npm install` here;

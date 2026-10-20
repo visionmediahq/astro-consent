@@ -3,7 +3,7 @@
 // answer is recorded (fixtures/fonts-wire/css2/, fake woff2, stand-in licences); nothing reaches
 // the network.
 import { createHash } from 'node:crypto'
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, relative, sep } from 'node:path'
 import { afterEach, describe, expect, test } from 'vitest'
@@ -222,6 +222,111 @@ describe('runFontsFiles', () => {
       const bad: FontFetch = async (url, h) => (/\/ofl\/oswald\/OFL\.txt$/.test(url) ? text('nope', 'text/plain', 404) : net(url, h))
       expect(await refusal(generatedSite(), URL_KNUT, bad)).toContain('no licence for Oswald')
     })
+  })
+})
+
+describe('IO errors leave the site byte-identical, so a retry works', () => {
+  const same = (dir: string, before: Map<string, Buffer>): void => {
+    const after = tree(dir)
+    expect([...after.keys()]).toEqual([...before.keys()])
+    for (const [k, v] of before) expect(after.get(k)!.equals(v)).toBe(true)
+  }
+  /** Directories (not just files) of the tree, to prove none is left behind. */
+  const dirsOf = (dir: string): string[] => {
+    const out: string[] = []
+    const visit = (d: string): void => {
+      for (const e of readdirSync(d, { withFileTypes: true })) if (e.isDirectory()) (out.push(relative(dir, join(d, e.name))), visit(join(d, e.name)))
+    }
+    visit(dir)
+    return out.sort()
+  }
+
+  test('a read-only public/: exit 1, nothing written (not even fonts.css), the retry succeeds', async () => {
+    const dir = generatedSite()
+    mkdirSync(join(dir, 'public'))
+    const before = tree(dir)
+    const dirs = dirsOf(dir)
+    chmodSync(join(dir, 'public'), 0o555)
+    try {
+      const r = await runFontsFiles({ dir, url: URL_KNUT, entry: ENTRY, dryRun: false }, { fetch: network(), now: DATE }).catch((e: Error) => e)
+      expect(r).toBeInstanceOf(Error)
+      same(dir, before)
+      expect(dirsOf(dir)).toEqual(dirs)
+      expect(await main([dir, '--url', URL_KNUT])).toBe(1)
+    } finally {
+      chmodSync(join(dir, 'public'), 0o755)
+    }
+    same(dir, before)
+    expect((await runFontsFiles({ dir, url: URL_KNUT, entry: ENTRY, dryRun: false }, { fetch: network(), now: DATE })).code).toBe(0)
+  })
+
+  test('a read-only entry with --entry: exit 1, no fonts.css, licences or woff2 left, entry unchanged, the retry succeeds', async () => {
+    const dir = generatedSite()
+    const before = tree(dir)
+    const dirs = dirsOf(dir)
+    chmodSync(join(dir, ENTRY), 0o444)
+    try {
+      await expect(runFontsFiles({ dir, url: URL_KNUT, entry: ENTRY, dryRun: false }, { fetch: network(), now: DATE })).rejects.toThrow(/EACCES|not writable/)
+      same(dir, before)
+      expect(dirsOf(dir)).toEqual(dirs)
+    } finally {
+      chmodSync(join(dir, ENTRY), 0o644)
+    }
+    expect((await runFontsFiles({ dir, url: URL_KNUT, entry: ENTRY, dryRun: false }, { fetch: network(), now: DATE })).code).toBe(0)
+  })
+
+  test('a write that fails half way (what no preflight sees) is rolled back: files, new directories and the entry', async () => {
+    const dir = generatedSite()
+    const before = tree(dir)
+    const dirs = dirsOf(dir)
+    let n = 0
+    const write = (path: string, data: string | Uint8Array): void => {
+      if (++n === 4) throw Object.assign(new Error('ENOSPC: no space left on device'), { code: 'ENOSPC' })
+      writeFileSync(path, data)
+    }
+    await expect(runFontsFiles({ dir, url: URL_KNUT, entry: ENTRY, dryRun: false }, { fetch: network(), now: DATE, write })).rejects.toThrow(/ENOSPC/)
+    expect(n).toBe(4)
+    same(dir, before)
+    expect(dirsOf(dir)).toEqual(dirs)
+    expect((await runFontsFiles({ dir, url: URL_KNUT, entry: ENTRY, dryRun: false }, { fetch: network(), now: DATE })).code).toBe(0)
+  })
+
+  test('a failure while writing the entry itself restores the entry', async () => {
+    const dir = generatedSite()
+    const before = tree(dir)
+    const write = (path: string, data: string | Uint8Array): void => {
+      if (path.endsWith('global.css')) {
+        writeFileSync(path, 'half')
+        throw new Error('EIO')
+      }
+      writeFileSync(path, data)
+    }
+    await expect(runFontsFiles({ dir, url: URL_KNUT, entry: ENTRY, dryRun: false }, { fetch: network(), now: DATE, write })).rejects.toThrow(/EIO/)
+    same(dir, before)
+  })
+
+  test('fonts.css and the entry are written last', async () => {
+    const dir = generatedSite()
+    const order: string[] = []
+    const write = (path: string, data: string | Uint8Array): void => {
+      order.push(relative(dir, path))
+      writeFileSync(path, data)
+    }
+    await runFontsFiles({ dir, url: URL_KNUT, entry: ENTRY, dryRun: false }, { fetch: network(), now: DATE, write })
+    expect(order.slice(-2)).toEqual(['src/styles/fonts.css', ENTRY])
+  })
+})
+
+describe('--entry must stay inside the site', () => {
+  test.each(['/etc/hosts', '../outside.css', 'src/../../outside.css'])('%s is refused with exit 3', async (entry) => {
+    const dir = generatedSite()
+    const net = network()
+    const before = tree(dir)
+    const r = await runFontsFiles({ dir, url: URL_KNUT, entry, dryRun: false }, { fetch: net, now: DATE })
+    expect(r.code).toBe(3)
+    expect(r.output).toContain('--entry must be a path inside the site')
+    expect(net.calls).toEqual([])
+    expect([...tree(dir).keys()]).toEqual([...before.keys()])
   })
 })
 

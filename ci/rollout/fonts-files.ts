@@ -8,8 +8,8 @@
 //
 // Exit codes: 0 ok, 1 error, 2 usage, 3 refused (nothing written). Imports node built-ins and
 // relative files without packages only, so it runs with tsx alone (the unit test pins this).
-import { existsSync, mkdirSync, statSync, writeFileSync } from 'node:fs'
-import { dirname, isAbsolute, join, resolve } from 'node:path'
+import { accessSync, constants, existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { diskSite } from './lib/site-files'
 import { applyEdits } from './wire/engine'
@@ -59,6 +59,56 @@ export interface FontsFilesOptions {
   fetch?: FontFetch
   /** The date in the fonts.css header. */
   now?: Date
+  /** How a file is written; tests inject failures. */
+  write?: (path: string, data: string | Uint8Array) => void
+}
+
+/** The nearest directory above (or at) `dir` that exists. */
+function existingAncestor(dir: string): string {
+  let d = dir
+  while (!existsSync(d)) d = dirname(d)
+  return d
+}
+
+/**
+ * Writes `out` under `root`, all or nothing. Preflight: every directory that has to be created or
+ * written into, and the entry, must be writable (throws before the first write). On any failure
+ * during the writes, every file and directory this run created is removed and the entry is put
+ * back byte for byte, then the error is rethrown: the site is as it was and a rerun works.
+ */
+function writeAll(root: string, out: { path: string; data: string | Uint8Array }[], entry: string | null, write: (path: string, data: string | Uint8Array) => void): void {
+  for (const f of out) {
+    const dir = existingAncestor(dirname(join(root, f.path)))
+    try {
+      accessSync(dir, constants.W_OK | constants.X_OK)
+      if (f.path === entry) accessSync(join(root, f.path), constants.W_OK)
+    } catch {
+      throw new Error(`${f.path === entry ? f.path : relative(root, dir) || '.'} is not writable, nothing written`)
+    }
+  }
+  const entryBefore = entry !== null ? readFileSync(join(root, entry)) : null
+  const created: string[] = []
+  const madeDirs: string[] = []
+  try {
+    for (const f of out) {
+      const target = join(root, f.path)
+      const top = existingAncestor(dirname(target))
+      if (top !== dirname(target)) {
+        // The highest directory this write creates; removing it removes the rest.
+        let first = dirname(target)
+        while (dirname(first) !== top) first = dirname(first)
+        madeDirs.push(first)
+        mkdirSync(dirname(target), { recursive: true })
+      }
+      if (f.path !== entry) created.push(target)
+      write(target, f.data)
+    }
+  } catch (e) {
+    for (const f of created) rmSync(f, { force: true })
+    for (const d of madeDirs) rmSync(d, { recursive: true, force: true })
+    if (entry !== null && entryBefore !== null) writeFileSync(join(root, entry), entryBefore)
+    throw e
+  }
 }
 
 /** Runs the command. Throws on an unusable site dir; refusals are code 3 and write nothing. */
@@ -91,17 +141,16 @@ export async function runFontsFiles(args: FontsFilesArgs, opts: FontsFilesOption
     return refuse((e as Error).message)
   }
 
-  const out: { path: string; data: string | Uint8Array }[] = [
+  // The font and licence files first, fonts.css and the entry last: whatever fails, the files that
+  // make a rerun refuse (fonts.css, public/fonts/) are the last to appear and the first to go.
+  const isMain = (p: string): boolean => p === FONTS_CSS || p === args.entry
+  const all: { path: string; data: string | Uint8Array }[] = [
     ...hosted.newFiles.map((f) => ({ path: f.path, data: f.text })),
     ...hosted.fontFiles.map((f) => ({ path: f.path, data: f.bytes })),
   ]
-  if (args.entry !== null && entryText !== null) out.push({ path: args.entry, data: entryText })
-  if (!args.dryRun) {
-    for (const f of out) {
-      mkdirSync(dirname(join(root, f.path)), { recursive: true })
-      writeFileSync(join(root, f.path), f.data)
-    }
-  }
+  if (args.entry !== null && entryText !== null) all.push({ path: args.entry, data: entryText })
+  const out = [...all.filter((f) => !isMain(f.path)), ...all.filter((f) => f.path === FONTS_CSS), ...all.filter((f) => f.path === args.entry)]
+  if (!args.dryRun) writeAll(root, out, args.entry, opts.write ?? writeFileSync)
   const lines = [
     `fonts-files: ${args.dryRun ? 'dry run, would write' : 'wrote'} ${out.length} files for ${args.url}`,
     ...hosted.notes,
