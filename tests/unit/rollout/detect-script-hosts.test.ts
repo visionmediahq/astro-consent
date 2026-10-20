@@ -110,6 +110,20 @@ describe('detectScripts: scripts from hosts outside the registry (#36)', () => {
     expect(hostsOf({ 'src/components/W.astro': `<script>\n${body}\n</script>\n` })).toEqual(['x.example src/components/W.astro'])
   })
 
+  test.each([
+    ["<script>import 'https://x.example/a.js'</script>"],
+    ["<script type=\"module\">import 'https://x.example/a.js'\n</script>"],
+    ["<script>await import('https://x.example/a.js')</script>"],
+    ["<script>import a from 'https://x.example/a.js'; a()</script>"],
+  ])('a remote import on the first line of the body, right after the tag, is listed: %s', (markup) => {
+    expect(hostsOf({ 'src/components/W.astro': `${markup}\n` })).toEqual(['x.example src/components/W.astro'])
+  })
+
+  test('data-src and data-type on a script in plain HTML are not src and type', () => {
+    expect(hostsOf({ 'public/a.html': '<script data-src="https://x.example/a.js"></script>\n' })).toEqual([])
+    expect(hostsOf({ 'public/a.html': '<script data-type="application/json" src="https://x.example/a.js"></script>\n' })).toEqual(['x.example public/a.html'])
+  })
+
   test('a commented-out script in a plain HTML file is not listed', () => {
     expect(hostsOf({ 'public/a.html': '<!-- <script src="https://x.example/a.js"></script> -->\n<p>hej</p>\n' })).toEqual([])
     expect(hostsOf({ 'public/a.html': '<!--\n<script src="https://x.example/a.js"></script>\n-->\n<script src="https://y.example/b.js"></script>\n' })).toEqual([

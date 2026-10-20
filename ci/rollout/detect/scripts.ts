@@ -236,7 +236,8 @@ const REMOTE_IMPORTS = [
 
 /**
  * Longest line or tag read. These regexes backtrack, and a minified or broken file is one huge
- * line: past this it is skipped, so a 1 MB file costs linear time, not minutes.
+ * line: past this it is skipped, so a 1 MB file costs linear time, not minutes. A real import on a
+ * line this long (minified source) is missed; src/ is not minified, and a miss is the safe direction.
  */
 const MAX_SPAN = 4000
 
@@ -273,8 +274,8 @@ function htmlScriptSrcs(html: string): string[] {
     i = end
     const attrs = text.slice(start + '<script'.length, end)
     if (attrs.length > MAX_SPAN || /^[\w-]/.test(attrs)) continue
-    if (/\btype\s*=\s*["']?[^"'\s>]*json/i.test(attrs)) continue
-    const src = /\bsrc\s*=\s*["']?((?:https?:)?\/\/[^"'\s>]+)/i.exec(attrs)
+    if (/(?:^|\s)type\s*=\s*["']?[^"'\s>]*json/i.test(attrs)) continue
+    const src = /(?:^|\s)src\s*=\s*["']?((?:https?:)?\/\/[^"'\s>]+)/i.exec(attrs)
     if (src) out.push(src[1]!)
   }
 }
@@ -304,7 +305,9 @@ function scriptLoadUrls(node: AstroNode, text: string): string[] {
   if (type?.kind === 'quoted' && /json/i.test(type.value)) return []
   const src = attr(node, 'src')
   const fromSrc = src && src.kind !== 'empty' ? urlsIn(src.value) : []
-  const fromBody = remoteImports(text.slice(node.start, node.end))
+  const source = text.slice(node.start, node.end)
+  // The opening tag is cut, or a one-line body would not start its line with `import`.
+  const fromBody = remoteImports(source.slice(source.indexOf('>') + 1))
   return [...fromSrc, ...fromBody]
 }
 
