@@ -21,7 +21,7 @@ Filer:
 
 ## Kontroller
 
-Kontrollerat lokalt med `ci/rollout` (astro-consent):
+Kontrollerat lokalt med `ci/rollout` (astro-consent @ 0123456):
 
 - ok: 1. lockfile
 - ok: 2. build

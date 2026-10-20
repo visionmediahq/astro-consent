@@ -1,0 +1,41 @@
+## Vad ändras
+
+- Samtyckesbanner (`@visionmediahq/astro-consent`). Externt innehåll (Google Maps) laddas först när besökaren klickar på knappen i platshållaren eller har godkänt externt innehåll.
+- `src/data/privacy.json`: `google-maps`.
+- "Cookie-inställningar" i sidfoten och på 404-sidan, så att besökaren kan ändra sitt val.
+
+Filer:
+
+- `src/layouts/Base.astro`
+- `src/data/privacy.json`
+
+## Så testar du
+
+1. Öppna https://kund.se i ett privat fönster: bannern visas längst ned.
+2. Klicka "Neka" och gå till en sida med externt innehåll: bara platshållare visas, inget innehåll laddas.
+3. Klicka "Visa Google Maps": innehållet laddas. Kryssa "Visa alltid innehåll från Google Maps" så laddas det direkt framöver.
+4. Klicka "Cookie-inställningar" i sidfoten: bannern öppnas igen.
+
+## Kontroller
+
+Kontrollerat lokalt med `ci/rollout` (astro-consent @ 0123456):
+
+- ok: 1. lockfile
+- ok: 2. build
+- ok: 3. requests
+- ok: 4. consent-paths
+- ok: 5. clip
+- ok: 6. contrast
+- ok: 7. screenshots
+- ok: 8. docker
+
+Skärmbilder (360/1280 px, banner och platshållarna):
+
+- [home-1280-open.png](https://github.com/visionmediahq/site-factory/blob/main/docs/rollout/2026-10-06-astro-consent/kund/home-1280-open.png)
+- [home-360-open.png](https://github.com/visionmediahq/site-factory/blob/main/docs/rollout/2026-10-06-astro-consent/kund/home-360-open.png)
+
+**Mergas efter verifiering och livekontroll.**
+
+## Relaterade ärenden
+
+Inga

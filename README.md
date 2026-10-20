@@ -261,6 +261,12 @@ npx tsx ci/rollout/run.ts help
   overwrites the banner's. `detect` adds `.rollout/` to the checkout's `.git/info/exclude`, so
   stages can be rerun one at a time and nothing of it is committed. `verify --demo` writes to a
   temp folder.
+- **Tool commit.** `report.json`, every `verify*.json` and every `live-*.json` record `tool:
+  { sha, dirty }`: the HEAD of the astro-consent checkout the tool ran from, and whether its
+  tracked files had uncommitted changes (both `null` when git failed; untracked files are ignored).
+  `verify` and `live` print it first (`tool: astro-consent @ <short sha>`), each evidence file
+  starts with that line, the PR body names it under "Kontroller", and `merge` prints the one of the
+  verify it merged on.
 - **Exit codes:** `0` ok (for `live baseline` also the expected RED), `1` error, a failed verify
   step or a live/merge STOP, `2` usage, `3` the wire (or fonts) plan was refused (dry run or not; nothing was
   written).

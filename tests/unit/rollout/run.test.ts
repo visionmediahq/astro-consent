@@ -58,6 +58,15 @@ describe('runDetect', () => {
     expect(execFileSync('git', ['status', '--porcelain', '--untracked-files=all'], { cwd: dir, encoding: 'utf8' })).not.toContain('.rollout')
   })
 
+  test('records the tool commit that detected the site; the real one by default', () => {
+    const tool = { sha: '0123456789abcdef0123456789abcdef01234567', dirty: false }
+    const dir = site()
+    expect(runDetect(dir, ['a.se'], { toolVersion: () => tool }).tool).toEqual(tool)
+    expect((JSON.parse(readFileSync(join(dir, '.rollout/report.json'), 'utf8')) as Report).tool).toEqual(tool)
+    const real = runDetect(site(), ['a.se']).tool
+    expect(real?.sha).toMatch(/^[0-9a-f]{40}$/)
+  })
+
   test('running twice adds the exclude line once', () => {
     const dir = site()
     runDetect(dir, ['a.se'])

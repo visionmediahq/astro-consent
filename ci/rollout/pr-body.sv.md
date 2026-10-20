@@ -19,7 +19,7 @@ Filer:
 
 ## Kontroller
 
-Kontrollerat lokalt med `ci/rollout` (astro-consent):
+Kontrollerat lokalt med `ci/rollout` ({{tool}}):
 
 {{steps}}
 

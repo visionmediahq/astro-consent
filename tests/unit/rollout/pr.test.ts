@@ -10,9 +10,11 @@ const DEMO = JSON.parse(readFileSync(join(import.meta.dirname, 'fixtures/demo-re
 const template = readFileSync(TEMPLATE_PATH, 'utf8')
 const report = (over: Partial<Report> = {}): Report => ({ ...DEMO, site: 'kund', domains: ['kund.se'], ...over })
 const HEAD = 'b'.repeat(40)
+const TOOL_SHA = '0123456789abcdef0123456789abcdef01234567'
 const PASS: VerifyResult = {
   pass: true,
   sha: HEAD,
+  tool: { sha: TOOL_SHA, dirty: false },
   steps: ['lockfile', 'build', 'requests', 'consent-paths', 'clip', 'contrast', 'screenshots', 'docker'].map((name, i) => ({
     step: i + 1,
     name,
@@ -27,6 +29,18 @@ const render = (
 ) => renderBody(template, { kind: over.classification ?? 'consent', services: over.services ?? ['google-maps'], verify: PASS, issues, domain: 'kund.se', screenshots })
 
 describe('renderBody', () => {
+  test('Kontroller names the tool commit of the verify run, and says when it had uncommitted changes', () => {
+    expect(render()).toContain('Kontrollerat lokalt med `ci/rollout` (astro-consent @ 0123456):\n')
+    const body = (tool: VerifyResult['tool']) => {
+      const { tool: _t, ...rest } = PASS
+      return renderBody(template, { kind: 'consent', services: ['google-maps'], verify: tool === undefined ? rest : { ...rest, tool }, issues: [], domain: 'kund.se' })
+    }
+    expect(body({ sha: TOOL_SHA, dirty: true })).toContain('Kontrollerat lokalt med `ci/rollout` (astro-consent @ 0123456, med ändringar som inte är incheckade):\n')
+    // A verify.json stored before the tool was recorded, or git failing.
+    expect(body(undefined)).toContain('Kontrollerat lokalt med `ci/rollout` (astro-consent, okänd version):\n')
+    expect(body({ sha: null, dirty: null })).toContain('(astro-consent, okänd version):')
+  })
+
   test('has the four sections; nothing addressed to the client (clients already know the banner is coming)', () => {
     for (const classification of ['notice', 'consent'] as const) {
       const body = render({ classification })
@@ -148,12 +162,17 @@ const opts = (f: ReturnType<typeof fake>, extra: Record<string, unknown> = {}) =
   ...extra,
 })
 
+const BANNER_GOLDEN = join(import.meta.dirname, 'fixtures/pr-body/consent-banner.md.txt')
+
 describe('openPr', () => {
-  test('creates the PR with title, head, base and repo, from the rendered body', async () => {
+  test('creates the PR with title, head, base and repo, from the rendered body; the body matches the golden file', async () => {
     const dir = siteDir()
     const f = fake()
     const r = await openPr(dir, opts(f))
     expect(r.url).toBe('https://github.com/visionmediahq/kund/pull/9')
+    const body = readFileSync(join(dir, '.rollout/pr-body.md'), 'utf8')
+    if (process.env['UPDATE_GOLDEN']) writeFileSync(BANNER_GOLDEN, body)
+    expect(body).toBe(readFileSync(BANNER_GOLDEN, 'utf8'))
     const create = f.calls.find((c) => c.startsWith('gh pr create'))!
     expect(create).toContain(`-t ${TITLE}`)
     // No version (#51): the range wire installs changes with each release, the diff shows it.
@@ -161,7 +180,6 @@ describe('openPr', () => {
     expect(create).toContain('-R visionmediahq/kund')
     expect(create).toContain('-H consent-banner')
     expect(create).toContain('-B main')
-    const body = readFileSync(join(dir, '.rollout/pr-body.md'), 'utf8')
     expect(body).toContain('Visa Google Maps')
     expect(body).toContain('src/layouts/Base.astro')
     expect(body).toContain('docs/rollout/2026-10-06-astro-consent/kund/home-360-open.png')

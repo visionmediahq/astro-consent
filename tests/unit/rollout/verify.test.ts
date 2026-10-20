@@ -12,7 +12,7 @@ import type { FontsPage } from '../../../ci/rollout/checks/fonts'
 import { dockerCheck } from '../../../ci/rollout/docker'
 import { ssrEntry, startPreview } from '../../../ci/rollout/preview'
 import type { Report } from '../../../ci/rollout/types'
-import { type Checks, embedRoutes, type Exec, filterRoutes, formatVerify, MIN_FREE_GB, minFreeGb, ORIGIN, type VerifyDeps, verify } from '../../../ci/rollout/verify'
+import { type Checks, embedRoutes, type Exec, filterRoutes, formatVerify, MIN_FREE_GB, minFreeGb, ORIGIN, type VerifyDeps, verify, verifyOutput } from '../../../ci/rollout/verify'
 
 const PKG = '@visionmediahq/astro-consent'
 const STEP_NAMES = ['lockfile', 'build', 'requests', 'consent-paths', 'clip', 'contrast', 'screenshots', 'fonts', 'docker']
@@ -226,6 +226,47 @@ describe('verify', () => {
     }
     expect(readFileSync(join(dir, '.rollout/evidence/8-fonts.txt'), 'utf8')).toMatch(/skipped: no self-hosted fonts/)
     expect(f.called.has('fonts http://127.0.0.1:4399')).toBe(false)
+  })
+
+  test('records the tool commit in verify.json and heads every evidence file with it; the step evidence stays as it was', async () => {
+    const dir = siteDir()
+    const f = fake()
+    const tool = { sha: '0123456789abcdef0123456789abcdef01234567', dirty: true }
+    f.deps.toolVersion = () => tool
+    const result = await verify(dir, report(), { deps: f.deps })
+    expect(result.tool).toEqual(tool)
+    expect(JSON.parse(readFileSync(join(dir, '.rollout/verify.json'), 'utf8')).tool).toEqual(tool)
+    for (const name of ['1-lockfile', '3-requests', '9-docker']) {
+      expect(evidence(dir, `${name}.txt`).split('\n')[0], name).toBe('tool: astro-consent @ 0123456 (uncommitted changes)')
+    }
+    expect(result.steps.some((s) => s.evidence.includes('tool:'))).toBe(false)
+  })
+
+  test('the tool is recorded on an early stop too (a dirty site checkout)', async () => {
+    const dir = siteDir()
+    const f = fake({ exec: { 'git status --porcelain': { code: 0, out: '?? stray.txt\n' } } })
+    f.deps.toolVersion = () => ({ sha: null, dirty: null })
+    const result = await verify(dir, report(), { deps: f.deps })
+    expect(result.pass).toBe(false)
+    expect(JSON.parse(readFileSync(join(dir, '.rollout/verify.json'), 'utf8')).tool).toEqual({ sha: null, dirty: null })
+    expect(evidence(dir, '0-clean.txt').split('\n')[0]).toBe('tool: astro-consent @ unknown (git failed)')
+  })
+
+  test('the console output starts with the tool line, then each step and its evidence, then the summary', () => {
+    const tool = { sha: '0123456789abcdef0123456789abcdef01234567', dirty: false }
+    const steps = [
+      { step: 1, name: 'lockfile', pass: true, skipped: true, evidence: 'x' },
+      { step: 2, name: 'build', pass: true, evidence: 'built\nok' },
+    ]
+    expect(verifyOutput({ pass: true, sha: null, tool, steps })).toEqual([
+      'tool: astro-consent @ 0123456',
+      '--- step 1 lockfile: skipped',
+      '--- step 2 build: pass',
+      '  built\n  ok',
+      'step 1 lockfile: skipped',
+      'step 2 build: pass',
+      'verify: PASS',
+    ])
   })
 
   test('stops at the first failing step: later steps are not run', async () => {

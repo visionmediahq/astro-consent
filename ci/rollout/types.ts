@@ -1,6 +1,7 @@
 // Shared shapes for the rollout tool: detect produces a Report, wire turns it into a WirePlan,
 // verify returns a VerifyResult, and the pool scan and selection work on PoolRow and Selection.
 import type { ServiceSlug } from '../../src/services'
+import type { ToolVersion } from './lib/tool-version'
 
 export type Classification = 'consent' | 'notice' | 'needs-human'
 
@@ -131,6 +132,8 @@ export interface Report {
   fonts?: FontsInfo
   classification: Classification
   reasons: string[]
+  /** The tool commit that ran detect (runDetect sets it; detect() itself is pure). */
+  tool?: ToolVersion
 }
 
 export interface Edit {
@@ -183,6 +186,8 @@ export interface VerifyResult {
   steps: StepResult[]
   /** Main's preview restarted mid-step after it stopped answering (#20), one line each. */
   restarts?: string[]
+  /** The tool commit that ran this verify; missing in files stored before it was recorded. */
+  tool?: ToolVersion
 }
 
 export interface PoolRow {

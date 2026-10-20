@@ -32,6 +32,7 @@ const lock = (packages: Record<string, Record<string, unknown>>) => JSON.stringi
 const PKG_JSON = JSON.stringify({ name: 'site', dependencies: { [PKG]: 'github:visionmediahq/astro-consent#semver:^1.1.2', astro: '^7.3.5' } })
 const LOCK = lock({ '': { name: 'site', dependencies: { [PKG]: 'github:visionmediahq/astro-consent#semver:^1.1.2', astro: '^7.3.5' } }, [`node_modules/${PKG}`]: { version: '1.1.3' } })
 const SHA = 'a'.repeat(40)
+const TOOL_SHA = '0123456789abcdef0123456789abcdef01234567'
 const NPM_LS = JSON.stringify({ name: 'site', dependencies: { astro: { version: '7.3.5' } } })
 
 const dirs: string[] = []
@@ -122,6 +123,7 @@ function fake(o: { branch?: string; mainPkg?: string; mainLock?: string; diff?: 
     isUp: async () => false,
     docker: async (_url, b, run) => (called.push(`docker ${b}`), { pass: await run('http://127.0.0.1:4397'), log: 'docker ok' }),
     fontFetch: o.fontFetch ?? (async () => ({ status: 200, contentType: 'text/css', body: new TextEncoder().encode(CSS2) })),
+    toolVersion: () => ({ sha: TOOL_SHA, dirty: false }),
   }
   return { deps, calls, called, requestOpts }
 }
@@ -165,6 +167,8 @@ describe('verify on fonts-selfhost', () => {
     expect(f.called).toContain('fonts http://127.0.0.1:4399 360,1280')
     expect(f.called).toContain('fonts http://127.0.0.1:4397 1280')
     expect(JSON.parse(readFileSync(join(dir, '.rollout/verify-fonts-selfhost.json'), 'utf8'))).toEqual(r)
+    expect(r.tool).toEqual({ sha: TOOL_SHA, dirty: false })
+    expect(evidence(dir, 'fonts-selfhost', '8-fonts.txt').split('\n')[0]).toBe('tool: astro-consent @ 0123456')
     expect(readFileSync(join(dir, '.rollout/pushed-fonts-selfhost.txt'), 'utf8')).toBe(`${SHA}\n`)
     expect(readFileSync(join(dir, '.rollout/verify.json'), 'utf8')).toBe('{"banner":true}')
     expect(existsSync(join(dir, '.rollout/pushed.txt'))).toBe(false)

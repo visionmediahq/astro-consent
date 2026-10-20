@@ -13,6 +13,7 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { type App, appsFor, type Deployment, followsMain, lastDeployed, listApps, listDeployments } from './coolify'
 import { type Exec, exec as realExec, tail } from './lib/exec'
+import type { ToolVersion } from './lib/tool-version'
 import { APPS_FILE, BASELINE_FILE, BASELINE_HOSTS_FILE, type LiveResult, live as realLive, type RecordedApps } from './live'
 import { originRepo } from './pr'
 import { normaliseReport } from './lib/report'
@@ -36,6 +37,8 @@ export interface MergeResult {
   /** Set once the PR is merged. */
   mergeCommit?: string
   live?: LiveResult
+  /** The tool commit of the verify merged on (stored, or rerun after main moved); null when that verify file predates it. */
+  tool?: ToolVersion | null
 }
 
 const realDeps = (): MergeDeps => ({
@@ -52,7 +55,9 @@ export async function merge(dir: string, pr: number | string, opts: { deps?: Par
   const root = resolve(dir)
   const git = (...args: string[]) => deps.exec('git', args, root)
   const gh = (...args: string[]) => deps.exec('gh', args, root)
-  const stop = (reason: string, more: Partial<MergeResult> = {}): MergeResult => ({ status: 'stop', reason, ...more })
+  let tool: ToolVersion | null | undefined
+  const withTool = (): Partial<MergeResult> => (tool === undefined ? {} : { tool })
+  const stop = (reason: string, more: Partial<MergeResult> = {}): MergeResult => ({ status: 'stop', reason, ...withTool(), ...more })
 
   try {
     const reportPath = join(root, '.rollout/report.json')
@@ -86,6 +91,7 @@ export async function merge(dir: string, pr: number | string, opts: { deps?: Par
     const verifyPath = statePath(rollout, VERIFY_FILE, BRANCH)
     const stored = existsSync(verifyPath) ? (JSON.parse(readFileSync(verifyPath, 'utf8')) as Partial<VerifyResult>) : null
     let verified = stored?.pass === true && stored.sha ? stored.sha : null
+    if (verified) tool = stored?.tool ?? null
     let head = ''
     for (let round = 0; ; round++) {
       const fetched = await git('fetch', 'origin', 'main')
@@ -109,6 +115,7 @@ export async function merge(dir: string, pr: number | string, opts: { deps?: Par
       head = (await git('rev-parse', 'HEAD')).out.trim()
       if (result.sha !== head) return stop(`verify ran for ${result.sha ?? '(no commit)'}, HEAD is ${head}`)
       verified = result.sha
+      tool = result.tool ?? null
     }
 
     // Ruling 14: which apps follow main, judged on main as it is right before the merge.
@@ -141,7 +148,7 @@ export async function merge(dir: string, pr: number | string, opts: { deps?: Par
 
     const result = await deps.live(root, 'post-merge', mergeCommit)
     if (result.status !== 'pass') return stop(result.reason ?? `live post-merge: ${result.status}`, { mergeCommit, live: result })
-    return { status: 'done', mergeCommit, live: result }
+    return { status: 'done', mergeCommit, live: result, ...withTool() }
   } catch (e) {
     return stop((e as Error).message)
   }
