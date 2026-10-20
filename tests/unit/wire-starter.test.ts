@@ -35,13 +35,15 @@ import '../styles/global.css'
   </body>
 </html>
 `
+// An <aside> since astro-starter #58: the client site's own footer is the one contentinfo landmark.
+// Always dark (--vm-footer-bg: #18181b), whatever the client's neutral is.
 const FOOTER = `---
-// Vision Media branding footer — present on every client site.
+// Vision Media agency mark — present on every client site.
 ---
 
-<footer class="bg-neutral py-3">
+<aside class="bg-(--vm-footer-bg)" aria-label="Webbplatsen är byggd av Vision Media">
   <a href="https://visionmedia.io">Vision Media</a>
-</footer>
+</aside>
 `
 
 test('wireConfig adds the import and consent() to integrations', () => {
@@ -64,10 +66,10 @@ test('wireBase imports ConsentBanner and renders it before VisionFooter', () => 
   expect(wired).toMatch(/<ConsentBanner \/>\n\s*<VisionFooter \/>/)
 })
 
-test('wireFooter imports PrivacyLinks and renders it inside the footer with the neutral text colour', () => {
+test('wireFooter imports PrivacyLinks and renders it inside the aside in a colour that reads on its dark background', () => {
   const wired = wireFooter(FOOTER)
   expect(wired).toContain("import PrivacyLinks from '@visionmediahq/astro-consent/components/PrivacyLinks.astro'")
-  expect(wired).toMatch(/<PrivacyLinks class="mt-2 text-neutral-content" \/>\n<\/footer>/)
+  expect(wired).toMatch(/<PrivacyLinks class="mt-2 text-white\/70" \/>\n<\/aside>/)
 })
 
 test('every wire function is idempotent', () => {

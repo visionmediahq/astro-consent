@@ -52,13 +52,13 @@ repo tool and is not part of the installed package.)
    <ConsentBanner />
    ```
 
-4. The footer:
+4. The footer (in the starter, the `VisionFooter` aside, which is always dark):
 
    ```astro
    ---
    import PrivacyLinks from '@visionmediahq/astro-consent/components/PrivacyLinks.astro'
    ---
-   <PrivacyLinks class="text-neutral-content" />
+   <PrivacyLinks class="text-white/70" />
    ```
 
 5. `src/data/privacy.json`

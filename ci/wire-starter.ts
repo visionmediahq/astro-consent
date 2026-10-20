@@ -48,10 +48,12 @@ export function wireBase(source: string): string {
   return insertLineBefore(withImport, '<VisionFooter />', '<ConsentBanner />')
 }
 
+// VisionFooter is an <aside> (astro-starter #58), always dark (--vm-footer-bg: #18181b) whatever
+// the client's neutral is, so the links get a fixed light colour rather than text-neutral-content.
 export function wireFooter(source: string): string {
   if (source.includes('<PrivacyLinks')) return source
   const withImport = addFrontmatterImport(source, `import PrivacyLinks from '${PKG}/components/PrivacyLinks.astro'`)
-  return insertLineBefore(withImport, '</footer>', '<PrivacyLinks class="mt-2 text-neutral-content" />', '  ')
+  return insertLineBefore(withImport, '</aside>', '<PrivacyLinks class="mt-2 text-white/70" />', '  ')
 }
 
 const EDITS: Array<[string, (source: string) => string]> = [
