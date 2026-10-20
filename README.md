@@ -306,6 +306,45 @@ npx tsx ci/rollout/run.ts help
   Visa button, "Visa alltid" label and "Öppna i" link. A dark theme that sets `--color-base-content`
   but not `--color-base-200` leaves light text on the light placeholder (knutssonsbil, about 1.2:1).
   `live post-merge` runs the same contrast check, so live sites are measured as well.
+- A background that is one gradient of colours (nanolfs-villan's footer: two brand blues) is
+  measured, not reported indeterminate. Each segment between two stops is searched for its worst
+  point (a grid, refined around every local minimum), alpha composited over what is beneath:
+  `5.25:1 ok (gradient, worst stop)`. sRGB segments are interpolated by the tool; any other method
+  (`in oklch`, `in hsl longer hue`, the oklab default for oklch stops) is mixed by the page with
+  `color-mix()` in the same method, and the line names it. A `url()` image that shows, a second
+  gradient that shows, or a stop or mix the page cannot resolve stays indeterminate.
+- Effects the colours do not show are indeterminate: `background-blend-mode`, `background-clip:
+  text`, `opacity` on an element with a background or above it, `mix-blend-mode` or a filter that
+  changes something (`grayscale(0)` does not) on the text or any ancestor, and `backdrop-filter`
+  below the first opaque background. Opacity on the text or a background-less wrapper (`opacity-70`
+  on the links) fades the text colour and is measured.
+- A positioned `::before`/`::after` that paints (a background colour or image, a visible border, or a
+  `backdrop-filter`), on the text or any ancestor, counts only when its box overlaps the text's
+  (ahatrafikskola's 1px footer hairline and a width-0 link underline do not). A `box-shadow` with a
+  visible colour (Tailwind's resting `0 0 #0000` is not), an outline, a filter that changes
+  something (drop-shadow, blur) or any `content` other than `""` (text, glyphs, a url() image)
+  reaches outside the box and always counts. A fixed one counts on any horizontal overlap, wherever
+  the text is scrolled. Its box is computed when its containing block is its own element
+  (positioned, not scrolled, not an inline element broken over lines, and neither it nor any
+  ancestor scaled, rotated, zoomed or on an `offset-path`) or the viewport (fixed, no ancestor with a
+  transform, `translate`, `scale`, `rotate`, `zoom`, `offset-path`, any filter, `preserve-3d`,
+  `contain`, `content-visibility` or a matching `will-change` capturing it); any other containing
+  block, a transform, individual transform property, `zoom` or `offset-path` on the pseudo-element,
+  or `direction: rtl` on it is indeterminate.
+- Pseudo-elements that do not count: faint feTurbulence grain (ernstedt's fixed `body::after`: an SVG
+  whose every shape is drawn through a filter, with no other paint), while the grain opacities on a
+  row's path add up to 0.2 or less; and a negative z-index above the opaque background with no
+  z-index on or between them, which paints beneath it. The grain exemption is a bounded error, not
+  proof: up to 0.2 of white grain over a background can lift or lower a borderline ratio (white text
+  on #767676 measures 4.54:1 ok under 0.2 white grain that brightens it), so a row within a few
+  hundredths of 4.5 on a grain site deserves a look at the screenshot. A higher z-index around the text is not taken as proof that it paints above a
+  pseudo-element: a solid fixed overlay counts even under the z-50 banner. Scrolling elsewhere is
+  already in both boxes; the pseudo-element's own element scrolled is indeterminate.
+- The contrast step scrolls each page through and back (as step 3 does) and waits for finite
+  animations to finish: the starter's `[data-animate]` is `opacity: 0` until Motion's `inView` fades
+  it in, and about 25 sites wrap an embed in one. An opacity animation still running on the text or
+  an ancestor gets one more wait (5 s) and a second reading; after that the row is `animation not
+  settled`.
 - `verify` stops before any step when the disk holding the site has less than 15 GB free
   (`ROLLOUT_MIN_FREE_GB` changes the threshold; demo mode skips it). Each verify runs `npm ci` and a
   build twice and builds a Docker image, and Docker failed with I/O errors at 2.5 GB free during the
