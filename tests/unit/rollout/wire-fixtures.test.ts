@@ -15,7 +15,8 @@ import { applyEdits } from '../../../ci/rollout/wire/engine'
 import { applyWire, BRANCH, COMMIT_MESSAGE, INSTALL_SPEC, planWire } from '../../../ci/rollout/wire/index'
 
 const FIXTURES = join(import.meta.dirname, 'fixtures')
-const SITES = readdirSync(FIXTURES).filter((s) => statSync(join(FIXTURES, s)).isDirectory()).sort()
+// Each site fixture has a before/ tree; other folders (fonts/: detect-only fixtures) are not wire fixtures.
+const SITES = readdirSync(FIXTURES).filter((s) => existsSync(join(FIXTURES, s, 'before'))).sort()
 const REFUSED = (site: string) => join(FIXTURES, site, 'expected', 'REFUSED.md')
 const WIRED = SITES.filter((s) => !existsSync(REFUSED(s)))
 const NEEDS_HUMAN = SITES.filter((s) => existsSync(REFUSED(s)))

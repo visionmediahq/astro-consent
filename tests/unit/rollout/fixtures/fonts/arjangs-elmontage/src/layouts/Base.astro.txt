@@ -1,0 +1,32 @@
+---
+import SEO from '../components/SEO.astro'
+import '../styles/global.css'
+
+const fontHref =
+  'https://fonts.googleapis.com/css2?family=Kanit:wght@500;600;700;800&family=Open+Sans:wght@400;500;600;700&display=swap'
+
+const umamiScriptUrl = import.meta.env.UMAMI_SCRIPT_URL
+---
+<html lang="sv">
+  <head>
+    <!-- Google Fonts.
+         Loaded off the critical path: as a render-blocking stylesheet this costs
+         ~800 ms of blocked rendering. `media="print"` makes the browser fetch it
+         without blocking, and the onload handler promotes it to `all` once it
+         arrives. The fonts already use display=swap, so the fallback-then-swap
+         behaviour is unchanged — only the render block goes away. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href={fontHref}
+      media="print"
+      onload="this.media='all'"
+    />
+    <noscript>
+      <link rel="stylesheet" href={fontHref} />
+    </noscript>
+    {umamiScriptUrl && <script is:inline defer src={umamiScriptUrl}></script>}
+  </head>
+  <body><slot /></body>
+</html>

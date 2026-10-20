@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { main, parseDetectArgs, parseLiveArgs, parseMergeArgs, parseVerifyArgs, runDetect, runWire, summary, USAGE } from '../../../ci/rollout/run'
-import type { Report } from '../../../ci/rollout/types'
+import type { FontsInfo, Report } from '../../../ci/rollout/types'
 
 const dirs: string[] = []
 afterEach(() => {
@@ -183,5 +183,17 @@ describe('stored reports', () => {
     const report = { site: 'k', domains: ['k.se'], classification: 'consent', services: ['elfsight', 'google-maps'], astro: { major: 6, output: 'static' }, config: { path: 'astro.config.mjs' }, iframes: [], footers: [], policyPage: null, trackers: [], banners: [], reasons: [] } as unknown as Report
     expect(summary(report).split('\n')[0]).toBe('k (k.se): consent (elfsight, google-maps)')
     expect(summary({ ...report, classification: 'notice', services: [] }).split('\n')[0]).toBe('k (k.se): notice')
+  })
+
+  test('the summary ends with the Google Fonts status and its reasons, when the report has one', () => {
+    const report = { site: 'k', domains: ['k.se'], classification: 'notice', services: [], astro: { major: 6, output: 'static' }, config: { path: 'astro.config.mjs' }, iframes: [], footers: [], policyPage: null, trackers: [], banners: [], reasons: [] } as unknown as Report
+    expect(summary(report)).not.toContain('google fonts')
+    const fonts: FontsInfo = { status: 'needs-human', url: null, urls: [], locations: [], csp: [], reasons: ['src/x.ts:1: Google Fonts host outside a recognised <link>, @import or CSP'] }
+    expect(summary({ ...report, fonts }).split('\n').slice(-2)).toEqual([
+      '  google fonts: needs-human',
+      '    - src/x.ts:1: Google Fonts host outside a recognised <link>, @import or CSP',
+    ])
+    const url = 'https://fonts.googleapis.com/css2?family=Oswald&display=swap'
+    expect(summary({ ...report, fonts: { ...fonts, status: 'wire', url, urls: [url], reasons: [] } }).split('\n').at(-1)).toBe(`  google fonts: wire ${url}`)
   })
 })

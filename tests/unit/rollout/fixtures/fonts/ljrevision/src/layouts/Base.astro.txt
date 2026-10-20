@@ -1,0 +1,11 @@
+---
+import SEO from '../components/SEO.astro'
+import '../styles/global.css'
+---
+<html lang="sv">
+  <head>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  </head>
+  <body><slot /></body>
+</html>

@@ -117,6 +117,10 @@ export function summary(report: Report): string {
   if (report.trackers.length) lines.push(`  trackers: ${report.trackers.join(', ')}`)
   if (report.banners.length) lines.push(`  banners: ${report.banners.join(', ')}`)
   for (const reason of report.reasons) lines.push(`  - ${reason}`)
+  if (report.fonts) {
+    lines.push(`  google fonts: ${report.fonts.status}${report.fonts.url ? ` ${report.fonts.url}` : ''}`)
+    for (const reason of report.fonts.reasons) lines.push(`    - ${reason}`)
+  }
   return lines.join('\n')
 }
 
