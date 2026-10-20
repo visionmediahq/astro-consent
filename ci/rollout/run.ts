@@ -21,13 +21,14 @@ import { createTwoFilesPatch, FILE_HEADERS_ONLY } from 'diff'
 import { detect } from './detect/index'
 import { diskSite } from './lib/site-files'
 import { exec } from './lib/exec'
+import { toolLine, type ToolVersion, toolVersion } from './lib/tool-version'
 import { type FlowBranch, isFlowBranch, openPrsFrom, statePath } from './flows'
 import { classificationLine, normaliseReport } from './lib/report'
 import type { Report } from './types'
 import { formatLive, live } from './live'
 import { merge } from './merge'
 import { openPr, originRepo } from './pr'
-import { formatVerify, verify } from './verify'
+import { verify, verifyOutput } from './verify'
 import { main as mainFontsFiles } from './fonts-files'
 import { commitFonts, FONTS_BRANCH, type FontFetch, type FontsFile, fontsFiles, fontsTargetsTaken, planFonts } from './wire/fonts'
 import { applyWire, BRANCH, planFiles, planWire, refusalLines } from './wire/index'
@@ -108,11 +109,11 @@ function excludeRollout(dir: string): void {
   appendFileSync(file, `${text === '' || text.endsWith('\n') ? '' : '\n'}.rollout/\n`)
 }
 
-/** Detects the site in `dir`, writes `.rollout/report.json` and keeps `.rollout/` out of git. */
-export function runDetect(dir: string, domains: string[]): Report {
+/** Detects the site in `dir`, writes `.rollout/report.json` (with the tool commit) and keeps `.rollout/` out of git. */
+export function runDetect(dir: string, domains: string[], opts: { toolVersion?: () => ToolVersion } = {}): Report {
   const root = resolve(dir)
   excludeRollout(root)
-  const report = detect(diskSite(root), basename(root), domains)
+  const report: Report = { ...detect(diskSite(root), basename(root), domains), tool: (opts.toolVersion ?? toolVersion)() }
   mkdirSync(join(root, '.rollout'), { recursive: true })
   writeFileSync(join(root, '.rollout/report.json'), `${JSON.stringify(report, null, 2)}\n`)
   return report
@@ -377,11 +378,7 @@ async function mainVerify(rest: string[]): Promise<number> {
     const report = args.demo ? normaliseReport(JSON.parse(readFileSync(DEMO_REPORT, 'utf8'))) : readReport(dir)
     const out = args.demo ? mkdtempSync(join(tmpdir(), 'rollout-verify-demo-')) : join(dir, '.rollout')
     const result = await verify(dir, report, { demo: args.demo, out })
-    for (const step of result.steps) {
-      console.log(`--- step ${step.step} ${step.name}: ${step.skipped ? 'skipped' : step.pass ? 'pass' : 'FAIL'}`)
-      if (!step.skipped) console.log(step.evidence.replace(/^/gm, '  '))
-    }
-    for (const line of formatVerify(result)) console.log(line)
+    for (const line of verifyOutput(result)) console.log(line)
     const head = args.demo ? 'consent-banner' : execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: dir, encoding: 'utf8' }).trim()
     const branch: FlowBranch = isFlowBranch(head) ? head : 'consent-banner'
     console.log(`  → ${statePath(out, 'verify.json', branch)}`)
@@ -495,6 +492,7 @@ async function mainMerge(rest: string[]): Promise<number> {
     return 2
   }
   const r = await merge(args.dir, args.pr)
+  if (r.tool !== undefined) console.log(`verified with ${toolLine(r.tool ?? undefined)}`)
   if (r.live) for (const line of formatLive('post-merge', r.live)) console.log(line)
   if (r.mergeCommit) console.log(`merge commit ${r.mergeCommit}`)
   console.log(r.status === 'done' ? 'merge: DONE' : `merge: STOP (${r.reason ?? 'unknown'})`)

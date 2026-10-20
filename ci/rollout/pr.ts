@@ -12,6 +12,7 @@ import { parseFontsCss } from './checks/fonts'
 import { currentFlow, FLOWS, fontsCssAt, openPrsFrom, statePath, unmergedBranch } from './flows'
 import { type Exec, exec as realExec, tail } from './lib/exec'
 import { normaliseReport } from './lib/report'
+import { toolNote } from './lib/tool-version'
 import { SERVICES, type ServiceSlug } from '../../src/services'
 import sv from '../../src/text/sv.json'
 import type { Report, VerifyResult } from './types'
@@ -78,6 +79,7 @@ export function renderBody(template: string, input: BodyInput): string {
     fontsStep: fontsStep(kind, services),
     families: list(input.fonts?.families ?? []),
     files: (input.files?.length ? input.files : ['(se diffen)']).map((f) => `- \`${f}\``).join('\n'),
+    tool: toolNote(verify.tool),
     steps: verify.steps.map((s) => `- ${s.skipped ? 'hoppades över' : s.pass ? 'ok' : 'FEL'}: ${s.step}. ${s.name}`).join('\n'),
     screenshots: input.screenshots?.length ? input.screenshots.map((s) => `- [${s.file}](${s.url})`).join('\n') : 'Inga.',
     issues: issues.length ? issues.map((i) => `- ${i}`).join('\n') : 'Inga',

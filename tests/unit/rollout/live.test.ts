@@ -8,7 +8,7 @@ import type { RequestResult } from '../../../ci/rollout/checks/requests'
 import type { FontsPage } from '../../../ci/rollout/checks/fonts'
 import type { App, Deployment } from '../../../ci/rollout/coolify'
 import type { Exec } from '../../../ci/rollout/lib/exec'
-import { decodeBaseline, encodeBaseline, issueTitle, type LiveChecks, type LiveResult, live, type RecordedApps } from '../../../ci/rollout/live'
+import { decodeBaseline, encodeBaseline, formatLive, issueTitle, type LiveChecks, type LiveResult, live, type RecordedApps } from '../../../ci/rollout/live'
 import { merge } from '../../../ci/rollout/merge'
 import type { Report, VerifyResult } from '../../../ci/rollout/types'
 
@@ -16,6 +16,7 @@ const DEMO = JSON.parse(readFileSync(join(import.meta.dirname, 'fixtures/demo-re
 const SHA = 'a'.repeat(40)
 const HEAD = 'b'.repeat(40)
 const MAIN = 'c'.repeat(40)
+const TOOL_SHA = '0123456789abcdef0123456789abcdef01234567'
 
 const dirs: string[] = []
 afterEach(() => {
@@ -308,6 +309,21 @@ describe('live post-merge', () => {
     expect(d.sleeps).toEqual([30_000])
   })
 
+  test('records the tool commit in live-<mode>.json, a STOP included; formatLive prints it first', async () => {
+    const tool = { sha: TOOL_SHA, dirty: false }
+    const dir = siteDir({ apps: { head: MAIN, apps: [app('web', ['nhrk.se'], true)] } })
+    const r = await live(dir, 'post-merge', SHA, { deps: { ...deps().deps, toolVersion: () => tool } })
+    expect(r.status).toBe('pass')
+    expect(r.tool).toEqual(tool)
+    expect(JSON.parse(readFileSync(join(dir, '.rollout/live-post-merge.json'), 'utf8')).tool).toEqual(tool)
+    expect(formatLive('post-merge', r)[0]).toBe('tool: astro-consent @ 0123456')
+    const base = siteDir({ baseline: null, domains: [] })
+    const stop = await live(base, 'baseline', undefined, { deps: { ...deps().deps, toolVersion: () => ({ sha: TOOL_SHA, dirty: true }) } })
+    expect(stop.status).toBe('stop')
+    expect(JSON.parse(readFileSync(join(base, '.rollout/live-baseline.json'), 'utf8')).tool).toEqual({ sha: TOOL_SHA, dirty: true })
+    expect(formatLive('baseline', stop)[0]).toBe('tool: astro-consent @ 0123456 (uncommitted changes)')
+  })
+
   test('a pass deletes the clone\'s node_modules and dist and says so (#23)', async () => {
     const dir = siteDir({ apps: { head: MAIN, apps: [app('web', ['nhrk.se'], true)] } })
     for (const d of ['node_modules/x', 'dist/client']) mkdirSync(join(dir, d), { recursive: true })
@@ -467,6 +483,20 @@ describe('merge', () => {
     expect(r).toMatchObject({ status: 'done', mergeCommit: SHA })
     expect(m.order).toEqual(['gh pr merge', `live post-merge ${SHA}`])
     expect(g.calls.find((c) => c.startsWith('gh pr merge'))).toBe(`gh pr merge 7 -R visionmediahq/nhrk --squash --delete-branch --match-head-commit ${HEAD}`)
+  })
+
+  test('returns the tool of the verify it merged on: the stored one, or the rerun after main moved', async () => {
+    const tool = { sha: TOOL_SHA, dirty: true }
+    const head = { sha: HEAD }
+    const dir = siteDir({ verify: { ...VERIFIED(HEAD), tool } })
+    const g = mergeExec({ head })
+    expect(await merge(dir, 7, { deps: mergeDeps(g.exec, head).deps })).toMatchObject({ status: 'done', tool })
+    const moved = { sha: HEAD }
+    const m = mergeDeps(mergeExec({ moved: true, head: moved }).exec, moved)
+    const fresh = { sha: 'd'.repeat(40), dirty: false }
+    const rerun = m.deps.verify
+    m.deps.verify = async () => ({ ...(await rerun()), tool: fresh })
+    expect(await merge(siteDir({ verify: { ...VERIFIED(HEAD), tool } }), 7, { deps: m.deps })).toMatchObject({ status: 'done', tool: fresh })
   })
 
   test('records before the merge which apps follow main (Ruling 14)', async () => {

@@ -38,6 +38,7 @@ import { currentFlow, fontsCssAt, statePath } from './flows'
 import { type Exec, exec as realExec, tail } from './lib/exec'
 import { originRepo } from './pr'
 import { normaliseReport } from './lib/report'
+import { toolLine, type ToolVersion, toolVersion } from './lib/tool-version'
 import type { Report } from './types'
 import { embedPagesByFetch, hasPackage } from './verify'
 
@@ -67,6 +68,8 @@ export interface LiveResult {
   skipped: string[]
   /** Issue URLs for those apps (opened now or already open). */
   issues: string[]
+  /** The tool commit that ran this live check; optional only for results built by hand (tests). */
+  tool?: ToolVersion
 }
 
 /** The browser side of live, behind one interface so tests can answer it. Never stubbed. */
@@ -90,6 +93,8 @@ export interface LiveDeps {
   /** Coolify, read-only: for the hosts live baseline covers. */
   listApps: () => Promise<App[]>
   deployments: (uuid: string) => Promise<Deployment[]>
+  /** The tool's own commit, recorded in the result (lib/tool-version.ts). */
+  toolVersion: () => ToolVersion
 }
 
 /** The real checks: one Chromium, launched on first use, `stub: false` everywhere. */
@@ -117,6 +122,7 @@ const realDeps = (): LiveDeps => ({
   waitDeployed: (app, sha) => waitDeployed(app, sha),
   listApps: () => listApps(),
   deployments: (uuid) => listDeployments(uuid),
+  toolVersion: () => toolVersion(),
 })
 
 /** CMS admin shells (Ruling 26) never show the banner. */
@@ -241,7 +247,7 @@ export async function live(
   const deps: LiveDeps = { ...realDeps(), ...opts.deps }
   const root = resolve(dir)
   const rollout = join(root, '.rollout')
-  const result: LiveResult = { status: 'stop', lines: [], skipped: [], issues: [] }
+  const result: LiveResult = { status: 'stop', lines: [], skipped: [], issues: [], tool: deps.toolVersion() }
   const reportPath = join(rollout, 'report.json')
   if (!existsSync(reportPath)) throw new Error(`${reportPath} not found: run detect first`)
   const report = normaliseReport(readJson<unknown>(reportPath))
@@ -386,5 +392,5 @@ export async function live(
 
 /** One line per result, as run.ts prints them. */
 export function formatLive(mode: string, r: LiveResult): string[] {
-  return [...r.lines, `live ${mode}: ${r.status.toUpperCase()}${r.reason ? ` (${r.reason})` : ''}`]
+  return [...(r.tool ? [toolLine(r.tool)] : []), ...r.lines, `live ${mode}: ${r.status.toUpperCase()}${r.reason ? ` (${r.reason})` : ''}`]
 }

@@ -60,6 +60,7 @@ import { isRoute, routeOf } from './detect/structure'
 import { dockerCheck } from './docker'
 import { type Exec, exec as realExec, tail } from './lib/exec'
 import { diffLock, diffPackageJson } from './lib/lockfile'
+import { toolLine, type ToolVersion, toolVersion } from './lib/tool-version'
 import { isUp, type Preview, previewLog, ssrEntry, startPreview } from './preview'
 import { type Flow, FLOWS, flowOf, FONTS_MARKER, isToolFontsCss, statePath, STEPS, type StepName } from './flows'
 import type { Report, StepResult, VerifyResult } from './types'
@@ -106,6 +107,8 @@ export interface VerifyDeps {
   isUp: (url: string) => Promise<boolean>
   /** Step 8 asks Google's css2 URL (from fonts.css) which characters its faces offer; tests answer it. */
   fontFetch: FontFetch
+  /** The tool's own commit, recorded in the result (lib/tool-version.ts). */
+  toolVersion: () => ToolVersion
 }
 
 export interface VerifyOptions {
@@ -187,6 +190,7 @@ const realDeps = (): VerifyDeps => ({
   },
   isUp,
   fontFetch: httpFetch,
+  toolVersion: () => toolVersion(),
 })
 
 const firstLine = (e: unknown): string => (e instanceof Error ? e.message : String(e)).split('\n')[0]!
@@ -313,16 +317,17 @@ export async function verify(dir: string, report: Report, opts: VerifyOptions = 
   for (const d of [evidenceDir, shotsDir]) rmSync(d, { recursive: true, force: true })
   mkdirSync(evidenceDir, { recursive: true })
 
+  const tool = deps.toolVersion()
   const steps: StepResult[] = []
   const record = (step: number, name: string, o: Outcome): boolean => {
     const evidence = o.lines.join('\n')
-    writeFileSync(join(evidenceDir, `${step}-${name}.txt`), `${evidence}\n`)
+    writeFileSync(join(evidenceDir, `${step}-${name}.txt`), `${toolLine(tool)}\n\n${evidence}\n`)
     steps.push({ step, name, pass: o.pass, evidence, ...(o.skipped ? { skipped: true } : {}) })
     return o.pass
   }
   const restarts: string[] = []
   const finish = (): VerifyResult => {
-    const result: VerifyResult = { pass: steps.length > 0 && steps.every((s) => s.pass), sha, steps, ...(restarts.length ? { restarts } : {}) }
+    const result: VerifyResult = { pass: steps.length > 0 && steps.every((s) => s.pass), sha, tool, steps, ...(restarts.length ? { restarts } : {}) }
     writeFileSync(statePath(out, VERIFY_FILE, BRANCH), `${JSON.stringify(result, null, 2)}\n`)
     return result
   }
@@ -825,6 +830,18 @@ function headSha(out: string, branch: string): string {
     if (ref === `refs/heads/${branch}`) return sha ?? ''
   }
   return ''
+}
+
+/** What run.ts prints: the tool line, each step with its evidence, then formatVerify. */
+export function verifyOutput(result: VerifyResult): string[] {
+  return [
+    toolLine(result.tool),
+    ...result.steps.flatMap((s) => [
+      `--- step ${s.step} ${s.name}: ${s.skipped ? 'skipped' : s.pass ? 'pass' : 'FAIL'}`,
+      ...(s.skipped ? [] : [s.evidence.replace(/^/gm, '  ')]),
+    ]),
+    ...formatVerify(result),
+  ]
 }
 
 /** One line per step, as run.ts prints them. */
