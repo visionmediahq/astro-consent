@@ -374,3 +374,40 @@ describe('review of #76: the banner property and fail-closed edges', () => {
     expect(steps(await verify(dom, report(), { deps: hidden.deps })).at(-1)).toEqual([8, 'fonts', 'FAIL'])
   })
 })
+
+describe('step 8 skips CMS admin shells (lj-trim)', () => {
+  // public/admin/index.html loads Sveltia CMS from unpkg, which asks Google Fonts for the editor UI.
+  const ADMIN = '<!doctype html><html><head><script src="https://unpkg.com/@sveltia/cms@0.165.2/dist/sveltia-cms.js"></script></head><body></body></html>'
+  const googleOn =
+    (bad: string): Checks['fonts'] =>
+    async (_b, paths, opts) =>
+      paths.flatMap((p) => (opts?.widths ?? [360, 1280]).map((w) => okPage(p, w, p === bad ? { google: ['https://fonts.googleapis.com/css2?family=Merriweather+Sans'] } : {})))
+
+  test('Google requests only on /admin/: step 8 passes on the branch and against the container, /admin/ shown as skipped', async () => {
+    const dir = siteDir({ 'src/styles/fonts.css': FONTS_CSS, 'dist/admin/index.html': ADMIN })
+    const asked: string[][] = []
+    const fonts: Checks['fonts'] = async (b, paths, opts) => (asked.push(paths), googleOn('/admin/')(b, paths, opts))
+    const f = fake({ checks: { pages: async () => ['/', '/admin/', '/finns-inte-x'], fonts } })
+    const r = await verify(dir, report(), { deps: f.deps })
+    expect(steps(r).slice(-2)).toEqual([
+      [8, 'fonts', 'pass'],
+      [9, 'docker', 'pass'],
+    ])
+    expect(asked).toEqual([
+      ['/', '/finns-inte-x'],
+      ['/', '/finns-inte-x'],
+    ])
+    const text = evidence(dir, 'fonts-selfhost', '8-fonts.txt')
+    expect(text).toContain('/admin/: skipped (CMS admin shell, third-party editor fonts)')
+    expect(text).toContain('dist/: no Google Fonts host outside comments')
+    expect(evidence(dir, 'fonts-selfhost', '9-docker.txt')).toContain('  /admin/: skipped (CMS admin shell, third-party editor fonts)')
+  })
+
+  test('control: a Google request on / still fails step 8', async () => {
+    const dir = siteDir()
+    const f = fake({ checks: { pages: async () => ['/', '/admin/', '/finns-inte-x'], fonts: googleOn('/') } })
+    const r = await verify(dir, report(), { deps: f.deps })
+    expect(steps(r).at(-1)).toEqual([8, 'fonts', 'FAIL'])
+    expect(evidence(dir, 'fonts-selfhost', '8-fonts.txt')).toMatch(/request\(s\) to Google Fonts/)
+  })
+})
