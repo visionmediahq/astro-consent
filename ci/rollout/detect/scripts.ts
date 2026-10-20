@@ -224,30 +224,60 @@ const AGREED_SCRIPT_HOSTS: { host: string; path?: string; reason: string }[] = [
 const ADMIN_SHELL = /^(?:public|src\/pages)\/admin(?:\/|\.)/
 
 /**
- * Remote modules a script body imports, at the start of a statement: `import 'https://…'`,
+ * Remote modules a script body imports, one statement start per line: `import 'https://…'`,
  * `import a from "//…"`, `} from '…'` closing a multi-line list, `export * from '…'`,
  * `await import('https://…')`. Block comments are cut first; a line comment or a string that only
  * mentions an import does not start a statement.
  */
 const REMOTE_IMPORTS = [
-  /^[ \t]*(?:(?:(?:const|let|var)\s+)?[\w$.]+\s*=\s*)?(?:await\s+)?import\s*\(?\s*(['"])((?:https?:)?\/\/[^'"]+)\1/gm,
-  /^[ \t]*(?:(?:import|export)\b[^'"\n]*|\}[^'"\n]*)\bfrom\s*(['"])((?:https?:)?\/\/[^'"]+)\1/gm,
+  /^[ \t]*(?:(?:(?:const|let|var)\s+)?[\w$.]+\s*=\s*)?(?:await\s+)?import\s*\(?\s*(['"])((?:https?:)?\/\/[^'"]+)\1/,
+  /^[ \t]*(?:(?:import|export)\b[^'"\n]*|\}[^'"\n]*)\bfrom\s*(['"])((?:https?:)?\/\/[^'"]+)\1/,
 ]
-const remoteImports = (body: string): string[] => {
-  const code = body.replace(/\/\*[\s\S]*?\*\//g, '')
-  return REMOTE_IMPORTS.flatMap((re) => [...code.matchAll(re)].map((m) => m[2]!))
+
+/**
+ * Longest line or tag read. These regexes backtrack, and a minified or broken file is one huge
+ * line: past this it is skipped, so a 1 MB file costs linear time, not minutes.
+ */
+const MAX_SPAN = 4000
+
+/** `text` without the stretches from `open` to `close`; an unterminated one runs to the end, as a browser reads it. Linear. */
+function withoutSpans(text: string, open: string, close: string): string {
+  let out = ''
+  let i = 0
+  for (;;) {
+    const start = text.indexOf(open, i)
+    if (start === -1) return out + text.slice(i)
+    out += text.slice(i, start)
+    const end = text.indexOf(close, start + open.length)
+    if (end === -1) return out
+    i = end + close.length
+  }
 }
 
-/** `<script … src=…>` in a plain HTML file: the tag's attributes, once comments are cut. */
-const HTML_SCRIPT_TAG = /<script\b([^>]*)>/gi
-const HTML_COMMENT = /<!--[\s\S]*?-->/g
-const htmlScriptSrcs = (html: string): string[] =>
-  [...html.replace(HTML_COMMENT, '').matchAll(HTML_SCRIPT_TAG)].flatMap((m) => {
-    const attrs = m[1]!
-    if (/\btype\s*=\s*["']?[^"'\s>]*json/i.test(attrs)) return []
+const remoteImports = (body: string): string[] =>
+  withoutSpans(body, '/*', '*/')
+    .split('\n')
+    .flatMap((line) => (line.length > MAX_SPAN ? [] : REMOTE_IMPORTS.flatMap((re) => re.exec(line)?.[2] ?? [])))
+
+/** `src` of the `<script>` tags in a plain HTML file, HTML comments cut and JSON data scripts left out. */
+function htmlScriptSrcs(html: string): string[] {
+  const text = withoutSpans(html, '<!--', '-->')
+  const lower = text.toLowerCase()
+  const out: string[] = []
+  let i = 0
+  for (;;) {
+    const start = lower.indexOf('<script', i)
+    if (start === -1) return out
+    const end = lower.indexOf('>', start)
+    if (end === -1) return out
+    i = end
+    const attrs = text.slice(start + '<script'.length, end)
+    if (attrs.length > MAX_SPAN || /^[\w-]/.test(attrs)) continue
+    if (/\btype\s*=\s*["']?[^"'\s>]*json/i.test(attrs)) continue
     const src = /\bsrc\s*=\s*["']?((?:https?:)?\/\/[^"'\s>]+)/i.exec(attrs)
-    return src ? [src[1]!] : []
-  })
+    if (src) out.push(src[1]!)
+  }
+}
 
 /** The hosts, outside the registry and the agreed list, that these absolute URLs load scripts from. */
 function unregisteredHosts(urls: string[]): string[] {
@@ -261,7 +291,7 @@ function unregisteredHosts(urls: string[]): string[] {
     } catch {
       continue
     }
-    const host = parsed.hostname.toLowerCase()
+    const host = parsed.hostname.toLowerCase().replace(/\.+$/, '')
     if (AGREED_SCRIPT_HOSTS.some((a) => a.host === host && (a.path === undefined || parsed.pathname.startsWith(a.path)))) continue
     if (!out.includes(host)) out.push(host)
   }

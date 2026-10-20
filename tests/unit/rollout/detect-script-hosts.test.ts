@@ -125,6 +125,31 @@ describe('detectScripts: scripts from hosts outside the registry (#36)', () => {
     expect(hostsOf({ 'src/pages/sv/admin/x.astro': '<script src="https://widget.example/x.js"></script>\n' })).toEqual(['widget.example src/pages/sv/admin/x.astro'])
   })
 
+  test('a trailing dot on the host is dropped, so the site-own check and the list still match', () => {
+    expect(hostsOf({ 'src/layouts/Base.astro': page('<script src="https://dot.example./a.js"></script>') })).toEqual(['dot.example src/layouts/Base.astro'])
+    expect(hostsOf({ 'src/layouts/Base.astro': page('<script src="https://browser.sentry-cdn.com./8/bundle.min.js"></script>') })).toEqual([])
+  })
+
+  test('an unterminated HTML comment hides the rest of a plain HTML file, as a browser reads it', () => {
+    expect(hostsOf({ 'public/a.html': '<!-- never closed\n<script src="https://x.example/a.js"></script>\n' })).toEqual([])
+  })
+
+  // Real files never look like this, but a minified or broken file under public/ must not stall detect.
+  test.each([
+    ['/* without */ in a script body', (n: number) => ({ 'src/components/W.astro': `<script>${'/*\n'.repeat(n)}</script>` })],
+    ['one long line of from in a script body', (n: number) => ({ 'src/components/W.astro': `<script>import ${'from '.repeat(n)}</script>` })],
+    ['<script without a >', (n: number) => ({ 'public/a.html': '<script '.repeat(n) })],
+    ['<!-- without -->', (n: number) => ({ 'public/a.html': '<!--'.repeat(n) })],
+    ['a src that never closes', (n: number) => ({ 'public/a.html': '<script src="https://a'.repeat(n) })],
+    ['import in a script body', (n: number) => ({ 'src/components/W.astro': `<script>${'import '.repeat(n)}</script>` })],
+  ])('1 MB of %s is read in linear time', (_, make) => {
+    const files = make(Math.ceil(1_000_000 / 8))
+    const site = inline(files)
+    const t = Date.now()
+    detectScripts(site)
+    expect(Date.now() - t).toBeLessThan(2000)
+  })
+
   test('an agreed host is not listed: error reporting through Sentry\'s CDN', () => {
     expect(
       hostsOf({
