@@ -2,11 +2,12 @@
 
 ## 1.1.4
 
-- Fix: the banner's settings toggles have an explicit `border-base-content/60` boundary, like the
-  placeholder checkbox since 1.1.3. DaisyUI paints a checked `toggle-primary`'s boundary in the
-  primary colour, which on a pale primary is under WCAG 1.4.11's 3:1 against the banner (1.6:1
-  for `#f5c518`). 1.1.3's toggle test measured the unchecked state only; it now measures both
-  states on a pale primary (#52).
+- Fix: the banner's settings toggles have an explicit boundary, `border-base-content/60` unchecked
+  (like the placeholder checkbox since 1.1.3) and full `base-content` checked (as DaisyUI's
+  uncoloured toggle has it). DaisyUI paints a checked `toggle-primary`'s boundary in the primary
+  colour, which on a pale primary is under WCAG 1.4.11's 3:1 against the banner (1.6:1 for
+  `#f5c518`). 1.1.3's toggle test measured the unchecked state only; it now measures both states
+  on a pale primary (#52).
 - Test: the fixed-bar test uses a placeholder phone number, not one copied from a client site.
 - README: the contrast notes say z-99 for the banner, as it has been since 1.1.3.
 - No wording change: `CONSENT_VERSION` is unchanged and no visitor is asked again.

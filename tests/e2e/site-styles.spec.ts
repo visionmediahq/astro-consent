@@ -137,12 +137,15 @@ test.describe('control boundaries are 3:1', () => {
     })
     const toggles = banner(page).locator('form[data-consent-settings] input[type="checkbox"]:not(:disabled)')
     expect(await toggles.count()).toBeGreaterThan(2)
+    // Checked, the ring is base-content at full strength, as DaisyUI's own uncoloured toggle has it.
+    const { fg: baseContent } = await painted(banner(page), 'color')
     for (const toggle of await toggles.all()) {
       const name = await toggle.getAttribute('name')
       for (const checked of [false, true]) {
         await toggle.setChecked(checked)
         const [ratio, what] = await contrast(toggle, 'border-top-color')
         expect(ratio, `${name} ${checked ? 'checked' : 'unchecked'}: ${what}`).toBeGreaterThanOrEqual(3)
+        if (checked) expect((await painted(toggle, 'border-top-color')).fg, `${name} checked ring`).toBe(baseContent)
       }
     }
   })

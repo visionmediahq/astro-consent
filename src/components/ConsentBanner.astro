@@ -80,7 +80,8 @@ const servicesIn = (category: Category): ServiceSlug[] =>
                     </span>
                   </span>
                   {/* Toggles get an explicit boundary (WCAG 1.4.11): DaisyUI's is base-content at 50 %
-                      unchecked and the primary colour once checked, and a pale primary is under 3:1 on base-100. */}
+                      unchecked and the primary colour once checked, and a pale primary is under 3:1 on
+                      base-100. Checked, the ring is full base-content, as DaisyUI's uncoloured toggle has it. */}
                   {category === 'necessary' ? (
                     <span class="flex shrink-0 items-center gap-2">
                       <span class="badge badge-neutral badge-sm">{sv.consent.alwaysOn}</span>
@@ -89,7 +90,7 @@ const servicesIn = (category: Category): ServiceSlug[] =>
                   ) : (
                     <input
                       type="checkbox"
-                      class="toggle toggle-primary toggle-sm shrink-0 border-base-content/60"
+                      class="toggle toggle-primary toggle-sm shrink-0 border-base-content/60 checked:border-base-content"
                       name={category}
                     />
                   )}
@@ -103,7 +104,7 @@ const servicesIn = (category: Category): ServiceSlug[] =>
                     <span class="text-xs">{sv.consent.serviceRow.replace('{name}', SERVICES[slug].name)}</span>
                     <input
                       type="checkbox"
-                      class="toggle toggle-xs shrink-0 border-base-content/60"
+                      class="toggle toggle-xs shrink-0 border-base-content/60 checked:border-base-content"
                       name={`service:${slug}`}
                     />
                   </label>
