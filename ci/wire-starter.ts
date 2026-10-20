@@ -3,7 +3,7 @@
 // Usage: npx tsx ci/wire-starter.ts <starter dir>
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { pathToFileURL } from 'node:url'
+import { isEntryScript } from './rollout/lib/is-entry'
 
 const PKG = '@visionmediahq/astro-consent'
 
@@ -83,7 +83,7 @@ function main(dir: string): void {
   }
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (isEntryScript(import.meta.url, process.argv[1])) {
   const dir = process.argv[2]
   if (!dir) {
     console.error('usage: tsx ci/wire-starter.ts <starter dir>')

@@ -10,7 +10,7 @@
 // relative files without packages only, so it runs with tsx alone (the unit test pins this).
 import { accessSync, constants, existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
-import { pathToFileURL } from 'node:url'
+import { isEntryScript } from './lib/is-entry'
 import { diskSite } from './lib/site-files'
 import { applyEdits } from './wire/engine'
 import { FONTS_CSS, FONTS_DIR, type FontFetch, importEdit, selfHostFonts } from './wire/fonts-host'
@@ -178,6 +178,6 @@ export async function main(argv: string[], opts: FontsFilesOptions = {}): Promis
   }
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (isEntryScript(import.meta.url, process.argv[1])) {
   process.exit(await main(process.argv.slice(2)))
 }
