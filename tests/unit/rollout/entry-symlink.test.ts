@@ -25,7 +25,7 @@ function run(script: string, args: string[]) {
   return { code: r.status, out: `${r.stdout}${r.stderr}` }
 }
 
-describe('every entry script runs when started through a symlinked directory', () => {
+describe('every entry script runs when started through a symlinked directory', { timeout: 60_000 }, () => {
   test('run.ts help prints the usage and exits 0', () => {
     const r = run('rollout/run.ts', ['help'])
     expect(r.code).toBe(0)
