@@ -65,7 +65,7 @@ test.describe('site styles', () => {
     await expect(banner(page)).toBeVisible()
     await page.evaluate(() => {
       const bar = document.createElement('a')
-      bar.textContent = '0142-425 25'
+      bar.textContent = '000-000 00 00'
       bar.setAttribute('style', 'position:fixed;left:0;right:0;bottom:0;height:60vh;z-index:98;background:#ddd')
       document.body.append(bar)
     })
@@ -124,10 +124,12 @@ test.describe('control boundaries are 3:1', () => {
     expect(ratio, what).toBeGreaterThanOrEqual(3)
   })
 
-  test('the banner settings toggles', async ({ page, context }) => {
+  // A checked toggle-primary paints its boundary in the primary colour. Pale primaries are common
+  // in the pool (the buttons get black text for them): this one is about 1.6:1 on white.
+  test('the banner settings toggles, unchecked and checked, on a pale primary', async ({ page, context }) => {
     await stub(context)
     await page.goto('/')
-    await page.addStyleTag({ content: noTransitions })
+    await page.addStyleTag({ content: `${noTransitions} :root { --color-primary: #f5c518 }` })
     await action(page, 'settings').click()
     // Service rows show only once granted; show them unticked to measure them too.
     await page.evaluate(() => {
@@ -137,8 +139,11 @@ test.describe('control boundaries are 3:1', () => {
     expect(await toggles.count()).toBeGreaterThan(2)
     for (const toggle of await toggles.all()) {
       const name = await toggle.getAttribute('name')
-      const [ratio, what] = await contrast(toggle, 'border-top-color')
-      expect(ratio, `${name}: ${what}`).toBeGreaterThanOrEqual(3)
+      for (const checked of [false, true]) {
+        await toggle.setChecked(checked)
+        const [ratio, what] = await contrast(toggle, 'border-top-color')
+        expect(ratio, `${name} ${checked ? 'checked' : 'unchecked'}: ${what}`).toBeGreaterThanOrEqual(3)
+      }
     }
   })
 })

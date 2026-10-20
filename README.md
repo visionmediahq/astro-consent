@@ -355,7 +355,7 @@ npx tsx ci/rollout/run.ts help
   proof: up to 0.2 of white grain over a background can lift or lower a borderline ratio (white text
   on #767676 measures 4.54:1 ok under 0.2 white grain that brightens it), so a row within a few
   hundredths of 4.5 on a grain site deserves a look at the screenshot. A higher z-index around the text is not taken as proof that it paints above a
-  pseudo-element: a solid fixed overlay counts even under the z-50 banner. Scrolling elsewhere is
+  pseudo-element: a solid fixed overlay counts even under the z-99 banner. Scrolling elsewhere is
   already in both boxes; the pseudo-element's own element scrolled is indeterminate.
 - The contrast step scrolls each page through and back (as step 3 does) and waits for finite
   animations to finish: the starter's `[data-animate]` is `opacity: 0` until Motion's `inView` fades
