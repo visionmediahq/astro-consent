@@ -130,6 +130,10 @@ const MEASURE = `(() => {
   const pseudoOver = (e, pseudo, text, exempt) => {
     const p = getComputedStyle(e, pseudo)
     if (p.content === 'none' || p.content === 'normal' || !/absolute|fixed/.test(p.position)) return false
+    // A pseudo switched off (jokkmoks-lbc's modifier class) still computes position and background, but
+    // paints nothing: display none, visibility hidden, or opacity 0 that no animation of it can change.
+    if (p.display === 'none' || /hidden|collapse/.test(p.visibility)) return false
+    if (Number(p.opacity) === 0 && !document.getAnimations().some((a) => a.effect && a.effect.target === e && a.effect.pseudoElement === pseudo)) return false
     if (exempt && parseInt(p.zIndex, 10) < 0) return false
     const paint = paintOf(p)
     if (paint === 'none') return false
