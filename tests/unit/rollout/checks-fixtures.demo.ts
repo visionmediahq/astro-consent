@@ -156,6 +156,7 @@ const FIXTURES: Record<string, string> = {
   hairline: page(`<style>footer{position:relative;background:#00375f;padding:24px}footer::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,#f00,#00f)}a{position:relative;color:#fff}a::after{content:'';position:absolute;left:0;bottom:-2px;width:0;height:2px;background:#fff}</style><footer><div data-privacy-links><a href="/integritet">Integritetspolicy</a></div></footer>`),
   // A white ::before at z-index -1 inside an isolated black footer paints over the black, under the
   // white text; a near-white overlay on a positioned section around a non-positioned black footer.
+  pseudohidden: page(`<style>footer{background:#000;position:relative;padding:24px}footer::before{content:'';position:absolute;inset:0;background:#fff}footer.flat::before{display:none}</style><footer class="flat"><div data-privacy-links><a href="/integritet" style="color:#fff">Integritetspolicy</a></div></footer>`),
   pseudoneg: page(`<style>footer{background:#000;position:relative;isolation:isolate;padding:24px}footer::before{content:'';position:absolute;inset:0;background:#fff;z-index:-1}</style><footer><div data-privacy-links><a href="/integritet" style="color:#fff">Integritetspolicy</a></div></footer>`),
   pseudoup: page(`<style>section{position:relative}section::before{content:'';position:absolute;inset:0;background:rgba(255,255,255,.95)}footer{background:#000;padding:24px}</style><section><footer><div data-privacy-links><a href="/integritet" style="color:#fff">Integritetspolicy</a></div></footer></section>`),
   // Round 3. ernstedt: a fixed feTurbulence grain over everything at z-index 1, under a z-50 banner.
@@ -399,6 +400,8 @@ try {
     )
     const hair = await links('/hairline/')
     expect(hair.length === 1 && hair.every((r) => r.ok && !r.indeterminate), '/hairline/ a 1px ::before hairline and a width-0 a::after underline are not over the text (ahatrafikskola)', hair)
+    const hidden = await links('/pseudohidden/')
+    expect(hidden.length === 1 && hidden.every((r) => r.ok && !r.indeterminate), '/pseudohidden/ a white ::before overlay switched off with display: none paints nothing (jokkmoks-lbc)', hidden)
     for (const [path, what] of [['/pseudoneg/', 'a z-index -1 ::before inside an isolated footer'], ['/pseudoup/', 'an overlay ::before on a positioned ancestor above the opaque footer']] as const) {
       const rows = await links(path)
       expect(rows.length === 1 && rows.every((r) => !r.ok && r.indeterminate === 'effect on the text or its background: positioned ::before with a background'), `${path} ${what} is over the text: indeterminate`, rows)

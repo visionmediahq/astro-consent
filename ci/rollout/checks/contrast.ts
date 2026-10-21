@@ -129,7 +129,8 @@ const MEASURE = `(() => {
   // where a negative z-index paints below that layer's in-flow background.
   const pseudoOver = (e, pseudo, text, exempt) => {
     const p = getComputedStyle(e, pseudo)
-    if (p.content === 'none' || p.content === 'normal' || !/absolute|fixed/.test(p.position)) return false
+    // display: none (a modifier class switching a decorative overlay off) still computes position and background.
+    if (p.display === 'none' || p.content === 'none' || p.content === 'normal' || !/absolute|fixed/.test(p.position)) return false
     if (exempt && parseInt(p.zIndex, 10) < 0) return false
     const paint = paintOf(p)
     if (paint === 'none') return false
