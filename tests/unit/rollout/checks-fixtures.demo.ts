@@ -156,9 +156,15 @@ const FIXTURES: Record<string, string> = {
   hairline: page(`<style>footer{position:relative;background:#00375f;padding:24px}footer::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,#f00,#00f)}a{position:relative;color:#fff}a::after{content:'';position:absolute;left:0;bottom:-2px;width:0;height:2px;background:#fff}</style><footer><div data-privacy-links><a href="/integritet">Integritetspolicy</a></div></footer>`),
   // A white ::before at z-index -1 inside an isolated black footer paints over the black, under the
   // white text; a near-white overlay on a positioned section around a non-positioned black footer.
-  pseudohidden: page(`<style>footer{background:#000;position:relative;padding:24px}footer::before{content:'';position:absolute;inset:0;background:#fff}footer.flat::before{display:none}</style><footer class="flat"><div data-privacy-links><a href="/integritet" style="color:#fff">Integritetspolicy</a></div></footer>`),
   pseudoneg: page(`<style>footer{background:#000;position:relative;isolation:isolate;padding:24px}footer::before{content:'';position:absolute;inset:0;background:#fff;z-index:-1}</style><footer><div data-privacy-links><a href="/integritet" style="color:#fff">Integritetspolicy</a></div></footer>`),
   pseudoup: page(`<style>section{position:relative}section::before{content:'';position:absolute;inset:0;background:rgba(255,255,255,.95)}footer{background:#000;padding:24px}</style><section><footer><div data-privacy-links><a href="/integritet" style="color:#fff">Integritetspolicy</a></div></footer></section>`),
+  // jokkmoks-lbc: a white overlay ::before switched off by a modifier class paints nothing, however
+  // it is switched off; without the modifier, or with an opacity animation that may show it, it counts.
+  pseudohidden: page(`<style>footer{background:#000;position:relative;padding:24px}footer::before{content:'';position:absolute;inset:0;background:#fff}footer.flat::before{display:none}</style><footer class="flat"><div data-privacy-links><a href="/integritet" style="color:#fff">Integritetspolicy</a></div></footer>`),
+  pseudoinvisible: page(`<style>footer{background:#000;position:relative;padding:24px}footer::before{content:'';position:absolute;inset:0;background:#fff}footer.flat::before{visibility:hidden}</style><footer class="flat"><div data-privacy-links><a href="/integritet" style="color:#fff">Integritetspolicy</a></div></footer>`),
+  pseudotransparent: page(`<style>footer{background:#000;position:relative;padding:24px}footer::before{content:'';position:absolute;inset:0;background:#fff}footer.flat::before{opacity:0;transition:opacity .2s}</style><footer class="flat"><div data-privacy-links><a href="/integritet" style="color:#fff">Integritetspolicy</a></div></footer>`),
+  pseudoshown: page(`<style>footer{background:#000;position:relative;padding:24px}footer::before{content:'';position:absolute;inset:0;background:#fff}footer.flat::before{display:none}</style><footer><div data-privacy-links><a href="/integritet" style="color:#fff">Integritetspolicy</a></div></footer>`),
+  pseudopulse: page(`<style>footer{background:#000;position:relative;padding:24px}footer::before{content:'';position:absolute;inset:0;background:#fff}@keyframes pulse{50%{opacity:1}}footer.flat::before{opacity:0;animation:pulse 2s infinite}</style><footer class="flat"><div data-privacy-links><a href="/integritet" style="color:#fff">Integritetspolicy</a></div></footer>`),
   // Round 3. ernstedt: a fixed feTurbulence grain over everything at z-index 1, under a z-50 banner.
   grain: page(`<style>body::after{content:'';position:fixed;inset:0;z-index:1;pointer-events:none;opacity:.055;mix-blend-mode:multiply;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}</style>${banner('position:fixed;bottom:0;left:0;right:0;background:#fff;padding:8px;z-index:50')}<footer style="background:#000;padding:24px"><div data-privacy-links><a href="/integritet" style="color:#fff">Integritetspolicy</a></div></footer>`),
   // A solid fixed overlay at z-index 1: the z-50 banner paints above it, a footer below the fold does
@@ -400,8 +406,14 @@ try {
     )
     const hair = await links('/hairline/')
     expect(hair.length === 1 && hair.every((r) => r.ok && !r.indeterminate), '/hairline/ a 1px ::before hairline and a width-0 a::after underline are not over the text (ahatrafikskola)', hair)
-    const hidden = await links('/pseudohidden/')
-    expect(hidden.length === 1 && hidden.every((r) => r.ok && !r.indeterminate), '/pseudohidden/ a white ::before overlay switched off with display: none paints nothing (jokkmoks-lbc)', hidden)
+    for (const [path, what] of [['/pseudohidden/', 'display: none'], ['/pseudoinvisible/', 'visibility: hidden'], ['/pseudotransparent/', 'opacity: 0 at rest']] as const) {
+      const rows = await links(path)
+      expect(rows.length === 1 && rows.every((r) => r.ok && !r.indeterminate), `${path} a white ::before overlay switched off with ${what} paints nothing (jokkmoks-lbc)`, rows)
+    }
+    for (const [path, what] of [['/pseudoshown/', 'the same overlay without the modifier'], ['/pseudopulse/', 'an overlay at opacity 0 under an infinite opacity animation']] as const) {
+      const rows = await links(path)
+      expect(rows.length === 1 && rows.every((r) => !r.ok && r.indeterminate === 'effect on the text or its background: positioned ::before with a background'), `${path} ${what} is over the text: indeterminate`, rows)
+    }
     for (const [path, what] of [['/pseudoneg/', 'a z-index -1 ::before inside an isolated footer'], ['/pseudoup/', 'an overlay ::before on a positioned ancestor above the opaque footer']] as const) {
       const rows = await links(path)
       expect(rows.length === 1 && rows.every((r) => !r.ok && r.indeterminate === 'effect on the text or its background: positioned ::before with a background'), `${path} ${what} is over the text: indeterminate`, rows)
