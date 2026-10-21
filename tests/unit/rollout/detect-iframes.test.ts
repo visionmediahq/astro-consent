@@ -231,7 +231,6 @@ describe('detectIframes: synthetic cases', () => {
     const r = detectIframes(inline({ 'src/components/Map.astro': text }), ['x.se'])
     expect(r.iframes[0]).toMatchObject({ srcKind: 'expression', src: null, service: 'google-maps' })
     expect(r.iframes[0]!.host).toMatch(/^(maps|www)\.google\.com$/)
-    expect(r.iframes[0]!.callSites).toBeUndefined()
   })
 
   test('a template literal without substitutions and a const identifier resolve as expressions', () => {
@@ -405,6 +404,38 @@ describe('detectIframes: fails closed (review round 1)', () => {
       [],
     )
     expect(r.iframes[0]).toMatchObject({ srcKind: 'unresolved', src: null })
+  })
+
+  test('a prop-driven template literal src keeps its call sites, so verify knows the pages', () => {
+    const r = detectIframes(
+      inline({
+        'src/components/Map.astro': "---\nconst { address } = Astro.props\n---\n<iframe src={`https://maps.google.com/maps?q=${encodeURIComponent(address)}&output=embed`} title=\"t\"></iframe>\n",
+        'src/pages/kontakt.astro': "---\nimport Map from '../components/Map.astro'\n---\n<Map address=\"Storgatan 1\" />\n",
+      }),
+      ['x.se'],
+    )
+    expect(r.iframes[0]).toMatchObject({ srcKind: 'expression', src: null, service: 'google-maps', callSites: [{ file: 'src/pages/kontakt.astro', src: null }] })
+  })
+
+  test("a made-up pb= in a template literal's literal start is still reported", () => {
+    const head = ATAK_PB.slice(0, ATAK_PB.indexOf('!5m2'))
+    const r = detectIframes(
+      inline({ 'src/components/Map.astro': `---\nconst { lang } = Astro.props\n---\n<iframe src={\`${head}!5m2!1s\${lang}\`} title="t"></iframe>\n` }),
+      ['x.se'],
+    )
+    expect(r.iframes[0]).toMatchObject({ srcKind: 'expression', service: 'google-maps' })
+    expect(r.inventedMaps).toEqual([`${head}!5m2!1s`])
+  })
+
+  test('a template literal built from a data file names the data file', () => {
+    const r = detectIframes(
+      inline({
+        'src/data/site.json': '{ "address": "Storgatan 1" }',
+        'src/pages/index.astro': "---\nimport site from '../data/site.json'\n---\n<iframe src={`https://www.google.com/maps?q=${site.address}&output=embed`} title=\"t\"></iframe>\n",
+      }),
+      ['x.se'],
+    )
+    expect(r.iframes[0]).toMatchObject({ srcKind: 'data-file', dataPath: 'src/data/site.json', src: 'https://www.google.com/maps?q=Storgatan 1&output=embed' })
   })
 
   test.each([

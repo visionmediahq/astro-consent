@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { attr, components, elements, parseAstro } from '../../../ci/rollout/lib/astro-ast'
+import { attr, blankComments, components, elements, parseAstro } from '../../../ci/rollout/lib/astro-ast'
 
 describe('parseAstro', () => {
   test('element offsets slice the element exactly', () => {
@@ -95,5 +95,34 @@ describe('parseAstro', () => {
 
   test('a parse error throws with the compiler message', () => {
     expect(() => parseAstro('<div><iframe src="x"></div')).toThrow(/Expected/)
+  })
+
+  // compiler-rs rejects an HTML comment between `(` and the element in a `{…}` conditional; Astro's
+  // own compiler builds it (anab, fonsterdekor, nnf).
+  const CONDITIONAL = '{wide ? (\n  <!-- wide -->\n  <iframe src="https://maps.google.com/maps?q=a&output=embed" title="a"></iframe>\n) : (\n  <!-- narrow -->\n  <p>x</p>\n)}\n'
+
+  test('an HTML comment inside a {…} conditional parses, offsets kept', () => {
+    const text = `---\nconst wide = true\n---\n<section>${CONDITIONAL}</section>\n`
+    const { root, frontmatter } = parseAstro(text)
+    const [iframe] = elements(root, 'iframe')
+    expect(iframe && text.slice(iframe.start, iframe.end)).toBe('<iframe src="https://maps.google.com/maps?q=a&output=embed" title="a"></iframe>')
+    expect(frontmatter?.text).toBe('\nconst wide = true\n')
+  })
+
+  test('the retry blanks markup comments only: frontmatter, script and style keep theirs', () => {
+    const script = "<script>\n  const a = '<!--'\n  load('https://www.googletagmanager.com/gtag/js')\n  const b = '-->'\n</script>\n"
+    const front = "---\nconst c = '<!-- x -->'\n---\n"
+    const style = '<style>/* <!-- */ .a { color: red } /* --> */</style>\n'
+    const text = front + CONDITIONAL + script + style
+    const blanked = blankComments(text)
+    expect(blanked).toHaveLength(text.length)
+    expect(blanked.startsWith(front)).toBe(true)
+    expect(blanked.endsWith(script + style)).toBe(true)
+    expect(blanked).not.toContain('<!-- wide -->')
+    expect(elements(parseAstro(text).root, 'script')).toHaveLength(1)
+  })
+
+  test('an escaped quote inside an attribute still throws (byggk, bringekonomi)', () => {
+    expect(() => parseAstro('<div style="background: url(\\"data:image/svg+xml,%3Csvg xmlns=\\"http://www.w3.org/2000/svg\\"%3E%3C/svg%3E\\")"></div>\n')).toThrow(/Astro parse error/)
   })
 })

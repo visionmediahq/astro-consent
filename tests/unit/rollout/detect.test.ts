@@ -609,41 +609,17 @@ describe('detect', () => {
     expect(r.reasons.filter((x) => x.startsWith('parse error in src/pages/broken.astro: '))).toHaveLength(1)
   })
 
-  // compiler-rs rejects both; Astro's own compiler builds them (anab, fonsterdekor, nnf; byggk, bringekonomi).
-  const COMMENT_IN_EXPR =
-    "---\nimport { Image } from 'astro:assets'\nconst wide = true\n---\n<section>\n  {wide ? (\n    <!-- wide: image right -->\n    <div class=\"a\" />\n  ) : (\n    <!-- narrow -->\n    <div class=\"b\" />\n  )}\n</section>\n"
-  const ESCAPED_QUOTE =
-    '<div style="background-image: url(\\"data:image/svg+xml,%3Csvg xmlns=\\"http://www.w3.org/2000/svg\\" width=\\"60\\"%3E%3C/svg%3E\\")"></div>\n'
-  const MENU_SCRIPT = "<script>\n  const b = document.getElementById('menu')\n  b?.addEventListener('click', () => b.classList.toggle('open'))\n</script>\n"
-
-  test.each([
-    ['an HTML comment inside a {…} conditional', 'src/components/Hero.astro', COMMENT_IN_EXPR],
-    ['an escaped quote inside an attribute', 'src/components/ContactHero.astro', ESCAPED_QUOTE],
-    ['the same with an inline menu script (anab)', 'src/components/Header.astro', COMMENT_IN_EXPR + MENU_SCRIPT],
-  ])('a parse error in a component with nothing detect looks for is not a reason: %s', (_name, path, text) => {
-    const r = detect(withFiles(pilot('munkforstradgardstjanst'), { [path]: text }), 'x', ['x.se'])
-    expect(r.reasons).toEqual([])
-    expect(r.classification).toBe('notice')
-  })
-
-  test.each([
-    ['a page', 'src/pages/om.astro', COMMENT_IN_EXPR],
-    ['a layout', 'src/layouts/Other.astro', COMMENT_IN_EXPR],
-    ['an iframe', 'src/components/Hero.astro', COMMENT_IN_EXPR + '<iframe src="/x" title="t"></iframe>\n'],
-    ['a <footer>', 'src/components/Hero.astro', COMMENT_IN_EXPR + '<footer>x</footer>\n'],
-    ['a Footer component', 'src/components/Hero.astro', COMMENT_IN_EXPR + '<SiteFooter />\n'],
-    ['<html>', 'src/components/Hero.astro', COMMENT_IN_EXPR + '<html><body></body></html>\n'],
-    ['a URL other than the SVG namespace', 'src/components/Hero.astro', COMMENT_IN_EXPR + '<img src="https://cdn.example.org/a.png" alt="" />\n'],
-    ['a protocol-relative URL', 'src/components/Hero.astro', COMMENT_IN_EXPR + '<link rel="preconnect" href="//fonts.gstatic.com" />\n'],
-    ['an .astro import', 'src/components/Hero.astro', "---\nimport Map from './Map.astro'\n---\n" + COMMENT_IN_EXPR.replace(/^---\n/, '')],
-    ['a script with src', 'src/components/Hero.astro', COMMENT_IN_EXPR + '<script src="/x.js"></script>\n'],
-    ['a script that imports (spam-guard, nnf)', 'src/components/Hero.astro', COMMENT_IN_EXPR + "<script>\n  import { preloadSpamCheck } from '@visionmediahq/spam-guard/client'\n</script>\n"],
-    ['a script that builds an iframe', 'src/components/Hero.astro', COMMENT_IN_EXPR + "<script>\n  const f = document.createElement('iframe')\n</script>\n"],
-    ['an unclosed script', 'src/components/Hero.astro', COMMENT_IN_EXPR + '<script>\n  const a = 1\n'],
-  ])('a parse error stays a reason when the file has %s', (_name, path, text) => {
-    const r = detect(withFiles(pilot('munkforstradgardstjanst'), { [path]: text }), 'x', ['x.se'])
-    expect(r.classification).toBe('needs-human')
-    expect(r.reasons.filter((x) => x.startsWith(`parse error in ${path}: `))).toHaveLength(1)
+  test('a component with an HTML comment inside a {…} conditional is read like any other (anab, fonsterdekor, nnf)', () => {
+    const hero =
+      "---\nconst wide = true\n---\n<section>\n  {wide ? (\n    <!-- wide: image right -->\n    <div class=\"a\" />\n  ) : (\n    <!-- narrow -->\n    <div class=\"b\" />\n  )}\n</section>\n"
+    const clean = detect(withFiles(pilot('munkforstradgardstjanst'), { 'src/components/Hero.astro': hero }), 'x', ['x.se'])
+    expect(clean.reasons).toEqual([])
+    expect(clean.classification).toBe('notice')
+    // Every detector reads the file: a tracker in it is still found.
+    const gtag = '<script async src="https://www.googletagmanager.com/gtag/js?id=G-X"></script>\n'
+    const tracked = detect(withFiles(pilot('munkforstradgardstjanst'), { 'src/components/Hero.astro': hero + gtag }), 'x', ['x.se'])
+    expect(tracked.classification).toBe('needs-human')
+    expect(tracked.trackers).toContain('google-analytics')
   })
 
   const FEED_PAGE =

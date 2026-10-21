@@ -145,12 +145,14 @@ class Evaluator {
     if (ts.isObjectLiteralExpression(e)) return { kind: 'object', node: e, scope }
     if (ts.isTemplateExpression(e)) {
       let value = e.head.text
+      let dataPath: string | undefined
       for (const span of e.templateSpans) {
         const v = next(span.expression)
         if (v?.kind !== 'string') return { kind: 'prefix', value }
+        dataPath ??= v.dataPath
         value += v.value + span.literal.text
       }
-      return { kind: 'string', value }
+      return dataPath ? { kind: 'string', value, dataPath } : { kind: 'string', value }
     }
     if (ts.isIdentifier(e)) return this.identifier(e.text, scope, depth)
 
@@ -523,11 +525,19 @@ export function detectIframes(files: SiteFiles, ownDomains: string[]): DetectedI
         continue
       }
       if (value?.kind === 'prefix') {
-        iframes.push(
-          FIXED_PREFIX.test(value.value)
-            ? { ...base, srcKind: 'expression', src: null, ...classify(value.value, ownDomains) }
-            : unresolved(candidatesOf(expr, scope)),
-        )
+        if (!FIXED_PREFIX.test(value.value)) {
+          iframes.push(unresolved(candidatesOf(expr, scope)))
+          continue
+        }
+        note([value.value])
+        // The host is fixed whatever the rest holds. The component's call sites still tell verify
+        // which pages to open (a prop inside a call such as encodeURIComponent is never reached).
+        const callSites = callSitesOf(file).map((use) => {
+          const v = evaluator.evaluate(expr, scopeOf(file, shadowed, argOf(use.file, use.node, use.shadowed)))
+          return { file: use.file, src: v?.kind === 'string' ? v.value : null }
+        })
+        note(callSites.map((c) => c.src))
+        iframes.push({ ...base, srcKind: 'expression', src: null, ...(callSites.length ? { callSites } : {}), ...classify(value.value, ownDomains) })
         continue
       }
       if (value?.kind === 'string') {
