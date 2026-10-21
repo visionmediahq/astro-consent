@@ -2,10 +2,13 @@
 // registry service it loads; and lists map URLs whose `pb=` parameter looks made up.
 //
 // An expression `src` is followed back to a literal through a small evaluator over the
-// frontmatter: string literals, template literals without `${}`, top-level `const`s, relative
-// imports of JSON/TS data files, `===`/`!==`, `!`, `&&`/`||` and `? :`. A `src` that depends on a
-// component prop is evaluated once per call site. Anything else is `unresolved`, which makes the
-// site `needs-human`: the evaluator answers or gives up, it never guesses.
+// frontmatter: string literals, template literals, top-level `const`s, relative imports of JSON/TS
+// data files, `===`/`!==`, `!`, `&&`/`||` and `? :`. A template literal whose substitutions do not
+// all resolve still gives its host when the literal text before the first one already holds the
+// scheme, host and whole path (`https://maps.google.com/maps?q=${…}`): the src is then unknown but
+// its host and service are not. A `src` that depends on a component prop is evaluated once per call
+// site. Anything else is `unresolved`, which makes the site `needs-human`: the evaluator answers or
+// gives up, it never guesses.
 //
 // For an unresolved `src` the host and service still matter (a Google Calendar is a third-party
 // host; a home-made gate's map is still a map), so they are taken from "candidates": the literals
@@ -41,6 +44,8 @@ export function isInventedPb(url: string): boolean {
 
 type Value =
   | { kind: 'string'; value: string; dataPath?: string }
+  /** A template literal's known start, up to its first unresolved substitution. */
+  | { kind: 'prefix'; value: string }
   | { kind: 'boolean'; value: boolean }
   | { kind: 'json'; value: object; dataPath: string }
   | { kind: 'object'; node: ts.ObjectLiteralExpression; scope: Scope }
@@ -138,6 +143,15 @@ class Evaluator {
     if (e.kind === ts.SyntaxKind.TrueKeyword) return { kind: 'boolean', value: true }
     if (e.kind === ts.SyntaxKind.FalseKeyword) return { kind: 'boolean', value: false }
     if (ts.isObjectLiteralExpression(e)) return { kind: 'object', node: e, scope }
+    if (ts.isTemplateExpression(e)) {
+      let value = e.head.text
+      for (const span of e.templateSpans) {
+        const v = next(span.expression)
+        if (v?.kind !== 'string') return { kind: 'prefix', value }
+        value += v.value + span.literal.text
+      }
+      return { kind: 'string', value }
+    }
     if (ts.isIdentifier(e)) return this.identifier(e.text, scope, depth)
 
     if (ts.isPropertyAccessExpression(e) || ts.isElementAccessExpression(e)) {
@@ -302,6 +316,9 @@ const isLoadable = (s: string): boolean => {
   const t = s.trim()
   return isUrlLike(t) || (t !== '' && !/^[a-z][a-z0-9+.-]*:/i.test(t))
 }
+
+/** Scheme, host and the whole path, then a query or fragment: what follows cannot change the host or path. */
+const FIXED_PREFIX = /^https?:\/\/[^/?#\s]+\/[^?#\s]*[?#]/i
 
 /** URLs written anywhere inside a piece of text (a `srcdoc`, a tag). */
 const urlsIn = (text: string): string[] => text.match(/(?:https?:)?\/\/[^\s"'<>`]+/gi) ?? []
@@ -503,6 +520,14 @@ export function detectIframes(files: SiteFiles, ownDomains: string[]): DetectedI
       const value = evaluator.evaluate(expr, scope)
       if (value?.kind === 'string' && !isLoadable(value.value)) {
         iframes.push(unresolved([]))
+        continue
+      }
+      if (value?.kind === 'prefix') {
+        iframes.push(
+          FIXED_PREFIX.test(value.value)
+            ? { ...base, srcKind: 'expression', src: null, ...classify(value.value, ownDomains) }
+            : unresolved(candidatesOf(expr, scope)),
+        )
         continue
       }
       if (value?.kind === 'string') {
