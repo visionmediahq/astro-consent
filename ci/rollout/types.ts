@@ -15,7 +15,8 @@ export interface IframeInfo {
   srcKind: SrcKind
   /**
    * The resolved src. Null when unresolved, and also for a resolved `srcKind: 'expression'` whose
-   * value comes from a component prop: then `callSites` holds the value at each call site.
+   * value comes from a component prop (then `callSites` holds the value at each call site) or from a
+   * template literal known only up to its query (then host and service come from that start).
    */
   src: string | null
   dataPath?: string

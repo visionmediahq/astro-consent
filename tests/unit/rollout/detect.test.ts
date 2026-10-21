@@ -609,6 +609,19 @@ describe('detect', () => {
     expect(r.reasons.filter((x) => x.startsWith('parse error in src/pages/broken.astro: '))).toHaveLength(1)
   })
 
+  test('a component with an HTML comment inside a {…} conditional is read like any other (anab, fonsterdekor, nnf)', () => {
+    const hero =
+      "---\nconst wide = true\n---\n<section>\n  {wide ? (\n    <!-- wide: image right -->\n    <div class=\"a\" />\n  ) : (\n    <!-- narrow -->\n    <div class=\"b\" />\n  )}\n</section>\n"
+    const clean = detect(withFiles(pilot('munkforstradgardstjanst'), { 'src/components/Hero.astro': hero }), 'x', ['x.se'])
+    expect(clean.reasons).toEqual([])
+    expect(clean.classification).toBe('notice')
+    // Every detector reads the file: a tracker in it is still found.
+    const gtag = '<script async src="https://www.googletagmanager.com/gtag/js?id=G-X"></script>\n'
+    const tracked = detect(withFiles(pilot('munkforstradgardstjanst'), { 'src/components/Hero.astro': hero + gtag }), 'x', ['x.se'])
+    expect(tracked.classification).toBe('needs-human')
+    expect(tracked.trackers).toContain('google-analytics')
+  })
+
   const FEED_PAGE =
     "---\nimport Base from '../layouts/Base.astro'\n---\n<Base title=\"Flöde\">\n  <section>\n    <!-- Elfsight Instagram Feed | Flöde -->\n" +
     '    <script src="https://elfsightcdn.com/platform.js" async></script>\n' +

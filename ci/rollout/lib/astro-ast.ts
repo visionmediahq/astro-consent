@@ -157,13 +157,41 @@ function frontmatterOf(raw: unknown, text: string): Frontmatter | null {
   return { text: text.slice(start, end), start, end }
 }
 
+const errorsOf = (source: string) => {
+  const { ast, diagnostics } = parse(source)
+  return { ast, errors: diagnostics.filter((d) => d.severity === 'error') }
+}
+
+/** The frontmatter and every script and style element: their `<!--` is not an HTML comment. */
+const NOT_MARKUP = /^\s*---\r?\n[\s\S]*?\r?\n---|<(script|style)\b[\s\S]*?<\/\1\s*>/gi
+
+/**
+ * `text` with each HTML comment outside the frontmatter, scripts and styles turned into spaces
+ * (newlines kept), so every offset is unchanged. A comment is not live markup; the tree has none.
+ */
+export function blankComments(text: string): string {
+  const skip = [...text.matchAll(NOT_MARKUP)].map((m) => [m.index, m.index + m[0].length] as const)
+  return text.replace(/<!--[\s\S]*?-->/g, (m, at: number) =>
+    skip.some(([a, b]) => at < b && at + m.length > a) ? m : m.replace(/[^\r\n]/g, ' '),
+  )
+}
+
 /**
  * Parses an .astro file. Throws on a compiler error: its tree is not trustworthy then (it holds a
  * placeholder element named `this` at 0-0), and the caller should hand the file to a human.
+ *
+ * compiler-rs rejects an HTML comment between `(` and the element in a `{…}` conditional, which
+ * Astro's own compiler builds (anab, fonsterdekor, nnf). On an error the file is parsed once more
+ * with its comments blanked (`blankComments`); the first error is thrown if that fails too.
  */
 export function parseAstro(text: string): { frontmatter: Frontmatter | null; root: AstroNode } {
-  const { ast, diagnostics } = parse(text)
-  const errors = diagnostics.filter((d) => d.severity === 'error')
+  let source = text
+  let { ast, errors } = errorsOf(text)
+  if (errors.length > 0) {
+    const blanked = blankComments(text)
+    const retry = blanked === text ? null : errorsOf(blanked)
+    if (retry && retry.errors.length === 0) ({ ast, errors, source } = { ...retry, source: blanked })
+  }
   if (errors.length > 0) {
     const where = (d: (typeof errors)[number]): string => {
       const label = d.labels[0]
@@ -174,11 +202,11 @@ export function parseAstro(text: string): { frontmatter: Frontmatter | null; roo
   const root: AstroNode = {
     type: 'root',
     attributes: [],
-    children: convertChildren(ast['body'], text),
+    children: convertChildren(ast['body'], source),
     start: 0,
     end: text.length,
   }
-  return { frontmatter: frontmatterOf(ast['frontmatter'], text), root }
+  return { frontmatter: frontmatterOf(ast['frontmatter'], source), root }
 }
 
 function collect(root: AstroNode, match: (n: AstroNode) => boolean): AstroNode[] {

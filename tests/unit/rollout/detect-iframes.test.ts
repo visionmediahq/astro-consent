@@ -213,14 +213,24 @@ describe('detectIframes: synthetic cases', () => {
     expect(r.iframes[0]).toMatchObject({ srcKind: 'literal', src, service: 'google-maps', host: 'www.google.com' })
   })
 
-  test('an interpolated template literal src is unresolved', () => {
+  test('a template literal whose substitutions all resolve is the whole src', () => {
     const r = detectIframes(
       inline({
         'src/pages/index.astro': "---\nconst q = 'Göteborg'\n---\n<iframe src={`https://www.google.com/maps?q=${q}&output=embed`} title=\"t\"></iframe>\n",
       }),
       [],
     )
-    expect(r.iframes[0]).toMatchObject({ srcKind: 'unresolved', src: null })
+    expect(r.iframes[0]).toMatchObject({ srcKind: 'expression', src: 'https://www.google.com/maps?q=Göteborg&output=embed', host: 'www.google.com', service: 'google-maps' })
+  })
+
+  // allkakel, bjorno-marina; autorecondhjo, lafina, sthbygg, vassbo-Musteri through a const.
+  test.each([
+    ['inline', "---\nconst { address } = Astro.props\n---\n<iframe src={`https://maps.google.com/maps?q=${encodeURIComponent(address)}&z=15&output=embed`} title=\"t\"></iframe>\n"],
+    ['through a top-level const', "---\nconst { street } = Astro.props\nconst mapSrc = `https://www.google.com/maps?q=${encodeURIComponent(street)}&output=embed`\n---\n<iframe src={mapSrc} title=\"t\"></iframe>\n"],
+  ])('a template literal with a literal host and path is resolved by host, src unknown (%s)', (_name, text) => {
+    const r = detectIframes(inline({ 'src/components/Map.astro': text }), ['x.se'])
+    expect(r.iframes[0]).toMatchObject({ srcKind: 'expression', src: null, service: 'google-maps' })
+    expect(r.iframes[0]!.host).toMatch(/^(maps|www)\.google\.com$/)
   })
 
   test('a template literal without substitutions and a const identifier resolve as expressions', () => {
@@ -392,6 +402,60 @@ describe('detectIframes: fails closed (review round 1)', () => {
     const r = detectIframes(
       inline({ 'src/pages/index.astro': "---\nconst U = 'about:blank'\n---\n<iframe src={U} title=\"t\"></iframe>\n" }),
       [],
+    )
+    expect(r.iframes[0]).toMatchObject({ srcKind: 'unresolved', src: null })
+  })
+
+  test('a prop-driven template literal src keeps its call sites, so verify knows the pages', () => {
+    const r = detectIframes(
+      inline({
+        'src/components/Map.astro': "---\nconst { address } = Astro.props\n---\n<iframe src={`https://maps.google.com/maps?q=${encodeURIComponent(address)}&output=embed`} title=\"t\"></iframe>\n",
+        'src/pages/kontakt.astro': "---\nimport Map from '../components/Map.astro'\n---\n<Map address=\"Storgatan 1\" />\n",
+      }),
+      ['x.se'],
+    )
+    expect(r.iframes[0]).toMatchObject({ srcKind: 'expression', src: null, service: 'google-maps', callSites: [{ file: 'src/pages/kontakt.astro', src: null }] })
+  })
+
+  test("a made-up pb= in a template literal's literal start is still reported", () => {
+    const head = ATAK_PB.slice(0, ATAK_PB.indexOf('!5m2'))
+    const r = detectIframes(
+      inline({ 'src/components/Map.astro': `---\nconst { lang } = Astro.props\n---\n<iframe src={\`${head}!5m2!1s\${lang}\`} title="t"></iframe>\n` }),
+      ['x.se'],
+    )
+    expect(r.iframes[0]).toMatchObject({ srcKind: 'expression', service: 'google-maps' })
+    expect(r.inventedMaps).toEqual([`${head}!5m2!1s`])
+  })
+
+  test('a template literal built from a data file names the data file', () => {
+    const r = detectIframes(
+      inline({
+        'src/data/site.json': '{ "address": "Storgatan 1" }',
+        'src/pages/index.astro': "---\nimport site from '../data/site.json'\n---\n<iframe src={`https://www.google.com/maps?q=${site.address}&output=embed`} title=\"t\"></iframe>\n",
+      }),
+      ['x.se'],
+    )
+    expect(r.iframes[0]).toMatchObject({ srcKind: 'data-file', dataPath: 'src/data/site.json', src: 'https://www.google.com/maps?q=Storgatan 1&output=embed' })
+  })
+
+  test.each([
+    ['the host is a substitution', 'https://${host}/maps?q=${q}'],
+    ['the host can be extended', 'https://www.google.com${path}'],
+    ['the path is not finished', 'https://www.google.com/${kind}?q=${q}'],
+    ['the path is not finished before the first substitution', 'https://www.google.com/maps${rest}'],
+    ['no scheme', 'www.google.com/maps?q=${q}'],
+  ])('a template literal src stays unresolved when %s', (_name, template) => {
+    const r = detectIframes(
+      inline({ 'src/components/Map.astro': `---\nconst { host, q, path, kind, rest } = Astro.props\n---\n<iframe src={\`${template}\`} title="t"></iframe>\n` }),
+      ['x.se'],
+    )
+    expect(r.iframes[0]).toMatchObject({ srcKind: 'unresolved', src: null })
+  })
+
+  test('a template literal is never truthy evidence: `a || \`…${x}\`` with an unknown a stays unresolved', () => {
+    const r = detectIframes(
+      inline({ 'src/components/Map.astro': "---\nconst { url, q } = Astro.props\n---\n<iframe src={url || `https://www.google.com/maps?q=${q}&output=embed`} title=\"t\"></iframe>\n" }),
+      ['x.se'],
     )
     expect(r.iframes[0]).toMatchObject({ srcKind: 'unresolved', src: null })
   })
