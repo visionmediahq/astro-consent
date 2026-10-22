@@ -21,9 +21,9 @@
 // search as one gradient's). Each fold but an opaque colour or an opaque sRGB gradient that covers
 // the box is widened by one 8-bit level past rounding outward (see widen): stops are read back in 8
 // bits and the page rounds what it paints. One gradient and plain colours give the worst point as
-// read, exact for opaque colours and stops, within a level or two per channel with translucent ones
-// (near 4.5, up to about 0.08 in the ratio); `ok` allows for that rounding, and for translucent
-// text's, without moving the ratio shown (#96). A url(), a
+// read: exact for opaque colours; a gradient is dithered a level past its stops, and translucent
+// layers are rounded a level or two per channel (near 4.5, about 0.1 in the ratio). `ok` allows for
+// that rounding, and for translucent text's, without moving the ratio shown (#96). A url(), a
 // stop or mix the page does not resolve, or a prelude keyword the parser does not know stays
 // indeterminate.
 //
@@ -77,7 +77,10 @@ export interface ContrastRow {
   /** The button's or link's text. */
   button: string
   ratio: number
-  /** ratio ≥ 4.5 and not indeterminate. An indeterminate row is never a pass, whatever its ratio. */
+  /**
+   * ratio ≥ 4.5, still ≥ 4.5 after the page's 8-bit rounding (#96; the note says when only that fails),
+   * and not indeterminate. An indeterminate row is never a pass, whatever its ratio.
+   */
   ok: boolean
   fg: Rgb
   bg: Rgb
@@ -551,7 +554,10 @@ interface Evaluated {
   missing: string[]
 }
 
-/** `margin`: 8-bit levels each fold of several gradients is widened by (see widen). */
+/**
+ * `margin`: 8-bit levels each rounding the page does is allowed for (see widen): each fold of several
+ * gradients, each translucent layer or gradient under one, and translucent text's blend.
+ */
 export interface ContrastOptions {
   margin?: number
 }
@@ -644,16 +650,17 @@ function evaluate(r: RawContrast, { margin = 1 }: ContrastOptions = {}): Evaluat
           : undefined
   // ok allows for the page's 8-bit rounding (#96); the ratio and colours stay the worst point as read.
   // The page rounds each translucent layer it composites, and translucent text once more, so a painted
-  // pixel can lie a level per such layer past that point. One gradient and plain colours: the point
-  // widened by a level per translucent layer (and the gradient's, unless it is exact there). Several
-  // gradients: the box is widened already; only the text's own rounding is added.
+  // pixel can lie a level per such layer past that point; Chromium also dithers a gradient, so even an
+  // opaque sRGB one paints a level past its stops (#97 review). One gradient and plain colours: the
+  // point widened by a level per translucent layer and one for the gradient. Several gradients: the
+  // box is widened already (dither stays between the stops); only the text's own rounding is added.
   const softText = fgBase[3] < 255
   let painted = worst.ratio
   if (!indeterminate && worst.ratio >= 4.5) {
     if (gradients.length > 1) {
       if (softText) painted = boxWorst(fgBase, box, margin).ratio
     } else {
-      const layers = shown.filter((e) => e.kind === 'colour' && e.c[3] > 0 && e.c[3] < 255).length + (g && !(exact(g) && worst.stop) ? 1 : 0)
+      const layers = shown.filter((e) => e.kind === 'colour' && e.c[3] > 0 && e.c[3] < 255).length + (g ? 1 : 0)
       if (layers || softText) {
         let around: Box = { lo: worst.bg, hi: worst.bg }
         for (let i = 0; i < layers; i++) around = widen(around, margin)
