@@ -55,6 +55,10 @@ describe('parseOrgRepos', () => {
   test('a line without a numeric id is an error, not a repo that can never be excluded', () => {
     expect(() => parseOrgRepos('{"name":"a","isArchived":false,"homepageUrl":null}')).toThrow(/id/)
   })
+
+  test('a line without a name is an error too, not a repo called "undefined"', () => {
+    expect(() => parseOrgRepos('{"id":101,"isArchived":false,"homepageUrl":null}')).toThrow(/name/)
+  })
 })
 
 describe('statsLabels', () => {

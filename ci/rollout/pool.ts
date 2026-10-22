@@ -148,7 +148,8 @@ export function parseOrgRepos(out: string): Omit<OrgRepo, 'astro'>[] {
     .map((line) => {
       const r = JSON.parse(line) as Partial<Omit<OrgRepo, 'astro'>>
       if (!Number.isSafeInteger(r.id)) throw new Error(`org repo listing: no numeric id in ${line}`)
-      return { id: r.id!, name: String(r.name), isArchived: Boolean(r.isArchived), homepageUrl: r.homepageUrl ?? null }
+      if (typeof r.name !== 'string' || !r.name) throw new Error(`org repo listing: no name in ${line}`)
+      return { id: r.id!, name: r.name, isArchived: Boolean(r.isArchived), homepageUrl: r.homepageUrl ?? null }
     })
 }
 

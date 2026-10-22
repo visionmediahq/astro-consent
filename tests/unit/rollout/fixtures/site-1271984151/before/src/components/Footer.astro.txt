@@ -20,7 +20,7 @@ import { Phone, Smartphone, Mail, MapPin } from '@lucide/astro'
         </a>
         <p class="text-sm leading-relaxed text-white/60 max-w-xs">
           Exempel Tak AB — takläggare i Exempelby sedan mitten av 1990-talet.
-          Specialister på tätskikt, omläggning och renovering i hela Halland.
+          Specialister på tätskikt, omläggning och renovering i hela Exempellän.
         </p>
         <div>
           <div class="w-8 h-0.5" style="background: var(--color-primary);"></div>

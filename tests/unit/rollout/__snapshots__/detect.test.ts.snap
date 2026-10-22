@@ -540,7 +540,7 @@ exports[`detect > pilot site-1271984151: needs-human, matching the committed sna
     {
       "alignment": "left",
       "centred": false,
-      "end": 3847,
+      "end": 3850,
       "file": "src/components/Footer.astro",
       "kind": "component",
       "start": 110,
@@ -661,7 +661,7 @@ exports[`detect > pilot site-1277834673: needs-human, matching the committed sna
     {
       "alignment": "centred",
       "centred": true,
-      "end": 5771,
+      "end": 5783,
       "file": "src/components/Footer.astro",
       "kind": "component",
       "start": 512,

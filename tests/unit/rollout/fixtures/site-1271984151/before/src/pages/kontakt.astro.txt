@@ -11,7 +11,7 @@ export const prerender = true;
 
 <Base
   title="Kontakt – Exempel Takläggare Exempelby"
-  description="Kontakta Exempel Tak AB i Exempelby. Ring oss på 08-123 45 67 eller skicka ett meddelande. Vi hjälper med taklösningar i hela Halland."
+  description="Kontakta Exempel Tak AB i Exempelby. Ring oss på 08-123 45 67 eller skicka ett meddelande. Vi hjälper med taklösningar i hela Exempellän."
   canonical="https://site-1271984151.se/kontakt/"
   ogImage="/og-image.jpg"
   schema={{
@@ -25,7 +25,7 @@ export const prerender = true;
       postalCode: '432 48',
       addressCountry: 'SE',
     },
-    description: 'Kontakta Exempel Tak AB i Exempelby för takläggning, tätskikt och renoveringar i Halland.',
+    description: 'Kontakta Exempel Tak AB i Exempelby för takläggning, tätskikt och renoveringar i Exempellän.',
     image: 'https://site-1271984151.se/og-image.jpg',
   }}
 >
