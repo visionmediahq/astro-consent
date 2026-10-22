@@ -13,7 +13,7 @@
 // rasterised by the page. Each segment between two stops is searched for its worst point: on a grid,
 // then refined around every local minimum. sRGB segments are interpolated here (premultiplied, as
 // browsers paint them); any other space or hue method is mixed by the page itself with color-mix()
-// in the same method. Several gradients that show (jokkmoks-lbc's faint radial glow on a dark linear
+// in the same method. Several gradients that show (a client footer's faint radial glow on a dark linear
 // gradient) are bounded instead: bottom-up, per channel, the lowest and highest value every layer can
 // composite to, and the text against the worst point of that box (see boxWorst). Compositing and
 // luminance are monotone per channel, so the bound is never above the true worst point. A url(), a
@@ -134,7 +134,7 @@ const MEASURE = `(() => {
   const pseudoOver = (e, pseudo, text, exempt) => {
     const p = getComputedStyle(e, pseudo)
     if (p.content === 'none' || p.content === 'normal' || !/absolute|fixed/.test(p.position)) return false
-    // A pseudo switched off (jokkmoks-lbc's modifier class) still computes position and background, but
+    // A pseudo switched off (a client site's modifier class) still computes position and background, but
     // paints nothing: display none, visibility hidden, or opacity 0 that no animation of it can change.
     if (p.display === 'none' || /hidden|collapse/.test(p.visibility)) return false
     if (Number(p.opacity) === 0 && !document.getAnimations().some((a) => a.effect && a.effect.target === e && a.effect.pseudoElement === pseudo)) return false

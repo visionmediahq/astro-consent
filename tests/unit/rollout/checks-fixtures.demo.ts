@@ -158,7 +158,7 @@ const FIXTURES: Record<string, string> = {
   // white text; a near-white overlay on a positioned section around a non-positioned black footer.
   pseudoneg: page(`<style>footer{background:#000;position:relative;isolation:isolate;padding:24px}footer::before{content:'';position:absolute;inset:0;background:#fff;z-index:-1}</style><footer><div data-privacy-links><a href="/integritet" style="color:#fff">Integritetspolicy</a></div></footer>`),
   pseudoup: page(`<style>section{position:relative}section::before{content:'';position:absolute;inset:0;background:rgba(255,255,255,.95)}footer{background:#000;padding:24px}</style><section><footer><div data-privacy-links><a href="/integritet" style="color:#fff">Integritetspolicy</a></div></footer></section>`),
-  // jokkmoks-lbc: a white overlay ::before switched off by a modifier class paints nothing, however
+  // A client site: a white overlay ::before switched off by a modifier class paints nothing, however
   // it is switched off; without the modifier, or with an opacity animation that may show it, it counts.
   pseudohidden: page(`<style>footer{background:#000;position:relative;padding:24px}footer::before{content:'';position:absolute;inset:0;background:#fff}footer.flat::before{display:none}</style><footer class="flat"><div data-privacy-links><a href="/integritet" style="color:#fff">Integritetspolicy</a></div></footer>`),
   pseudoinvisible: page(`<style>footer{background:#000;position:relative;padding:24px}footer::before{content:'';position:absolute;inset:0;background:#fff}footer.flat::before{visibility:hidden}</style><footer class="flat"><div data-privacy-links><a href="/integritet" style="color:#fff">Integritetspolicy</a></div></footer>`),
@@ -408,7 +408,7 @@ try {
     expect(hair.length === 1 && hair.every((r) => r.ok && !r.indeterminate), '/hairline/ a 1px ::before hairline and a width-0 a::after underline are not over the text (ahatrafikskola)', hair)
     for (const [path, what] of [['/pseudohidden/', 'display: none'], ['/pseudoinvisible/', 'visibility: hidden'], ['/pseudotransparent/', 'opacity: 0 at rest']] as const) {
       const rows = await links(path)
-      expect(rows.length === 1 && rows.every((r) => r.ok && !r.indeterminate), `${path} a white ::before overlay switched off with ${what} paints nothing (jokkmoks-lbc)`, rows)
+      expect(rows.length === 1 && rows.every((r) => r.ok && !r.indeterminate), `${path} a white ::before overlay switched off with ${what} paints nothing`, rows)
     }
     for (const [path, what] of [['/pseudoshown/', 'the same overlay without the modifier'], ['/pseudopulse/', 'an overlay at opacity 0 under an infinite opacity animation']] as const) {
       const rows = await links(path)

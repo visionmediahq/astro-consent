@@ -524,7 +524,7 @@ describe('contrast', () => {
         return { r: a * top[0] + (1 - a) * below[0], g: a * top[1] + (1 - a) * below[1], b: a * top[2] + (1 - a) * below[2] }
       }
 
-      it('jokkmoks-lbc: #dbe6ef over a faint radial glow on a dark linear gradient passes at its lightest point, 8.71:1', () => {
+      it('a client footer: #dbe6ef over a faint radial glow on a dark linear gradient passes at its lightest point, 8.71:1', () => {
         const value = 'radial-gradient(at 80% 0%, rgba(127, 183, 226, 0.18), rgba(0, 0, 0, 0) 55%), linear-gradient(158deg, rgb(21, 36, 47), rgb(13, 25, 34))'
         const [row] = contrastRows([two([219, 230, 239, 255], value)])
         expect(row!.indeterminate).toBeUndefined()

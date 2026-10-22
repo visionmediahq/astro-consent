@@ -335,7 +335,7 @@ npx tsx ci/rollout/run.ts help
   `5.25:1 ok (gradient, worst stop)`. sRGB segments are interpolated by the tool; any other method
   (`in oklch`, `in hsl longer hue`, the oklab default for oklch stops) is mixed by the page with
   `color-mix()` in the same method, and the line names it. Several gradients that show
-  (jokkmoks-lbc's faint radial glow over a dark linear gradient) are bounded: bottom-up, per
+  (a faint radial glow over a dark linear gradient, seen on a client footer) are bounded: bottom-up, per
   channel, the lowest and highest value each layer can composite to over the range below it
   (stops, points between them in another method, and the layer below through translucent
   stops), then the text against the worst point of that range: `8.70:1 ok (2 gradients, bound
