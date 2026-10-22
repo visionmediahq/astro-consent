@@ -1,9 +1,11 @@
 import { mkdirSync, writeFileSync } from 'node:fs'
-import { afterEach, describe, expect, test, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { dockerCheck, imageTag } from '../../../ci/rollout/docker'
 import type { Exec } from '../../../ci/rollout/lib/exec'
 
 describe('dockerCheck', () => {
+  // A ROLLOUT_PORT_BASE set in the shell must not change these tests.
+  beforeEach(() => void vi.stubEnv('ROLLOUT_PORT_BASE', ''))
   afterEach(() => void vi.unstubAllEnvs())
 
   test('publishes the container on ROLLOUT_PORT_BASE (default 4397) and checks it there', async () => {

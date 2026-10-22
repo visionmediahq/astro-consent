@@ -1,10 +1,21 @@
-import { describe, expect, test } from 'vitest'
+import { afterEach, describe, expect, test, vi } from 'vitest'
 import { PORT_BASE, rolloutPorts } from '../../../ci/rollout/lib/ports'
 
 describe('rolloutPorts', () => {
+  afterEach(() => void vi.unstubAllEnvs())
+
   test('unset or empty: Docker 4397, main 4398, branch 4399', () => {
     expect(PORT_BASE).toBe(4397)
-    for (const env of [undefined, '']) expect(rolloutPorts(env)).toEqual({ docker: 4397, main: 4398, branch: 4399 })
+    const DEFAULT = { docker: 4397, main: 4398, branch: 4399 }
+    vi.stubEnv('ROLLOUT_PORT_BASE', undefined)
+    expect(rolloutPorts()).toEqual(DEFAULT)
+    vi.stubEnv('ROLLOUT_PORT_BASE', '')
+    expect(rolloutPorts()).toEqual(DEFAULT)
+  })
+
+  test('reads ROLLOUT_PORT_BASE when not given a value', () => {
+    vi.stubEnv('ROLLOUT_PORT_BASE', '5000')
+    expect(rolloutPorts().branch).toBe(5002)
   })
 
   test('ROLLOUT_PORT_BASE moves all three, so two verifies on one machine do not share a port', () => {

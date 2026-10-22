@@ -1,6 +1,6 @@
 // Verify's local ports, three in a row from ROLLOUT_PORT_BASE (default 4397): the Docker container
 // on the base, main's preview on the next, the branch's on the one after. Two verifies on one
-// machine at the same time need different bases; with the same ports the second one's previews
+// machine at the same time need bases at least 3 apart; with the same ports the second one's previews
 // refuse to start, or its checks run against the first one's server.
 
 export const PORT_BASE = 4397

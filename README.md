@@ -375,7 +375,7 @@ npx tsx ci/rollout/run.ts help
   `node_modules` and `dist`; a stop keeps them for the next verify.
 - `verify` serves on three local ports: the Docker container on 4397, main's preview on 4398, the
   branch's on 4399. `ROLLOUT_PORT_BASE` moves all three (e.g. `4417` → 4417–4419), so two verifies
-  can run on one machine at once, each with its own base. A value that is not a port from 1024 to
+  can run on one machine at once with bases at least 3 apart. A value that is not a port from 1024 to
   65533 stops verify before any step rather than falling back to 4397. The two runs still share CPU
   and disk: each needs the free space above.
 - If main's local preview stops answering mid-step (a dropped connection, and nothing answers on
