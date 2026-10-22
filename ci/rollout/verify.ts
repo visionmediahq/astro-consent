@@ -67,6 +67,7 @@ import { type Flow, FLOWS, flowOf, FONTS_MARKER, isToolFontsCss, statePath, STEP
 import type { Report, StepResult, VerifyResult } from './types'
 import type { ServiceSlug } from '../../src/services'
 import { CHROME_UA, FONTS_BRANCH, FONTS_CSS, FONTS_DIR, type FontFetch, httpFetch } from './wire/fonts'
+import { compareVersions, installedOf, UPDATE_BRANCH } from './wire/update'
 import { type Face, parseCss2 } from './wire/fonts-css'
 
 export type { Exec } from './lib/exec'
@@ -564,7 +565,33 @@ export async function verify(dir: string, report: Report, opts: VerifyOptions = 
       } catch (e) {
         pkgChanges = [`could not compare package.json with origin/main: ${(e as Error).message}`]
       }
-      lines.push(`package.json, main → branch: ${pkgChanges.length ? 'CHANGED beyond the package' : `only ${PKG} added`}`, ...pkgChanges.map((l) => `  UNKNOWN ${l}`))
+      const update = BRANCH === UPDATE_BRANCH
+      lines.push(
+        `package.json, main → branch: ${pkgChanges.length ? 'CHANGED beyond the package' : update ? `only the ${PKG} spec changed` : `only ${PKG} added`}`,
+        ...pkgChanges.map((l) => `  UNKNOWN ${l}`),
+      )
+      // The update commit is the install alone: the two package files, the package moved up.
+      let updateOk = true
+      if (update) {
+        const diff = await git('diff', '--name-only', 'origin/main...HEAD')
+        const changed = diff.out.split('\n').filter(Boolean)
+        const extra = changed.filter((p) => p !== 'package.json' && p !== 'package-lock.json')
+        let from: string | null = null
+        let to: string | null = null
+        try {
+          from = installedOf(readFileSync(join(mainDir!, 'package-lock.json'), 'utf8'))?.version ?? null
+          to = installedOf(readFileSync(join(root, 'package-lock.json'), 'utf8'))?.version ?? null
+        } catch {
+          // reported as (none) below
+        }
+        const up = from !== null && to !== null && compareVersions(to, from) > 0
+        lines.push(
+          `changed files (${changed.length}): ${diff.code === 0 ? (extra.length ? 'NOT ONLY package.json AND package-lock.json' : 'only package.json and package-lock.json') : 'git diff failed'}`,
+          ...extra.map((p) => `  UNKNOWN ${p}`),
+          `${PKG} on main → branch: ${from ?? '(none)'} → ${to ?? '(none)'}${up ? '' : ': NOT AN UPDATE'}`,
+        )
+        updateOk = diff.code === 0 && extra.length === 0 && up
+      }
       const ls: Record<string, string[]> = {}
       for (const [side, cwd] of [['main', mainDir!], ['branch', root]] as const) {
         const res = await exec('npm', NPM_LS, cwd)
@@ -576,7 +603,7 @@ export async function verify(dir: string, report: Report, opts: VerifyOptions = 
       }
       const same = JSON.stringify(ls['main']) === JSON.stringify(ls['branch'])
       lines.push(`npm ls astro vite @tailwindcss/vite: ${same ? 'same' : 'DIFFERENT'}`, `  main   ${ls['main']!.join(' ')}`, `  branch ${ls['branch']!.join(' ')}`)
-      return { pass: unknown.length === 0 && pkgChanges.length === 0 && same, lines }
+      return { pass: unknown.length === 0 && pkgChanges.length === 0 && same && updateOk, lines }
     },
 
     async build() {

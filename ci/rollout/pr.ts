@@ -1,7 +1,9 @@
 // The pr stage (spec C4): opens the PR of the checkout's flow (flows.ts) on a client site repo with
 // a Swedish body. consent-banner: built from the branch's src/data/privacy.json (which template
 // block: Ruling 40), plus a fonts paragraph when the branch self-hosts the Google Fonts.
-// fonts-selfhost: from the families in the branch's src/styles/fonts.css. Both take the Report,
+// fonts-selfhost: from the families in the branch's src/styles/fonts.css. astro-consent-update: the
+// versions from main's and the branch's lockfiles, the CHANGELOG.md entries in between, and whether
+// every visitor is asked again (CONSENT_VERSION). Each takes the Report,
 // the flow's verify result (step names and results, never evidence text), the changed file names
 // and issue links. Screenshots are not committed to the site repo: openPr returns the files to copy
 // into site-factory (`screenshotsDir`), and the body links them under `screenshotsBase`. The copy,
@@ -18,6 +20,7 @@ import sv from '../../src/text/sv.json'
 import type { Report, VerifyResult } from './types'
 import { ORIGIN, VERIFY_FILE, verify as realVerify } from './verify'
 import { FONTS_BRANCH, FONTS_CSS } from './wire/fonts'
+import { CHANGELOG_PATH, changelogBetween, consentVersionAt, reaskLine, UPDATE_BRANCH, updateSummary } from './wire/update'
 
 /** The consent-banner PR's title. No version (#51): the range wire installs moves with each release. */
 export const TITLE = FLOWS['consent-banner'].title
@@ -27,9 +30,9 @@ export const FONTS_TEMPLATE_PATH = FLOWS['fonts-selfhost'].template
 export interface BodyInput {
   /**
    * Which template block: `consent` or `notice` from the branch's privacy.json (`templateKind`),
-   * not the classification; `fonts` for the fonts-selfhost template.
+   * not the classification; `fonts` for the fonts-selfhost template, `update` for astro-consent-update's.
    */
-  kind: 'consent' | 'notice' | 'fonts'
+  kind: 'consent' | 'notice' | 'fonts' | 'update'
   /** The services of the consent block, in registry order; empty otherwise. */
   services: ServiceSlug[]
   verify: VerifyResult
@@ -40,6 +43,8 @@ export interface BodyInput {
   screenshots?: { file: string; url: string }[]
   /** The self-hosted families (fonts.css): the `{{#fonts}}` blocks are kept, and fill `{{families}}`. */
   fonts?: { families: string[] }
+  /** astro-consent-update: the versions, the changelog entries in between, and `{{#reask}}` or `{{#noreask}}`. */
+  update?: { from: string; to: string; reasks: boolean; changelog: { version: string; text: string }[] }
 }
 
 // Fills the placeholder texts exactly as src/components/EmbedPlaceholder.astro does.
@@ -70,7 +75,7 @@ function fontsStep(kind: BodyInput['kind'], services: ServiceSlug[]): string {
 export function renderBody(template: string, input: BodyInput): string {
   const { kind, services, verify, issues, domain } = input
   if (!verify.pass) throw new Error('verify did not pass: no PR body')
-  const active = new Set<string>([kind, ...(input.fonts ? ['fonts'] : [])])
+  const active = new Set<string>([kind, ...(input.fonts ? ['fonts'] : []), ...(input.update ? [input.update.reasks ? 'reask' : 'noreask'] : [])])
   const values: Record<string, string> = {
     domain,
     serviceNames: list(services.map((slug) => SERVICES[slug].name)),
@@ -83,9 +88,12 @@ export function renderBody(template: string, input: BodyInput): string {
     steps: verify.steps.map((s) => `- ${s.skipped ? 'hoppades över' : s.pass ? 'ok' : 'FEL'}: ${s.step}. ${s.name}`).join('\n'),
     screenshots: input.screenshots?.length ? input.screenshots.map((s) => `- [${s.file}](${s.url})`).join('\n') : 'Inga.',
     issues: issues.length ? issues.map((i) => `- ${i}`).join('\n') : 'Inga',
+    fromVersion: input.update?.from ?? '',
+    toVersion: input.update?.to ?? '',
+    changelog: (input.update?.changelog ?? []).map((e) => `#### ${e.version}\n\n${e.text}`).join('\n\n'),
   }
   const out = template
-    .replace(/\{\{#(consent|notice|fonts)\}\}([\s\S]*?)\{\{\/\1\}\}/g, (_, name: string, text: string) => (active.has(name) ? text : ''))
+    .replace(/\{\{#(consent|notice|fonts|reask|noreask)\}\}([\s\S]*?)\{\{\/\1\}\}/g, (_, name: string, text: string) => (active.has(name) ? text : ''))
     .replace(/\{\{(\w+)\}\}/g, (m, name: string) => values[name] ?? m)
   const left = out.match(/\{\{[^}]*\}\}/)
   if (left) throw new Error(`unfilled placeholder ${left[0]} in the PR body template`)
@@ -102,6 +110,10 @@ export interface PrOptions {
   /** Replaces the full verify run (which pushes the branch) after a rebase. */
   verify?: (dir: string, report: Report) => Promise<VerifyResult>
   domain?: string
+  /** astro-consent-update: CONSENT_VERSION at an astro-consent commit (this checkout's git unless a test injects it). */
+  consentVersionAt?: (sha: string) => number | null
+  /** astro-consent-update: the CHANGELOG.md text (this checkout's unless a test gives one). */
+  changelog?: string
 }
 
 export interface PrResult {
@@ -161,12 +173,14 @@ export async function openPr(dir: string, opts: PrOptions): Promise<PrResult> {
   const flow = await currentFlow(exec, root, 'pr')
   const branch = flow.branch
   const repo = originRepo((await git('remote', 'get-url', 'origin')).out.trim())
-  const others = await openPrsFrom(exec, root, repo, flow.other)
-  if (others.length) {
-    throw new Error(`an open ${flow.other} PR (${others.map((p) => p.url).join(', ')}) would conflict with ${branch}: merge or close it first`)
+  for (const other of flow.others) {
+    const prs = await openPrsFrom(exec, root, repo, other)
+    if (prs.length) throw new Error(`an open ${other} PR (${prs.map((p) => p.url).join(', ')}) would conflict with ${branch}: merge or close it first`)
   }
-  const unmerged = await unmergedBranch(exec, root, flow.other)
-  if (unmerged) throw new Error(`${unmerged}; it would conflict with ${branch}`)
+  for (const other of flow.others) {
+    const unmerged = await unmergedBranch(exec, root, other)
+    if (unmerged) throw new Error(`${unmerged}; it would conflict with ${branch}`)
+  }
 
   const fetched = await git('fetch', 'origin', 'main')
   if (fetched.code !== 0) throw new Error(`git fetch origin main failed:\n${tail(fetched.out)}`)
@@ -205,7 +219,21 @@ export async function openPr(dir: string, opts: PrOptions): Promise<PrResult> {
   if (branch === FONTS_BRANCH && fontsCss === null) throw new Error(`${FONTS_CSS} from this tool is not on the branch: run.ts fonts first`)
   let kind: BodyInput['kind'] = 'fonts'
   let services: ServiceSlug[] = []
-  if (branch !== FONTS_BRANCH) {
+  let update: BodyInput['update']
+  if (branch === UPDATE_BRANCH) {
+    kind = 'update'
+    const show = async (ref: string) => {
+      const r = await git('show', `${ref}:package-lock.json`)
+      if (r.code !== 0) throw new Error(`git show ${ref}:package-lock.json failed:\n${tail(r.out)}`)
+      return r.out
+    }
+    const [mainLock, branchLock] = [await show('origin/main'), await show('HEAD')]
+    const versionAt = opts.consentVersionAt ?? consentVersionAt
+    const { from, to, reasks } = updateSummary(mainLock, branchLock, versionAt)
+    // The body says whether every visitor is asked again: never a guess.
+    if (reasks === null) throw new Error(reaskLine(mainLock, branchLock, versionAt))
+    update = { from, to, reasks, changelog: changelogBetween(opts.changelog ?? readFileSync(CHANGELOG_PATH, 'utf8'), from, to) }
+  } else if (branch !== FONTS_BRANCH) {
     const privacy = await git('show', 'HEAD:src/data/privacy.json')
     if (privacy.code !== 0) throw new Error(`src/data/privacy.json is not on the branch: wire the site first\n${tail(privacy.out)}`)
     ;({ kind, services } = templateKind(privacy.out))
@@ -226,6 +254,7 @@ export async function openPr(dir: string, opts: PrOptions): Promise<PrResult> {
     files: changed,
     screenshots: names.map((n) => ({ file: n, url: `${opts.screenshotsBase.replace(/\/+$/, '')}/${n}` })),
     ...(fontsCss !== null ? { fonts: { families: familiesOf(fontsCss) } } : {}),
+    ...(update ? { update } : {}),
   })
   const bodyFile = statePath(rollout, 'pr-body.md', branch)
   writeFileSync(bodyFile, body)
