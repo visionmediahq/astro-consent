@@ -162,8 +162,12 @@ function fake(
 
 const evidence = (dir: string, file: string) => readFileSync(join(dir, '.rollout/evidence', file), 'utf8')
 
-// The disk guard reads ROLLOUT_MIN_FREE_GB; a value set in the shell must not change these tests.
-beforeEach(() => void vi.stubEnv('ROLLOUT_MIN_FREE_GB', ''))
+// The disk guard reads ROLLOUT_MIN_FREE_GB and the previews ROLLOUT_PORT_BASE; a value set in the
+// shell must not change these tests.
+beforeEach(() => {
+  vi.stubEnv('ROLLOUT_MIN_FREE_GB', '')
+  vi.stubEnv('ROLLOUT_PORT_BASE', '')
+})
 afterEach(() => void vi.unstubAllEnvs())
 
 describe('verify', () => {
@@ -201,6 +205,27 @@ describe('verify', () => {
       f.deps.freeBytes = (d) => (seen.push(d), 100e9)
       await verify(dir, report(), { deps: f.deps })
       expect(seen).toEqual([dir])
+    })
+  })
+
+  describe('ports (ROLLOUT_PORT_BASE)', () => {
+    test('main and branch previews move with ROLLOUT_PORT_BASE', async () => {
+      vi.stubEnv('ROLLOUT_PORT_BASE', '4417')
+      const f = fake()
+      expect((await verify(siteDir(), report(), { deps: f.deps })).pass).toBe(true)
+      expect([...new Set(f.calls.filter((c) => c.startsWith('preview')).map((c) => c.split(' ').at(-1)))].sort()).toEqual(['4418', '4419'])
+      expect(f.calls).toContain('stop 4418')
+      expect(f.calls).toContain('stop 4419')
+      expect(f.calls.some((c) => / 439[89]$/.test(c))).toBe(false)
+    })
+
+    test('a bad ROLLOUT_PORT_BASE stops verify before any step', async () => {
+      vi.stubEnv('ROLLOUT_PORT_BASE', 'abc')
+      const dir = siteDir()
+      const f = fake()
+      await expect(verify(dir, report(), { deps: f.deps })).rejects.toThrow(/ROLLOUT_PORT_BASE/)
+      expect(f.calls.some((c) => c.startsWith('npm') || c.startsWith('git push'))).toBe(false)
+      expect(existsSync(join(dir, '.rollout/verify.json'))).toBe(false)
     })
   })
 

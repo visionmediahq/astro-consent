@@ -5,9 +5,8 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { type Exec, exec as realExec, tail } from './lib/exec'
+import { rolloutPorts } from './lib/ports'
 import { waitUp as realWaitUp } from './preview'
-
-export const DOCKER_PORT = 4397
 
 export interface DockerDeps {
   exec?: Exec
@@ -38,7 +37,7 @@ export function exposedPort(dockerfile: string): number {
 }
 
 /**
- * Clones `branch` of `repoUrl`, builds and runs its Dockerfile on port 4397 and calls `run(url)`
+ * Clones `branch` of `repoUrl`, builds and runs its Dockerfile on ROLLOUT_PORT_BASE (default 4397) and calls `run(url)`
  * against it. Cleanup always runs, also when `run` throws: container stopped, image removed, build
  * cache pruned, clone deleted. Docker not running is a failure with a clear message, never a skip.
  * `buildArgs` are what Coolify passes as build variables (SITE_URL): a Dockerfile that turns an
@@ -53,6 +52,7 @@ export async function dockerCheck(
 ): Promise<{ pass: boolean; log: string }> {
   const exec = deps.exec ?? realExec
   const waitUp = deps.waitUp ?? ((url: string) => realWaitUp(url, 120_000))
+  const hostPort = rolloutPorts().docker
   const log: string[] = []
   const info = await exec('docker', ['info'])
   if (info.code !== 0) {
@@ -77,10 +77,10 @@ export async function dockerCheck(
     const build = await exec('docker', ['build', ...args, '-t', image, clone])
     log.push(`docker build exit ${build.code}`)
     if (build.code !== 0) return { pass: false, log: `${log.join('\n')}\n${tail(build.out, 30)}` }
-    const started = await exec('docker', ['run', '-d', '--rm', '-p', `${DOCKER_PORT}:${port}`, '-e', 'HOST=0.0.0.0', '-e', `PORT=${port}`, image])
+    const started = await exec('docker', ['run', '-d', '--rm', '-p', `${hostPort}:${port}`, '-e', 'HOST=0.0.0.0', '-e', `PORT=${port}`, image])
     if (started.code !== 0) return { pass: false, log: `${log.join('\n')}\ndocker run failed:\n${tail(started.out)}` }
     container = started.out.trim().split('\n').at(-1) ?? null
-    const url = `http://127.0.0.1:${DOCKER_PORT}`
+    const url = `http://127.0.0.1:${hostPort}`
     if (!(await waitUp(`${url}/`))) {
       const logs = container ? await exec('docker', ['logs', '--tail', '30', container]) : { out: '' }
       return { pass: false, log: `${log.join('\n')}\nthe container did not answer on ${url}:\n${logs.out}` }

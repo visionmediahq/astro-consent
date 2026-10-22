@@ -39,7 +39,11 @@ const dirs: string[] = []
 afterEach(() => {
   for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true })
 })
-beforeEach(() => void vi.stubEnv('ROLLOUT_MIN_FREE_GB', ''))
+// A ROLLOUT_MIN_FREE_GB or ROLLOUT_PORT_BASE set in the shell must not change these tests.
+beforeEach(() => {
+  vi.stubEnv('ROLLOUT_MIN_FREE_GB', '')
+  vi.stubEnv('ROLLOUT_PORT_BASE', '')
+})
 afterEach(() => void vi.unstubAllEnvs())
 
 /** `<tmp>/site` with package files, and the files given (fonts.css by default). */

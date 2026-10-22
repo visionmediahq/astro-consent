@@ -1,9 +1,36 @@
 import { mkdirSync, writeFileSync } from 'node:fs'
-import { describe, expect, test } from 'vitest'
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { dockerCheck, imageTag } from '../../../ci/rollout/docker'
 import type { Exec } from '../../../ci/rollout/lib/exec'
 
 describe('dockerCheck', () => {
+  // A ROLLOUT_PORT_BASE set in the shell must not change these tests.
+  beforeEach(() => void vi.stubEnv('ROLLOUT_PORT_BASE', ''))
+  afterEach(() => void vi.unstubAllEnvs())
+
+  test('publishes the container on ROLLOUT_PORT_BASE (default 4397) and checks it there', async () => {
+    for (const [env, port] of [['', 4397], ['4417', 4417]] as const) {
+      vi.stubEnv('ROLLOUT_PORT_BASE', env)
+      const calls: string[][] = []
+      const exec: Exec = async (cmd, args) => {
+        calls.push([cmd, ...args])
+        if (cmd === 'git' && args[0] === 'clone') {
+          mkdirSync(args.at(-1)!, { recursive: true })
+          writeFileSync(`${args.at(-1)!}/Dockerfile`, 'FROM node:22\nEXPOSE 3000\n')
+        }
+        return { code: 0, out: cmd === 'docker' && args[0] === 'run' ? 'abc123\n' : '' }
+      }
+      const urls: string[] = []
+      const waited: string[] = []
+      const result = await dockerCheck('https://github.com/visionmediahq/bbstad.git', 'consent-banner', async (url) => (urls.push(url), true), { exec, waitUp: async (u) => (waited.push(u), true) })
+      expect(result.pass).toBe(true)
+      const run = calls.find((c) => c[0] === 'docker' && c[1] === 'run')!
+      expect(run[run.indexOf('-p') + 1]).toBe(`${port}:3000`)
+      expect(waited).toEqual([`http://127.0.0.1:${port}/`])
+      expect(urls).toEqual([`http://127.0.0.1:${port}`])
+    }
+  })
+
   test('passes build args to docker build (SITE_URL, as Coolify does)', async () => {
     const calls: string[][] = []
     const exec: Exec = async (cmd, args) => {
