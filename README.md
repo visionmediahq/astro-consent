@@ -340,16 +340,16 @@ npx tsx ci/rollout/run.ts help
   below it (its stops; in another method, the extremes of the page's mixes, found by the same
   sampled search; and the range below wherever the layer has translucent stops or may not cover
   the box), then the text against the worst point of that range. Each layer other than an opaque
-  colour or an opaque sRGB gradient widens the range by one 8-bit level past rounding outward:
-  the canvas reads colours back in 8 bits (alpha 0.15 as 38/255 = 0.149) and the page rounds
-  each layer it paints. That client footer's lightest point is 8.70:1; its line reads
+  colour or an opaque sRGB gradient that covers the box widens the range by one 8-bit level past
+  rounding outward: the canvas reads colours back in 8 bits (alpha 0.15 as 38/255 = 0.149) and the
+  page rounds each layer it paints. That client footer's lightest point is 8.70:1; its line reads
   `8.50:1 ok (2 gradients, bound over all stops)`. Compositing and luminance only grow with each
   channel, so with sRGB layers the bound is not above any pixel the page paints; with another
   method it is as good as the sampled search for each segment's extremes. A brute-force unit test
   checks it against random stacks. A `url()` image that shows, or a stop or mix the page cannot
   resolve stays indeterminate. One gradient and plain colours are not widened: they report the
   worst point as read, which is exact for opaque colours and opaque sRGB stops; with translucent
-  layers it can be about one level off what is painted (near 4.5, up to about 0.06 in the ratio).
+  layers it can be a level or two off what is painted (near 4.5, up to about 0.08 in the ratio).
 - Effects the colours do not show are indeterminate: `background-blend-mode`, `background-clip:
   text`, `opacity` on an element with a background or above it, `mix-blend-mode` or a filter that
   changes something (`grayscale(0)` does not) on the text or any ancestor, and `backdrop-filter`

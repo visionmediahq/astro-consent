@@ -698,7 +698,11 @@ describe('contrast', () => {
         const grad = (linear: boolean): Grad => ({ stops: Array.from({ length: rnd() < 0.7 ? 2 : 3 }, stop), linear, covers: rnd() < 0.65 })
 
         const CASES = 300
-        it(`${CASES} random stacks of 2–3 gradients (sRGB and srgb-linear), a colour layer between, opaque and translucent text`, async () => {
+        // Once as verify runs, and once with the 8-bit margin off: the margin is slack, and without it the
+        // fold maths alone must still never land above the truth (the reference does not round).
+        for (const margin of [1, 0])
+        it(`${CASES} random stacks of 2–3 gradients (sRGB and srgb-linear), a colour layer between, opaque and translucent text; margin ${margin}`, async () => {
+          seed = 92
           let worstGap = -Infinity
           let close = 0
           for (let n = 0; n < CASES; n++) {
@@ -716,7 +720,7 @@ describe('contrast', () => {
                 ? { fg, layers: [mid, base], images: [image(above, 0), image(below, 1)] }
                 : { fg, layers: [base], images: [image(below, 0)] },
             )
-            const [got] = await measureContrast(linearPage([row]) as never)
+            const [got] = await measureContrast(linearPage([row]) as never, { margin })
             const exact = truth(fg, base, below, mid, above)
             const at = `case ${n}: ${JSON.stringify({ fg, base, mid, value: value(gs), coversBottomUp: gs.map((g) => g.covers) })}`
             expect(got!.indeterminate, at).toBeUndefined()
@@ -729,6 +733,29 @@ describe('contrast', () => {
           expect(close).toBeGreaterThan(CASES / 2)
           expect(worstGap).toBeLessThanOrEqual(1e-6)
         }, 60_000)
+        it('an opaque, covering gradient in another method is widened too; an sRGB one is exact', async () => {
+          // The page's mixes are read back in 8 bits like any colour, so only an sRGB gradient, whose
+          // points the tool interpolates from its 8-bit stops, may skip the margin.
+          const stack = (method: string) => `linear-gradient(rgba(0, 0, 0, 0), rgba(0, 0, 0, 0)), linear-gradient(${method}rgb(0, 0, 0), rgb(0, 0, 0))`
+          const bg = async (method: string) => {
+            const rows = [two([255, 255, 255, 255], stack(method))]
+            rows[0]!.colours = undefined
+            const page = linearPage(rows)
+            // As the canvas reads them: whole 8-bit values (the exact mixes carry float noise of their own).
+            const rounded = {
+              evaluate: async (src: string) => {
+                const got = (await page.evaluate(src)) as unknown[]
+                return Array.isArray(got[0]) ? (got as C[]).map((c) => c.map(Math.round)) : got
+              },
+            }
+            const [got] = await measureContrast(rounded as never)
+            expect(got!.indeterminate, method).toBeUndefined()
+            return got!.bg
+          }
+          // Black, then the transparent layer's fold: one level for it, one more for the srgb-linear layer.
+          expect(await bg('')).toEqual({ r: 1, g: 1, b: 1 })
+          expect(await bg('in srgb-linear, ')).toEqual({ r: 2, g: 2, b: 2 })
+        })
         it('a color-mix the page answers with null, in one of several layers, stays indeterminate', async () => {
           const rows = [two([255, 255, 255, 255], 'linear-gradient(rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0)), linear-gradient(in srgb-linear, rgb(0, 0, 139), rgb(139, 0, 0))')]
           rows[0]!.colours = undefined
