@@ -919,7 +919,7 @@ describe('PR 3: wire refused while fonts-selfhost is open (the other direction o
     const branch = await runWire(dir, { dryRun: false, fonts: false, install: () => {}, openPrs: async (_r, b) => (asked.push(b), []) })
     expect(branch.code).toBe(3)
     expect(branch.output).toMatch(/origin has a fonts-selfhost branch \([0-9a-f]{7}\) that is not in origin\/main: .*merge or close the fonts first\. Then detect and wire again/)
-    expect(asked).toEqual(['fonts-selfhost'])
+    expect(asked).toEqual(['fonts-selfhost', 'astro-consent-update'])
     expect(git(dir, 'branch', '--show-current')).toBe('main')
 
     git(dir, 'push', '-q', 'origin', '--delete', 'fonts-selfhost')
@@ -941,11 +941,11 @@ describe('PR 3: wire refused while fonts-selfhost is open (the other direction o
     expect((await runWire(dir, { dryRun: false, fonts: false, install: () => {}, openPrs: noPrs })).code).toBe(0)
   })
 
-  test('runFonts asks GitHub about consent-banner only', async () => {
+  test('runFonts asks GitHub about the other two flows: consent-banner, then astro-consent-update', async () => {
     const dir = checkout(knutTree())
     runDetect(dir, ['knutssonsbil.se'])
     const asked: string[] = []
     await runFonts(dir, { dryRun: true, fetch: network(), now: DATE, openPrs: async (_r, b) => (asked.push(b), []) })
-    expect(asked).toEqual(['consent-banner'])
+    expect(asked).toEqual(['consent-banner', 'astro-consent-update'])
   })
 })

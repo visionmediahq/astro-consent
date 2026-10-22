@@ -241,6 +241,9 @@ describe('merge on fonts-selfhost', () => {
       if (line === `git merge-base --is-ancestor ${'d'.repeat(40)} origin/main`) return { code: o.otherBranch === 'merged' ? 0 : 1, out: '' }
       if (line === 'gh pr list -R visionmediahq/nhrk --head consent-banner --state open --json url,title')
         return { code: 0, out: JSON.stringify(o.otherPr ? [{ url: 'https://github.com/visionmediahq/nhrk/pull/3', title: 'Samtyckesbanner (astro-consent)' }] : []) }
+      // No astro-consent-update branch or PR on GitHub.
+      if (line === 'git ls-remote --heads origin refs/heads/astro-consent-update') return { code: 0, out: '' }
+      if (line === 'gh pr list -R visionmediahq/nhrk --head astro-consent-update --state open --json url,title') return { code: 0, out: '[]' }
       return { code: 1, out: `unexpected: ${line}` }
     }
     return { exec, calls }

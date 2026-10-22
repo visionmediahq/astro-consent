@@ -496,3 +496,80 @@ describe('openPr on consent-banner with the fonts commit', () => {
     expect(renderBody(template, { kind: 'consent', services: ['google-maps', 'elfsight'], verify: PASS, issues: [], domain: 'kund.se', fonts })).toMatch(/^5\. Klicka "Cookie-inställningar"[^\n]*\n6\. Öppna webbläsarens nätverksflik/m)
   })
 })
+
+// ── astro-consent-update ─────────────────────────────────────────────────────────────────────
+
+const OLD = 'c258167ff9c28a92eab5f4b414e575701e9cebd3'
+const NEW = '8128aec232f06065a139ba384f6fa623bb2527d4'
+const lockAt = (version: string, sha: string) =>
+  JSON.stringify({ lockfileVersion: 3, packages: { '': {}, 'node_modules/@visionmediahq/astro-consent': { version, resolved: `git+ssh://git@github.com/visionmediahq/astro-consent.git#${sha}` } } })
+const UPDATE_GOLDEN = join(import.meta.dirname, 'fixtures/pr-body/astro-consent-update.md.txt')
+const UPDATE_CHANGELOG = '# Changelog\n\n## 1.1.4\n\n- Fix: the toggles.\n\n## 1.1.3\n\n- Fix: the width.\n\n## 1.1.2\n\n- Old.\n\n## 1.1.0\n\n- `CONSENT_VERSION` 2.\n\n## 1.0.2\n\n- Older.\n'
+
+/** A clone on astro-consent-update with its own verify file and shots. */
+function updateDir(): string {
+  const dir = siteDir()
+  writeFileSync(join(dir, '.rollout/verify-astro-consent-update.json'), JSON.stringify(PASS))
+  mkdirSync(join(dir, '.rollout/shots-astro-consent-update'))
+  writeFileSync(join(dir, '.rollout/shots-astro-consent-update/home-360-open.png'), 'png')
+  return dir
+}
+const updateFake = (from = '1.1.2', more: Record<string, Answer> = {}) =>
+  fake({
+    'git rev-parse --abbrev-ref HEAD': { code: 0, out: 'astro-consent-update\n' },
+    'git diff --name-only origin/main...HEAD': { code: 0, out: 'package-lock.json\npackage.json\n' },
+    'git show origin/main:package-lock.json': { code: 0, out: lockAt(from, OLD) },
+    'git show HEAD:package-lock.json': { code: 0, out: lockAt('1.1.4', NEW) },
+    'git show HEAD:src/data/privacy.json': { code: 1, out: 'never read on this flow' },
+    ...more,
+  })
+const updateOpts = (f: ReturnType<typeof fake>, versions: Record<string, number> = { [OLD]: 2, [NEW]: 2 }, extra: Record<string, unknown> = {}) =>
+  opts(f, { consentVersionAt: (sha: string) => versions[sha] ?? null, changelog: UPDATE_CHANGELOG, ...extra })
+
+describe('openPr on astro-consent-update', () => {
+  test('its title and branch, both other flows checked, its own files; the body matches the golden file', async () => {
+    const dir = updateDir()
+    const f = updateFake()
+    const r = await openPr(dir, updateOpts(f))
+    expect(r.url).toBe('https://github.com/visionmediahq/kund/pull/9')
+    expect(r.files.map((x) => x.to)).toEqual(['docs/rollout/2026-10-06-astro-consent/kund/home-360-open.png'])
+    const create = f.calls.find((c) => c.startsWith('gh pr create'))!
+    expect(create).toContain('-H astro-consent-update')
+    expect(create).toContain('-t Uppdatera astro-consent')
+    expect(create).toContain(join(dir, '.rollout/pr-body-astro-consent-update.md'))
+    expect(f.calls).toContain('gh pr list -R visionmediahq/kund --head consent-banner --state open --json url,title')
+    expect(f.calls).toContain('gh pr list -R visionmediahq/kund --head fonts-selfhost --state open --json url,title')
+    expect(f.calls.some((c) => c.includes('privacy.json'))).toBe(false)
+    const body = readFileSync(join(dir, '.rollout/pr-body-astro-consent-update.md'), 'utf8')
+    if (process.env['UPDATE_GOLDEN']) writeFileSync(UPDATE_GOLDEN, body)
+    expect(body).toBe(readFileSync(UPDATE_GOLDEN, 'utf8'))
+    expect(body).toContain('uppdateras från 1.1.2 till 1.1.4')
+    expect(body).toMatch(/#### 1\.1\.4\n\n- Fix: the toggles\.\n\n#### 1\.1\.3\n\n- Fix: the width\./)
+    expect(body).not.toContain('#### 1.1.2')
+    expect(body).toContain('Ingen besökare får frågan igen')
+    expect(body).not.toContain('Alla besökare får frågan')
+    expect(body).not.toContain('SECRET-EVIDENCE-TEXT')
+  })
+
+  test('from 1.0.2 (CONSENT_VERSION 1 → 2): the body says every visitor is asked again, with a test step for it', async () => {
+    const dir = updateDir()
+    await openPr(dir, updateOpts(updateFake('1.0.2'), { [OLD]: 1, [NEW]: 2 }))
+    const body = readFileSync(join(dir, '.rollout/pr-body-astro-consent-update.md'), 'utf8')
+    expect(body).toContain('**Alla besökare får frågan om samtycke igen efter mergen.**')
+    expect(body).toMatch(/^3\. Efter mergen, i en webbläsare där du redan gjort ett val på sajten: bannern visas igen\.$/m)
+    expect(body).toContain('#### 1.1.0')
+    expect(body).not.toContain('Ingen besökare får frågan igen')
+  })
+
+  test('refused when whether visitors are asked again is unknown, or the changelog has no entry for the new version', async () => {
+    await expect(openPr(updateDir(), updateOpts(updateFake(), { [NEW]: 2 }))).rejects.toThrow(/CONSENT_VERSION could not be read at both commits/)
+    await expect(openPr(updateDir(), updateOpts(updateFake(), undefined, { changelog: '# Changelog\n\n## 1.1.3\n\n- x\n' }))).rejects.toThrow(/CHANGELOG\.md has no entry for 1\.1\.4/)
+  })
+
+  test('refused while a consent-banner or fonts-selfhost PR is open', async () => {
+    for (const other of ['consent-banner', 'fonts-selfhost']) {
+      const f = updateFake('1.1.2', { [`gh pr list -R visionmediahq/kund --head ${other}`]: { code: 0, out: JSON.stringify([{ url: 'https://github.com/visionmediahq/kund/pull/5', title: 'x' }]) } })
+      await expect(openPr(updateDir(), updateOpts(f))).rejects.toThrow(`an open ${other} PR (https://github.com/visionmediahq/kund/pull/5) would conflict with astro-consent-update`)
+    }
+  })
+})

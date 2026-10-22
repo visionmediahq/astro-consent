@@ -5,6 +5,7 @@
 //   tsx ci/rollout/run.ts wire   <site dir> [--dry-run] [--no-fonts]
 //   tsx ci/rollout/run.ts fonts  <site dir> [--dry-run]       Google Fonts alone, branch fonts-selfhost
 //   tsx ci/rollout/run.ts fonts-files <site dir> --url <css2 url> [--entry <css>] [--dry-run]   files only, no git
+//   tsx ci/rollout/run.ts update <site dir>              the lockfile on the latest release, branch astro-consent-update
 //   tsx ci/rollout/run.ts verify <site dir>
 //   tsx ci/rollout/run.ts verify --demo <dist dir>   CI/self-test: a built demo, no git/npm/Docker
 //   tsx ci/rollout/run.ts pr     <site dir> --shots-dir <path> --shots-base <url> [--issue <url>]...
@@ -13,7 +14,7 @@
 //
 // Exit codes: 0 ok, 1 error/failed check/STOP, 2 usage, 3 wire plan refused (see USAGE).
 import { execFileSync } from 'node:child_process'
-import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from 'node:fs'
+import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, isAbsolute, join, resolve } from 'node:path'
 import { isEntryScript } from './lib/is-entry'
@@ -22,21 +23,24 @@ import { detect } from './detect/index'
 import { diskSite } from './lib/site-files'
 import { exec } from './lib/exec'
 import { toolLine, type ToolVersion, toolVersion } from './lib/tool-version'
-import { type FlowBranch, isFlowBranch, openPrsFrom, statePath } from './flows'
+import { FLOWS, type FlowBranch, isFlowBranch, openPrsFrom, statePath } from './flows'
+import { diffLock, diffPackageJson } from './lib/lockfile'
 import { classificationLine, normaliseReport } from './lib/report'
 import type { Report } from './types'
 import { formatLive, live } from './live'
 import { merge } from './merge'
 import { openPr, originRepo } from './pr'
-import { verify, verifyOutput } from './verify'
+import { PKG, verify, verifyOutput } from './verify'
 import { main as mainFontsFiles } from './fonts-files'
 import { commitFonts, FONTS_BRANCH, type FontFetch, type FontsFile, fontsFiles, fontsTargetsTaken, planFonts } from './wire/fonts'
-import { applyWire, BRANCH, planFiles, planWire, refusalLines } from './wire/index'
+import { applyWire, BRANCH, changedPaths, commitAllowed, keepOrphans, planFiles, planWire, refusalLines, startBranch } from './wire/index'
+import { compareVersions, consentVersionAt, installedOf, npmUpdate, reaskLine, RELEASE, UPDATE_BRANCH, updateCommitMessage, updateSpec } from './wire/update'
 
 const DETECT_USAGE = 'usage: tsx ci/rollout/run.ts detect <site dir> --domain <domain> [--domain <domain>]'
 const WIRE_USAGE = 'usage: tsx ci/rollout/run.ts wire <site dir> [--dry-run] [--no-fonts]'
 const FONTS_USAGE = 'usage: tsx ci/rollout/run.ts fonts <site dir> [--dry-run]'
 const FONTS_FILES_USAGE = 'usage: tsx ci/rollout/run.ts fonts-files <site dir> --url <css2 url> [--entry <css file>] [--dry-run]'
+const UPDATE_USAGE = 'usage: tsx ci/rollout/run.ts update <site dir>'
 const VERIFY_USAGE = 'usage: tsx ci/rollout/run.ts verify <site dir> | verify --demo <dist dir>'
 const PR_USAGE =
   'usage: tsx ci/rollout/run.ts pr <site dir> --shots-dir <path in site-factory> --shots-base <github url of that folder> [--issue <url>]... [--domain <d>]'
@@ -47,6 +51,7 @@ export const USAGE = [
   WIRE_USAGE,
   FONTS_USAGE,
   FONTS_FILES_USAGE,
+  UPDATE_USAGE,
   VERIFY_USAGE,
   PR_USAGE,
   LIVE_USAGE,
@@ -59,7 +64,7 @@ export const USAGE = [
   '  0  ok (live baseline: also the expected RED)',
   '  1  error, a failed verify step, or a live/merge STOP',
   '  2  usage: bad command or arguments',
-  '  3  wire, fonts, fonts-files: the plan was refused (dry run or not); nothing was written',
+  '  3  wire, fonts, fonts-files, update: the plan was refused (dry run or not); nothing was written',
 ].join('\n')
 /** Exit code of a refused wire plan (Ruling 32). */
 export const EXIT_REFUSED = 3
@@ -225,7 +230,7 @@ export async function runWire(dir: string, opts: WireRunOptions): Promise<{ code
     return { code: EXIT_REFUSED, output: `${lines.join('\n')}\n` }
   }
   if (!opts.dryRun) {
-    const conflicts = await flowConflicts(root, FONTS_BRANCH, 'wire', opts.openPrs ?? openPrsOn)
+    const conflicts = await othersConflicts(root, BRANCH, 'wire', opts.openPrs ?? openPrsOn)
     if (conflicts.length) {
       lines.push(`wire: refused, ${nothing}`, ...conflicts.map((l) => `  ${l}`))
       return { code: EXIT_REFUSED, output: `${lines.join('\n')}\n` }
@@ -291,7 +296,7 @@ async function flowConflicts(root: string, branch: FlowBranch, stage: string, op
     throw unknown(`git ls-remote --heads origin refs/heads/${branch}`, e)
   }
   const sha = listed.split('\n').map((l) => l.trim().split(/\s+/)).find(([, ref]) => ref === `refs/heads/${branch}`)?.[0]
-  const what = branch === BRANCH ? 'the banner' : 'the fonts'
+  const what = branch === BRANCH ? 'the banner' : branch === FONTS_BRANCH ? 'the fonts' : 'the update'
   if (sha) {
     // Both tips as GitHub has them now: main may have moved since the clone's last fetch.
     try {
@@ -316,6 +321,13 @@ async function flowConflicts(root: string, branch: FlowBranch, stage: string, op
   return out
 }
 
+/** flowConflicts for every flow `branch` conflicts with (flows.ts `others`), in that order. */
+async function othersConflicts(root: string, branch: FlowBranch, stage: string, openPrs: OpenPrs): Promise<string[]> {
+  const out: string[] = []
+  for (const other of FLOWS[branch].others) out.push(...(await flowConflicts(root, other, stage, openPrs)))
+  return out
+}
+
 /**
  * fonts <site dir>: self-hosts the Google Fonts of a site whose banner is already live, on a new
  * branch fonts-selfhost from origin/main with one commit. A dry run prints the diff and writes
@@ -334,7 +346,7 @@ export async function runFonts(
     lines.push(`fonts: refused, nothing ${opts.dryRun ? 'would be' : 'was'} written`, ...reasons.map((l) => `  ${l}`))
     return { code: EXIT_REFUSED, output: `${lines.join('\n')}\n` }
   }
-  const conflicts = await flowConflicts(root, BRANCH, 'fonts', opts.openPrs ?? openPrsOn)
+  const conflicts = await othersConflicts(root, FONTS_BRANCH, 'fonts', opts.openPrs ?? openPrsOn)
   if (conflicts.length) return refused(conflicts)
   const fp = await planFonts(site, report, { ...(opts.fetch ? { fetch: opts.fetch } : {}), ...(opts.now ? { now: opts.now } : {}) })
   if (!fp.ok) return refused(refusalLines(fp))
@@ -346,6 +358,105 @@ export async function runFonts(
   return { code: 0, output: `${lines.join('\n')}\n` }
 }
 
+export function parseUpdateArgs(args: string[]): { dir: string } {
+  let dir: string | null = null
+  for (const arg of args) {
+    if (arg.startsWith('-')) throw new Error(`unknown option ${arg}\n${UPDATE_USAGE}`)
+    else if (dir === null) dir = arg
+    else throw new Error(`one site dir only\n${UPDATE_USAGE}`)
+  }
+  if (dir === null) throw new Error(UPDATE_USAGE)
+  return { dir }
+}
+
+export interface UpdateRunOptions {
+  /** npm install of the spec into the lockfile; npmUpdate unless a test injects its own. */
+  install?: (dir: string, spec: string) => void
+  openPrs?: OpenPrs
+  /** The release to update to; this checkout's package.json version unless a test says. */
+  release?: string
+  /** CONSENT_VERSION at an astro-consent commit; this checkout's git unless a test injects it. */
+  consentVersionAt?: (sha: string) => number | null
+}
+
+/**
+ * update <site dir>: moves the lockfile of a site whose banner is live to the latest release, on a
+ * new branch astro-consent-update from origin/main, one commit (package.json and package-lock.json).
+ * Exit code 3, nothing written, while another flow has an open PR or an unmerged branch on origin,
+ * when main has no astro-consent or already has the release, or when the install changed anything
+ * beyond the package's own lockfile entry and the root's dependency on it (or did not move it up):
+ * then the branch is deleted again and the checkout is back where it was. Any other failure after
+ * branching is rolled back the same way and thrown.
+ */
+export async function runUpdate(dir: string, opts: UpdateRunOptions = {}): Promise<{ code: number; output: string }> {
+  const root = resolve(dir)
+  const release = opts.release ?? RELEASE
+  const versionAt = opts.consentVersionAt ?? consentVersionAt
+  const lines: string[] = []
+  const refused = (reasons: string[]) => {
+    lines.push('update: refused, nothing was written', ...reasons.map((l) => `  ${l}`))
+    return { code: EXIT_REFUSED, output: `${lines.join('\n')}\n` }
+  }
+  const git = (...args: string[]) => execFileSync('git', args, { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 256 * 1024 * 1024 })
+  const conflicts = await othersConflicts(root, UPDATE_BRANCH, 'update', opts.openPrs ?? openPrsOn)
+  if (conflicts.length) return refused(conflicts)
+
+  const mainPkg = git('show', 'origin/main:package.json')
+  const mainLock = git('show', 'origin/main:package-lock.json')
+  const from = installedOf(mainLock)
+  if (!from || typeof (JSON.parse(mainPkg) as { dependencies?: Record<string, unknown> }).dependencies?.[PKG] !== 'string') {
+    return refused([`${PKG} is not installed on origin/main: the banner is not live there (run.ts wire)`])
+  }
+  if (compareVersions(from.version, release) >= 0) return refused([`origin/main already has astro-consent ${from.version} (the release is ${release}): nothing to update`])
+
+  const back = git('branch', '--show-current').trim()
+  const head = git('rev-parse', 'HEAD').trim()
+  startBranch(root, UPDATE_BRANCH)
+  /** Back to where the checkout was: the branch's changes dropped, the branch deleted. */
+  const rollBack = (): string => {
+    git('reset', '-q', '--hard')
+    for (const p of changedPaths(root)) rmSync(join(root, p), { recursive: true, force: true })
+    git('switch', '-q', ...(back ? [back] : ['--detach', head]))
+    git('branch', '-q', '-D', UPDATE_BRANCH)
+    return `rolled back: ${UPDATE_BRANCH} deleted, the checkout is on ${back || head.slice(0, 7)} again`
+  }
+  const spec = updateSpec(release)
+  try {
+    ;(opts.install ?? npmUpdate)(root, spec)
+    const notes = keepOrphans(root)
+    const branchPkg = readFileSync(join(root, 'package.json'), 'utf8')
+    const branchLock = readFileSync(join(root, 'package-lock.json'), 'utf8')
+    const { allowed, unknown } = diffLock(mainLock, branchLock, PKG, JSON.parse(branchPkg) as Record<string, unknown>)
+    const pkgChanges = diffPackageJson(mainPkg, branchPkg, PKG)
+    const to = installedOf(branchLock)
+    const found = [
+      ...unknown.map((l) => `UNKNOWN ${l}`),
+      ...pkgChanges.map((l) => `UNKNOWN package.json ${l}`),
+      ...(to && compareVersions(to.version, from.version) > 0 ? [] : [`the install left astro-consent at ${to?.version ?? '(none)'} (main ${from.version}): not an update`]),
+    ]
+    if (found.length) {
+      const how = rollBack()
+      return refused([...found, ...allowed.map((l) => `allowed ${l}`), how])
+    }
+    commitAllowed(root, new Set(['package.json', 'package-lock.json']), updateCommitMessage(from.version, to!.version))
+    lines.push(
+      `update: astro-consent ${from.version} → ${to!.version} (${spec})`,
+      ...notes,
+      ...allowed.map((l) => `  allowed ${l}`),
+      `  ${reaskLine(mainLock, branchLock, versionAt)}`,
+      `committed on ${UPDATE_BRANCH}`,
+    )
+    return { code: 0, output: `${lines.join('\n')}\n` }
+  } catch (e) {
+    let how: string
+    try {
+      how = rollBack()
+    } catch (again) {
+      how = `the rollback failed too (${(again as Error).message}): git reset --hard && git clean -fd && git switch main && git branch -D ${UPDATE_BRANCH}, or re-clone`
+    }
+    throw new Error(`${(e as Error).message}\n${how}`)
+  }
+}
 
 export function parseVerifyArgs(args: string[]): { dir: string; demo: boolean } {
   let dir: string | null = null
@@ -535,6 +646,24 @@ async function mainFonts(rest: string[]): Promise<number> {
   }
 }
 
+async function mainUpdate(rest: string[]): Promise<number> {
+  let args: ReturnType<typeof parseUpdateArgs>
+  try {
+    args = parseUpdateArgs(rest)
+  } catch (e) {
+    console.error((e as Error).message)
+    return 2
+  }
+  try {
+    const { code, output } = await runUpdate(args.dir)
+    process.stdout.write(output)
+    return code
+  } catch (e) {
+    console.error((e as Error).message)
+    return 1
+  }
+}
+
 export async function main(argv: string[]): Promise<number> {
   const [command, ...rest] = argv
   if (command === 'help' || command === '--help' || command === '-h') {
@@ -544,6 +673,7 @@ export async function main(argv: string[]): Promise<number> {
   if (command === 'wire') return mainWire(rest)
   if (command === 'fonts') return mainFonts(rest)
   if (command === 'fonts-files') return mainFontsFiles(rest)
+  if (command === 'update') return mainUpdate(rest)
   if (command === 'verify') return mainVerify(rest)
   if (command === 'pr') return mainPr(rest)
   if (command === 'live') return mainLive(rest)

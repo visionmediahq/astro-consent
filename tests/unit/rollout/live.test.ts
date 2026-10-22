@@ -406,9 +406,11 @@ function mergeExec(o: { moved?: boolean; head: { sha: string }; rebaseFails?: bo
       return { code: 0, out: JSON.stringify({ state: o.state ?? 'OPEN', headRefName: 'consent-banner' }) }
     if (line.startsWith('gh pr merge 7 ')) return { code: 0, out: '' }
     if (line === 'gh pr view 7 -R visionmediahq/nhrk --json mergeCommit') return { code: 0, out: JSON.stringify({ mergeCommit: { oid: SHA } }) }
-    // No fonts-selfhost branch or PR on GitHub.
-    if (line === 'git ls-remote --heads origin refs/heads/fonts-selfhost') return { code: 0, out: '' }
-    if (line === 'gh pr list -R visionmediahq/nhrk --head fonts-selfhost --state open --json url,title') return { code: 0, out: '[]' }
+    // No fonts-selfhost or astro-consent-update branch or PR on GitHub.
+    for (const other of ['fonts-selfhost', 'astro-consent-update']) {
+      if (line === `git ls-remote --heads origin refs/heads/${other}`) return { code: 0, out: '' }
+      if (line === `gh pr list -R visionmediahq/nhrk --head ${other} --state open --json url,title`) return { code: 0, out: '[]' }
+    }
     return { code: 1, out: `unexpected: ${line}` }
   }
   return { exec, calls }

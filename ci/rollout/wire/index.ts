@@ -186,7 +186,7 @@ export function applyWire(dir: string, plan: WirePlan, opts: ApplyOptions): stri
  * After the install: puts back the lockfile entries npm pruned that origin/main had and nothing
  * requires (lib/lockfile keepPrunedOrphans), so the lockfile differs from main only by the package.
  */
-function keepOrphans(root: string): string[] {
+export function keepOrphans(root: string): string[] {
   const path = join(root, 'package-lock.json')
   if (!existsSync(path) || !gitOk(root, 'cat-file', '-e', 'origin/main:package-lock.json')) return []
   const main = execFileSync('git', ['show', 'origin/main:package-lock.json'], { cwd: root, encoding: 'utf8', maxBuffer: 256 * 1024 * 1024 })
