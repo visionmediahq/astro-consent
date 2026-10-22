@@ -26,7 +26,7 @@ export interface ClipResult {
   covered: boolean
   /**
    * An embed button, or the rest of its row ("Visa alltid", the open link), that an ancestor with
-   * `overflow: hidden` or `clip` cuts off, wholly or in part, on the axis it hides (lbfastigheter,
+   * `overflow: hidden` or `clip` cuts off, wholly or in part, on the axis it hides (site 1239527674,
    * #43: a map parent 300px tall on phones hid "Visa" below its edge). An axis that scrolls is not
    * counted: the visitor can scroll to the button.
    */

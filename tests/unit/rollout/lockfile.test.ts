@@ -20,11 +20,11 @@ const entry = (version: string, extra: Record<string, unknown> = {}) => ({
 
 describe('majorOf', () => {
   test('astro from a v3 lockfile', () => {
-    expect(majorOf(lock('a-tak', 'before'), 'astro')).toBe(6)
+    expect(majorOf(lock('site-1271984151', 'before'), 'astro')).toBe(6)
   })
 
   test('a scoped package, a parsed object and a missing package', () => {
-    expect(majorOf(lock('a-tak', 'merged'), PKG)).toBe(1)
+    expect(majorOf(lock('site-1271984151', 'merged'), PKG)).toBe(1)
     expect(majorOf(v3({ 'node_modules/daisyui': entry('5.5.19') }), 'daisyui')).toBe(5)
     expect(majorOf(v3({}), 'tailwindcss')).toBeNull()
   })
@@ -139,7 +139,7 @@ describe('diffLock', () => {
     expect(d.unknown).toEqual([expect.stringContaining('root')])
   })
 
-  test('the root engines catching up with package.json is allowed (stale lockfile on main, mannature)', () => {
+  test('the root engines catching up with package.json is allowed (stale lockfile on main)', () => {
     const d = diffLock(
       v3({ '': { name: 'site', dependencies: {}, engines: { node: '>=22.0.0' } } }),
       v3({ '': { name: 'site', dependencies: { [PKG]: '^1.0.2' }, engines: { node: '>=22.12.0' } } }),
@@ -160,15 +160,15 @@ describe('diffLock', () => {
     expect(diffLock(before, dropped, PKG, { engines: undefined }).unknown).toEqual(['(root): engines changed'])
   })
 
-  test('the root name catching up with package.json is allowed (lockfile left from astro-starter, bbstad)', () => {
+  test('the root name catching up with package.json is allowed (lockfile left from astro-starter)', () => {
     const d = diffLock(
       v3({ '': { name: 'astro-starter', version: '0.0.1', dependencies: {} } }),
-      v3({ '': { name: 'bbstad', version: '0.0.1', dependencies: { [PKG]: '^1.0.2' } } }),
+      v3({ '': { name: 'site-1270076313', version: '0.0.1', dependencies: { [PKG]: '^1.0.2' } } }),
       PKG,
-      { name: 'bbstad', version: '0.0.1' },
+      { name: 'site-1270076313', version: '0.0.1' },
     )
     expect(d.unknown).toEqual([])
-    expect(d.allowed).toEqual([`(root): dependency on ${PKG}; name synced to package.json ("astro-starter" → "bbstad")`])
+    expect(d.allowed).toEqual([`(root): dependency on ${PKG}; name synced to package.json ("astro-starter" → "site-1270076313")`])
   })
 
   test('only the fields npm copies from package.json sync; a root dependency map never does', () => {
@@ -187,7 +187,7 @@ describe('diffLock', () => {
     expect(d.unknown).toEqual(['(root): dependencies, engines changed'])
   })
 
-  test('daisyUI 5 added where main had none is allowed, with its root dependency (faluridklubb)', () => {
+  test('daisyUI 5 added where main had none is allowed, with its root dependency', () => {
     const d = diffLock(
       v3({ '': { name: 'site', dependencies: { astro: '^6.1.6' } } }),
       v3({
@@ -228,7 +228,7 @@ describe('diffLock', () => {
   })
 
   test('every pilot fixture before → merged is fully allowed', () => {
-    for (const site of ['a-tak', 'aspomad', 'domeijstapetserarverkstad', 'munkforstradgardstjanst', 'nhrk', 'traforadling', 'vasshallakatthotell']) {
+    for (const site of ['site-1271984151', 'site-1218869363', 'site-1243511314', 'site-1286040212', 'site-1277834673', 'site-1243335919', 'site-1245311266']) {
       const d = diffLock(lock(site, 'before'), lock(site, 'merged'), PKG)
       expect(d.unknown, site).toEqual([])
       expect(d.allowed.length, site).toBeGreaterThan(0)
@@ -259,7 +259,7 @@ describe('diffPackageJson', () => {
     expect(diffPackageJson(before, before, PKG)).toEqual([expect.stringContaining(PKG)])
   })
 
-  test('npm dropping an empty dependency map is not a change (antonicommunications); emptying one is', () => {
+  test('npm dropping an empty dependency map is not a change; emptying one is', () => {
     const withEmpty = JSON.stringify({ ...JSON.parse(before), devDependencies: {} })
     const after = JSON.stringify({ ...JSON.parse(before), dependencies: { ...JSON.parse(before).dependencies, [PKG]: '^1.0.2' } })
     expect(diffPackageJson(withEmpty, after, PKG)).toEqual([])
@@ -269,7 +269,7 @@ describe('diffPackageJson', () => {
     expect(diffPackageJson(JSON.stringify({ ...JSON.parse(before), overrides: {} }), after, PKG)).toEqual(['overrides: changed'])
   })
 
-  test('daisyUI 5 added to dependencies where main had none is allowed (faluridklubb); 4, or a change to one on main, is not', () => {
+  test('daisyUI 5 added to dependencies where main had none is allowed; 4, or a change to one on main, is not', () => {
     const withPkg = (deps: Record<string, string>) =>
       JSON.stringify({ ...JSON.parse(before), dependencies: { ...JSON.parse(before).dependencies, [PKG]: '^1.0.2', ...deps } })
     expect(diffPackageJson(before, withPkg({ daisyui: '^5.7.47' }), PKG)).toEqual([])

@@ -33,9 +33,9 @@ function where(files: SiteFiles, r: FontsInfo): string[] {
   return r.locations.map((l) => `${l.kind} ${l.file}: ${files.read(l.file).slice(l.start, l.end).split('\n')[0]!.trim()}`)
 }
 
-const KNUT = 'https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Barlow:ital,wght@0,300;0,400;0,500;0,600;1,400&display=swap'
+const OSWALD_BARLOW = 'https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Barlow:ital,wght@0,300;0,400;0,500;0,600;1,400&display=swap'
 const TW = '@import "tailwindcss";\n'
-const LINK = `<link rel="stylesheet" href="${KNUT}" />`
+const LINK = `<link rel="stylesheet" href="${OSWALD_BARLOW}" />`
 const page = (head: string, frontmatter = "import '../styles/global.css'"): string =>
   `---\n${frontmatter}\n---\n<html lang="sv">\n  <head>\n    ${head}\n  </head>\n  <body><slot /></body>\n</html>\n`
 /** A minimal site: a layout with `head` and a Tailwind entry. */
@@ -49,10 +49,10 @@ function needsHuman(r: FontsInfo, fragment: string): void {
 }
 
 describe('detectFonts: wireable patterns', () => {
-  test('knutssonsbil: one-line stylesheet link and two preconnects', () => {
-    const files = site('knutssonsbil')
+  test('one-line stylesheet link and two preconnects', () => {
+    const files = site('site-1228881255')
     const r = fonts(files)
-    expect(r).toMatchObject({ status: 'wire', url: KNUT, urls: [KNUT], csp: [], reasons: [] })
+    expect(r).toMatchObject({ status: 'wire', url: OSWALD_BARLOW, urls: [OSWALD_BARLOW], csp: [], reasons: [] })
     expect(where(files, r)).toEqual([
       'preconnect src/layouts/Base.astro: <link rel="preconnect" href="https://fonts.googleapis.com" />',
       'preconnect src/layouts/Base.astro: <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />',
@@ -60,8 +60,8 @@ describe('detectFonts: wireable patterns', () => {
     ])
   })
 
-  test('ahatrafikskola: a link split over lines', () => {
-    const files = site('ahatrafikskola')
+  test('a link split over lines', () => {
+    const files = site('site-1230607492')
     const r = fonts(files)
     expect(r.status).toBe('wire')
     expect(r.url).toMatch(/^https:\/\/fonts\.googleapis\.com\/css2\?family=Bricolage\+Grotesque:opsz,wght@12\.\.96,400;/)
@@ -70,8 +70,8 @@ describe('detectFonts: wireable patterns', () => {
     expect(files.read(link.file).slice(link.start, link.end)).toMatch(/^<link\n\s+rel="stylesheet"\n\s+href="[^"]+"\n\s+\/>$/)
   })
 
-  test('ernstedt: preload as=style, a print/onload stylesheet and a noscript copy (any attribute order)', () => {
-    const files = site('ernstedt')
+  test('preload as=style, a print/onload stylesheet and a noscript copy (any attribute order)', () => {
+    const files = site('site-1270108078')
     const r = fonts(files)
     expect(r.status).toBe('wire')
     expect(r.urls).toHaveLength(1)
@@ -80,8 +80,8 @@ describe('detectFonts: wireable patterns', () => {
     expect(files.read(ns.file).slice(ns.start, ns.end)).toMatch(/^<noscript><link [^>]+\/><\/noscript>$/)
   })
 
-  test('onoffshore: multi-line preload + stylesheet, a CSP in _headers that keeps self', () => {
-    const files = site('onoffshore')
+  test('multi-line preload + stylesheet, a CSP in _headers that keeps self', () => {
+    const files = site('site-1249129412')
     const r = fonts(files)
     expect(r.status).toBe('wire')
     expect(r.locations.map((l) => l.kind)).toEqual(['preconnect', 'preconnect', 'preload', 'link'])
@@ -90,8 +90,8 @@ describe('detectFonts: wireable patterns', () => {
     expect(files.read(c.file).slice(c.start, c.end)).toMatch(/^ {2}Content-Security-Policy: default-src 'self';.*form-action 'self';$/)
   })
 
-  test('arjangs-elmontage: a frontmatter const used only as href, in a link and a noscript', () => {
-    const files = site('arjangs-elmontage')
+  test('a frontmatter const used only as href, in a link and a noscript', () => {
+    const files = site('site-1272266556')
     const r = fonts(files)
     expect(r.status).toBe('wire')
     expect(r.url).toBe('https://fonts.googleapis.com/css2?family=Kanit:wght@500;600;700;800&family=Open+Sans:wght@400;500;600;700&display=swap')
@@ -106,8 +106,8 @@ describe('detectFonts: wireable patterns', () => {
     expect(files.read(c.file).slice(c.start, c.end)).toMatch(/^const fontHref =\n {2}'https:[^']+'$/)
   })
 
-  test('ljrevision: @import url(...) on line 1 of global.css, preconnects in the layout', () => {
-    const files = site('ljrevision')
+  test('@import url(...) on line 1 of global.css, preconnects in the layout', () => {
+    const files = site('site-1222250001')
     const r = fonts(files)
     expect(r.status).toBe('wire')
     expect(r.url).toBe('https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&display=swap')
@@ -119,13 +119,13 @@ describe('detectFonts: wireable patterns', () => {
   })
 
   test('a quoted @import "…" is the same pattern', () => {
-    const r = fonts(withFiles(null, { 'src/styles/global.css': `@import "${KNUT}";\n${TW}` }))
+    const r = fonts(withFiles(null, { 'src/styles/global.css': `@import "${OSWALD_BARLOW}";\n${TW}` }))
     expect(r.status).toBe('wire')
     expect(r.locations.map((l) => l.kind)).toEqual(['import'])
   })
 
-  test('kfkmekan: a CSP meta in the layout that keeps self is reported, not refused', () => {
-    const files = site('kfkmekan')
+  test('a CSP meta in the layout that keeps self is reported, not refused', () => {
+    const files = site('site-1230972300')
     const r = fonts(files)
     expect(r.status).toBe('wire')
     expect(r.locations.map((l) => l.kind)).toEqual(['preconnect', 'preconnect', 'link'])
@@ -135,12 +135,12 @@ describe('detectFonts: wireable patterns', () => {
   })
 
   test('&amp; in an attribute is decoded in the url', () => {
-    const r = fonts(mini(`<link rel="stylesheet" href="${KNUT.replaceAll('&', '&amp;')}" />`))
+    const r = fonts(mini(`<link rel="stylesheet" href="${OSWALD_BARLOW.replaceAll('&', '&amp;')}" />`))
     expect(r.status).toBe('wire')
-    expect(r.url).toBe(KNUT)
+    expect(r.url).toBe(OSWALD_BARLOW)
   })
 
-  test('an image preload with a dynamic href is not a stylesheet (ernstedt, farstaglas)', () => {
+  test('an image preload with a dynamic href is not a stylesheet', () => {
     const r = fonts(mini(`${LINK}\n    {heroPreload && <link rel="preload" as="image" href={heroPreload} fetchpriority="high" />}`, {}, "import '../styles/global.css'\nconst { heroPreload } = Astro.props"))
     expect(r.reasons).toEqual([])
     expect(r.status).toBe('wire')
@@ -159,14 +159,14 @@ describe('detectFonts: wireable patterns', () => {
       }, "import '../styles/global.css'\n// fonts come from https://fonts.googleapis.com\n/* https://fonts.gstatic.com */"),
     )
     expect(r.status).toBe('wire')
-    expect(r.urls).toEqual([KNUT])
+    expect(r.urls).toEqual([OSWALD_BARLOW])
     expect(r.locations.map((l) => l.kind)).toEqual(['link'])
   })
 })
 
 describe('detectFonts: self-hosted and none', () => {
-  test('olarpsvasstak: no font loading at all is none; the CSP strings in middleware are still listed', () => {
-    const files = site('olarpsvasstak')
+  test('no font loading at all is none; the CSP strings in middleware are still listed', () => {
+    const files = site('site-1239527744')
     const r = fonts(files)
     expect(r).toMatchObject({ status: 'none', url: null, urls: [], locations: [], reasons: [] })
     expect(r.csp.map((c) => [c.file, c.kind, files.read(c.file).slice(c.start, c.end)])).toEqual([
@@ -175,16 +175,16 @@ describe('detectFonts: self-hosted and none', () => {
     ])
   })
 
-  test('gron-kontor: @font-face and public/fonts; a comment naming fonts.googleapis.com is not a load', () => {
-    expect(fonts(site('gron-kontor'))).toMatchObject({ status: 'self-hosted', reasons: [], locations: [] })
+  test('@font-face and public/fonts; a comment naming fonts.googleapis.com is not a load', () => {
+    expect(fonts(site('site-1348189257'))).toMatchObject({ status: 'self-hosted', reasons: [], locations: [] })
   })
 
-  test('Vildmarkscamp: the Astro fonts config', () => {
-    expect(fonts(site('Vildmarkscamp'))).toMatchObject({ status: 'self-hosted', reasons: [] })
+  test('the Astro fonts config', () => {
+    expect(fonts(site('site-1344694739'))).toMatchObject({ status: 'self-hosted', reasons: [] })
   })
 
-  test('sveplant: an @fontsource dependency', () => {
-    expect(fonts(site('sveplant'))).toMatchObject({ status: 'self-hosted', reasons: [] })
+  test('an @fontsource dependency', () => {
+    expect(fonts(site('site-1257114107'))).toMatchObject({ status: 'self-hosted', reasons: [] })
   })
 
   test('woff2 files under src/assets with @font-face', () => {
@@ -221,14 +221,14 @@ describe('detectFonts: needs-human', () => {
   })
 
   test('a Google Fonts url in a .env file', () => {
-    needsHuman(fonts(mini('', { '.env.example': `PUBLIC_FONT_CSS=${KNUT}\n` })), '.env.example')
+    needsHuman(fonts(mini('', { '.env.example': `PUBLIC_FONT_CSS=${OSWALD_BARLOW}\n` })), '.env.example')
   })
 
   test('two distinct urls', () => {
     const other = 'https://fonts.googleapis.com/css2?family=Lato:wght@400&display=swap'
     const r = fonts(mini(`${LINK}\n    <link rel="stylesheet" href="${other}" />`))
     needsHuman(r, '2 distinct')
-    expect(r.urls).toEqual([KNUT, other])
+    expect(r.urls).toEqual([OSWALD_BARLOW, other])
   })
 
   test('the css v1 API', () => {
@@ -236,7 +236,7 @@ describe('detectFonts: needs-human', () => {
   })
 
   test('a text= subset', () => {
-    needsHuman(fonts(mini(`<link rel="stylesheet" href="${KNUT}&text=Hello" />`)), 'text=')
+    needsHuman(fonts(mini(`<link rel="stylesheet" href="${OSWALD_BARLOW}&text=Hello" />`)), 'text=')
   })
 
   test('icon families: Material Symbols in css2 and the Material Icons API', () => {
@@ -248,21 +248,21 @@ describe('detectFonts: needs-human', () => {
   })
 
   test('http or protocol-relative urls', () => {
-    needsHuman(fonts(mini(`<link rel="stylesheet" href="${KNUT.replace('https:', '')}" />`)), 'not understood')
+    needsHuman(fonts(mini(`<link rel="stylesheet" href="${OSWALD_BARLOW.replace('https:', '')}" />`)), 'not understood')
   })
 
   test('a Google Fonts host in a .ts module that is not a CSP', () => {
-    needsHuman(fonts(mini(LINK, { 'src/lib/fonts.ts': `export const FONT_CSS = '${KNUT}'\n` })), 'src/lib/fonts.ts')
+    needsHuman(fonts(mini(LINK, { 'src/lib/fonts.ts': `export const FONT_CSS = '${OSWALD_BARLOW}'\n` })), 'src/lib/fonts.ts')
   })
 
   test('a Google Fonts host in a component <script> or <style>', () => {
     needsHuman(fonts(mini(`${LINK}\n    <script is:inline>const l = document.createElement('link'); l.href = 'https://fonts.googleapis.com/css2?family=X'</script>`)), 'outside')
-    needsHuman(fonts(mini(`<style>@import url('${KNUT}');</style>`)), 'outside')
+    needsHuman(fonts(mini(`<style>@import url('${OSWALD_BARLOW}');</style>`)), 'outside')
   })
 
   test('a Google Fonts host in a data file or in public/', () => {
-    needsHuman(fonts(mini(LINK, { 'src/data/site.json': `{ "fonts": "${KNUT}" }\n` })), 'src/data/site.json')
-    needsHuman(fonts(mini(LINK, { 'public/legacy.html': `<link rel="stylesheet" href="${KNUT}">\n` })), 'public/legacy.html')
+    needsHuman(fonts(mini(LINK, { 'src/data/site.json': `{ "fonts": "${OSWALD_BARLOW}" }\n` })), 'src/data/site.json')
+    needsHuman(fonts(mini(LINK, { 'public/legacy.html': `<link rel="stylesheet" href="${OSWALD_BARLOW}">\n` })), 'public/legacy.html')
   })
 
   test('the Astro fonts config is already set', () => {
@@ -288,7 +288,7 @@ describe('detectFonts: needs-human', () => {
   })
 
   test('the const is used for something besides href', () => {
-    const fm = `import '../styles/global.css'\nconst fontHref = '${KNUT}'`
+    const fm = `import '../styles/global.css'\nconst fontHref = '${OSWALD_BARLOW}'`
     needsHuman(fonts(mini('<link rel="stylesheet" href={fontHref} />\n    <meta name="x" content={fontHref} />', {}, fm)), 'fontHref')
   })
 
@@ -309,11 +309,11 @@ describe('detectFonts: needs-human', () => {
   })
 
   test('an attribute the tool does not know', () => {
-    needsHuman(fonts(mini(`<link id="gf" rel="stylesheet" href="${KNUT}" />`)), 'attribute id')
+    needsHuman(fonts(mini(`<link id="gf" rel="stylesheet" href="${OSWALD_BARLOW}" />`)), 'attribute id')
   })
 
   test('@import with a media query', () => {
-    needsHuman(fonts(withFiles(null, { 'src/styles/global.css': `@import url("${KNUT}") screen;\n${TW}` })), '@import')
+    needsHuman(fonts(withFiles(null, { 'src/styles/global.css': `@import url("${OSWALD_BARLOW}") screen;\n${TW}` })), '@import')
   })
 
   test('the file with the link does not import the Tailwind entry', () => {
@@ -325,16 +325,16 @@ describe('detectFonts: needs-human', () => {
   })
 
   test('an .astro file that does not parse', () => {
-    needsHuman(fonts(mini(LINK, { 'src/pages/broken.astro': `<div>{</div>\n<link rel="stylesheet" href="${KNUT}" />\n` })), 'parse')
+    needsHuman(fonts(mini(LINK, { 'src/pages/broken.astro': `<div>{</div>\n<link rel="stylesheet" href="${OSWALD_BARLOW}" />\n` })), 'parse')
   })
 })
 
 describe('detect: fonts is a separate field', () => {
   test('fonts does not change the classification or the reasons', () => {
-    const files = site('knutssonsbil')
-    const r = detect(files, 'knutssonsbil', ['knutssonsbil.se'])
+    const files = site('site-1228881255')
+    const r = detect(files, 'site-1228881255', ['site-1228881255.se'])
     expect(r.fonts?.status).toBe('wire')
-    const broken = detect(withFiles(files, { 'src/lib/fonts.ts': `export const X = '${KNUT}'\n` }), 'knutssonsbil', ['knutssonsbil.se'])
+    const broken = detect(withFiles(files, { 'src/lib/fonts.ts': `export const X = '${OSWALD_BARLOW}'\n` }), 'site-1228881255', ['site-1228881255.se'])
     expect(broken.fonts?.status).toBe('needs-human')
     expect(broken.classification).toBe(r.classification)
     expect(broken.reasons).toEqual(r.reasons)
@@ -368,7 +368,7 @@ describe('detectFonts: review probes', () => {
     ['@import text inside a CSS string', css(`${TW}.a::before { content: "@import url(${U});" }\n`), 'outside'],
     ['@import inside @media braces', css(`${TW}@media print { @import url(${U}); }\n`), 'outside'],
     ['the href const also spread', base('<link rel="stylesheet" href={f} /><div {...f}></div>', {}, `import '../styles/global.css'\nconst f = '${U}'`), 'const f'],
-    ['an HTML file named .ico (lannabilcenter)', base(L, { 'public/favicon.ico': `<!doctype html><link rel="stylesheet" href="${U}">\n` }), 'public/favicon.ico'],
+    ['an HTML file named .ico (site-1248930114)', base(L, { 'public/favicon.ico': `<!doctype html><link rel="stylesheet" href="${U}">\n` }), 'public/favicon.ico'],
     ["a second CSP string whose font-src lacks 'self'", base(L, { 'src/middleware.ts': `export const A = "font-src 'self' https://fonts.gstatic.com"\nexport const B = "font-src https://fonts.gstatic.com"\n` }), 'font-src'],
     ['a CSP meta inside an expression', base(`{csp && <meta http-equiv="Content-Security-Policy" content="default-src 'self'; font-src 'self' https://fonts.gstatic.com" />}${L}`, {}, "import '../styles/global.css'\nconst csp = true"), 'expression'],
     ['a <style> in a component', base(L, { 'src/components/X.astro': `<style is:global>@import url('${U}');</style>` }), 'src/components/X.astro'],

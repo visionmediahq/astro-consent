@@ -1,5 +1,7 @@
 # Rollout Retro Artifact Implementation Plan
 
+Sites are named by GitHub repo ID (`gh api repositories/<id>`).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** A private, static Artifact page for the Task 27 retro: goal and status, timeline from
@@ -142,7 +144,7 @@ import type { Finding, Milestone } from './types'
 import { caughtByLayer, countBy, findingsOn, formatDate, retroGroups, stats, validate } from './derive'
 
 const f = (over: Partial<Finding>): Finding => ({
-  id: 'x', date: '2026-10-08', site: 'mannature', phase: 'expansion', layer: 'rollout-tool',
+  id: 'x', date: '2026-10-08', site: 'site-1286030122', phase: 'expansion', layer: 'rollout-tool',
   symptom: 's', cause: 'c', fix: 'fx', fixRef: [{ label: '#5', url: 'https://github.com/visionmediahq/astro-consent/pull/5' }],
   caughtBy: 'verify-step-1', status: 'fixed-tool', retro: null,
   source: { label: 'batch log', path: 'site-factory/.superpowers/sdd/x/log.md', excerpt: 'e' },
@@ -359,17 +361,17 @@ export const SEED_IDS = [
   // package
   'pb-map-open-link', 'button-contrast', 'map-button-label',
   // pilot
-  'audit-missed-map', 'hand-wire-not-script', 'nhrk-cms-redeploy', 'rule-gaps-rulings', 'domeij-footer-contrast',
+  'audit-missed-map', 'hand-wire-not-script', 'site-1277834673-cms-redeploy', 'rule-gaps-rulings', 'site-1243511314-footer-contrast',
   // rollout tool PRs #5–#15
   'engines-resync', 'crawl-file-endpoints', 'cdn-cgi-links', 'load-networkidle', 'covered-banner-button',
   'empty-dependency-map', 'sideways-scroll', 'root-field-resync', 'docker-site-url', 'daisyui-added', 'root-styles',
   // site branch fixes
-  'burnersverige-site-url-fallback', 'aspokarlsson-banner-lift', 'bbstad-chrome-conditional',
-  'merel-scoped-footer-contrast', 'faluridklubb-daisyui-scrollbar', 'faluridklubb-recaptcha', 'faluridklubb-policy-section',
+  'site-1346130035-site-url-fallback', 'site-1249159919-banner-lift', 'site-1270076313-chrome-conditional',
+  'site-1237723650-scoped-footer-contrast', 'site-1243331215-daisyui-scrollbar', 'site-1243331215-recaptcha', 'site-1243331215-policy-section',
   // infra / ops
   'coolify-no-history', 'disk-full-docker', 'docker-lease', 'preview-drop', 'main-moved',
   // detect
-  'invented-map-1life', 'invented-map-aktivborr',
+  'invented-map-site-1233003545', 'invented-map-site-1270982253',
 ]
 ```
 
@@ -395,12 +397,12 @@ describe('compiled data', () => {
     expect(milestones.filter((m) => m.upcoming).map((m) => m.date)).toEqual(['2026-10-15', '2026-10-19', '2026-10-26', '2026-10-27'])
   })
   it('marks known-fixed retro items done', () => {
-    const sb = findings.find((f) => f.id === 'faluridklubb-daisyui-scrollbar')!
+    const sb = findings.find((f) => f.id === 'site-1243331215-daisyui-scrollbar')!
     expect(sb.retro?.doneBy?.url).toBe('https://github.com/visionmediahq/astro-consent/pull/15')
   })
   it('classifies the non-findings', () => {
     expect(findings.find((f) => f.id === 'docker-lease')!.status).toBe('not-a-finding')
-    expect(findings.find((f) => f.id === 'invented-map-1life')!.status).toBe('false-positive')
+    expect(findings.find((f) => f.id === 'invented-map-site-1233003545')!.status).toBe('false-positive')
   })
 })
 ```
@@ -447,8 +449,8 @@ findings; #5–#15 are findings.
 `export const COMPILED_ON = '<today, ISO>'` and `export const findings: Finding[] = [ … ]`, one
 entry per finding in the sources, using each `SEED_IDS` id for the matching finding and adding
 any further findings the sources contain (at least: `animation-during-shots` on
-antonicommunications, `atak-template-href` on molndals-plat, `merel-visa-transient` on merel as
-`retro-open` with group `fleet-process`, `large-site-sampling` on bbstad). Classification rules:
+site 1239527892, `site-1271984151-template-href` on site 1240623269, `site-1237723650-visa-transient` on site 1237723650 as
+`retro-open` with group `fleet-process`, `large-site-sampling` on site 1270076313). Classification rules:
 
 | Situation | layer | status |
 |---|---|---|
@@ -461,7 +463,7 @@ antonicommunications, `atak-template-href` on molndals-plat, `merel-visa-transie
 
 `retro` is set whenever the source says "for the retro"/"retro:"; group by what would change:
 the package → `package-v1.1`, `ci/rollout` → `rollout-tool`, people/process/Coolify → `fleet-process`.
-Set `doneBy` only on `faluridklubb-daisyui-scrollbar` (PR #15) unless a source shows another
+Set `doneBy` only on `site-1243331215-daisyui-scrollbar` (PR #15) unless a source shows another
 retro item fixed. `caughtBy` follows the source wording ("verify round 1 FAIL step 3" →
 `verify-step-3`; "found it in the 360 px screenshot" → `screenshot`; "subagent review" →
 `subagent-review`; "live post-merge STOP" → `live-check`; "detect:" → `detect`; otherwise `by-hand`).
@@ -472,7 +474,7 @@ Example entry (copy this shape):
 {
   id: 'cdn-cgi-links',
   date: '2026-10-08',
-  site: 'linjegods',
+  site: 'site-1296282111',
   phase: 'expansion',
   layer: 'rollout-tool',
   symptom: "Live post-merge check stopped on /cdn-cgi/l/email-protection, which has no banner.",
@@ -483,7 +485,7 @@ Example entry (copy this shape):
   status: 'fixed-tool',
   retro: null,
   source: {
-    label: 'Batch log, linjegods',
+    label: 'Batch log, site 1296282111',
     path: 'site-factory/.superpowers/sdd/2026-10-06-astro-consent-pilot-expansion/log.md',
     excerpt: "live post-merge STOP on /cdn-cgi/l/email-protection: Cloudflare's email obfuscation page has no banner, and the site's own 14 pages all passed. Fixed by astro-consent #7: extractLinks skips /cdn-cgi/.",
   },
@@ -541,7 +543,7 @@ import { renderPage } from './page'
 import type { Finding, Milestone } from './types'
 
 const f = (over: Partial<Finding>): Finding => ({
-  id: 'a', date: '2026-10-05', site: 'a-tak', phase: 'pilot', layer: 'package',
+  id: 'a', date: '2026-10-05', site: 'site-1271984151', phase: 'pilot', layer: 'package',
   symptom: 'Opened <iframe src="x"> & "quotes" `ticks`', cause: 'c', fix: 'fx',
   fixRef: [{ label: 'v1.0.1', url: 'https://github.com/visionmediahq/astro-consent/commit/fbca91a' }],
   caughtBy: 'live-check', status: 'fixed-package', retro: null,

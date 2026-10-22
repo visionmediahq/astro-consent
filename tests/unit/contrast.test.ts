@@ -54,7 +54,7 @@ describe('pickText', () => {
     expect(pickText(parseColour('#ff0000'), Y_CUT)).toBe('black')
   })
 
-  test('domeij orange takes black at about 6.2', () => {
+  test('a client orange takes black at about 6.2', () => {
     const p = parseColour('#eb5e28')
     expect(wcagContrast(rgbOf(pickText(p, Y_CUT)), p)).toBeCloseTo(6.2, 1)
   })

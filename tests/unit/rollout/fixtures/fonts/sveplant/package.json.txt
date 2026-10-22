@@ -1,8 +1,0 @@
-{
-  "name": "sveplant",
-  "type": "module",
-  "dependencies": {
-    "@fontsource/poppins": "^5.3.0",
-    "astro": "^6.1.6"
-  }
-}

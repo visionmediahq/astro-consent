@@ -1,5 +1,7 @@
 # Elfsight and Google Calendar (v1.1.0) Implementation Plan
 
+Sites are named by GitHub repo ID (`gh api repositories/<id>`).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Sites can gate Elfsight widgets and Google Calendar iframes behind consent, released as
@@ -173,8 +175,8 @@ Already known (curl of `https://elfsightcdn.com/platform.js`, 2026-10-13): refer
     line ~101: text match skips iframe tags for slug in IFRAME_SERVICES (today: google-maps only)
     line ~105: parsed-URL check skips slug in IFRAME_SERVICES (today: google-maps only)
   run npm test; expected, intended changes:
-    tests/unit/rollout/detect-iframes.test.ts:135  nhrk Calendar iframe service null -> 'google-calendar'
-    tests/unit/rollout/__snapshots__/detect.test.ts.snap  nhrk entry: iframe service 'google-calendar'
+    tests/unit/rollout/detect-iframes.test.ts:135  site 1277834673 Calendar iframe service null -> 'google-calendar'
+    tests/unit/rollout/__snapshots__/detect.test.ts.snap  site 1277834673 entry: iframe service 'google-calendar'
       (update with vitest -u only after reading the diff: no other site's entry may change except
        Elfsight sites gaining tracker 'elfsight' next to banner 'elfsight')
   classification stays needs-human for both kinds of site (Calendar iframe: iframeReason;

@@ -192,7 +192,7 @@ export function lastDeployed(deployments: Deployment[]): string | null {
 /**
  * Ruling 14: Coolify has no auto-deploy flag, so an app follows `main` when it deployed the
  * current `main` head: its latest finished deployment is `head`, or `head` is queued or in progress
- * (the push already triggered it). Anything else, e.g. nhrk.vmedia.se still on a commit from the
+ * (the push already triggered it). Anything else, e.g. a client CMS app on vmedia.se still on a commit from the
  * week before, is treated as not redeploying from main.
  */
 export function followsMain(deployments: Deployment[], head: string): boolean {

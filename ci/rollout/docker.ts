@@ -19,7 +19,7 @@ export const repoName = (url: string): string => url.replace(/\.git$/, '').repla
 /**
  * The image tag for a repo name: `rollout-` plus the name made a valid Docker path component
  * (lowercase; anything outside [a-z0-9] runs collapsed to one separator; none at the ends).
- * `Vildmarkscamp` → `rollout-vildmarkscamp`: Docker refuses uppercase repository names.
+ * `ExampleCamp` → `rollout-examplecamp`: Docker refuses uppercase repository names.
  */
 export function imageTag(repo: string): string {
   const name = repo

@@ -70,7 +70,7 @@ const embedTarget = (t: string): boolean =>
 describe('planWire on the pilot fixtures', () => {
   test('the fixture set: 10 wired, 3 refused', () => {
     expect(WIRED).toHaveLength(10)
-    expect(NEEDS_HUMAN).toEqual(['a-tak', 'elfsight-v4', 'nhrk'])
+    expect(NEEDS_HUMAN).toEqual(['elfsight-v4', 'site-1271984151', 'site-1277834673'])
   })
 
   test.each(NEEDS_HUMAN)('%s: needs-human, refused whole with exactly the REFUSED.md reasons', (site) => {
@@ -107,7 +107,7 @@ describe('planWire on the pilot fixtures', () => {
   })
 
   test('idempotent after a hand edit (Review Focus 5): <ConsentBanner /> moved to another line of the layout', () => {
-    const site = 'aspomad'
+    const site = 'site-1218869363'
     const files = fixtureSite(join(FIXTURES, site, 'expected'))
     const layout = 'src/layouts/Base.astro'
     const text = files.read(layout)
@@ -126,16 +126,16 @@ describe('planWire on the pilot fixtures', () => {
   })
 
   test('a needs-human report is refused before any part is planned: only its reasons, no other refusal', () => {
-    const files = fixtureSite(join(FIXTURES, 'aspomad', 'before'))
-    const report = detect(files, 'aspomad', ['aspomad.se'])
+    const files = fixtureSite(join(FIXTURES, 'site-1218869363', 'before'))
+    const report = detect(files, 'site-1218869363', ['site-1218869363.se'])
     // A config that is not there would be a refusal of its own if wireConfig ran.
     const plan = planWire(files, { ...report, config: { ...report.config, path: 'missing.config.ts' }, classification: 'needs-human', reasons: ['tracker gtm'] })
     expect(plan).toEqual({ ok: false, refusals: [{ file: '', target: 'classification', reason: 'tracker gtm' }] })
   })
 
   test('the policy_url host is report.domains[0] (Ruling 3)', () => {
-    const files = fixtureSite(join(FIXTURES, 'vasshallakatthotell', 'before'))
-    const report = detect(files, 'vasshallakatthotell', ['www.example.se', 'example.se'])
+    const files = fixtureSite(join(FIXTURES, 'site-1245311266', 'before'))
+    const report = detect(files, 'site-1245311266', ['www.example.se', 'example.se'])
     const ok = okPlan(planWire(files, report))
     expect(JSON.parse(ok.newFiles.find((f) => f.path === 'src/data/privacy.json')!.text).policy_url).toBe('https://www.example.se/gdpr')
   })
@@ -208,20 +208,20 @@ describe('applyWire', () => {
 
   test('commit: false writes the edits and new files only: the checkout becomes expected/', () => {
     const dir = temp('wire-plain-')
-    writeTree(dir, treeOf(join(FIXTURES, 'aspomad', 'before')))
-    const report = detect(fixtureSite(join(FIXTURES, 'aspomad', 'before')), 'aspomad', ['aspomad.se'])
+    writeTree(dir, treeOf(join(FIXTURES, 'site-1218869363', 'before')))
+    const report = detect(fixtureSite(join(FIXTURES, 'site-1218869363', 'before')), 'site-1218869363', ['site-1218869363.se'])
     let installs = 0
-    applyWire(dir, planWire(fixtureSite(join(FIXTURES, 'aspomad', 'before')), report), { commit: false, install: () => void installs++ })
-    expect(diskTree(dir)).toEqual(expectedTree('aspomad'))
+    applyWire(dir, planWire(fixtureSite(join(FIXTURES, 'site-1218869363', 'before')), report), { commit: false, install: () => void installs++ })
+    expect(diskTree(dir)).toEqual(expectedTree('site-1218869363'))
     expect(installs).toBe(0)
   })
 
   test('commit: true: branch consent-banner from origin/main, edits, the install, one commit with everything', () => {
-    const dir = checkout('domeijstapetserarverkstad')
+    const dir = checkout('site-1243511314')
     const main = git(dir, 'rev-parse', 'origin/main')
-    const report = runDetect(dir, ['domeijstapetserarverkstad.se'])
+    const report = runDetect(dir, ['site-1243511314.se'])
     const calls: { dir: string; layout: string }[] = []
-    applyWire(dir, planWire(fixtureSite(join(FIXTURES, 'domeijstapetserarverkstad', 'before')), report), {
+    applyWire(dir, planWire(fixtureSite(join(FIXTURES, 'site-1243511314', 'before')), report), {
       commit: true,
       install: (d) => {
         // The install runs on the edited tree, before the commit.
@@ -236,25 +236,25 @@ describe('applyWire', () => {
     expect(git(dir, 'rev-parse', 'HEAD~1')).toBe(main)
     expect(git(dir, 'log', '-1', '--format=%s%n%b')).toBe('feat: samtyckesbanner (astro-consent)')
     expect(git(dir, 'status', '--porcelain', '--untracked-files=all')).toBe('')
-    const want = expectedTree('domeijstapetserarverkstad')
+    const want = expectedTree('site-1243511314')
     want.set('package.json', '{"installed":true}\n')
     expect(diskTree(dir)).toEqual(new Map([...want].sort(([a], [b]) => a.localeCompare(b))))
     expect(git(dir, 'show', '--name-only', '--format=', 'HEAD').split('\n')).toContain('src/data/privacy.json')
   })
 
   test('a refused plan writes nothing and says why', () => {
-    const dir = checkout('nhrk')
-    const report = runDetect(dir, ['nhrk.se'])
-    const plan = planWire(fixtureSite(join(FIXTURES, 'nhrk', 'before')), report)
+    const dir = checkout('site-1277834673')
+    const report = runDetect(dir, ['site-1277834673.se'])
+    const plan = planWire(fixtureSite(join(FIXTURES, 'site-1277834673', 'before')), report)
     expect(() => applyWire(dir, plan, { commit: true, install: () => {} })).toThrow(/unresolved iframe src/)
     expect(git(dir, 'branch', '--show-current')).toBe('main')
     expect(git(dir, 'status', '--porcelain', '--untracked-files=all')).toBe('')
   })
 
   test('a dirty working tree: refused before anything is switched or written', () => {
-    const dir = checkout('munkforstradgardstjanst')
-    const report = runDetect(dir, ['munkforstradgardstjanst.se'])
-    const plan = planWire(fixtureSite(join(FIXTURES, 'munkforstradgardstjanst', 'before')), report)
+    const dir = checkout('site-1286040212')
+    const report = runDetect(dir, ['site-1286040212.se'])
+    const plan = planWire(fixtureSite(join(FIXTURES, 'site-1286040212', 'before')), report)
     writeFileSync(join(dir, 'stray.txt'), 'x\n')
     expect(() => applyWire(dir, plan, { commit: true, install: () => {} })).toThrow(/not clean/)
     expect(git(dir, 'branch', '--show-current')).toBe('main')
@@ -263,9 +263,9 @@ describe('applyWire', () => {
   })
 
   test('a consent-banner branch that already exists: refused, never clobbered', () => {
-    const dir = checkout('munkforstradgardstjanst')
-    const report = runDetect(dir, ['munkforstradgardstjanst.se'])
-    const plan = planWire(fixtureSite(join(FIXTURES, 'munkforstradgardstjanst', 'before')), report)
+    const dir = checkout('site-1286040212')
+    const report = runDetect(dir, ['site-1286040212.se'])
+    const plan = planWire(fixtureSite(join(FIXTURES, 'site-1286040212', 'before')), report)
     git(dir, 'branch', 'consent-banner')
     const tip = git(dir, 'rev-parse', 'consent-banner')
     expect(() => applyWire(dir, plan, { commit: true, install: () => {} })).toThrow(/consent-banner already exists/)
@@ -275,9 +275,9 @@ describe('applyWire', () => {
   })
 
   test('finding 2: a consent-banner on origin (fetched with the clone) is refused, never pushed over', () => {
-    const dir = checkout('munkforstradgardstjanst')
-    const report = runDetect(dir, ['munkforstradgardstjanst.se'])
-    const plan = planWire(fixtureSite(join(FIXTURES, 'munkforstradgardstjanst', 'before')), report)
+    const dir = checkout('site-1286040212')
+    const report = runDetect(dir, ['site-1286040212.se'])
+    const plan = planWire(fixtureSite(join(FIXTURES, 'site-1286040212', 'before')), report)
     git(dir, 'push', '-q', 'origin', 'main:refs/heads/consent-banner')
     git(dir, 'fetch', '-q', 'origin')
     expect(git(dir, 'rev-parse', 'refs/remotes/origin/consent-banner')).toBeTruthy()
@@ -287,9 +287,9 @@ describe('applyWire', () => {
   })
 
   test('finding 2: a consent-banner pushed to origin after the clone (only ls-remote sees it) is refused too', () => {
-    const dir = checkout('munkforstradgardstjanst')
-    const report = runDetect(dir, ['munkforstradgardstjanst.se'])
-    const plan = planWire(fixtureSite(join(FIXTURES, 'munkforstradgardstjanst', 'before')), report)
+    const dir = checkout('site-1286040212')
+    const report = runDetect(dir, ['site-1286040212.se'])
+    const plan = planWire(fixtureSite(join(FIXTURES, 'site-1286040212', 'before')), report)
     git(dir, 'push', '-q', 'origin', 'main:refs/heads/consent-banner')
     git(dir, 'update-ref', '-d', 'refs/remotes/origin/consent-banner')
     expect(() => applyWire(dir, plan, { commit: true, install: () => {} })).toThrow(/origin already has a consent-banner branch/)
@@ -297,18 +297,18 @@ describe('applyWire', () => {
   })
 
   test('pre-run: another branch ending in /consent-banner on origin does not block wiring', () => {
-    const dir = checkout('munkforstradgardstjanst')
-    const report = runDetect(dir, ['munkforstradgardstjanst.se'])
-    const plan = planWire(fixtureSite(join(FIXTURES, 'munkforstradgardstjanst', 'before')), report)
+    const dir = checkout('site-1286040212')
+    const report = runDetect(dir, ['site-1286040212.se'])
+    const plan = planWire(fixtureSite(join(FIXTURES, 'site-1286040212', 'before')), report)
     git(dir, 'push', '-q', 'origin', 'main:refs/heads/feature/consent-banner')
     applyWire(dir, plan, { commit: true, install: () => {} })
     expect(git(dir, 'branch', '--show-current')).toBe('consent-banner')
   })
 
   test('a checkout whose HEAD is not origin/main: refused (the plan was made on another tree)', () => {
-    const dir = checkout('munkforstradgardstjanst')
-    const report = runDetect(dir, ['munkforstradgardstjanst.se'])
-    const plan = planWire(fixtureSite(join(FIXTURES, 'munkforstradgardstjanst', 'before')), report)
+    const dir = checkout('site-1286040212')
+    const report = runDetect(dir, ['site-1286040212.se'])
+    const plan = planWire(fixtureSite(join(FIXTURES, 'site-1286040212', 'before')), report)
     writeFileSync(join(dir, 'README.md'), 'local\n')
     git(dir, 'add', '-A')
     git(dir, 'commit', '-q', '-m', 'local')
@@ -317,9 +317,9 @@ describe('applyWire', () => {
   })
 
   test('Ruling 32: a failure after the branch switch names the recovery steps', () => {
-    const dir = checkout('munkforstradgardstjanst')
-    const report = runDetect(dir, ['munkforstradgardstjanst.se'])
-    const plan = planWire(fixtureSite(join(FIXTURES, 'munkforstradgardstjanst', 'before')), report)
+    const dir = checkout('site-1286040212')
+    const report = runDetect(dir, ['site-1286040212.se'])
+    const plan = planWire(fixtureSite(join(FIXTURES, 'site-1286040212', 'before')), report)
     const err = (() => {
       try {
         applyWire(dir, plan, {
@@ -342,9 +342,9 @@ describe('applyWire', () => {
   })
 
   test('Ruling 32: a path the plan did not name (besides package.json and the lockfile) stops the commit and is listed', () => {
-    const dir = checkout('munkforstradgardstjanst')
-    const report = runDetect(dir, ['munkforstradgardstjanst.se'])
-    const plan = planWire(fixtureSite(join(FIXTURES, 'munkforstradgardstjanst', 'before')), report)
+    const dir = checkout('site-1286040212')
+    const report = runDetect(dir, ['site-1286040212.se'])
+    const plan = planWire(fixtureSite(join(FIXTURES, 'site-1286040212', 'before')), report)
     expect(() =>
       applyWire(dir, plan, {
         commit: true,
@@ -362,9 +362,9 @@ describe('applyWire', () => {
   })
 
   test('Ruling 32: package.json and package-lock.json changed by the install are allowed', () => {
-    const dir = checkout('munkforstradgardstjanst')
-    const report = runDetect(dir, ['munkforstradgardstjanst.se'])
-    const plan = planWire(fixtureSite(join(FIXTURES, 'munkforstradgardstjanst', 'before')), report)
+    const dir = checkout('site-1286040212')
+    const report = runDetect(dir, ['site-1286040212.se'])
+    const plan = planWire(fixtureSite(join(FIXTURES, 'site-1286040212', 'before')), report)
     applyWire(dir, plan, {
       commit: true,
       install: (d) => {
@@ -376,7 +376,7 @@ describe('applyWire', () => {
     expect(git(dir, 'show', '--name-only', '--format=', 'HEAD').split('\n')).toEqual(expect.arrayContaining(['package.json', 'package-lock.json']))
   })
 
-  // trippolo and midvatten (2026-10-16): main's lockfile still had esbuild and its @esbuild/*
+  // site 1240501458 and site 1219936814 (2026-10-16): main's lockfile still had esbuild and its @esbuild/*
   // builds, marked optional, that nothing depends on since vite 8 (esbuild is only an optional peer
   // of vite). npm install prunes them, and verify step 1 rightly refuses 27 unexplained removals.
   describe('orphan lockfile entries npm prunes', () => {
@@ -392,7 +392,7 @@ describe('applyWire', () => {
     // The fixture is Astro 6, whose astro entry depends on esbuild; Astro 7 does not.
     const fixturePackages = Object.fromEntries(
       Object.entries(
-        (JSON.parse(readFileSync(join(FIXTURES, 'munkforstradgardstjanst', 'before', 'package-lock.json.txt'), 'utf8')) as { packages: Packages }).packages,
+        (JSON.parse(readFileSync(join(FIXTURES, 'site-1286040212', 'before', 'package-lock.json.txt'), 'utf8')) as { packages: Packages }).packages,
       ).map(([k, v]) => {
         const deps = { ...((v['dependencies'] as Record<string, string> | undefined) ?? {}) }
         delete deps['esbuild']
@@ -436,8 +436,8 @@ describe('applyWire', () => {
     }
 
     function wire(main: Packages, install: (d: string) => void): { notes: string[]; branch: string } {
-      const dir = checkout('munkforstradgardstjanst', { 'package-lock.json': lockText(main) })
-      const plan = planWire(fixtureSite(join(FIXTURES, 'munkforstradgardstjanst', 'before')), runDetect(dir, ['munkforstradgardstjanst.se']))
+      const dir = checkout('site-1286040212', { 'package-lock.json': lockText(main) })
+      const plan = planWire(fixtureSite(join(FIXTURES, 'site-1286040212', 'before')), runDetect(dir, ['site-1286040212.se']))
       const notes = applyWire(dir, plan, { commit: true, install })
       return { notes, branch: execFileSync('git', ['show', 'HEAD:package-lock.json'], { cwd: dir, encoding: 'utf8' }) }
     }
@@ -485,8 +485,8 @@ describe('applyWire', () => {
 
   test('a new file that already exists on disk: refused before anything is written', () => {
     const dir = temp('wire-exists-')
-    writeTree(dir, treeOf(join(FIXTURES, 'aspomad', 'before')))
-    const plan = planWire(fixtureSite(join(FIXTURES, 'aspomad', 'before')), detect(fixtureSite(join(FIXTURES, 'aspomad', 'before')), 'aspomad', ['aspomad.se']))
+    writeTree(dir, treeOf(join(FIXTURES, 'site-1218869363', 'before')))
+    const plan = planWire(fixtureSite(join(FIXTURES, 'site-1218869363', 'before')), detect(fixtureSite(join(FIXTURES, 'site-1218869363', 'before')), 'site-1218869363', ['site-1218869363.se']))
     mkdirSync(join(dir, 'src/data'), { recursive: true })
     writeFileSync(join(dir, 'src/data/privacy.json'), '{}\n')
     const base = readFileSync(join(dir, 'src/layouts/Base.astro'), 'utf8')
@@ -507,13 +507,13 @@ describe('run.ts wire', () => {
   })
 
   test('--dry-run prints the summary and a unified diff, and writes nothing (spec C2)', async () => {
-    const dir = checkout('aspomad')
-    runDetect(dir, ['aspomad.se'])
+    const dir = checkout('site-1218869363')
+    runDetect(dir, ['site-1218869363.se'])
     const rollout = readdirSync(join(dir, '.rollout'))
     const tree = diskTree(dir)
     const { code, output } = await runWire(dir, { dryRun: true, fonts: false })
     expect(code).toBe(0)
-    expect(output).toContain('site (aspomad.se): consent')
+    expect(output).toContain('site (site-1218869363.se): consent')
     expect(output).toMatch(/edits in \d+ files/)
     expect(output).toContain('--- a/src/layouts/Base.astro')
     expect(output).toContain('+++ b/src/layouts/Base.astro')
@@ -527,17 +527,17 @@ describe('run.ts wire', () => {
   })
 
   test('--dry-run of a needs-human site prints the refusals and exits 3 (Ruling 32)', async () => {
-    const dir = checkout('a-tak')
-    runDetect(dir, ['a-tak.se'])
+    const dir = checkout('site-1271984151')
+    runDetect(dir, ['site-1271984151.se'])
     const { code, output } = await runWire(dir, { dryRun: true, fonts: false })
     expect(code).toBe(3)
-    for (const reason of refusedReasons('a-tak')) expect(output).toContain(reason)
+    for (const reason of refusedReasons('site-1271984151')) expect(output).toContain(reason)
     expect(output).not.toContain('+++')
   })
 
   test('a refused plan without --dry-run also exits 3 and leaves the checkout alone (Ruling 32)', async () => {
-    const dir = checkout('a-tak')
-    runDetect(dir, ['a-tak.se'])
+    const dir = checkout('site-1271984151')
+    runDetect(dir, ['site-1271984151.se'])
     const { code, output } = await runWire(dir, { dryRun: false, fonts: false })
     expect(code).toBe(3)
     expect(output).toContain('nothing was written')
@@ -546,7 +546,7 @@ describe('run.ts wire', () => {
   })
 
   test('without .rollout/report.json: an error that says to run detect first', async () => {
-    const dir = checkout('aspomad')
+    const dir = checkout('site-1218869363')
     await expect(runWire(dir, { dryRun: true })).rejects.toThrow(/run detect first/)
   })
 })

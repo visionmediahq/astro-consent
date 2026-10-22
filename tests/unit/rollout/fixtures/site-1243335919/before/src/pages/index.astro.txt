@@ -1,0 +1,23 @@
+---
+import Base from '../layouts/Base.astro';
+import HomeSplash from '../components/HomeSplash.astro';
+import SchemaOrg from '../components/SchemaOrg.astro';
+
+export const prerender = true;
+---
+
+<Base
+  title="Exempel Trä AB – Hyvleri & Sågverk sedan 1985"
+  description="Exempel Trä AB är ett familjeägt hyvleri i Exempelstad med dotterbolaget Exempel Såg AB. Högkvalitativa träprodukter sedan 1985."
+  canonical="https://site-1243335919.se/"
+  ogImage="/og-image.jpg"
+>
+  <SchemaOrg
+    type="Organization"
+    name="Exempel Trä AB"
+    url="https://site-1243335919.se/"
+    description="Familjeägt hyvleri beläget strax utanför Exempelstad. Grundat 1985. Hyvleri, måleri, sågverk och trävaror."
+    image="/images/logo-tra.png"
+  />
+  <HomeSplash />
+</Base>

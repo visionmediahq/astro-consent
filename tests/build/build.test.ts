@@ -372,7 +372,7 @@ describe('banner and footer markup', () => {
   })
 })
 
-// gron-kontor (#64): a site's @theme with its own --spacing-<size> scale. Tailwind 4 resolves
+// site 1348189257 (#64): a site's @theme with its own --spacing-<size> scale. Tailwind 4 resolves
 // max-w-<size> through --spacing-<size> before --container-<size>, so max-w-2xl became 64px there.
 describe('site theme tokens', () => {
   const SIZES = ['3xs', '2xs', 'xs', 'sm', 'md', 'lg', 'xl', '2xl', '3xl', '4xl', '5xl', '6xl', '7xl']
@@ -399,7 +399,7 @@ describe('site theme tokens', () => {
       const cssPath = join(dir, 'src/styles/global.css')
       const tokens = SIZES.map((size) => `  --spacing-${size}: 4rem;`).join('\n')
       writeFileSync(cssPath, `${readFileSync(cssPath, 'utf8')}\n@theme {\n${tokens}\n}\n`)
-      // A site element with max-w-2xl: proves the theme took effect the way it did on gron-kontor.
+      // A site element with max-w-2xl: proves the theme took effect the way it did on site 1348189257.
       writeFileSync(join(dir, 'src/pages/probe.astro'), '<div class="max-w-2xl">probe</div>\n')
     })
     expect(build.code).toBe(0)

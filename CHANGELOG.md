@@ -16,13 +16,13 @@
 
 - Fix: the banner's width is `max-w-[42rem]` instead of `max-w-2xl`. Tailwind 4 resolves
   `max-w-2xl` through a site's `--spacing-2xl` when the site defines one, which made the banner
-  64px wide on gron-kontor (#64).
+  64px wide on a client site (#64).
 - The banner is `z-[99]` instead of `z-50`, so a fixed site bar at z-index 50–98 (a mobile call
-  bar on hkc-fitness and aspokarlsson) no longer covers its buttons (#64). It stays below 100, so
+  bar on two client sites) no longer covers its buttons (#64). It stays below 100, so
   client sites' focused skip link (`focus:z-[100]`, ahead of the banner in the DOM) is still on
   top when a tall banner reaches the top of a small phone.
 - The placeholder's "Öppna i …" link and the banner's "Läs mer" links are `text-base-content`, so
-  a site's `a { color }` in `@layer base` can't lower their contrast (tfhydraulik, #64). This
+  a site's `a { color }` in `@layer base` can't lower their contrast (a client site, #64). This
   covers a link colour in `@layer base` only: unlayered site CSS still wins over the package's
   utilities. `PrivacyLinks` keeps following the site's footer colour on purpose.
 - The placeholder's "Visa alltid" checkbox border is `border-base-content/60`, for WCAG 1.4.11
@@ -82,7 +82,7 @@ Not part of the package (`files` is unchanged) and not a release.
 - `verify` step 4 (and `live`, which runs the same check) also fails a one-off "Visa" whose loaded
   iframe's layout box is under 100 px wide or tall; widgets are not measured. `wire` refuses a map
   whose grid wrapper keeps a class with a scoped rule setting a `display` other than grid/none or a
-  height that is not definite (salviablommor: `display: block` left the loaded map 0px tall).
+  height that is not definite (a client site: `display: block` left the loaded map 0px tall).
 - CI: the `e2e` job runs `verify --demo demo/dist-consent` after the consent demo build.
 
 ## 1.0.2

@@ -30,24 +30,24 @@ function iframeSpan(text: string, from = 0): { start: number; end: number } {
   return { start, end: close + '</iframe>'.length }
 }
 
-const ATAK_PB =
-  'https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d2196.5!2d12.2558!3d57.1058!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x465169e2e2e2e2e3%3A0x0!2sAnnebergsv%C3%A4gen+12%2C+432+48+Varberg!5e0!3m2!1ssv!2sse!4v1700000000000!5m2!1ssv!2sse'
-const ASPOMAD_PB =
-  'https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d2150.8471873476244!2d15.587845!3d56.167886!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x4657d0b4c8c8c8c8%3A0x4c8c8c8c8c8c8c8c!2sMadviksv%C3%A4gen%2C%20373%2064%20Drottningsk%C3%A4r!5e0!3m2!1ssv!2sse!4v1234567890123!5m2!1ssv!2sse'
-const LEVENE_PB =
-  'https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d2116.3748!2d12.8920!3d58.3268!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x464c19c12a7fc1f1%3A0x1b1c4e5b6a7d8e9f!2sLevene+Furubacken+1%2C+534+93+Stora+Levene!5e0!3m2!1ssv!2sse!4v1700000000000!5m2!1ssv!2sse'
-const SKARABORG_PB =
-  'https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d2127.8!2d14.1!3d58.7!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x0%3A0x0!2sSkaraborgs+Tr%C3%A4f%C3%B6r%C3%A4dling+AB!5e0!3m2!1ssv!2sse!4v1700000000000!5m2!1ssv!2sse'
+const HEX_E2_PB =
+  'https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d2196.5!2d18.0611!3d59.3311!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x465169e2e2e2e2e3%3A0x0!2sExempelgatan+1%2C+123+45+Exempelby!5e0!3m2!1ssv!2sse!4v1700000000000!5m2!1ssv!2sse'
+const HEX_C8_PB =
+  'https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d2150.8471873476244!2d18.0622!3d59.3322!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x4657d0b4c8c8c8c8%3A0x4c8c8c8c8c8c8c8c!2sExempelgatan%2C%20123%2045%20Exempelby!5e0!3m2!1ssv!2sse!4v1234567890123!5m2!1ssv!2sse'
+const SAG_PB =
+  'https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d2116.3748!2d18.0633!3d59.3333!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x464c19c12a7fc1f1%3A0x1b1c4e5b6a7d8e9f!2sExempelv%C3%A4gen+2%2C+123+46+Exempelby!5e0!3m2!1ssv!2sse!4v1700000000000!5m2!1ssv!2sse'
+const TRA_PB =
+  'https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d2127.8!2d18.1!3d59.3!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x0%3A0x0!2sExempel+Tr%C3%A4+AB!5e0!3m2!1ssv!2sse!4v1700000000000!5m2!1ssv!2sse'
 /** Random hex place id, non-round timestamp. */
 const REAL_PB =
   'https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d2131.9!2d11.97!3d57.70!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x464ff36d9c1d2a8b%3A0x7a3f0e61b2c94d15!2sG%C3%B6teborg!5e0!3m2!1ssv!2sse!4v1712345678901!5m2!1ssv!2sse'
 
 describe('isInventedPb', () => {
   test.each([
-    ['a-tak: repeating hex e2e2e2e2 and 4v1700000000000', ATAK_PB, true],
-    ['aspomad: repeating hex c8c8c8c8 and 4v1234567890123', ASPOMAD_PB, true],
-    ['traforadling Levene: round timestamp only', LEVENE_PB, true],
-    ['traforadling Skaraborg: 0x0:0x0 and round timestamp', SKARABORG_PB, true],
+    ['repeating hex e2e2e2e2 and 4v1700000000000', HEX_E2_PB, true],
+    ['repeating hex c8c8c8c8 and 4v1234567890123', HEX_C8_PB, true],
+    ['round timestamp only', SAG_PB, true],
+    ['0x0:0x0 and round timestamp', TRA_PB, true],
     ['a real-looking place id with a non-round timestamp', REAL_PB, false],
     ['a repeating place id with an unencoded colon', REAL_PB.replace('0x464ff36d9c1d2a8b%3A', '0x46abababab12cd34:'), true],
     ['a q= map (no pb=)', 'https://maps.google.com/maps?q=57.69,13.04&hl=sv&z=15&output=embed', false],
@@ -58,19 +58,19 @@ describe('isInventedPb', () => {
 })
 
 describe('detectIframes: pilot fixtures', () => {
-  test('vasshalla: literal Google Maps src', () => {
-    const r = detectIframes(pilot('vasshallakatthotell'), ['vasshallakatthotell.se'])
+  test('a literal Google Maps src', () => {
+    const r = detectIframes(pilot('site-1245311266'), ['site-1245311266.se'])
     const file = 'src/components/ContactSection.astro'
-    const text = fixtureText('vasshallakatthotell', file)
+    const text = fixtureText('site-1245311266', file)
     expect(r.iframes).toEqual([
       {
         file,
         ...iframeSpan(text),
         srcKind: 'literal',
-        src: 'https://maps.google.com/maps?q=57.698734,13.042359&hl=sv&z=15&output=embed',
+        src: 'https://maps.google.com/maps?q=59.329300,18.068600&hl=sv&z=15&output=embed',
         host: 'maps.google.com',
         service: 'google-maps',
-        title: 'Karta till Vasshalla Katthotell i Gånghester',
+        title: 'Karta till Exempel Katthotell i Exempelby',
         classes: null,
         height: '100%',
         style: 'border:0;',
@@ -80,56 +80,56 @@ describe('detectIframes: pilot fixtures', () => {
     expect(r.parseErrors).toEqual([])
   })
 
-  test('aspomad: src={kontakt.googleMapsEmbedUrl} from a JSON data file', () => {
-    const r = detectIframes(pilot('aspomad'), ['aspomad.se'])
+  test('src={kontakt.googleMapsEmbedUrl} from a JSON data file', () => {
+    const r = detectIframes(pilot('site-1218869363'), ['site-1218869363.se'])
     const file = 'src/components/ContactMap.astro'
     expect(r.iframes).toEqual([
       {
         file,
-        ...iframeSpan(fixtureText('aspomad', file)),
+        ...iframeSpan(fixtureText('site-1218869363', file)),
         srcKind: 'data-file',
-        src: ASPOMAD_PB,
+        src: HEX_C8_PB,
         dataPath: 'src/data/kontakt.json',
         host: 'www.google.com',
         service: 'google-maps',
-        title: 'Karta till Aspö Mad Vin & Café',
+        title: 'Karta till Exempel Café',
         classes: null,
         height: '100%',
         style: 'border:0;',
       },
     ])
-    expect(r.inventedMaps).toEqual([ASPOMAD_PB])
+    expect(r.inventedMaps).toEqual([HEX_C8_PB])
   })
 
-  test('traforadling: two maps chosen by a component prop; one iframe, resolved per call site', () => {
-    const r = detectIframes(pilot('traforadling'), ['traforadling.se'])
+  test('two maps chosen by a component prop; one iframe, resolved per call site', () => {
+    const r = detectIframes(pilot('site-1243335919'), ['site-1243335919.se'])
     const file = 'src/components/ContactFormSection.astro'
     expect(r.iframes).toHaveLength(1)
     const [f] = r.iframes
     expect(f).toMatchObject({
       file,
-      ...iframeSpan(fixtureText('traforadling', file)),
+      ...iframeSpan(fixtureText('site-1243335919', file)),
       srcKind: 'expression',
       src: null,
       host: 'www.google.com',
       service: 'google-maps',
       height: '320',
     })
-    expect(f!.title).toBe("{isLevene ? 'Karta till Levene Såg AB' : 'Karta till Skaraborgs Träförädling AB'}")
+    expect(f!.title).toBe("{isSag ? 'Karta till Exempel Såg AB' : 'Karta till Exempel Trä AB'}")
     expect(f!.callSites).toEqual([
-      { file: 'src/pages/kontakt-levene.astro', src: LEVENE_PB },
-      { file: 'src/pages/kontakt.astro', src: SKARABORG_PB },
+      { file: 'src/pages/kontakt-sag.astro', src: SAG_PB },
+      { file: 'src/pages/kontakt.astro', src: TRA_PB },
     ])
-    expect(r.inventedMaps).toEqual([LEVENE_PB, SKARABORG_PB])
+    expect(r.inventedMaps).toEqual([SAG_PB, TRA_PB])
   })
 
-  test('nhrk: Google Calendar iframes in a .map() loop: unresolved, host listed, no service', () => {
-    const r = detectIframes(pilot('nhrk'), ['nhrk.se'])
+  test('Google Calendar iframes in a .map() loop: unresolved, host listed, no service', () => {
+    const r = detectIframes(pilot('site-1277834673'), ['site-1277834673.se'])
     const file = 'src/pages/kalendrar.astro'
     expect(r.iframes).toEqual([
       {
         file,
-        ...iframeSpan(fixtureText('nhrk', file)),
+        ...iframeSpan(fixtureText('site-1277834673', file)),
         srcKind: 'unresolved',
         src: null,
         host: 'calendar.google.com',
@@ -143,10 +143,10 @@ describe('detectIframes: pilot fixtures', () => {
     expect(r.inventedMaps).toEqual([])
   })
 
-  test('a-tak: the home-made gate iframe has no src; still found, its map URL is the frontmatter const', () => {
-    const r = detectIframes(pilot('a-tak'), ['a-tak.se'])
+  test('the home-made gate iframe has no src; still found, its map URL is the frontmatter const', () => {
+    const r = detectIframes(pilot('site-1271984151'), ['site-1271984151.se'])
     const file = 'src/components/KontaktMap.astro'
-    const text = fixtureText('a-tak', file)
+    const text = fixtureText('site-1271984151', file)
     expect(r.iframes).toEqual([
       {
         file,
@@ -155,25 +155,25 @@ describe('detectIframes: pilot fixtures', () => {
         src: null,
         host: 'www.google.com',
         service: 'google-maps',
-        title: 'Karta – Annebergsvägens Tak AB, Varberg',
+        title: 'Karta – Exempel Tak AB, Exempelby',
         classes: null,
         height: '420',
         style: 'border:0; display:none; position:absolute; inset:0;',
       },
     ])
-    expect(r.inventedMaps).toEqual([ATAK_PB])
+    expect(r.inventedMaps).toEqual([HEX_E2_PB])
   })
 
-  test('domeij: a literal q= map', () => {
-    const r = detectIframes(pilot('domeijstapetserarverkstad'), ['domeijstapetserarverkstad.se'])
+  test('a literal q= map', () => {
+    const r = detectIframes(pilot('site-1243511314'), ['site-1243511314.se'])
     expect(r.iframes.map((f) => [f.file, f.srcKind, f.host, f.service])).toEqual([
       ['src/components/Contact.astro', 'literal', 'www.google.com', 'google-maps'],
     ])
     expect(r.inventedMaps).toEqual([])
   })
 
-  test('munkfors: no iframes', () => {
-    const r = detectIframes(pilot('munkforstradgardstjanst'), ['munkforstradgardstjanst.se'])
+  test('no iframes', () => {
+    const r = detectIframes(pilot('site-1286040212'), ['site-1286040212.se'])
     expect(r).toEqual({ iframes: [], inventedMaps: [], parseErrors: [] })
   })
 })
@@ -223,7 +223,7 @@ describe('detectIframes: synthetic cases', () => {
     expect(r.iframes[0]).toMatchObject({ srcKind: 'expression', src: 'https://www.google.com/maps?q=Göteborg&output=embed', host: 'www.google.com', service: 'google-maps' })
   })
 
-  // allkakel, bjorno-marina; autorecondhjo, lafina, sthbygg, vassbo-Musteri through a const.
+  // site 1217042929, site 1276746449; site 1236328899, site 1293477034, site 1262822896, site 1286022055 through a const.
   test.each([
     ['inline', "---\nconst { address } = Astro.props\n---\n<iframe src={`https://maps.google.com/maps?q=${encodeURIComponent(address)}&z=15&output=embed`} title=\"t\"></iframe>\n"],
     ['through a top-level const', "---\nconst { street } = Astro.props\nconst mapSrc = `https://www.google.com/maps?q=${encodeURIComponent(street)}&output=embed`\n---\n<iframe src={mapSrc} title=\"t\"></iframe>\n"],
@@ -340,14 +340,14 @@ describe('detectIframes: synthetic cases', () => {
     const r = detectIframes(
       inline({
         'src/pages/index.astro':
-          '<iframe src="/kalender.html" title="a"></iframe>\n<iframe src="https://www.nhrk.se/kalender" title="b"></iframe>\n<iframe src="https://nhrk.se/k" title="c"></iframe>\n',
+          '<iframe src="/kalender.html" title="a"></iframe>\n<iframe src="https://www.site-1277834673.se/kalender" title="b"></iframe>\n<iframe src="https://site-1277834673.se/k" title="c"></iframe>\n',
       }),
-      ['nhrk.se'],
+      ['site-1277834673.se'],
     )
     expect(r.iframes.map((f) => [f.title, f.srcKind, f.host, f.service])).toEqual([
-      ['a', 'literal', 'nhrk.se', null],
-      ['b', 'literal', 'www.nhrk.se', null],
-      ['c', 'literal', 'nhrk.se', null],
+      ['a', 'literal', 'site-1277834673.se', null],
+      ['b', 'literal', 'www.site-1277834673.se', null],
+      ['c', 'literal', 'site-1277834673.se', null],
     ])
   })
 
@@ -418,7 +418,7 @@ describe('detectIframes: fails closed (review round 1)', () => {
   })
 
   test("a made-up pb= in a template literal's literal start is still reported", () => {
-    const head = ATAK_PB.slice(0, ATAK_PB.indexOf('!5m2'))
+    const head = HEX_E2_PB.slice(0, HEX_E2_PB.indexOf('!5m2'))
     const r = detectIframes(
       inline({ 'src/components/Map.astro': `---\nconst { lang } = Astro.props\n---\n<iframe src={\`${head}!5m2!1s\${lang}\`} title="t"></iframe>\n` }),
       ['x.se'],

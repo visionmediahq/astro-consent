@@ -1,0 +1,53 @@
+---
+import Base from '../layouts/Base.astro';
+import Header from '../components/Header.astro';
+import Footer from '../components/Footer.astro';
+import Hero from '../components/Hero.astro';
+import TrustBadges from '../components/TrustBadges.astro';
+import AboutSection from '../components/AboutSection.astro';
+import CtaBanner from '../components/CtaBanner.astro';
+import ServicesSection from '../components/ServicesSection.astro';
+import ExtraServices from '../components/ExtraServices.astro';
+import FaqSection from '../components/FaqSection.astro';
+import PageLinksSection from '../components/PageLinksSection.astro';
+import BookingAndTestimonial from '../components/BookingAndTestimonial.astro';
+import SchemaOrg from '../components/SchemaOrg.astro';
+
+export const prerender = true;
+---
+
+<Base
+  title="Takläggare Exempelby & Exempelstad – Exempel Tak AB"
+  description="Exempel Tak AB – mer än 30 års erfarenhet av takläggning i Exempelby, Exempelstad, Exempelhamn och Exempelvik. Tätskiktsgaranti, omläggning och renovering."
+  canonical="https://site-1271984151.se/"
+  ogImage="/og-image.jpg"
+  preloadImage="/images/papptak.webp"
+>
+  <SchemaOrg
+    name="Exempel Tak AB"
+    url="https://site-1271984151.se/"
+    telephone="+4681234567"
+    email="info@site-1271984151.se"
+    address={{
+      streetAddress: 'Exempelgatan 1',
+      addressLocality: 'Exempelby',
+      postalCode: '432 48',
+      addressCountry: 'SE',
+    }}
+    description="Professionell takläggning med mer än 30 års erfarenhet. Specialister inom tätskikt, omläggning och renovering i Exempelby, Exempelstad, Exempelhamn och Exempelvik."
+    image="https://site-1271984151.se/og-image.jpg"
+  />
+  <Header />
+  <main>
+    <Hero />
+    <TrustBadges />
+    <AboutSection />
+    <ServicesSection />
+    <ExtraServices />
+    <FaqSection />
+    <CtaBanner />
+    <PageLinksSection />
+    <BookingAndTestimonial />
+  </main>
+  <Footer />
+</Base>

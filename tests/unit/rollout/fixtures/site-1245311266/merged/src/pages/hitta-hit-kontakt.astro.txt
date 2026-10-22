@@ -1,0 +1,34 @@
+---
+import Base from '../layouts/Base.astro';
+import Header from '../components/Header.astro';
+import Footer from '../components/Footer.astro';
+import PageHero from '../components/PageHero.astro';
+import ContactSection from '../components/ContactSection.astro';
+import CtaBanner from '../components/CtaBanner.astro';
+import { businessSchema } from '../config/site';
+
+export const prerender = true;
+---
+
+<Base
+  title="Hitta hit / Kontakt – Exempel Katthotell"
+  description="Hitta till Exempel Katthotell i Exempelby, ett stenkast från Exempelstad. Adress: Exempelgatan 1, 123 45 Exempelby. Ring eller mejla oss!"
+  canonical="https://site-1245311266.se/hitta-hit-kontakt/"
+  ogImage="/og-image.jpg"
+  schema={businessSchema}
+>
+  <Header />
+
+  <main>
+    <PageHero
+      title="Hitta hit / Kontakt"
+      image="exempel-gard-hitta-hit.webp"
+      alt="Exempel Katthotell — den röda gården i Exempelby"
+      imagePosition="45%"
+    />
+    <ContactSection />
+    <CtaBanner />
+  </main>
+
+  <Footer />
+</Base>

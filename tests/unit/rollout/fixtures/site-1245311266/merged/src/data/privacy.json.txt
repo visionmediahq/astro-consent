@@ -1,0 +1,6 @@
+{
+  "services": [
+    "google-maps"
+  ],
+  "policy_url": "https://site-1245311266.se/gdpr"
+}

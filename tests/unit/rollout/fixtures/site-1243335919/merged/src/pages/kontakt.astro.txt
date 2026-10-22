@@ -1,0 +1,46 @@
+---
+import Base from '../layouts/Base.astro';
+import HeaderTra from '../components/HeaderTra.astro';
+import FooterTra from '../components/FooterTra.astro';
+import HeroTra from '../components/HeroTra.astro';
+import ContactCardsTra from '../components/ContactCardsTra.astro';
+import ContactFormSection from '../components/ContactFormSection.astro';
+import SchemaOrg from '../components/SchemaOrg.astro';
+
+export const prerender = true;
+---
+
+<Base
+  title="Kontakt – Exempel Trä AB"
+  description="Kontakta Exempel Trä AB i Exempelstad. Telefon, e-post och adress till våra medarbetare. Öppet mån–fre 07.00–16.00."
+  canonical="https://site-1243335919.se/kontakt/"
+  ogImage="/og-image.jpg"
+>
+  <SchemaOrg
+    type="Organization"
+    name="Exempel Trä AB"
+    url="https://site-1243335919.se"
+    telephone="0506-21175"
+    email="info@site-1243335919.se"
+    address="Exempelgatan 1, 123 45 Exempelstad"
+    description="Exempel Trä AB – familjeägt hyvleri i Exempelstad sedan 1985."
+    image="/images/logo-tra.png"
+  />
+
+  <HeaderTra />
+
+  <main id="main-content">
+    <HeroTra
+      title="Kontakt"
+      subtitle="Välkommen att kontakta eller besöka oss."
+      ctaLabel="Produkter"
+      ctaHref="/exempel-tra-ab/"
+    />
+
+    <ContactCardsTra />
+
+    <ContactFormSection formTarget="tra" />
+  </main>
+
+  <FooterTra />
+</Base>

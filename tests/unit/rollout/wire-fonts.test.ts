@@ -25,16 +25,16 @@ const ENTRY = 'src/styles/global.css'
 const DATE = new Date('2026-10-19T12:00:00Z')
 
 const URLS = {
-  knutssonsbil: 'https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Barlow:ital,wght@0,300;0,400;0,500;0,600;1,400&display=swap',
-  ernstedt: 'https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400..700&family=Hanken+Grotesk:wght@400;500;600;700&display=swap',
-  arjangs: 'https://fonts.googleapis.com/css2?family=Kanit:wght@500;600;700;800&family=Open+Sans:wght@400;500;600;700&display=swap',
+  'oswald-barlow': 'https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Barlow:ital,wght@0,300;0,400;0,500;0,600;1,400&display=swap',
+  'fraunces-hanken': 'https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400..700&family=Hanken+Grotesk:wght@400;500;600;700&display=swap',
+  'kanit-opensans': 'https://fonts.googleapis.com/css2?family=Kanit:wght@500;600;700;800&family=Open+Sans:wght@400;500;600;700&display=swap',
   figtree: 'https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&display=swap',
-  kfk: 'https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Barlow:wght@400;500&display=swap',
-  onoffshore: 'https://fonts.googleapis.com/css2?family=Barlow:wght@400;500&family=Big+Shoulders+Text:wght@600;700;800&display=swap',
-  ahatrafikskola:
+  'barlow-condensed': 'https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Barlow:wght@400;500&display=swap',
+  'barlow-bigshoulders': 'https://fonts.googleapis.com/css2?family=Barlow:wght@400;500&family=Big+Shoulders+Text:wght@600;700;800&display=swap',
+  'bricolage-dmsans':
     'https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,700;12..96,800&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&display=swap',
 } as const
-const css2 = (name: keyof typeof URLS): string => readFileSync(join(WIRE, 'css2', `${name === 'knutssonsbil' ? 'knut' : name}.css.txt`), 'utf8')
+const css2 = (name: keyof typeof URLS): string => readFileSync(join(WIRE, 'css2', `${name}.css.txt`), 'utf8')
 
 interface Answer {
   status: number
@@ -107,17 +107,17 @@ function treeOf(dir: string): Map<string, string> {
 }
 
 const fontsSite = (name: string): SiteFiles => fixtureSite(join(FIXTURES, 'fonts', name))
-const MIDDLEWARE = readFileSync(join(FIXTURES, 'fonts', 'olarpsvasstak', 'src', 'middleware.ts.txt'), 'utf8')
+const MIDDLEWARE = readFileSync(join(FIXTURES, 'fonts', 'site-1239527744', 'src', 'middleware.ts.txt'), 'utf8')
 /** The before tree of each golden case. */
 const CASES: Record<string, () => SiteFiles> = {
-  knutssonsbil: () => fontsSite('knutssonsbil'),
-  ahatrafikskola: () => fontsSite('ahatrafikskola'),
-  ernstedt: () => fontsSite('ernstedt'),
-  'arjangs-elmontage': () => fontsSite('arjangs-elmontage'),
-  ljrevision: () => fontsSite('ljrevision'),
-  kfkmekan: () => fontsSite('kfkmekan'),
-  onoffshore: () => fontsSite('onoffshore'),
-  'knutssonsbil-middleware': () => withFiles(fontsSite('knutssonsbil'), { 'src/middleware.ts': MIDDLEWARE }),
+  'site-1228881255': () => fontsSite('site-1228881255'),
+  'site-1230607492': () => fontsSite('site-1230607492'),
+  'site-1270108078': () => fontsSite('site-1270108078'),
+  'site-1272266556': () => fontsSite('site-1272266556'),
+  'site-1222250001': () => fontsSite('site-1222250001'),
+  'site-1230972300': () => fontsSite('site-1230972300'),
+  'site-1249129412': () => fontsSite('site-1249129412'),
+  'site-1228881255-middleware': () => withFiles(fontsSite('site-1228881255'), { 'src/middleware.ts': MIDDLEWARE }),
 }
 
 const reportOf = (files: SiteFiles, entry: string | null = ENTRY): { fonts: FontsInfo; css: { entry: string | null } } => ({ fonts: detectFonts(files, entry), css: { entry } })
@@ -148,8 +148,8 @@ function after(files: SiteFiles, plan: Extract<FontsPlan, { ok: true }>): SiteFi
 // ── css2 parsing, unicode ranges, subsets, names ─────────────────────────────────────────────
 
 describe('parseCss2', () => {
-  test('knutssonsbil: 35 faces in Google order, each with its subset, family, style, weight and woff2 url', () => {
-    const faces = parseCss2(css2('knutssonsbil'))
+  test('a two-family css2 answer: 35 faces in Google order, each with its subset, family, style, weight and woff2 url', () => {
+    const faces = parseCss2(css2('oswald-barlow'))
     expect(faces).toHaveLength(35)
     expect(new Set(faces.map((f) => f.family))).toEqual(new Set(['Oswald', 'Barlow']))
     expect(new Set(faces.map((f) => f.subset))).toEqual(new Set(['cyrillic-ext', 'cyrillic', 'vietnamese', 'latin-ext', 'latin']))
@@ -163,7 +163,7 @@ describe('parseCss2', () => {
   })
 
   test('a variable face keeps its weight range ("400 700") and opsz fonts parse like any other', () => {
-    const faces = parseCss2(css2('ernstedt'))
+    const faces = parseCss2(css2('fraunces-hanken'))
     expect(faces.filter((f) => f.family === 'Fraunces').every((f) => f.weight === '400 700')).toBe(true)
   })
 
@@ -208,7 +208,7 @@ describe('selectFaces: latin, latin-ext, and any subset that covers a character 
   const swedish = codePointsOf('Välkommen till oss – vi fixar bilen åt dig. Öppet 08–17. © 2026 “Bäst”\n\t')
 
   test('Swedish text: latin + latin-ext only; cyrillic, cyrillic-ext and vietnamese left out', () => {
-    const { kept, extra, dropped } = selectFaces(parseCss2(css2('knutssonsbil')), swedish)
+    const { kept, extra, dropped } = selectFaces(parseCss2(css2('oswald-barlow')), swedish)
     expect(new Set(kept.map((f) => f.subset))).toEqual(new Set(['latin', 'latin-ext']))
     expect(kept).toHaveLength(18)
     expect(extra).toEqual([])
@@ -216,7 +216,7 @@ describe('selectFaces: latin, latin-ext, and any subset that covers a character 
   })
 
   test('an arrow (U+2192) keeps Open Sans math and symbols, nothing extra for Kanit (no subset has it)', () => {
-    const { kept, extra } = selectFaces(parseCss2(css2('arjangs')), new Set([...swedish, 0x2192]))
+    const { kept, extra } = selectFaces(parseCss2(css2('kanit-opensans')), new Set([...swedish, 0x2192]))
     const subsets = (family: string) => [...new Set(kept.filter((f) => f.family === family).map((f) => f.subset))].sort()
     expect(subsets('Open Sans')).toEqual(['latin', 'latin-ext', 'math', 'symbols'])
     expect(subsets('Kanit')).toEqual(['latin', 'latin-ext'])
@@ -227,18 +227,18 @@ describe('selectFaces: latin, latin-ext, and any subset that covers a character 
   })
 
   test('↑ and ↓ are in latin: no extra subset', () => {
-    const { extra } = selectFaces(parseCss2(css2('arjangs')), new Set([...swedish, 0x2191, 0x2193]))
+    const { extra } = selectFaces(parseCss2(css2('kanit-opensans')), new Set([...swedish, 0x2191, 0x2193]))
     expect(extra).toEqual([])
   })
 
   test('Cyrillic text keeps the cyrillic subset of every family that has one (Oswald; Barlow has none)', () => {
-    const { kept, extra } = selectFaces(parseCss2(css2('knutssonsbil')), new Set([...swedish, ...codePointsOf('Привет')]))
+    const { kept, extra } = selectFaces(parseCss2(css2('oswald-barlow')), new Set([...swedish, ...codePointsOf('Привет')]))
     expect(new Set(kept.filter((f) => f.subset === 'cyrillic').map((f) => f.family))).toEqual(new Set(['Oswald']))
     expect(extra.map((e) => e.subset)).toEqual(['cyrillic'])
   })
 
   test('tabs, newlines and other controls never pull in a subset (Open Sans symbols covers U+0001-000C)', () => {
-    const { extra } = selectFaces(parseCss2(css2('arjangs')), codePointsOf('a\tb\nc\r\u0007'))
+    const { extra } = selectFaces(parseCss2(css2('kanit-opensans')), codePointsOf('a\tb\nc\r\u0007'))
     expect(extra).toEqual([])
   })
 })
@@ -293,13 +293,13 @@ describe('planFonts on the detect fixtures: every edited file comes out as fonts
     expect(wired).toMatchObject({ status: 'self-hosted', reasons: [], locations: [], csp: [] })
   })
 
-  test('knutssonsbil: fonts.css is the header, then Google\'s latin and latin-ext blocks verbatim with local urls', async () => {
-    const files = CASES['knutssonsbil']!()
+  test('fonts.css is the header, then Google\'s latin and latin-ext blocks verbatim with local urls', async () => {
+    const files = CASES['site-1228881255']!()
     const plan = ok(await planFonts(files, reportOf(files), { fetch: network(), now: DATE }))
     const css = plan.newFiles.find((f) => f.path === 'src/styles/fonts.css')!.text
     const header = [
       '/*',
-      ` * Generated from ${URLS.knutssonsbil}`,
+      ` * Generated from ${URLS['oswald-barlow']}`,
       ' * on 2026-10-19 by the astro-consent rollout tool: Google\'s own faces, served from /fonts/.',
       ' * Subsets: latin, latin-ext. Left out: cyrillic, cyrillic-ext, vietnamese.',
       ' * Licences: /fonts/LICENSE-barlow.txt (OFL), /fonts/LICENSE-oswald.txt (OFL).',
@@ -307,7 +307,7 @@ describe('planFonts on the detect fixtures: every edited file comes out as fonts
       '',
     ].join('\n')
     expect(css.slice(0, header.length)).toBe(header)
-    const google = parseCss2(css2('knutssonsbil')).filter((f) => f.subset === 'latin' || f.subset === 'latin-ext')
+    const google = parseCss2(css2('oswald-barlow')).filter((f) => f.subset === 'latin' || f.subset === 'latin-ext')
     const local = parseCss2Local(css.slice(header.length))
     expect(local).toHaveLength(google.length)
     const byPath = new Map(plan.fontFiles.map((f) => [f.path, f.bytes]))
@@ -329,7 +329,7 @@ describe('planFonts on the detect fixtures: every edited file comes out as fonts
   })
 
   test('every face keeps font-display: swap (added where Google left it out)', async () => {
-    const files = CASES['ljrevision']!()
+    const files = CASES['site-1222250001']!()
     const noSwap = css2('figtree').replaceAll('  font-display: swap;\n', '')
     const plan = ok(await planFonts(files, reportOf(files), { fetch: network({ [URLS.figtree]: text(noSwap, 'text/css') }), now: DATE }))
     const css = plan.newFiles.find((f) => f.path === 'src/styles/fonts.css')!.text
@@ -338,7 +338,7 @@ describe('planFonts on the detect fixtures: every edited file comes out as fonts
   })
 
   test('an arrow in the site\'s text keeps the subset that has it, and says why in the header', async () => {
-    const files = withFiles(CASES['arjangs-elmontage']!(), { 'src/pages/index.astro': '<a href="/kontakt">Kontakta oss →</a>\n' })
+    const files = withFiles(CASES['site-1272266556']!(), { 'src/pages/index.astro': '<a href="/kontakt">Kontakta oss →</a>\n' })
     const plan = ok(await planFonts(files, reportOf(files), { fetch: network(), now: DATE }))
     const css = plan.newFiles.find((f) => f.path === 'src/styles/fonts.css')!.text
     expect(css).toContain(' * Subsets: latin, latin-ext, math (U+2192), symbols (U+2192).')
@@ -346,21 +346,21 @@ describe('planFonts on the detect fixtures: every edited file comes out as fonts
   })
 
   test('the plan is deterministic: the same inputs give the same plan', async () => {
-    const files = CASES['ernstedt']!()
+    const files = CASES['site-1270108078']!()
     const a = await planFonts(files, reportOf(files), { fetch: network(), now: DATE })
     const b = await planFonts(files, reportOf(files), { fetch: network(), now: DATE })
     expect(a).toEqual(b)
   })
 
   test('the css entry gets the import relative to its own folder', async () => {
-    const base = CASES['knutssonsbil']!()
+    const base = CASES['site-1228881255']!()
     const files = withFiles(base, { 'src/global.css': base.read(ENTRY), [ENTRY]: null, 'src/layouts/Base.astro': base.read('src/layouts/Base.astro').replace('../styles/global.css', '../global.css') })
     const plan = ok(await planFonts(files, reportOf(files, 'src/global.css'), { fetch: network(), now: DATE }))
     expect(applyEdits(files.read('src/global.css'), plan.edits.filter((e) => e.file === 'src/global.css'))).toBe('@import "tailwindcss";\n@import "./styles/fonts.css";\n@plugin "daisyui";\n')
   })
 
   test('a Google Fonts comment right above the links goes with them; a blank line between keeps it', async () => {
-    const base = CASES['knutssonsbil']!()
+    const base = CASES['site-1228881255']!()
     const layout = base.read('src/layouts/Base.astro')
     const commented = layout.replace('    <link rel="preconnect" href="https://fonts.googleapis.com" />', '\n    <!-- Google Fonts: Oswald (headings) + Barlow (body) -->\n    <link rel="preconnect" href="https://fonts.googleapis.com" />')
     const files = withFiles(base, { 'src/layouts/Base.astro': `${commented.replace('  </head>', '\n  </head>')}` })
@@ -389,18 +389,18 @@ function parseCss2Local(css: string): { subset: string; block: string; src: stri
 // ── refusals: nothing planned, nothing written ───────────────────────────────────────────────
 
 describe('planFonts refuses, with nothing planned', () => {
-  const knut = (): SiteFiles => CASES['knutssonsbil']!()
+  const linkSite = (): SiteFiles => CASES['site-1228881255']!()
 
   test('a report from before fonts detection: run detect again; no request is made', async () => {
     const net = network()
-    const plan = await planFonts(knut(), { css: { entry: ENTRY } }, { fetch: net, now: DATE })
+    const plan = await planFonts(linkSite(), { css: { entry: ENTRY } }, { fetch: net, now: DATE })
     expect(plan).toEqual({ ok: false, refusals: [{ file: '', target: 'google fonts', reason: expect.stringMatching(/run detect again/) }] })
     expect(net.calls).toEqual([])
   })
 
   test('status needs-human (its reasons), none and self-hosted (nothing to do); no request is made', async () => {
     const net = network()
-    const files = knut()
+    const files = linkSite()
     const base = reportOf(files)
     await refused(files, net, 'needs a look', { ...base, fonts: { ...base.fonts, status: 'needs-human', url: null, reasons: ['src/x.ts: Google Fonts host mentioned'] } })
     await refused(files, net, 'src/x.ts: Google Fonts host mentioned', { ...base, fonts: { ...base.fonts, status: 'needs-human', url: null, reasons: ['src/x.ts: Google Fonts host mentioned'] } })
@@ -410,37 +410,37 @@ describe('planFonts refuses, with nothing planned', () => {
   })
 
   test('src/styles/fonts.css or anything in public/fonts/ already there', async () => {
-    const files = knut()
+    const files = linkSite()
     const report = reportOf(files)
     await refused(withFiles(files, { 'src/styles/fonts.css': '' }), network(), 'src/styles/fonts.css already exists', report)
     await refused(withFiles(files, { 'public/fonts/a.woff2': 'x' }), network(), 'public/fonts/ already exists', report)
   })
 
   test('the css2 request fails, answers 404, or answers without @font-face', async () => {
-    const files = knut()
-    await refused(files, network({ [URLS.knutssonsbil]: new Error('getaddrinfo ENOTFOUND fonts.googleapis.com') }), /fonts\.googleapis\.com\/css2.*ENOTFOUND/)
-    await refused(files, network({ [URLS.knutssonsbil]: text('nope', 'text/html', 404) }), /answered 404/)
-    await refused(files, network({ [URLS.knutssonsbil]: text('<!doctype html><p>Sorry</p>', 'text/html') }), /no @font-face/)
+    const files = linkSite()
+    await refused(files, network({ [URLS['oswald-barlow']]: new Error('getaddrinfo ENOTFOUND fonts.googleapis.com') }), /fonts\.googleapis\.com\/css2.*ENOTFOUND/)
+    await refused(files, network({ [URLS['oswald-barlow']]: text('nope', 'text/html', 404) }), /answered 404/)
+    await refused(files, network({ [URLS['oswald-barlow']]: text('<!doctype html><p>Sorry</p>', 'text/html') }), /no @font-face/)
   })
 
   test('a response with truetype faces (what an old User-Agent gets) or without latin', async () => {
-    const files = knut()
-    const ttf = css2('knutssonsbil').replaceAll(".woff2) format('woff2')", ".ttf) format('truetype')")
-    await refused(files, network({ [URLS.knutssonsbil]: text(ttf, 'text/css') }), /woff2/)
-    const noLatin = css2('knutssonsbil').replace(/\/\* latin \*\/\n@font-face \{[^}]*\}\n/g, '')
-    await refused(files, network({ [URLS.knutssonsbil]: text(noLatin, 'text/css') }), /no latin subset/)
+    const files = linkSite()
+    const ttf = css2('oswald-barlow').replaceAll(".woff2) format('woff2')", ".ttf) format('truetype')")
+    await refused(files, network({ [URLS['oswald-barlow']]: text(ttf, 'text/css') }), /woff2/)
+    const noLatin = css2('oswald-barlow').replace(/\/\* latin \*\/\n@font-face \{[^}]*\}\n/g, '')
+    await refused(files, network({ [URLS['oswald-barlow']]: text(noLatin, 'text/css') }), /no latin subset/)
   })
 
   test('a woff2 download fails, answers 500, or is not a woff2', async () => {
-    const files = knut()
-    const first = parseCss2(css2('knutssonsbil')).find((f) => f.subset === 'latin')!.src
+    const files = linkSite()
+    const first = parseCss2(css2('oswald-barlow')).find((f) => f.subset === 'latin')!.src
     await refused(files, network({ [first]: new Error('socket hang up') }), /socket hang up/)
     await refused(files, network({ [first]: { status: 500, contentType: 'text/html', body: new Uint8Array() } }), /answered 500/)
     await refused(files, network({ [first]: text('<html>', 'text/html') }), /not a woff2/)
   })
 
   test('a family whose licence is in none of ofl/, apache/, ufl/, or whose licence request fails', async () => {
-    const files = knut()
+    const files = linkSite()
     const [ofl] = licenceUrls('Oswald')
     await refused(files, network({ [ofl!.url]: text('404: Not Found', 'text/plain', 404) }), /no licence for Oswald in google\/fonts/)
     await refused(files, network({ [ofl!.url]: text('oops', 'text/plain', 500) }), /answered 500/)
@@ -448,7 +448,7 @@ describe('planFonts refuses, with nothing planned', () => {
   })
 
   test('an Apache family gets its LICENSE.txt', async () => {
-    const files = knut()
+    const files = linkSite()
     const [ofl, apache] = licenceUrls('Barlow')
     const plan = ok(
       await planFonts(files, reportOf(files), {
@@ -461,7 +461,7 @@ describe('planFonts refuses, with nothing planned', () => {
   })
 
   test('a CSP directive that would be left with no source', async () => {
-    const base = knut()
+    const base = linkSite()
     const layout = base.read('src/layouts/Base.astro').replace(
       '    <link rel="icon"',
       `    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src https://fonts.gstatic.com" />\n    <link rel="icon"`,
@@ -472,8 +472,8 @@ describe('planFonts refuses, with nothing planned', () => {
   })
 
   test('a css entry without @import "tailwindcss"', async () => {
-    const files = withFiles(knut(), { [ENTRY]: '@plugin "daisyui";\n' })
-    await refused(files, network(), /@import "tailwindcss"/, { ...reportOf(knut()), css: { entry: ENTRY } })
+    const files = withFiles(linkSite(), { [ENTRY]: '@plugin "daisyui";\n' })
+    await refused(files, network(), /@import "tailwindcss"/, { ...reportOf(linkSite()), css: { entry: ENTRY } })
   })
 })
 
@@ -512,10 +512,10 @@ function checkout(tree: Map<string, string>): string {
   git(dir, 'config', 'user.email', 't@example.se')
   return dir
 }
-/** A minimal wireable site: knutssonsbil's layout and entry, plus what detect needs. */
-function knutTree(): Map<string, string> {
+/** A minimal wireable site: site 1228881255's layout and entry, plus what detect needs. */
+function linkTree(): Map<string, string> {
   return new Map([
-    ...treeOf(join(FIXTURES, 'fonts', 'knutssonsbil')),
+    ...treeOf(join(FIXTURES, 'fonts', 'site-1228881255')),
     ['package.json', JSON.stringify({ dependencies: { astro: '^6.1.6' } })],
     ['astro.config.mjs', "import { defineConfig } from 'astro/config'\nexport default defineConfig({})\n"],
   ])
@@ -539,8 +539,8 @@ describe('run.ts fonts', () => {
   })
 
   test('--dry-run prints the diff and the new files, and writes nothing', async () => {
-    const dir = checkout(knutTree())
-    runDetect(dir, ['knutssonsbil.se'])
+    const dir = checkout(linkTree())
+    runDetect(dir, ['site-1228881255.se'])
     const { code, output } = await runFonts(dir, { dryRun: true, fetch: network(), now: DATE, openPrs: noPrs })
     expect(code).toBe(0)
     expect(output).toContain('--- a/src/layouts/Base.astro')
@@ -554,8 +554,8 @@ describe('run.ts fonts', () => {
   })
 
   test('commits everything on fonts-selfhost from origin/main, one commit, nothing else changed', async () => {
-    const dir = checkout(knutTree())
-    runDetect(dir, ['knutssonsbil.se'])
+    const dir = checkout(linkTree())
+    runDetect(dir, ['site-1228881255.se'])
     const net = network()
     const { code, output } = await runFonts(dir, { dryRun: false, fetch: net, now: DATE, openPrs: noPrs })
     expect(code).toBe(0)
@@ -566,7 +566,7 @@ describe('run.ts fonts', () => {
     expect(status(dir)).toBe('')
     const changed = git(dir, 'diff', '--name-only', 'HEAD~1', 'HEAD').split('\n')
     expect(changed.filter((p) => !p.startsWith('public/fonts/')).sort()).toEqual(['src/layouts/Base.astro', 'src/styles/fonts.css', 'src/styles/global.css'])
-    expect(readFileSync(join(dir, 'src/layouts/Base.astro'), 'utf8')).toBe(treeOf(join(WIRE, 'expected', 'knutssonsbil')).get('src/layouts/Base.astro'))
+    expect(readFileSync(join(dir, 'src/layouts/Base.astro'), 'utf8')).toBe(treeOf(join(WIRE, 'expected', 'site-1228881255')).get('src/layouts/Base.astro'))
     // The woff2 files are written byte for byte.
     const woff2 = changed.filter((p) => p.endsWith('.woff2'))
     expect(woff2.length).toBeGreaterThan(0)
@@ -574,9 +574,9 @@ describe('run.ts fonts', () => {
   })
 
   test('refuses (exit 3, nothing written) when the plan is refused', async () => {
-    const dir = checkout(knutTree())
-    runDetect(dir, ['knutssonsbil.se'])
-    const { code, output } = await runFonts(dir, { dryRun: false, fetch: network({ [URLS.knutssonsbil]: new Error('offline') }), now: DATE, openPrs: noPrs })
+    const dir = checkout(linkTree())
+    runDetect(dir, ['site-1228881255.se'])
+    const { code, output } = await runFonts(dir, { dryRun: false, fetch: network({ [URLS['oswald-barlow']]: new Error('offline') }), now: DATE, openPrs: noPrs })
     expect(code).toBe(3)
     expect(output).toContain('nothing was written')
     expect(git(dir, 'branch', '--show-current')).toBe('main')
@@ -584,8 +584,8 @@ describe('run.ts fonts', () => {
   })
 
   test('an existing fonts-selfhost branch, locally or on origin, or a dirty tree: an error, nothing written', async () => {
-    const dir = checkout(knutTree())
-    runDetect(dir, ['knutssonsbil.se'])
+    const dir = checkout(linkTree())
+    runDetect(dir, ['site-1228881255.se'])
     git(dir, 'branch', FONTS_BRANCH)
     await expect(runFonts(dir, { dryRun: false, fetch: network(), now: DATE, openPrs: noPrs })).rejects.toThrow(/fonts-selfhost already exists locally/)
     git(dir, 'push', '-q', 'origin', FONTS_BRANCH)
@@ -593,8 +593,8 @@ describe('run.ts fonts', () => {
     await expect(runFonts(dir, { dryRun: false, fetch: network(), now: DATE, openPrs: noPrs })).rejects.toThrow(/origin already has a fonts-selfhost branch/)
     expect(status(dir)).toBe('')
 
-    const dirty = checkout(knutTree())
-    runDetect(dirty, ['knutssonsbil.se'])
+    const dirty = checkout(linkTree())
+    runDetect(dirty, ['site-1228881255.se'])
     writeFileSync(join(dirty, 'stray.txt'), 'x')
     await expect(runFonts(dirty, { dryRun: false, fetch: network(), now: DATE, openPrs: noPrs })).rejects.toThrow(/not clean/)
     expect(existsSync(join(dirty, 'public/fonts'))).toBe(false)
@@ -602,10 +602,10 @@ describe('run.ts fonts', () => {
 })
 
 describe('run.ts wire: fonts as a second commit on consent-banner', () => {
-  const ASPOMAD_URL = 'https://fonts.googleapis.com/css2?family=Montserrat:wght@100;200;300;400&family=Poppins:wght@300;400&display=swap'
-  // aspomad's own response is not recorded; Figtree's stands in (the families do not matter here).
-  const aspomadNet = (over: Record<string, Answer | Error> = {}) => network(over, { [ASPOMAD_URL]: css2('figtree') })
-  const aspomad = (): string => checkout(treeOf(join(FIXTURES, 'aspomad', 'before')))
+  const PILOT_FONTS_URL = 'https://fonts.googleapis.com/css2?family=Montserrat:wght@100;200;300;400&family=Poppins:wght@300;400&display=swap'
+  // site 1218869363's own response is not recorded; Figtree's stands in (the families do not matter here).
+  const pilotNet = (over: Record<string, Answer | Error> = {}) => network(over, { [PILOT_FONTS_URL]: css2('figtree') })
+  const pilotDir = (): string => checkout(treeOf(join(FIXTURES, 'site-1218869363', 'before')))
 
   test('parseWireArgs (PR 3): fonts are on by default, --no-fonts skips them; --fonts is gone and says so', () => {
     expect(parseWireArgs(['site'])).toEqual({ dir: 'site', dryRun: false, fonts: true })
@@ -614,9 +614,9 @@ describe('run.ts wire: fonts as a second commit on consent-banner', () => {
   })
 
   test('--no-fonts: wire is what it was before the fonts: one commit, no request, fonts untouched', async () => {
-    const dir = aspomad()
-    runDetect(dir, ['aspomad.se'])
-    const net = aspomadNet()
+    const dir = pilotDir()
+    runDetect(dir, ['site-1218869363.se'])
+    const net = pilotNet()
     const { code, output } = await runWire(dir, { dryRun: false, fonts: false, fetch: net, install: () => {}, openPrs: noPrs })
     expect(code).toBe(0)
     expect(output).toContain(`committed on ${BRANCH}\n`)
@@ -627,18 +627,18 @@ describe('run.ts wire: fonts as a second commit on consent-banner', () => {
   })
 
   test('two commits: the banner exactly as before, then the fonts commit with only the fonts paths', async () => {
-    const dir = aspomad()
-    const report = runDetect(dir, ['aspomad.se'])
+    const dir = pilotDir()
+    const report = runDetect(dir, ['site-1218869363.se'])
     expect(report.fonts?.status).toBe('wire')
     // PR 3: no option needed, the fonts are self-hosted by default.
-    const { code, output } = await runWire(dir, { dryRun: false, fetch: aspomadNet(), now: DATE, install: () => {}, openPrs: noPrs })
+    const { code, output } = await runWire(dir, { dryRun: false, fetch: pilotNet(), now: DATE, install: () => {}, openPrs: noPrs })
     expect(code).toBe(0)
     expect(output).toContain(`committed on ${BRANCH} (2 commits)`)
     expect(git(dir, 'branch', '--show-current')).toBe(BRANCH)
     expect(git(dir, 'log', '-2', '--format=%s').split('\n')).toEqual([FONTS_COMMIT_MESSAGE, COMMIT_MESSAGE])
     expect(git(dir, 'rev-parse', 'HEAD~2')).toBe(git(dir, 'rev-parse', 'origin/main'))
     // The banner commit is the banner wiring alone: expected/ of the pilot fixture.
-    const expected = treeOf(join(FIXTURES, 'aspomad', 'expected'))
+    const expected = treeOf(join(FIXTURES, 'site-1218869363', 'expected'))
     for (const [path, want] of expected) expect(execFileSync('git', ['show', `HEAD~1:${path}`], { cwd: dir, encoding: 'utf8' }), path).toBe(want)
     const fontsPaths = git(dir, 'diff', '--name-only', 'HEAD~1', 'HEAD').split('\n')
     expect(fontsPaths.filter((p) => !p.startsWith('public/fonts/')).sort()).toEqual(['src/layouts/Base.astro', 'src/styles/fonts.css', 'src/styles/global.css'])
@@ -651,9 +651,9 @@ describe('run.ts wire: fonts as a second commit on consent-banner', () => {
   })
 
   test('a refused fonts plan refuses the whole wire (exit 3, nothing written) and says how to wire the banner alone', async () => {
-    const dir = aspomad()
-    runDetect(dir, ['aspomad.se'])
-    const { code, output } = await runWire(dir, { dryRun: false, fetch: aspomadNet({ [ASPOMAD_URL]: new Error('offline') }), install: () => {}, openPrs: noPrs })
+    const dir = pilotDir()
+    runDetect(dir, ['site-1218869363.se'])
+    const { code, output } = await runWire(dir, { dryRun: false, fetch: pilotNet({ [PILOT_FONTS_URL]: new Error('offline') }), install: () => {}, openPrs: noPrs })
     expect(code).toBe(3)
     expect(output).toContain('wire --no-fonts wires the banner alone')
     expect(git(dir, 'branch', '--show-current')).toBe('main')
@@ -661,9 +661,9 @@ describe('run.ts wire: fonts as a second commit on consent-banner', () => {
   })
 
   test('--dry-run shows the banner diff and the fonts diff, writes nothing', async () => {
-    const dir = aspomad()
-    runDetect(dir, ['aspomad.se'])
-    const { code, output } = await runWire(dir, { dryRun: true, fetch: aspomadNet(), now: DATE })
+    const dir = pilotDir()
+    runDetect(dir, ['site-1218869363.se'])
+    const { code, output } = await runWire(dir, { dryRun: true, fetch: pilotNet(), now: DATE })
     expect(code).toBe(0)
     expect(output).toContain("+import ConsentBanner from '@visionmediahq/astro-consent/components/ConsentBanner.astro'")
     expect(output).toContain('+++ b/src/styles/fonts.css')
@@ -675,25 +675,25 @@ describe('run.ts wire: fonts as a second commit on consent-banner', () => {
 // ── review of #75 ────────────────────────────────────────────────────────────────────────────
 
 describe('review of #75: stale reports, files changed on disk, recovery', () => {
-  const ASPOMAD = 'https://fonts.googleapis.com/css2?family=Montserrat:wght@100;200;300;400&family=Poppins:wght@300;400&display=swap'
+  const pilotUrl = 'https://fonts.googleapis.com/css2?family=Montserrat:wght@100;200;300;400&family=Poppins:wght@300;400&display=swap'
 
   test('a report whose offsets no longer fit the checkout is refused (run detect again), no request made; after detect it plans cleanly', async () => {
     // The repro: detect, wire the banner, that branch becomes main, fonts without re-detecting.
-    const dir = checkout(treeOf(join(FIXTURES, 'aspomad', 'before')))
-    runDetect(dir, ['aspomad.se'])
+    const dir = checkout(treeOf(join(FIXTURES, 'site-1218869363', 'before')))
+    runDetect(dir, ['site-1218869363.se'])
     expect((await runWire(dir, { dryRun: false, fonts: false, install: () => {}, openPrs: noPrs })).code).toBe(0)
     git(dir, 'push', '-q', 'origin', `${BRANCH}:main`)
     git(dir, 'fetch', '-q', 'origin')
     git(dir, 'switch', '-q', 'main')
     git(dir, 'reset', '-q', '--hard', 'origin/main')
     git(dir, 'branch', '-q', '-D', BRANCH)
-    const net = network({}, { [ASPOMAD]: css2('figtree') })
+    const net = network({}, { [pilotUrl]: css2('figtree') })
     const stale = await runFonts(dir, { dryRun: true, fetch: net, now: DATE, openPrs: noPrs })
     expect(stale.code).toBe(3)
     expect(stale.output).toMatch(/report\.fonts no longer matches the checkout: run detect again/)
     expect(net.calls).toEqual([])
 
-    runDetect(dir, ['aspomad.se'])
+    runDetect(dir, ['site-1218869363.se'])
     const fresh = await runFonts(dir, { dryRun: true, fetch: net, now: DATE, openPrs: noPrs })
     expect(fresh.code).toBe(0)
     expect(fresh.output).not.toMatch(/^-.*(?:viewport|favicon)/m)
@@ -703,15 +703,15 @@ describe('review of #75: stale reports, files changed on disk, recovery', () => 
   })
 
   test('planFonts refuses a report.fonts that a fresh detect does not reproduce', async () => {
-    const files = CASES['knutssonsbil']!()
+    const files = CASES['site-1228881255']!()
     const report = reportOf(files)
     const shifted = { ...report, fonts: { ...report.fonts, locations: report.fonts.locations.map((l) => ({ ...l, start: l.start + 3, end: l.end + 3 })) } }
     await refused(files, network(), /run detect again/, shifted)
   })
 
   test('a file changed on disk after planning: commitFonts refuses before writing or switching branch', async () => {
-    const dir = checkout(knutTree())
-    runDetect(dir, ['knutssonsbil.se'])
+    const dir = checkout(linkTree())
+    runDetect(dir, ['site-1228881255.se'])
     const site = diskSite(dir)
     const report = JSON.parse(readFileSync(join(dir, '.rollout/report.json'), 'utf8')) as { fonts: FontsInfo; css: { entry: string | null } }
     const plan = ok(await planFonts(site, report, { fetch: network(), now: DATE }))
@@ -723,8 +723,8 @@ describe('review of #75: stale reports, files changed on disk, recovery', () => 
   })
 
   test('a fonts commit that fails after the banner commit says the banner is committed and the fonts are not', async () => {
-    const dir = checkout(knutTree())
-    runDetect(dir, ['knutssonsbil.se'])
+    const dir = checkout(linkTree())
+    runDetect(dir, ['site-1228881255.se'])
     const site = diskSite(dir)
     const report = JSON.parse(readFileSync(join(dir, '.rollout/report.json'), 'utf8')) as { fonts: FontsInfo; css: { entry: string | null } }
     const files = fontsFiles((p) => site.read(p), ok(await planFonts(site, report, { fetch: network(), now: DATE })))
@@ -733,8 +733,8 @@ describe('review of #75: stale reports, files changed on disk, recovery', () => 
   })
 
   test('wire --fonts: a file changed since planning, after the banner commit, also gets the banner-is-committed recovery text', async () => {
-    const dir = checkout(knutTree())
-    runDetect(dir, ['knutssonsbil.se'])
+    const dir = checkout(linkTree())
+    runDetect(dir, ['site-1228881255.se'])
     const site = diskSite(dir)
     const report = JSON.parse(readFileSync(join(dir, '.rollout/report.json'), 'utf8')) as { fonts: FontsInfo; css: { entry: string | null } }
     const files = fontsFiles((p) => site.read(p), ok(await planFonts(site, report, { fetch: network(), now: DATE })))
@@ -746,15 +746,15 @@ describe('review of #75: stale reports, files changed on disk, recovery', () => 
 
 describe('review of #75: run.ts fonts and consent-banner', () => {
   test('a consent-banner branch on origin that main has (or none) is no obstacle', async () => {
-    const dir = checkout(knutTree())
-    runDetect(dir, ['knutssonsbil.se'])
+    const dir = checkout(linkTree())
+    runDetect(dir, ['site-1228881255.se'])
     git(dir, 'push', '-q', 'origin', 'main:consent-banner')
     expect((await runFonts(dir, { dryRun: true, fetch: network(), now: DATE, openPrs: noPrs })).code).toBe(0)
   })
 
   test('refused (exit 3) while origin has a consent-banner branch main does not have, or an open consent-banner PR', async () => {
-    const dir = checkout(knutTree())
-    runDetect(dir, ['knutssonsbil.se'])
+    const dir = checkout(linkTree())
+    runDetect(dir, ['site-1228881255.se'])
     git(dir, 'switch', '-q', '-c', 'consent-banner')
     writeFileSync(join(dir, 'x.txt'), 'x')
     git(dir, 'add', 'x.txt')
@@ -776,8 +776,8 @@ describe('review of #75: run.ts fonts and consent-banner', () => {
   })
 
   test('main moved on GitHub since the last fetch: a branch merged there is still seen as merged', async () => {
-    const dir = checkout(knutTree())
-    runDetect(dir, ['knutssonsbil.se'])
+    const dir = checkout(linkTree())
+    runDetect(dir, ['site-1228881255.se'])
     // Someone else merges a banner branch on GitHub: origin's main and consent-banner move, the clone has not fetched.
     const other = temp('fonts-other-')
     git(other, 'clone', '-q', git(dir, 'remote', 'get-url', 'origin'), 'o')
@@ -793,8 +793,8 @@ describe('review of #75: run.ts fonts and consent-banner', () => {
   })
 
   test('origin unreachable: an error that says whether a consent-banner branch exists is unknown, nothing written', async () => {
-    const dir = checkout(knutTree())
-    runDetect(dir, ['knutssonsbil.se'])
+    const dir = checkout(linkTree())
+    runDetect(dir, ['site-1228881255.se'])
     git(dir, 'remote', 'set-url', 'origin', join(tmpdir(), 'no-such-origin-for-fonts-test'))
     await expect(runFonts(dir, { dryRun: false, fetch: network(), now: DATE, openPrs: noPrs })).rejects.toThrow(
       /whether origin has a consent-banner branch is unknown; nothing written/,
@@ -804,9 +804,9 @@ describe('review of #75: run.ts fonts and consent-banner', () => {
 })
 
 describe('review of #75: CSP, subsets per family, comments', () => {
-  const knut = (): SiteFiles => CASES['knutssonsbil']!()
+  const linkSite = (): SiteFiles => CASES['site-1228881255']!()
   const withMeta = (content: string): SiteFiles => {
-    const base = knut()
+    const base = linkSite()
     return withFiles(base, {
       'src/layouts/Base.astro': base.read('src/layouts/Base.astro').replace('    <link rel="icon"', `    <meta http-equiv="Content-Security-Policy" content="${content}" />\n    <link rel="icon"`),
     })
@@ -844,7 +844,7 @@ describe('review of #75: CSP, subsets per family, comments', () => {
   })
 
   const layoutWith = (above: string): { files: SiteFiles; out: () => Promise<string> } => {
-    const base = knut()
+    const base = linkSite()
     const text = base.read('src/layouts/Base.astro').replace('    <link rel="preconnect" href="https://fonts.googleapis.com" />', `${above}\n    <link rel="preconnect" href="https://fonts.googleapis.com" />`)
     const files = withFiles(base, { 'src/layouts/Base.astro': text })
     return {
@@ -872,7 +872,7 @@ describe('review of #75: CSP, subsets per family, comments', () => {
   })
 
   test('a // fonts comment right above the const goes with it, and so does a trailing comment on its line; another comment stays', async () => {
-    const base = CASES['arjangs-elmontage']!()
+    const base = CASES['site-1272266556']!()
     const text = base
       .read('src/layouts/Base.astro')
       .replace("import '../styles/global.css'\n", "import '../styles/global.css'\n// site helpers\n")
@@ -882,7 +882,7 @@ describe('review of #75: CSP, subsets per family, comments', () => {
     const files = withFiles(base, { 'src/layouts/Base.astro': text })
     const plan = ok(await planFonts(files, reportOf(files), { fetch: network(), now: DATE }))
     const out = applyEdits(text, plan.edits.filter((e) => e.file === 'src/layouts/Base.astro'))
-    const want = treeOf(join(WIRE, 'expected', 'arjangs-elmontage')).get('src/layouts/Base.astro')!.replace("import '../styles/global.css'\n", "import '../styles/global.css'\n// site helpers\n")
+    const want = treeOf(join(WIRE, 'expected', 'site-1272266556')).get('src/layouts/Base.astro')!.replace("import '../styles/global.css'\n", "import '../styles/global.css'\n// site helpers\n")
     expect(out).toBe(want)
   })
 
@@ -890,7 +890,7 @@ describe('review of #75: CSP, subsets per family, comments', () => {
     ['// Google Fonts\n// Fonts: Kanit + Open Sans\n', true],
     ['// Google Fonts\n// keep this url in sync with the brand guide\n', false],
   ])('a contiguous // block above the const goes only when every line is a fonts comment: %j', async (block, cut) => {
-    const base = CASES['arjangs-elmontage']!()
+    const base = CASES['site-1272266556']!()
     const text = base.read('src/layouts/Base.astro').replace('const fontHref =\n', `${block}const fontHref =\n`)
     const files = withFiles(base, { 'src/layouts/Base.astro': text })
     const plan = ok(await planFonts(files, reportOf(files), { fetch: network(), now: DATE }))
@@ -902,11 +902,11 @@ describe('review of #75: CSP, subsets per family, comments', () => {
 })
 
 describe('PR 3: wire refused while fonts-selfhost is open (the other direction of #75)', () => {
-  const aspomad = (): string => checkout(treeOf(join(FIXTURES, 'aspomad', 'before')))
+  const pilotDir = (): string => checkout(treeOf(join(FIXTURES, 'site-1218869363', 'before')))
 
   test('refused (exit 3) while origin has a fonts-selfhost branch main does not have, or an open fonts-selfhost PR; nothing written', async () => {
-    const dir = aspomad()
-    runDetect(dir, ['aspomad.se'])
+    const dir = pilotDir()
+    runDetect(dir, ['site-1218869363.se'])
     git(dir, 'switch', '-q', '-c', 'fonts-selfhost')
     writeFileSync(join(dir, 'x.txt'), 'x')
     git(dir, 'add', 'x.txt')
@@ -931,8 +931,8 @@ describe('PR 3: wire refused while fonts-selfhost is open (the other direction o
   })
 
   test('a fonts-selfhost branch main already has is no obstacle; a dry run does not ask GitHub at all', async () => {
-    const dir = aspomad()
-    runDetect(dir, ['aspomad.se'])
+    const dir = pilotDir()
+    runDetect(dir, ['site-1218869363.se'])
     git(dir, 'push', '-q', 'origin', 'main:fonts-selfhost')
     let asked = 0
     const openPrs = async () => (asked++, ['https://github.com/visionmediahq/site/pull/12'])
@@ -942,8 +942,8 @@ describe('PR 3: wire refused while fonts-selfhost is open (the other direction o
   })
 
   test('runFonts asks GitHub about consent-banner only', async () => {
-    const dir = checkout(knutTree())
-    runDetect(dir, ['knutssonsbil.se'])
+    const dir = checkout(linkTree())
+    runDetect(dir, ['site-1228881255.se'])
     const asked: string[] = []
     await runFonts(dir, { dryRun: true, fetch: network(), now: DATE, openPrs: async (_r, b) => (asked.push(b), []) })
     expect(asked).toEqual(['consent-banner'])

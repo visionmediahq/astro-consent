@@ -1,0 +1,58 @@
+---
+// GDPR-friendly map: loads iframe only after user consent click
+---
+
+<section class="w-full" aria-label="Karta över Exempel Återvinning">
+  <div class="w-full relative overflow-hidden" style="height: 420px;">
+
+    <!-- Placeholder shown before consent -->
+    <div
+      id="map-placeholder"
+      class="absolute inset-0 flex flex-col items-center justify-center gap-5 bg-warm-off"
+    >
+      <div class="text-center">
+        <p class="text-sm text-gray-500 mb-1" style="font-family: 'Oswald', sans-serif; font-weight: 300;">
+          Exempelgatan 1, 123 45 Exempelstad
+        </p>
+        <p class="text-xs text-gray-500" style="font-family: 'Oswald', sans-serif; font-weight: 300;">
+          Google Maps laddas inte förrän du klickar — de samlar annars in data utan ditt samtycke.
+        </p>
+      </div>
+      <button
+        id="map-consent-btn"
+        type="button"
+        class="inline-flex items-center px-5 py-2.5 text-sm font-semibold text-white rounded transition-opacity hover:opacity-90 focus-visible:outline-none"
+        style="background: var(--color-primary);"
+      >
+        Visa karta
+      </button>
+    </div>
+
+    <!-- Iframe injected here on consent -->
+    <div id="map-container" class="absolute inset-0 hidden"></div>
+  </div>
+</section>
+
+<script>
+  const btn = document.getElementById('map-consent-btn');
+  const placeholder = document.getElementById('map-placeholder');
+  const container = document.getElementById('map-container');
+
+  btn?.addEventListener('click', () => {
+    if (!container || !placeholder) return;
+
+    const iframe = document.createElement('iframe');
+    iframe.title = 'Karta – Exempel Återvinning, Exempelgatan 1, Exempelstad';
+    iframe.src = 'https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d2043.7!2d18.0644!3d59.3344!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x465e4f7a0cd1c9e5%3A0x1b4a13f3c5d4a9e7!2sExempelgatan%201%2C%20123%2045%20Exempelstad!5e0!3m2!1ssv!2sse!4v1690000000000!5m2!1ssv!2sse';
+    iframe.width = '100%';
+    iframe.height = '420';
+    iframe.style.cssText = 'border:0; display:block; width:100%; height:100%;';
+    iframe.allowFullscreen = true;
+    iframe.loading = 'lazy';
+    iframe.referrerPolicy = 'no-referrer-when-downgrade';
+
+    container.appendChild(iframe);
+    container.classList.remove('hidden');
+    placeholder.classList.add('hidden');
+  });
+</script>

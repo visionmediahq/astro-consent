@@ -12,7 +12,7 @@
 // the only such link deeper in the bar, unless it sits in phrasing content (#61). "Only" counts
 // every link to that page in the bar: in the © line, inside `{…}` and as a component (#65); wire
 // replaces none when there are two. When the © element is a `<p>`/`<span>`/`<small>` with layout
-// classes (a container, padding, a max width: lhiab), a `<div>` takes its classes and holds it and
+// classes (a container, padding, a max width: site 1369745148), a `<div>` takes its classes and holds it and
 // the links, so they stay inside the box (#65). With no © bar, the links are the slot's last
 // child, as before.
 //
@@ -173,7 +173,7 @@ function isLinkTo(text: string, n: AstroNode, path: string, domains: readonly st
 
 /**
  * The path an `<a>` links to: a quoted href, or an expression that is a string literal or a call
- * whose first argument is one (schloetter: `href={localize('/gdpr/', lang)}`). Null otherwise.
+ * whose first argument is one (site 1369693991: `href={localize('/gdpr/', lang)}`). Null otherwise.
  */
 function hrefPath(n: AstroNode, domains: readonly string[]): string | null {
   const href = attr(n, 'href')
@@ -219,8 +219,8 @@ function policyLinks(row: AstroNode, mark: AstroNode, path: string, domains: rea
 }
 
 /**
- * The bar's own link to `path` below the © row's siblings (#61: exakthaltagning's in a neighbouring
- * div, schloetter's in a `<ul>`), when it is the only link to `path` anywhere in `row` (#65: the ©
+ * The bar's own link to `path` below the © row's siblings (#61: site 1250154895's in a neighbouring
+ * div, site 1369693991's in a `<ul>`), when it is the only link to `path` anywhere in `row` (#65: the ©
  * line, conditionals and components counted), its parent is a flow container that may hold a
  * <nav>, and nothing between the row and it is phrasing, hidden or decoration (Ruling 29; fail
  * closed). With its parent, for the layout.
@@ -368,8 +368,8 @@ const ownBackground = (el: AstroNode, rules: CssRule[]): boolean =>
 const DAISY_SURFACE = /^(?:btn|badge|alert|card|kbd|toast|tooltip|modal-box|dropdown-content|menu|hero-overlay|stat|tab-active|mockup-[\w-]+)(?:-[\w-]+)?$/
 
 /**
- * White text on `surface` itself (#61: evabekonomi `text-white/45`, milodahlmann inline
- * `rgba(255,255,255,0.4)`, landhsel `text-white` headings): a `text-white` or `text-white/NN` class
+ * White text on `surface` itself (#61: site 1253341044 `text-white/45`, site 1244371378 inline
+ * `rgba(255,255,255,0.4)`, site 1243539503 `text-white` headings): a `text-white` or `text-white/NN` class
  * without a variant, or a light inline/scoped colour, on an element under `surface` that is not
  * inside another background (a button's white text says nothing about the footer).
  */
@@ -498,7 +498,7 @@ const within = (outer: AstroNode, inner: AstroNode): boolean => inner.start >= o
 const WRAPPABLE = new Set(['p', 'span', 'small'])
 
 /**
- * A layout class: a container, padding, a max width or auto side margins (lhiab:
+ * A layout class: a container, padding, a max width or auto side margins (site 1369745148:
  * `site-container py-5`). With one, the © element is the bar's box, and links beside it would sit
  * outside the box, against the viewport edge. A `<span>` or `<small>` with padding only is inline
  * spacing (`<span class="px-2">© Firma</span> | …`): it needs a box class.
@@ -521,7 +521,7 @@ function namedBy(el: AstroNode, rules: CssRule[]): boolean {
 }
 
 /**
- * The © element is phrasing whose own quoted classes include a layout class (#65, lhiab), and no
+ * The © element is phrasing whose own quoted classes include a layout class (#65, site 1369745148), and no
  * scoped rule names it: moving its classes to a wrapper would lose `p.copy {…}` or `.bar > p {…}`.
  */
 function boxed(mark: AstroNode, rules: CssRule[]): boolean {
@@ -540,7 +540,7 @@ const keepsWhitespace = (chain: AstroNode[]): boolean =>
   })
 
 /**
- * #65 (lhiab, hand fix b7a90fa): a `<div>` takes over the © element's classes and holds it and the
+ * #65 (site 1369745148, hand fix b7a90fa): a `<div>` takes over the © element's classes and holds it and the
  * links, so the links sit in the same box. The links' classes are those of a © bar row with the
  * © element's classes as the row: nothing in a flex or grid box, else the block row's justify-*
  * and `mt-2`. Each line of the © element after the first moves one indent deeper, unless it holds

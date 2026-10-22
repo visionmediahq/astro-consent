@@ -38,7 +38,7 @@ async function contrast(el: Locator, property: 'color' | 'border-top-color'): Pr
 const noTransitions = '* { transition: none !important }'
 
 test.describe('site styles', () => {
-  // tfhydraulik (#64): a site's `a { color }` in @layer base gave the "Öppna i" link 3.34:1.
+  // site 1241412221 (#64): a site's `a { color }` in @layer base gave the "Öppna i" link 3.34:1.
   // PrivacyLinks is left out on purpose: it follows the site's footer colour.
   test("the banner's and the placeholder's links keep AA contrast under a site's link colour", async ({ page, context }) => {
     await stub(context)
@@ -55,8 +55,8 @@ test.describe('site styles', () => {
     }
   })
 
-  // hkc-fitness (#64): a fixed mobile call bar at z-index 60 covered the banner's buttons. The banner
-  // is z-99, not 100: client sites' skip link (aspomad, lhiab, dylta, ...) is focus:z-[100] ahead
+  // site 1277867824 (#64): a fixed mobile call bar at z-index 60 covered the banner's buttons. The banner
+  // is z-99, not 100: client sites' skip link (site 1218869363, site 1369745148, site 1252079051, ...) is focus:z-[100] ahead
   // of it and must stay on top.
   test('a fixed site bar up to z-index 98 does not cover the banner', async ({ page, context }) => {
     await stub(context)

@@ -1,0 +1,48 @@
+---
+import Base from '../layouts/Base.astro';
+import Header from '../components/Header.astro';
+import Footer from '../components/Footer.astro';
+import Hero from '../components/Hero.astro';
+import Services from '../components/Services.astro';
+import Intro from '../components/Intro.astro';
+import Process from '../components/Process.astro';
+import Suppliers from '../components/Suppliers.astro';
+import About from '../components/About.astro';
+import Contact from '../components/Contact.astro';
+import SchemaOrg from '../components/SchemaOrg.astro';
+
+export const prerender = true;
+---
+
+<Base
+  title="Möbeltapetsering Exempelstad – Exempel Tapetserare"
+  description="Auktoriserad möbeltapetserare i Exempelstad. Omklädsel, stoppning och försäljning av möbeltyger. Mästarbrev 2023. Ring 0700-000000."
+  canonical="https://site-1243511314.se/"
+  ogImage="/og-image.jpg"
+>
+  <SchemaOrg
+    name="Exempel tapetserare"
+    url="https://site-1243511314.se/"
+    telephone="0700-000000"
+    email="kontakt@exempel.se"
+    address={{ streetAddress: "Exempelgatan 1", addressLocality: "Exempelstad", postalCode: "123 45", addressCountry: "SE" }}
+    openingHours={["Mo-Fr 09:00-16:00"]}
+    description="Exempel tapetserare byter/lagar stoppning och klär om möbler för privat och offentlig miljö. Verkstan ligger i Exempelstad."
+    image="/images/exempel_logotyp.webp"
+    sameAs={[
+      "https://www.facebook.com/exempel.tapetserare/?locale=sv_SE",
+      "https://www.instagram.com/exempel_tapetserare/",
+    ]}
+  />
+  <Header />
+  <main>
+    <Hero />
+    <Services />
+    <Intro />
+    <Process />
+    <Suppliers />
+    <About />
+    <Contact />
+  </main>
+  <Footer />
+</Base>

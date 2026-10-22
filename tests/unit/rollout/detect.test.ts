@@ -112,11 +112,11 @@ describe('detectScripts: trackers', () => {
     const r = detectScripts(
       inline({
         'src/layouts/Base.astro': page(
-          `<script type="application/ld+json">{"sameAs":["https://www.facebook.com/traforadling"],"hasMap":"https://maps.google.com/?cid=123"}</script>
+          `<script type="application/ld+json">{"sameAs":["https://www.facebook.com/site-1243335919"],"hasMap":"https://maps.google.com/?cid=123"}</script>
 <script is:inline async src={umamiScriptUrl} data-website-id={umamiWebsiteId}></script>`,
           'const umamiScriptUrl = import.meta.env.UMAMI_SCRIPT_URL\nconst umamiWebsiteId = import.meta.env.UMAMI_WEBSITE_ID',
         ),
-        'src/components/Footer.astro': '<footer><a href="https://www.facebook.com/traforadling" data-umami-event="facebook">Facebook</a></footer>\n',
+        'src/components/Footer.astro': '<footer><a href="https://www.facebook.com/site-1243335919" data-umami-event="facebook">Facebook</a></footer>\n',
       }),
     )
     expect(r.trackers).toEqual([])
@@ -160,7 +160,7 @@ describe('detectScripts: Google Maps loads outside an iframe', () => {
     const r = detectScripts(
       inline({
         'src/components/Contact.astro':
-          '<a href="https://www.google.com/maps/place/Annebergsv%C3%A4gen+12">Hitta hit</a>\n<a href="https://maps.google.com/?q=Varberg">Karta</a>\n',
+          '<a href="https://www.google.com/maps/place/Exempelgatan+1">Hitta hit</a>\n<a href="https://maps.google.com/?q=Exempelby">Karta</a>\n',
       }),
     )
     expect(r.trackers).toEqual([])
@@ -169,7 +169,7 @@ describe('detectScripts: Google Maps loads outside an iframe', () => {
   test('a map iframe src is not also a tracker, even on maps.googleapis.com', () => {
     const r = detectScripts(
       inline({
-        'src/components/Map.astro': '<iframe title="Karta" src="https://www.google.com/maps/embed/v1/place?key=abc&q=Varberg"></iframe>\n<iframe title="Karta" src="https://maps.googleapis.com/maps/embed?x"></iframe>\n',
+        'src/components/Map.astro': '<iframe title="Karta" src="https://www.google.com/maps/embed/v1/place?key=abc&q=Exempelby"></iframe>\n<iframe title="Karta" src="https://maps.googleapis.com/maps/embed?x"></iframe>\n',
       }),
     )
     expect(r.trackers).toEqual([])
@@ -177,28 +177,28 @@ describe('detectScripts: Google Maps loads outside an iframe', () => {
 })
 
 // Two home-made click-to-load maps, copied unchanged from the sites' main before they were wired:
-// arjangs-elmontage src/components/KontaktContent.astro at 6337541aa (embed URL in a `data-map-src`
-// template literal; detect classed the site notice) and stromsbacka src/components/KontaktMap.astro
+// site 1272266556 src/components/KontaktContent.astro at 6337541aa (embed URL in a `data-map-src`
+// template literal; detect classed the site notice) and site 1270086671 src/components/KontaktMap.astro
 // at 10315351d (embed URL string in the <script>; detect said `tracker google-maps`).
-const ARJANGS = readFileSync(join(FIXTURES, 'map-script-arjangs-elmontage.astro.txt'), 'utf8')
-const STROMSBACKA = readFileSync(join(FIXTURES, 'map-script-stromsbacka.astro.txt'), 'utf8')
-// The same, with the URL reaching `data-src` through a variable: tranemoglas src/pages/kontakt.astro
-// at 5bd19c266 (frontmatter `const mapSrc = `…&output=embed``), and gron-kontor
+const DATA_ATTR_MAP = readFileSync(join(FIXTURES, 'map-script-site-1272266556.astro.txt'), 'utf8')
+const SCRIPT_MAP = readFileSync(join(FIXTURES, 'map-script-site-1270086671.astro.txt'), 'utf8')
+// The same, with the URL reaching `data-src` through a variable: site 1369770831 src/pages/kontakt.astro
+// at 5bd19c266 (frontmatter `const mapSrc = `…&output=embed``), and site 1348189257
 // src/pages/kontakta-oss.astro + src/data/company.ts at 9debb06c4 (imported `mapsEmbedUrl`, a `+`
 // concatenation with `&output=embed` in its own literal). Both were classed notice.
-const TRANEMOGLAS = readFileSync(join(FIXTURES, 'map-script-tranemoglas.astro.txt'), 'utf8')
-const GRON_PAGE = readFileSync(join(FIXTURES, 'map-script-gron-kontor.astro.txt'), 'utf8')
-const GRON_COMPANY = readFileSync(join(FIXTURES, 'map-script-gron-kontor-company.ts.txt'), 'utf8')
+const VAR_MAP = readFileSync(join(FIXTURES, 'map-script-site-1369770831.astro.txt'), 'utf8')
+const IMPORTED_PAGE = readFileSync(join(FIXTURES, 'map-script-site-1348189257.astro.txt'), 'utf8')
+const IMPORTED_COMPANY = readFileSync(join(FIXTURES, 'map-script-site-1348189257-company.ts.txt'), 'utf8')
 
 describe('detectScripts: embeds built by a script (#57)', () => {
-  test('arjangs: an embed URL in a data- attribute template literal is a script-built embed, not a tracker', () => {
-    const r = detectScripts(inline({ 'src/components/KontaktContent.astro': ARJANGS }))
+  test('an embed URL in a data- attribute template literal is a script-built embed, not a tracker', () => {
+    const r = detectScripts(inline({ 'src/components/KontaktContent.astro': DATA_ATTR_MAP }))
     expect(r.scriptBuilt).toEqual([{ service: 'google-maps', file: 'src/components/KontaktContent.astro', where: 'data-map-src' }])
     expect(r.trackers).toEqual([])
   })
 
-  test('stromsbacka: an embed URL string inside a <script> is a script-built embed, not a tracker', () => {
-    const r = detectScripts(inline({ 'src/components/KontaktMap.astro': STROMSBACKA }))
+  test('an embed URL string inside a <script> is a script-built embed, not a tracker', () => {
+    const r = detectScripts(inline({ 'src/components/KontaktMap.astro': SCRIPT_MAP }))
     expect(r.scriptBuilt).toEqual([{ service: 'google-maps', file: 'src/components/KontaktMap.astro', where: 'script' }])
     expect(r.trackers).toEqual([])
   })
@@ -221,7 +221,7 @@ describe('detectScripts: embeds built by a script (#57)', () => {
           "---\nimport Map from './Map.astro'\n---\n" +
           '<a href={`https://www.google.com/maps/search/?api=1&query=${q}`}>Hitta hit</a>\n' +
           '<a href="https://calendar.google.com/calendar/render?action=TEMPLATE">Lägg till</a>\n' +
-          '<div data-href="https://maps.google.com/?q=Varberg" />\n' +
+          '<div data-href="https://maps.google.com/?q=Exempelby" />\n' +
           '<iframe title="Karta" data-src="https://www.google.com/maps/embed?pb=!1m2"></iframe>\n' +
           '<Map src="https://www.google.com/maps/embed?pb=!1m2" />\n' +
           '<!-- <div data-map-src="https://www.google.com/maps/embed?pb=!1m2" /> -->\n',
@@ -243,7 +243,7 @@ describe('detectScripts: embeds built by a script (#57)', () => {
   })
 
   test.each([
-    ['&amp; before output=embed', '<div data-src="https://maps.google.com/maps?q=Varberg&amp;output=embed" />'],
+    ['&amp; before output=embed', '<div data-src="https://maps.google.com/maps?q=Exempelby&amp;output=embed" />'],
     ['My Maps /maps/d/embed', '<div data-src="https://www.google.com/maps/d/embed?mid=abc" />'],
     ['My Maps /maps/d/u/0/embed', '<div data-src="https://www.google.com/maps/d/u/0/embed?mid=abc" />'],
     ['Calendar /calendar/u/0/embed', '<div data-src="https://calendar.google.com/calendar/u/0/embed?src=x" />'],
@@ -251,27 +251,27 @@ describe('detectScripts: embeds built by a script (#57)', () => {
     expect(detectScripts(inline({ 'src/components/M.astro': `${markup}\n` })).scriptBuilt.map((s) => s.where)).toEqual(['data-src'])
   })
 
-  test('tranemoglas: data-src={mapSrc} from a frontmatter template literal, iframe made in the script', () => {
-    const r = detectScripts(inline({ 'src/pages/kontakt.astro': TRANEMOGLAS }))
+  test('data-src={mapSrc} from a frontmatter template literal, iframe made in the script', () => {
+    const r = detectScripts(inline({ 'src/pages/kontakt.astro': VAR_MAP }))
     expect(r.scriptBuilt).toEqual([{ service: 'google-maps', file: 'src/pages/kontakt.astro', where: 'createElement' }])
     expect(r.trackers).toEqual([])
   })
 
-  test('gron-kontor: the embed URL is a + concatenation in an imported data module', () => {
-    const r = detectScripts(inline({ 'src/pages/kontakta-oss.astro': GRON_PAGE, 'src/data/company.ts': GRON_COMPANY }))
+  test('the embed URL is a + concatenation in an imported data module', () => {
+    const r = detectScripts(inline({ 'src/pages/kontakta-oss.astro': IMPORTED_PAGE, 'src/data/company.ts': IMPORTED_COMPANY }))
     expect(r.scriptBuilt).toEqual([{ service: 'google-maps', file: 'src/pages/kontakta-oss.astro', where: 'createElement' }])
     expect(r.trackers).toEqual([])
   })
 
-  test('createElement(iframe) with no Maps or Calendar embed in reach is not flagged (hkc-fitness leasing calculator)', () => {
+  test('createElement(iframe) with no Maps or Calendar embed in reach is not flagged (a leasing calculator on a client site)', () => {
     const r = detectScripts(
       inline({
         'src/pages/formanscykel.astro':
           "---\nimport { FORMAN } from '../data/site'\n---\n" +
           '<div data-kalkyl-fasad data-src="https://example.leaseabike.se/kalkyl"><button data-kalkyl-start>Räkna</button></div>\n' +
-          '<a href="https://www.google.com/maps/search/?api=1&query=Varberg">Hitta hit</a>\n' +
+          '<a href="https://www.google.com/maps/search/?api=1&query=Exempelby">Hitta hit</a>\n' +
           "<script>\n  const iframe = document.createElement('iframe')\n  iframe.src = fasad.dataset.src\n</script>\n",
-        'src/data/site.ts': "export const FORMAN = 1\nexport const mapsUrl = 'https://www.google.com/maps/place/Varberg'\n",
+        'src/data/site.ts': "export const FORMAN = 1\nexport const mapsUrl = 'https://www.google.com/maps/place/Exempelby'\n",
       }),
     )
     expect(r.scriptBuilt).toEqual([])
@@ -364,8 +364,8 @@ describe('detectScripts: banners, reCAPTCHA, already wired', () => {
   })
 
   test('alreadyWired: a merged pilot site shows every piece of wiring', () => {
-    expect(detectScripts(pilot('a-tak', 'merged')).alreadyWired).toEqual(['dependency', 'config', 'css', 'components', 'privacy.json'])
-    expect(detectScripts(pilot('a-tak')).alreadyWired).toEqual([])
+    expect(detectScripts(pilot('site-1271984151', 'merged')).alreadyWired).toEqual(['dependency', 'config', 'css', 'components', 'privacy.json'])
+    expect(detectScripts(pilot('site-1271984151')).alreadyWired).toEqual([])
   })
 
   test('a file that does not parse is recorded', () => {
@@ -609,15 +609,15 @@ describe('detect', () => {
     expect(r.reasons.filter((x) => x.startsWith('parse error in src/pages/broken.astro: '))).toHaveLength(1)
   })
 
-  test('a component with an HTML comment inside a {…} conditional is read like any other (anab, fonsterdekor, nnf)', () => {
+  test('a component with an HTML comment inside a {…} conditional is read like any other', () => {
     const hero =
       "---\nconst wide = true\n---\n<section>\n  {wide ? (\n    <!-- wide: image right -->\n    <div class=\"a\" />\n  ) : (\n    <!-- narrow -->\n    <div class=\"b\" />\n  )}\n</section>\n"
-    const clean = detect(withFiles(pilot('munkforstradgardstjanst'), { 'src/components/Hero.astro': hero }), 'x', ['x.se'])
+    const clean = detect(withFiles(pilot('site-1286040212'), { 'src/components/Hero.astro': hero }), 'x', ['x.se'])
     expect(clean.reasons).toEqual([])
     expect(clean.classification).toBe('notice')
     // Every detector reads the file: a tracker in it is still found.
     const gtag = '<script async src="https://www.googletagmanager.com/gtag/js?id=G-X"></script>\n'
-    const tracked = detect(withFiles(pilot('munkforstradgardstjanst'), { 'src/components/Hero.astro': hero + gtag }), 'x', ['x.se'])
+    const tracked = detect(withFiles(pilot('site-1286040212'), { 'src/components/Hero.astro': hero + gtag }), 'x', ['x.se'])
     expect(tracked.classification).toBe('needs-human')
     expect(tracked.trackers).toContain('google-analytics')
   })
@@ -628,7 +628,7 @@ describe('detect', () => {
     '    <div class="elfsight-app-00000000-0000-0000-0000-000000000001" data-elfsight-app-lazy></div>\n  </section>\n</Base>\n'
 
   test('an Elfsight widget makes a notice site consent, with no banner and no tracker', () => {
-    const r = detect(withFiles(pilot('munkforstradgardstjanst'), { 'src/pages/flode.astro': FEED_PAGE }), 'x', ['x.se'])
+    const r = detect(withFiles(pilot('site-1286040212'), { 'src/pages/flode.astro': FEED_PAGE }), 'x', ['x.se'])
     expect(r.banners).toEqual([])
     expect(r.trackers).toEqual([])
     expect(r.reasons).toEqual([])
@@ -639,14 +639,14 @@ describe('detect', () => {
 
   test('a Cookiebot script beside the widget is still a banner', () => {
     const cookiebot = '<script id="Cookiebot" src="https://consent.cookiebot.com/uc.js" data-cbid="x"></script>\n'
-    const r = detect(withFiles(pilot('munkforstradgardstjanst'), { 'src/pages/flode.astro': FEED_PAGE + cookiebot }), 'x', ['x.se'])
+    const r = detect(withFiles(pilot('site-1286040212'), { 'src/pages/flode.astro': FEED_PAGE + cookiebot }), 'x', ['x.se'])
     expect(r.banners).toEqual(['cookiebot'])
     expect(r.classification).toBe('needs-human')
     expect(r.reasons).toContain('existing banner: cookiebot')
   })
 
   test('an Elfsight reason makes the site needs-human', () => {
-    const r = detect(withFiles(pilot('munkforstradgardstjanst'), { 'src/pages/flode.astro': FEED_PAGE.replace(' async>', ' defer>') }), 'x', ['x.se'])
+    const r = detect(withFiles(pilot('site-1286040212'), { 'src/pages/flode.astro': FEED_PAGE.replace(' async>', ' defer>') }), 'x', ['x.se'])
     expect(r.classification).toBe('needs-human')
     expect(r.reasons).toEqual(['elfsight: src/pages/flode.astro: script attribute defer not understood', 'elfsight: src/pages/flode.astro: elfsight outside a recognised widget'])
   })
@@ -656,43 +656,43 @@ describe('detect', () => {
       "---\nimport Base from '../layouts/Base.astro'\nimport ConsentWidget from '@visionmediahq/astro-consent/components/ConsentWidget.astro'\n---\n" +
       '<Base title="Flöde"><ConsentWidget service="elfsight" script="https://elfsightcdn.com/platform.js" title="Innehållet">' +
       '<div class="elfsight-app-00000000-0000-0000-0000-000000000001" data-elfsight-app-lazy></div></ConsentWidget></Base>\n'
-    const r = detect(withFiles(pilot('munkforstradgardstjanst'), { 'src/pages/flode.astro': wired }), 'x', ['x.se'])
+    const r = detect(withFiles(pilot('site-1286040212'), { 'src/pages/flode.astro': wired }), 'x', ['x.se'])
     expect(r.reasons).toEqual([])
     expect(r.widgets).toEqual([])
     expect(r.classification).toBe('consent')
     expect(r.services).toEqual(['elfsight'])
   })
 
-  test('a notice site with arjangs-elmontage\'s click-to-load map is needs-human, not notice (#57)', () => {
-    const r = detect(withFiles(pilot('munkforstradgardstjanst'), { 'src/components/KontaktContent.astro': ARJANGS }), 'x', ['x.se'])
+  test('a notice site with a click-to-load map in a data- attribute is needs-human, not notice (#57)', () => {
+    const r = detect(withFiles(pilot('site-1286040212'), { 'src/components/KontaktContent.astro': DATA_ATTR_MAP }), 'x', ['x.se'])
     expect(r.classification).toBe('needs-human')
     expect(r.reasons).toEqual(['script-built embed google-maps in src/components/KontaktContent.astro (data-map-src)'])
     expect(r.trackers).toEqual([])
   })
 
-  test('stromsbacka\'s map built in a <script> gives the same kind of reason', () => {
-    const r = detect(withFiles(pilot('munkforstradgardstjanst'), { 'src/components/KontaktMap.astro': STROMSBACKA }), 'x', ['x.se'])
+  test('a map built in a <script> gives the same kind of reason', () => {
+    const r = detect(withFiles(pilot('site-1286040212'), { 'src/components/KontaktMap.astro': SCRIPT_MAP }), 'x', ['x.se'])
     expect(r.classification).toBe('needs-human')
     expect(r.reasons).toEqual(['script-built embed google-maps in src/components/KontaktMap.astro (script)'])
   })
 
   test.each([
-    ['tranemoglas', { 'src/pages/kontakt.astro': TRANEMOGLAS }, 'src/pages/kontakt.astro'],
-    ['gron-kontor', { 'src/pages/kontakta-oss.astro': GRON_PAGE, 'src/data/company.ts': GRON_COMPANY }, 'src/pages/kontakta-oss.astro'],
+    ['site-1369770831', { 'src/pages/kontakt.astro': VAR_MAP }, 'src/pages/kontakt.astro'],
+    ['site-1348189257', { 'src/pages/kontakta-oss.astro': IMPORTED_PAGE, 'src/data/company.ts': IMPORTED_COMPANY }, 'src/pages/kontakta-oss.astro'],
   ])('a notice site with %s\'s map behind a variable is needs-human', (_site, extra, file) => {
-    const r = detect(withFiles(pilot('munkforstradgardstjanst'), extra), 'x', ['x.se'])
+    const r = detect(withFiles(pilot('site-1286040212'), extra), 'x', ['x.se'])
     expect(r.classification).toBe('needs-human')
     expect(r.reasons).toEqual([`script-built embed google-maps in ${file} (createElement)`])
   })
 
   test.each([
-    ['munkforstradgardstjanst', 'notice'],
-    ['nhrk', 'needs-human'],
-    ['a-tak', 'needs-human'],
-    ['vasshallakatthotell', 'consent'],
-    ['aspomad', 'consent'],
-    ['domeijstapetserarverkstad', 'consent'],
-    ['traforadling', 'consent'],
+    ['site-1286040212', 'notice'],
+    ['site-1277834673', 'needs-human'],
+    ['site-1271984151', 'needs-human'],
+    ['site-1245311266', 'consent'],
+    ['site-1218869363', 'consent'],
+    ['site-1243511314', 'consent'],
+    ['site-1243335919', 'consent'],
   ])('pilot %s: %s, matching the committed snapshot', (site, classification) => {
     const r = detect(pilot(site), site, [`${site}.se`])
     expect(r.classification).toBe(classification)

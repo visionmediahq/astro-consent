@@ -328,7 +328,7 @@ describe('verify', () => {
     expect(evidence(dir, '5-clip.txt')).toContain('Acceptera alla')
   })
 
-  test('step 5: a covered banner button fails and says so (aspokarlsson)', async () => {
+  test('step 5: a covered banner button fails and says so', async () => {
     const dir = siteDir()
     const covered: ClipResult = { path: '/', width: 360, kind: 'button', button: 'OK', w: 44, boxW: 326, over: false, out: false, covered: true, cut: false, clipped: true }
     const f = fake({ checks: { clip: async () => [covered] } })
@@ -337,7 +337,7 @@ describe('verify', () => {
     expect(evidence(dir, '5-clip.txt')).toContain('/ 360px button "OK" 44px in 326px CLIPPED (covered by another element)')
   })
 
-  test('step 5: an embed button cut off by an overflow:hidden ancestor fails and says so (#43, lbfastigheter)', async () => {
+  test('step 5: an embed button cut off by an overflow:hidden ancestor fails and says so (#43)', async () => {
     const dir = siteDir()
     const cut: ClipResult = { path: '/kontakt/', width: 360, kind: 'button', button: 'Visa Google Maps', w: 150, boxW: 326, over: false, out: false, covered: false, cut: true, clipped: true }
     const f = fake({ checks: { clip: async () => [cut] } })
@@ -468,7 +468,7 @@ describe('verify', () => {
     })
   })
 
-  describe('step 5: map heights are compared with main (#46, knutssonsbil)', () => {
+  describe('step 5: map heights are compared with main (#46)', () => {
     const boxes = (mainH: number, branchH: number) => async (base: string, paths: string[]) =>
       paths.map((path): EmbedBox => ({ path, width: 1280, service: 'google-maps', h: base.includes(':4398') ? mainH : branchH }))
 
@@ -497,7 +497,7 @@ describe('verify', () => {
     })
   })
 
-  test('step 6: an unreadable embed placeholder fails (#46, knutssonsbil)', async () => {
+  test('step 6: an unreadable embed placeholder fails (#46)', async () => {
     const dir = siteDir()
     const row = (path: string, kind: ContrastRow['kind'], ok = true): ContrastRow => ({ path, kind, button: kind === 'placeholder' ? 'Kartan hämtas från Google Maps' : 'Neka', ratio: ok ? 7 : 1.2, ok, fg: { r: 0, g: 0, b: 0 }, bg: { r: 255, g: 255, b: 255 } })
     const f = fake({
@@ -510,7 +510,7 @@ describe('verify', () => {
     expect(evidence(dir, '6-contrast.txt')).toContain('/karta placeholder "Kartan hämtas från Google Maps" 1.20:1 FAIL')
   })
 
-  describe('step 5: the root styles are compared with main (faluridklubb: daisyUI restyled the scrollbar)', () => {
+  describe('step 5: the root styles are compared with main (daisyUI restyled the scrollbar)', () => {
     const styles = (scrollbar: string) => ({ 'html scrollbar-color': scrollbar, 'html background-color': 'rgb(255, 255, 255)' })
 
     test('the same as main: passes and says so', async () => {
@@ -530,7 +530,7 @@ describe('verify', () => {
     })
   })
 
-  describe('step 5: a page that scrolls sideways is compared with main (antonicommunications)', () => {
+  describe('step 5: a page that scrolls sideways is compared with main', () => {
     const row = (path: string, kind: 'page' | 'button', w: number, boxW: number): ClipResult => {
       const over = kind === 'page' && w > boxW
       return { path, width: 320, kind, button: kind === 'page' ? '(page)' : 'OK', w, boxW, over, out: false, covered: false, cut: false, clipped: over }
@@ -558,7 +558,7 @@ describe('verify', () => {
     })
   })
 
-  test('step 8 builds with SITE_URL from the first domain, as Coolify does (burnersverige, bbstad)', async () => {
+  test('step 8 builds with SITE_URL from the first domain, as Coolify does', async () => {
     const dir = siteDir()
     const seen: Record<string, string>[] = []
     const f = fake({
@@ -567,8 +567,8 @@ describe('verify', () => {
         return { pass: await run('http://127.0.0.1:4397'), log: 'docker ok' }
       },
     })
-    await verify(dir, report({ domains: ['bbstad.se', 'www.bbstad.se'] }), { deps: f.deps })
-    expect(seen).toEqual([{ SITE_URL: 'https://bbstad.se' }])
+    await verify(dir, report({ domains: ['site-1270076313.se', 'www.site-1270076313.se'] }), { deps: f.deps })
+    expect(seen).toEqual([{ SITE_URL: 'https://site-1270076313.se' }])
   })
 
   test('step 1: an unknown lockfile change fails and is listed', async () => {
@@ -1099,7 +1099,7 @@ describe('startPreview', () => {
   })
 })
 
-describe('SSR entry from the start script (#60, kajsa-landgren)', () => {
+describe('SSR entry from the start script (#60)', () => {
   /** A temp root with the site at `<root>/site`, so a file "outside" it is still inside the temp dir. */
   const site = (start: string | undefined, files: string[]) => {
     const root = mkdtempSync(join(tmpdir(), 'entry-'))

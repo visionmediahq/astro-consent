@@ -30,8 +30,8 @@ const lock = (versions: Record<string, string>): string =>
   })
 
 describe('detectConfig', () => {
-  test('nhrk: server output, no sitemap integration key, tailwind vite plugin', () => {
-    const site = pilot('nhrk')
+  test('a pilot fixture: server output, no sitemap integration key, tailwind vite plugin', () => {
+    const site = pilot('site-1277834673')
     expect(detectConfig(site)).toEqual({
       path: 'astro.config.ts',
       hasIntegrations: false,
@@ -42,19 +42,19 @@ describe('detectConfig', () => {
     expect(detectAstroMajor(site)).toBe(7)
   })
 
-  test('aspomad has no integrations key; a-tak has one', () => {
-    expect(detectConfig(pilot('aspomad')).hasIntegrations).toBe(false)
-    expect(detectConfig(pilot('a-tak')).hasIntegrations).toBe(true)
+  test('one pilot fixture has no integrations key; another has one', () => {
+    expect(detectConfig(pilot('site-1218869363')).hasIntegrations).toBe(false)
+    expect(detectConfig(pilot('site-1271984151')).hasIntegrations).toBe(true)
   })
 
   test.each([
-    ['a-tak', 6],
-    ['aspomad', 6],
-    ['domeijstapetserarverkstad', 6],
-    ['munkforstradgardstjanst', 6],
-    ['nhrk', 7],
-    ['traforadling', 6],
-    ['vasshallakatthotell', 7],
+    ['site-1271984151', 6],
+    ['site-1218869363', 6],
+    ['site-1243511314', 6],
+    ['site-1286040212', 6],
+    ['site-1277834673', 7],
+    ['site-1243335919', 6],
+    ['site-1245311266', 7],
   ])('%s: astro major %i, output server', (site, major) => {
     expect(detectAstroMajor(pilot(site))).toBe(major)
     expect(detectConfig(pilot(site)).output).toBe('server')
@@ -99,7 +99,7 @@ describe('detectCss', () => {
   })
 
   test('daisyui 5 and tailwind 4 from the pilot lockfiles', () => {
-    for (const s of ['a-tak', 'nhrk', 'vasshallakatthotell']) {
+    for (const s of ['site-1271984151', 'site-1277834673', 'site-1245311266']) {
       const css = detectCss(pilot(s))
       expect(css.entry).toBe('src/styles/global.css')
       expect(css.tailwindMajor).toBe(4)
@@ -129,16 +129,16 @@ describe('detectCss', () => {
   })
 
   test('primaries: --client-primary and var() fallbacks in layout <style>, deduplicated in order', () => {
-    expect(detectCss(pilot('a-tak')).primaries).toEqual(['#570df8', '#ff0000'])
-    expect(detectCss(pilot('nhrk')).primaries).toEqual(['#570df8', '#a05200'])
-    expect(detectCss(pilot('traforadling')).primaries).toEqual(['#2C5F3A', '#005229', '#0460c7'])
-    expect(detectCss(pilot('munkforstradgardstjanst')).primaries).toContain('#ff3824')
-    expect(detectCss(pilot('vasshallakatthotell')).primaries).toEqual(['#2aa5a5'])
+    expect(detectCss(pilot('site-1271984151')).primaries).toEqual(['#570df8', '#ff0000'])
+    expect(detectCss(pilot('site-1277834673')).primaries).toEqual(['#570df8', '#a05200'])
+    expect(detectCss(pilot('site-1243335919')).primaries).toEqual(['#2C5F3A', '#005229', '#0460c7'])
+    expect(detectCss(pilot('site-1286040212')).primaries).toContain('#ff3824')
+    expect(detectCss(pilot('site-1245311266')).primaries).toEqual(['#2aa5a5'])
   })
 
   test('primaries: tokens.css and global.css are read, -label variants are not', () => {
-    expect(detectCss(pilot('aspomad')).primaries).toEqual(['#8B4513', '#570df8'])
-    expect(detectCss(pilot('domeijstapetserarverkstad')).primaries).toEqual(['#eb5e28'])
+    expect(detectCss(pilot('site-1218869363')).primaries).toEqual(['#8B4513', '#570df8'])
+    expect(detectCss(pilot('site-1243511314')).primaries).toEqual(['#eb5e28'])
   })
 
   test('a colour in a comment, or on another property, is ignored', () => {

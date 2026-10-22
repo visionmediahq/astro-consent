@@ -55,7 +55,7 @@ const WIDGET_ONLY = new Set<ServiceSlug>(['elfsight'])
 /**
  * Registry patterns that are a bare host (no path): safe to find anywhere in text. Path patterns
  * (`facebook.com/tr`) are only matched on parsed URLs, where a page link such as
- * `facebook.com/traforadling` can be told apart. The Maps API hosts (`maps.googleapis.com`,
+ * `facebook.com/<page>` can be told apart. The Maps API hosts (`maps.googleapis.com`,
  * `maps.gstatic.com`, `places.googleapis.com`) are kept: outside an iframe they are loads the batch
  * does not wire (a Static Maps image, the JavaScript API, its fonts and tiles).
  */
@@ -157,7 +157,7 @@ const CREATE_IFRAME = /\bcreateElement\s*\(\s*(['"`])iframe\1\s*\)/i
 
 /**
  * Embed services whose pieces appear somewhere in `text`, not necessarily as one URL: a registry
- * host and an embed marker (gron-kontor writes `'https://maps.google.com/maps?q=' + … +
+ * host and an embed marker (site 1348189257 writes `'https://maps.google.com/maps?q=' + … +
  * '&t=&z=15&ie=UTF8&iwloc=&output=embed'`). Literal `<iframe>` tags are left out: detectIframes
  * reports those.
  */
@@ -175,7 +175,7 @@ const SCRIPT_IMPORT = /\b(?:from|import)\s*(['"])(\.\.?\/[^'"]+)\1/g
 
 /**
  * A `<script>` that creates an iframe whose URL comes through a variable (`data-src={mapSrc}`,
- * tranemoglas; an imported `mapsEmbedUrl`, gron-kontor): the services whose embed pieces appear in
+ * site 1369770831; an imported `mapsEmbedUrl`, site 1348189257): the services whose embed pieces appear in
  * the file itself or in a relative non-`.astro` module it imports. An `.astro` import is left out:
  * a component's own iframe is detectIframes' to report.
  */

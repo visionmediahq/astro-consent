@@ -1,0 +1,63 @@
+---
+// site-1236396223 origin/main 62f4f0e, src/components/Footer.astro, columns and CSS reduced (#47).
+const currentYear = new Date().getFullYear();
+---
+
+<footer class="site-footer">
+  <div class="footer-top">
+    <div class="footer-inner">
+
+      <div class="footer-col footer-brand">
+        <p class="footer-tagline">Text.</p>
+      </div>
+
+      <div class="footer-col">
+        <h4 class="footer-heading">Om företaget</h4>
+        <ul class="footer-links">
+          <li><a href="/om-oss/" class="footer-link">Om oss</a></li>
+          <li><a href="/integritetspolicy/" class="footer-link">Integritetspolicy</a></li>
+        </ul>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="footer-bottom">
+    <div class="footer-inner footer-bottom-inner">
+      <p class="footer-copyright">
+        &copy; {currentYear} Exempel Mekaniska Verkstad AB.
+      </p>
+      <p class="footer-legal">
+        <a href="/integritetspolicy/" class="footer-legal-link">Integritetspolicy</a>
+      </p>
+    </div>
+  </div>
+</footer>
+
+<style>
+  .site-footer {
+    background: #0f0f1f;
+    color: rgba(255,255,255,0.75);
+    margin-top: 0;
+  }
+  .footer-inner {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 2rem;
+  }
+  .footer-bottom-inner {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  .footer-copyright {
+    color: rgba(255,255,255,0.35);
+    margin: 0;
+  }
+  .footer-legal-link {
+    color: rgba(255,255,255,0.35);
+    text-decoration: none;
+  }
+</style>
