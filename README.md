@@ -231,6 +231,7 @@ npx tsx ci/rollout/run.ts detect <site dir> --domain <host> [--domain <host>]...
 npx tsx ci/rollout/run.ts wire   <site dir> [--dry-run] [--no-fonts]
 npx tsx ci/rollout/run.ts fonts  <site dir> [--dry-run]   # Google Fonts alone, on branch fonts-selfhost
 npx tsx ci/rollout/run.ts fonts-files <site dir> --url <css/css2 url> [--entry <css file>] [--dry-run]   # files only, see below
+npx tsx ci/rollout/run.ts update <site dir>               # the lockfile on the latest release, branch astro-consent-update
 npx tsx ci/rollout/run.ts verify <site dir>
 npx tsx ci/rollout/run.ts verify --demo <dist dir>      # a built demo, no git/npm/Docker
 npx tsx ci/rollout/run.ts pr     <site dir> --shots-dir <path> --shots-base <url> [--issue <url>]...
@@ -249,11 +250,31 @@ npx tsx ci/rollout/run.ts help
 - **Flows.** `verify`, `pr`, `merge` and `live` read the clone's current branch and run its flow
   (`FLOWS` in `ci/rollout/flows.ts`); any other branch is refused. `consent-banner` (from `wire`):
   the banner, plus the fonts commit unless `--no-fonts`. `fonts-selfhost` (from `fonts`): the
-  Google Fonts commit alone, for a site whose banner is live. Each flow has its PR title and body
-  (`pr-body.sv.md`, `pr-body.fonts.sv.md`) and its verify steps. One flow at a time per site:
-  `wire` refuses while origin has a `fonts-selfhost` branch main does not contain or an open
-  `fonts-selfhost` PR, `fonts` the same for `consent-banner`, and `pr` and `merge` refuse the
-  same (the other flow's unmerged branch on origin or open PR).
+  Google Fonts commit alone, for a site whose banner is live. `astro-consent-update` (from
+  `update`): the site's lockfile on the latest release, for a site whose banner is live. Each flow
+  has its PR title and body (`pr-body.sv.md`, `pr-body.fonts.sv.md`, `pr-body.update.sv.md`) and its
+  verify steps. One flow at a time per site: `wire`, `fonts` and `update` each refuse while origin
+  has a branch of either other flow that main does not contain or an open PR from one, and `pr`
+  and `merge` refuse the same (`others` in `FLOWS`).
+- **Updating a live site (`update`).** A site does not upgrade on its own: its `package.json`
+  allows a semver range, but Docker runs `npm ci`, which installs the commit the lockfile pins.
+  `update <site dir>` branches `astro-consent-update` from origin/main (the same checks as
+  `fonts`: a clean checkout at origin/main, no such branch locally or on origin) and runs
+  `npm install --package-lock-only --ignore-scripts` of
+  `github:visionmediahq/astro-consent#semver:^<release>`, the release being this checkout's
+  `package.json` version, so the range gets the release as its new floor. It commits only
+  `package.json` and `package-lock.json` (`chore: astro-consent <old> → <new>`) and prints whether
+  every visitor is asked again (`CONSENT_VERSION` read at both installed commits from this
+  checkout's git history). Refused (exit 3) with nothing left behind: main without the package or
+  already on the release, or an install that changed the lockfile beyond the package's own entry
+  and the root's dependency on it (`diffLock`, the same rules as verify step 1; npm-version churn
+  such as re-added `optional` entries counts), or did not move the version up. Then the branch is
+  deleted and the checkout is back where it was. Verify runs every banner step on it (the banner
+  changes with the package), and step 1 also requires that only the two package files changed and
+  the version moved up. The PR body lists the `CHANGELOG.md` entries in between and says plainly
+  when every visitor will be asked again; `pr` refuses when that cannot be read. Do not update a
+  site with an open `fonts-selfhost` PR: that PR's verify requires main's lockfile, so the update
+  waits until it is merged.
 - **State** lives in `<site dir>/.rollout/`: `report.json`, and per flow `verify.json`,
   `pushed.txt`, `evidence/`, `shots/`, `pr-body.md`, `live-baseline.txt`,
   `live-baseline-hosts.json`, `apps.json` and `live-<mode>.json`. `consent-banner` uses exactly

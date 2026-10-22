@@ -1,0 +1,47 @@
+## Vad ändras
+
+- `@visionmediahq/astro-consent` uppdateras från 1.1.2 till 1.1.4: bannern, platshållarna och "Cookie-inställningar" kommer från den nya versionen. Bara `package.json` och `package-lock.json` ändras.
+- Ingen besökare får frågan igen: samtyckestexterna (`CONSENT_VERSION`) är desamma.
+
+Ändringar sedan 1.1.2 (från astro-consents `CHANGELOG.md`):
+
+#### 1.1.4
+
+- Fix: the toggles.
+
+#### 1.1.3
+
+- Fix: the width.
+
+Filer:
+
+- `package-lock.json`
+- `package.json`
+
+## Så testar du
+
+1. Öppna https://kund.se i ett privat fönster: bannern visas längst ned, som förut.
+2. Klicka "Cookie-inställningar" i sidfoten: bannern öppnas igen.
+
+## Kontroller
+
+Kontrollerat lokalt med `ci/rollout` (astro-consent @ 0123456):
+
+- ok: 1. lockfile
+- ok: 2. build
+- ok: 3. requests
+- ok: 4. consent-paths
+- ok: 5. clip
+- ok: 6. contrast
+- ok: 7. screenshots
+- ok: 8. docker
+
+Skärmbilder (360/1280 px):
+
+- [home-360-open.png](https://github.com/visionmediahq/site-factory/blob/main/docs/rollout/2026-10-06-astro-consent/kund/home-360-open.png)
+
+**Mergas efter verifiering och livekontroll.**
+
+## Relaterade ärenden
+
+Inga

@@ -83,9 +83,11 @@ export async function merge(dir: string, pr: number | string, opts: { deps?: Par
       return stop(`PR #${pr} is ${state.state}, not OPEN${hint}`)
     }
     if (state.headRefName !== BRANCH) return stop(`PR #${pr} is from ${state.headRefName}, not ${BRANCH}`)
-    // The other flow's work on GitHub would conflict with this merge (site-factory#220).
-    const obstacles = await flowObstacles(deps.exec, root, repo, flow.other)
-    if (obstacles.length) return stop(`${flow.other} would conflict with ${BRANCH}: ${obstacles.join('; ')}`)
+    // Another flow's work on GitHub would conflict with this merge (site-factory#220).
+    for (const other of flow.others) {
+      const obstacles = await flowObstacles(deps.exec, root, repo, other)
+      if (obstacles.length) return stop(`${other} would conflict with ${BRANCH}: ${obstacles.join('; ')}`)
+    }
 
     // Spec C4: if main moved, verify again in full right before the merge.
     const verifyPath = statePath(rollout, VERIFY_FILE, BRANCH)

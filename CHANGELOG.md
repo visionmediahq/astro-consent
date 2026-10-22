@@ -99,6 +99,11 @@ Not part of the package (`files` is unchanged) and not a release.
   whose grid wrapper keeps a class with a scoped rule setting a `display` other than grid/none or a
   height that is not definite (a client site: `display: block` left the loaded map 0px tall).
 - CI: the `e2e` job runs `verify --demo demo/dist-consent` after the consent demo build.
+- `update <site dir>`: a third flow, `astro-consent-update`, moves a live site's lockfile to the
+  latest release (only `package.json` and `package-lock.json`, one commit). It and the other two
+  flows refuse each other's open PRs and unmerged branches (`others` in `FLOWS`); verify runs every
+  banner step on it; the PR body lists the changelog entries in between and says when every
+  visitor is asked again (`CONSENT_VERSION` changed).
 
 ## 1.0.2
 
