@@ -299,6 +299,38 @@ describe('contrast', () => {
       expect(row!.ratio).toBeCloseTo(4.561, 3)
     })
 
+    it('a translucent layer beneath a translucent gradient counts too', () => {
+      const stop = 'rgba(255, 255, 255, 0.1)'
+      const [row] = contrastRows([
+        raw({ layers: [[0, 0, 0, 0], [255, 255, 255, 60], [20, 60, 60, 255]], images: [img(`linear-gradient(${stop}, ${stop})`)], colours: { [stop]: [255, 255, 255, 26] } }),
+      ])
+      expect(row).toMatchObject({ ok: false, note: 'gradient, worst stop; within the 8-bit margin of 4.5' })
+      // Two levels (the layer and the gradient) fail it; the gradient's alone would not.
+      expect(row!.ratio).toBeCloseTo(4.68, 2)
+    })
+
+    it('opaque text on a mid-tone opaque colour, and over several gradients, gets no margin', () => {
+      // Grey text and no clamp at 0 or 255 nearby, so a level anywhere would show.
+      const s = 'rgb(35, 114, 140)'
+      const value = `linear-gradient(rgba(0, 0, 0, 0), rgba(0, 0, 0, 0)), linear-gradient(${s}, ${s})`
+      const [plain, several] = contrastRows([
+        raw({ fg: [235, 235, 235, 255], layers: [[21, 116, 140, 255]] }),
+        raw({ fg: [235, 235, 235, 255], layers: [[244, 246, 248, 255]], images: [img(value)], colours: { [s]: [35, 114, 140, 255], 'rgba(0, 0, 0, 0)': [0, 0, 0, 0] } }),
+      ])
+      expect(plain).toMatchObject({ ok: true })
+      expect(plain!.note).toBeUndefined()
+      expect(plain!.ratio).toBeCloseTo(4.507, 3)
+      expect(several).toMatchObject({ ok: true, note: '2 gradients, bound over all stops' })
+      expect(several!.ratio).toBeCloseTo(4.503, 3)
+    })
+
+    it('opaque text over a translucent layer: the layer gets its level, the text none', () => {
+      const [row] = contrastRows([raw({ fg: [201, 201, 201, 255], layers: [[116, 116, 116, 90], [10, 70, 120, 255]] })])
+      expect(row).toMatchObject({ ok: true })
+      expect(row!.note).toBeUndefined()
+      expect(row!.ratio).toBeCloseTo(4.652, 3)
+    })
+
     it('opaque text on opaque colours is exact: 4.54:1 stays ok, and a clear pass with translucent layers too', () => {
       const rows = contrastRows([
         raw({ fg: [118, 118, 118, 255], layers: [[255, 255, 255, 255]] }),
