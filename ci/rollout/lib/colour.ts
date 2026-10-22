@@ -25,7 +25,7 @@ export function oklchL({ r, g, b }: Rgb): number {
 }
 
 /** WCAG 2 relative luminance. */
-const luminance = ({ r, g, b }: Rgb): number =>
+export const luminance = ({ r, g, b }: Rgb): number =>
   0.2126 * toLinear(r) + 0.7152 * toLinear(g) + 0.0722 * toLinear(b)
 
 /** WCAG 2 contrast ratio (1..21), argument order does not matter. */

@@ -13,8 +13,12 @@
 // rasterised by the page. Each segment between two stops is searched for its worst point: on a grid,
 // then refined around every local minimum. sRGB segments are interpolated here (premultiplied, as
 // browsers paint them); any other space or hue method is mixed by the page itself with color-mix()
-// in the same method. One gradient that shows is measured; a second one, a url(), a stop or mix the
-// page does not resolve, or a prelude keyword the parser does not know stays indeterminate.
+// in the same method. Several gradients that show (jokkmoks-lbc's faint radial glow on a dark linear
+// gradient) are bounded instead: bottom-up, per channel, the lowest and highest value every layer can
+// composite to, and the text against the worst point of that box (see boxWorst). Compositing and
+// luminance are monotone per channel, so the bound is never above the true worst point. A url(), a
+// stop or mix the page does not resolve, or a prelude keyword the parser does not know stays
+// indeterminate.
 //
 // Effects the colours do not show are indeterminate too: background-blend-mode, a background-clip or
 // -origin other than border/padding/content-box (text), opacity on an element with a background or
@@ -22,7 +26,7 @@
 // ::before/::after with a background on the way (it may sit over the text; its box is not checked).
 // Opacity on the text or a background-less wrapper is folded into the text colour instead.
 import type { Browser, Page } from '@playwright/test'
-import { type Rgb, wcagContrast } from '../lib/colour'
+import { luminance, type Rgb, wcagContrast } from '../lib/colour'
 import { freshPage, open } from './requests'
 
 type Rgba = [number, number, number, number] // 0..255, alpha too
@@ -436,6 +440,95 @@ const lerpSrgb = (a: Rgba, b: Rgba, t: number): Rgba => {
   return [ch(0), ch(1), ch(2), alpha]
 }
 
+/** Per channel, the lowest and highest value a background can take (unrounded). */
+type Box = { lo: Rgb; hi: Rgb }
+const CHANNELS = ['r', 'g', 'b'] as const
+const boxOf = (f: (k: (typeof CHANNELS)[number]) => [number, number]): Box => {
+  const [r, g, b] = CHANNELS.map(f) as [[number, number], [number, number], [number, number]]
+  return { lo: { r: r[0], g: g[0], b: b[0] }, hi: { r: r[1], g: g[1], b: b[1] } }
+}
+const union = (xs: Box[]): Box => boxOf((k) => [Math.min(...xs.map((x) => x.lo[k])), Math.max(...xs.map((x) => x.hi[k]))])
+/** `top` over every colour of the box: source-over is monotone in the colour below, per channel. */
+const overBox = (top: Rgba, below: Box): Box => ({ lo: over(top, below.lo), hi: over(top, below.hi) })
+
+/**
+ * What one gradient layer can show over `below`. sRGB: composited over a fixed colour, a premultiplied
+ * sRGB mix is linear between the composites of its two stops, so the stops are the extremes. Any
+ * other method: the page's mixes are searched, per channel, for the premultiplied colour's and the
+ * alpha's extremes, which bound the composite independently of `below`. Undefined while a colour is
+ * unresolved; every colour it needs is asked for all the same.
+ */
+function gradientBox(g: Gradient, below: Box, colour: (s: string) => Rgba | undefined): Box | undefined {
+  const stops = g.stops.map(colour)
+  if (stops.some((c) => c === undefined)) return undefined
+  const cs = stops as Rgba[]
+  let boxes: Box[]
+  if (!g.method) boxes = cs.map((c) => overBox(c, below))
+  else {
+    const method = g.method
+    boxes = []
+    let pending = false
+    for (let i = 1; i < g.stops.length; i++) {
+      const at = (t: number): Rgba | undefined => (t === 0 ? cs[i - 1] : t === 1 ? cs[i] : colour(mixKey(method, g.stops[i - 1]!, g.stops[i]!, t)))
+      // Premultiplied channel j (0..2) or alpha (3), 0..1, with sign s: minimised for both signs.
+      const extreme = (j: number, s: 1 | -1) =>
+        minimise((t) => {
+          const c = at(t)
+          return c && (s * (j === 3 ? c[3] : (c[j]! * c[3]) / 255)) / 255
+        })
+      const ext = [0, 1, 2, 3].map((j) => [extreme(j, 1), extreme(j, -1)] as const)
+      if (ext.some(([mn, mx]) => !mn || !mx)) {
+        pending = true
+        continue
+      }
+      const [aMin, aMax] = [ext[3]![0]!.v, -ext[3]![1]!.v]
+      boxes.push(
+        boxOf((k) => {
+          const j = CHANNELS.indexOf(k)
+          const [pMin, pMax] = [ext[j]![0]!.v * 255, -ext[j]![1]!.v * 255]
+          return [Math.max(0, pMin + (1 - aMax) * below.lo[k]), Math.min(255, pMax + (1 - aMin) * below.hi[k])]
+        }),
+      )
+    }
+    if (pending) return undefined
+  }
+  // A layer that may not cover the box leaves the colour below showing somewhere.
+  return union(g.covers ? boxes : [...boxes, below])
+}
+
+const SLICES = 16
+
+/**
+ * The lowest ratio text `fg` can have over any background in the box, and the corner where that bound
+ * is reached. For each sub-box, the text and background luminances lie between their values at its
+ * low and high corners (compositing and luminance are monotone per channel); separated ranges give a
+ * lower bound, overlapping ones give 1. Opaque text has one luminance, so the whole box is exact;
+ * translucent text follows the background, so the box is sliced to keep the bound tight.
+ */
+function boxWorst(fg: Rgba, box: Box): { bg: Rgb; ratio: number } {
+  const n = fg[3] === 255 ? 1 : SLICES
+  const cuts = (k: (typeof CHANNELS)[number]) => Array.from({ length: n + 1 }, (_, i) => box.lo[k] + ((box.hi[k] - box.lo[k]) * i) / n)
+  const [rs, gs, bs] = CHANNELS.map(cuts) as [number[], number[], number[]]
+  let worst = { bg: box.hi, ratio: Infinity }
+  for (let i = 0; i < n; i++)
+    for (let j = 0; j < n; j++)
+      for (let k = 0; k < n; k++) {
+        const lo = { r: rs[i]!, g: gs[j]!, b: bs[k]! }
+        const hi = { r: rs[i + 1]!, g: gs[j + 1]!, b: bs[k + 1]! }
+        const [bgLo, bgHi] = [luminance(lo), luminance(hi)]
+        const [fgLo, fgHi] = [luminance(over(fg, lo)), luminance(over(fg, hi))]
+        // Overlapping: the corner nearer the text in luminance is shown.
+        const found =
+          fgLo > bgHi
+            ? { bg: hi, ratio: (fgLo + 0.05) / (bgHi + 0.05) }
+            : bgLo > fgHi
+              ? { bg: lo, ratio: (bgLo + 0.05) / (fgHi + 0.05) }
+              : { bg: Math.abs(fgLo - bgLo) <= Math.abs(fgHi - bgHi) ? lo : hi, ratio: 1 }
+        if (found.ratio < worst.ratio) worst = found
+      }
+  return worst
+}
+
 interface Evaluated {
   row: ContrastRow
   /** Colour strings the page still has to resolve before this row can be measured. */
@@ -497,6 +590,21 @@ function evaluate(r: RawContrast): Evaluated {
       if (!Number.isFinite(worst.ratio)) worst = { bg: withAbove(beneath), ratio: ratioOn(withAbove(beneath)), stop: true }
     }
   }
+  // Several gradients: every layer bottom-up over the box of what lies below it, from white as above.
+  const methods = new Set<string>()
+  if (gradients.length > 1) {
+    let box: Box = { lo: WHITE, hi: WHITE }
+    for (const e of shown) {
+      if (e.kind === 'colour') box = overBox(e.c, box)
+      else if (e.kind === 'gradient') {
+        if (e.method) methods.add(e.method)
+        const next = gradientBox(e, box, colour)
+        if (next) box = next
+        else unresolved = true // keep going: the layers above still ask for their colours
+      }
+    }
+    if (!unresolved) worst = { ...boxWorst(fgBase, box), stop: true }
+  }
   const effects = r.effects ?? []
   const indeterminate = r.animating
     ? 'animation not settled'
@@ -504,15 +612,18 @@ function evaluate(r: RawContrast): Evaluated {
     ? `effect on the text or its background: ${effects.join(', ')}`
     : unknown
       ? 'background image behind the text'
+      : unresolved
+        ? 'gradient colour the page did not resolve'
+        : !opaque
+          ? 'no opaque background; composited over white'
+          : undefined
+  const note = unresolved
+    ? undefined
+    : g
+      ? `gradient, ${worst.stop ? 'worst stop' : 'worst point between stops'}${g.method ? `; interpolated in ${g.method}` : ''}`
       : gradients.length > 1
-        ? 'more than one gradient behind the text'
-        : unresolved
-          ? 'gradient colour the page did not resolve'
-          : !opaque
-            ? 'no opaque background; composited over white'
-            : undefined
-  const note =
-    g && !unresolved ? `gradient, ${worst.stop ? 'worst stop' : 'worst point between stops'}${g.method ? `; interpolated in ${g.method}` : ''}` : undefined
+        ? `${gradients.length} gradients, bound over all stops${methods.size ? `; points between stops sampled in ${[...methods].join(', ')}` : ''}`
+        : undefined
   const row: ContrastRow = {
     kind: r.kind,
     button: r.label,

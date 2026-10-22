@@ -413,6 +413,10 @@ describe('contrast', () => {
     const resolve = (css: string): RawContrast['fg'] | null => {
       const rgb = (s: string) => s.match(/\d+/g)!.map(Number) as [number, number, number]
       if (/^rgb\(/.test(css)) return [...rgb(css), 255]
+      if (/^rgba\(/.test(css)) {
+        const [r, g, b, a] = css.match(/[\d.]+/g)!.map(Number) as [number, number, number, number]
+        return [r, g, b, Math.round(a * 255)]
+      }
       const m = /^color-mix\(in hsl longer hue, (rgb\([^)]*\)) ([\d.]+)%, (rgb\([^)]*\)) ([\d.]+)%\)$/.exec(css)
       if (!m) return null
       const toHsl = ([r, g, b]: number[]) => {
@@ -494,12 +498,102 @@ describe('contrast', () => {
       expect(worstGap).toBeLessThan(1e-4)
     }, 30_000)
 
-    it('more than one gradient that shows is not combined: indeterminate', () => {
+    it('an opaque gradient on top hides the other one: measured as one gradient', () => {
       const top = 'linear-gradient(rgba(0, 0, 0, 0.5), rgb(0, 0, 0))'
-      const [row] = contrastRows([raw({ fg: [255, 255, 255, 255], layers: [[255, 255, 255, 255]], images: [img(`${top}, ${FOOTER}`)], colours })])
-      expect(row).toMatchObject({ ok: false, indeterminate: 'more than one gradient behind the text' })
-      // An opaque gradient on top hides the other one.
-      expect(contrastRows([footer(`${FOOTER}, ${top}`)])[0]).toMatchObject({ ok: true })
+      expect(contrastRows([footer(`${FOOTER}, ${top}`)])[0]).toMatchObject({ ok: true, note: 'gradient, worst stop' })
+    })
+
+    describe('several gradients that show (#90 item 5): a per-channel bound over every colour each layer can show', () => {
+      const more: RawContrast['colours'] = {
+        ...colours,
+        'rgba(127, 183, 226, 0.18)': [127, 183, 226, 46],
+        'rgba(0, 0, 0, 0)': [0, 0, 0, 0],
+        'rgb(21, 36, 47)': [21, 36, 47, 255],
+        'rgb(13, 25, 34)': [13, 25, 34, 255],
+        'rgba(255, 255, 255, 0.5)': [255, 255, 255, 128],
+        'rgba(255, 255, 255, 0)': [255, 255, 255, 0],
+        'rgba(0, 0, 0, 0.25)': [0, 0, 0, 64],
+        'rgb(250, 250, 250)': [250, 250, 250, 255],
+        'rgb(200, 200, 200)': [200, 200, 200, 255],
+        'rgb(255, 255, 255)': [255, 255, 255, 255],
+        'rgb(30, 30, 30)': [30, 30, 30, 255],
+      }
+      const two = (fg: RawContrast['fg'], value: string) => raw({ fg, layers: [[244, 246, 248, 255]], images: [img(value)], colours: more })
+      const mix = (top: RawContrast['fg'], below: [number, number, number]) => {
+        const a = top[3] / 255
+        return { r: a * top[0] + (1 - a) * below[0], g: a * top[1] + (1 - a) * below[1], b: a * top[2] + (1 - a) * below[2] }
+      }
+
+      it('jokkmoks-lbc: #dbe6ef over a faint radial glow on a dark linear gradient passes at its lightest point, 8.71:1', () => {
+        const value = 'radial-gradient(at 80% 0%, rgba(127, 183, 226, 0.18), rgba(0, 0, 0, 0) 55%), linear-gradient(158deg, rgb(21, 36, 47), rgb(13, 25, 34))'
+        const [row] = contrastRows([two([219, 230, 239, 255], value)])
+        expect(row!.indeterminate).toBeUndefined()
+        expect(row).toMatchObject({ ok: true, note: '2 gradients, bound over all stops', bg: { r: 40, g: 63, b: 79 } })
+        // The glow at full strength over the lighter end of the linear gradient.
+        expect(row!.ratio).toBeCloseTo(wcagContrast({ r: 219, g: 230, b: 239 }, mix([127, 183, 226, 46], [21, 36, 47])), 5)
+        expect(row!.ratio).toBeCloseTo(8.71, 1)
+      })
+
+      it('light text: a translucent white layer over a blue one fails at the lightest composite', () => {
+        const value = `linear-gradient(rgba(255, 255, 255, 0.5), rgba(0, 0, 0, 0)), ${FOOTER}`
+        const [row] = contrastRows([two([255, 255, 255, 255], value)])
+        expect(row!.indeterminate).toBeUndefined()
+        expect(row!.ok).toBe(false)
+        expect(row!.ratio).toBeCloseTo(wcagContrast({ r: 255, g: 255, b: 255 }, mix([255, 255, 255, 128], [0, 75, 133])), 5)
+      })
+
+      it('dark text: the bound flips to the darkest composite', () => {
+        const value = 'linear-gradient(rgba(0, 0, 0, 0.25), rgba(0, 0, 0, 0)), linear-gradient(rgb(250, 250, 250), rgb(200, 200, 200))'
+        const [row] = contrastRows([two([0, 0, 0, 255], value)])
+        expect(row!.indeterminate).toBeUndefined()
+        const darkest = mix([0, 0, 0, 64], [200, 200, 200])
+        expect(row).toMatchObject({ ok: true, bg: { r: Math.round(darkest.r), g: Math.round(darkest.g), b: Math.round(darkest.b) } })
+        expect(row!.ratio).toBeCloseTo(wcagContrast({ r: 0, g: 0, b: 0 }, darkest), 5)
+      })
+
+      it('a transparent stop in the top layer exposes the layer below', () => {
+        // White on top would make black text readable; where it fades out, the black below shows.
+        const value = 'linear-gradient(rgb(255, 255, 255), rgba(255, 255, 255, 0)), linear-gradient(rgb(0, 0, 0), rgb(30, 30, 30))'
+        const [row] = contrastRows([two([0, 0, 0, 255], value)])
+        expect(row!.indeterminate).toBeUndefined()
+        expect(row).toMatchObject({ ok: false, bg: { r: 0, g: 0, b: 0 } })
+        expect(row!.ratio).toBeCloseTo(1, 5)
+      })
+
+      it('text whose luminance lies inside the range the layers span is bounded at 1:1', () => {
+        const value = 'linear-gradient(rgb(255, 255, 255), rgba(255, 255, 255, 0)), linear-gradient(rgb(0, 0, 0), rgb(30, 30, 30))'
+        const [row] = contrastRows([two([128, 128, 128, 255], value)])
+        expect(row).toMatchObject({ ok: false, ratio: 1 })
+        expect(row!.indeterminate).toBeUndefined()
+      })
+
+      it('translucent text is bounded too, never above its true worst point', () => {
+        // White/70 over half-white on blue: the worst true point is the lightest composite.
+        const value = `linear-gradient(rgba(255, 255, 255, 0.5), rgba(0, 0, 0, 0)), ${FOOTER}`
+        const [row] = contrastRows([two(WHITE70, value)])
+        const bg = mix([255, 255, 255, 128], [0, 75, 133])
+        const exact = wcagContrast(mix(WHITE70, [bg.r, bg.g, bg.b]), bg)
+        expect(row!.ratio).toBeLessThanOrEqual(exact + 1e-9)
+        expect(row!.ratio).toBeGreaterThan(exact * 0.9)
+        expect(row!.ok).toBe(false)
+      })
+
+      it('a layer in another space: the page mixes its points, the bound covers them (never above the one-gradient worst)', async () => {
+        const hsl = 'linear-gradient(to right in hsl longer hue, rgb(0, 0, 139), rgb(139, 0, 0))'
+        const [alone] = await measureContrast(fakePage([raw({ fg: [255, 255, 255, 255], layers: [[255, 255, 255, 255]], images: [img(hsl)] })]) as never)
+        const page = fakePage([raw({ fg: [255, 255, 255, 255], layers: [[255, 255, 255, 255]], images: [img(`linear-gradient(rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0)), ${hsl}`)] })])
+        const [row] = await measureContrast(page as never)
+        expect(row!.indeterminate).toBeUndefined()
+        expect(row).toMatchObject({ ok: false, note: '2 gradients, bound over all stops; points between stops sampled in hsl longer hue' })
+        expect(row!.ratio).toBeLessThanOrEqual(alone!.ratio + 1e-9)
+        expect(page.calls.some((c) => c.includes('color-mix(in hsl longer hue, rgb(0, 0, 139)'))).toBe(true)
+      })
+
+      it('a gradient colour the page did not resolve stays indeterminate', () => {
+        const [row] = contrastRows([two([255, 255, 255, 255], `linear-gradient(rgb(1, 2, 3), rgba(0, 0, 0, 0)), ${FOOTER}`)])
+        expect(row).toMatchObject({ ok: false, indeterminate: 'gradient colour the page did not resolve' })
+        expect(pendingColours([two([255, 255, 255, 255], `linear-gradient(rgba(9, 9, 9, 0.5), rgba(0, 0, 0, 0)), ${FOOTER}`)])).toEqual(['rgba(9, 9, 9, 0.5)'])
+      })
     })
   })
 

@@ -334,8 +334,14 @@ npx tsx ci/rollout/run.ts help
   point (a grid, refined around every local minimum), alpha composited over what is beneath:
   `5.25:1 ok (gradient, worst stop)`. sRGB segments are interpolated by the tool; any other method
   (`in oklch`, `in hsl longer hue`, the oklab default for oklch stops) is mixed by the page with
-  `color-mix()` in the same method, and the line names it. A `url()` image that shows, a second
-  gradient that shows, or a stop or mix the page cannot resolve stays indeterminate.
+  `color-mix()` in the same method, and the line names it. Several gradients that show
+  (jokkmoks-lbc's faint radial glow over a dark linear gradient) are bounded: bottom-up, per
+  channel, the lowest and highest value each layer can composite to over the range below it
+  (stops, points between them in another method, and the layer below through translucent
+  stops), then the text against the worst point of that range: `8.70:1 ok (2 gradients, bound
+  over all stops)`. Compositing and luminance only grow with each channel, so the bound is never
+  above the true worst point. A `url()` image that shows, or a stop or mix the page cannot
+  resolve stays indeterminate.
 - Effects the colours do not show are indeterminate: `background-blend-mode`, `background-clip:
   text`, `opacity` on an element with a background or above it, `mix-blend-mode` or a filter that
   changes something (`grayscale(0)` does not) on the text or any ancestor, and `backdrop-filter`
