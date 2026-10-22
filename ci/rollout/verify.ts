@@ -60,6 +60,7 @@ import { isRoute, routeOf } from './detect/structure'
 import { dockerCheck } from './docker'
 import { type Exec, exec as realExec, tail } from './lib/exec'
 import { diffLock, diffPackageJson } from './lib/lockfile'
+import { rolloutPorts } from './lib/ports'
 import { toolLine, type ToolVersion, toolVersion } from './lib/tool-version'
 import { isUp, type Preview, previewLog, ssrEntry, startPreview } from './preview'
 import { type Flow, FLOWS, flowOf, FONTS_MARKER, isToolFontsCss, statePath, STEPS, type StepName } from './flows'
@@ -71,7 +72,6 @@ import { type Face, parseCss2 } from './wire/fonts-css'
 export type { Exec } from './lib/exec'
 
 export const PKG = '@visionmediahq/astro-consent'
-export const PORTS = { branch: 4399, main: 4398 } as const
 const DOCUMENT_404 = 'Failed to load resource: the server responded with a status of 404 (Not Found)'
 const NPM_LS = ['ls', 'astro', 'vite', '@tailwindcss/vite', '--all', '--json']
 
@@ -288,8 +288,8 @@ const utf8 = (body: Uint8Array): string => new TextDecoder().decode(body)
 /**
  * Runs C3 on the checkout `dir` (on a branch of FLOWS) for `report`. Pushes the branch first
  * (step 9 clones from GitHub), then runs the flow's steps and stops at the first failure. Throws,
- * before any step, when the disk has less free space than `minFreeGb` (#23), when `dir` is not on
- * a branch of FLOWS, or when a stray `<dir>-main` is not one of its worktrees.
+ * before any step, when ROLLOUT_PORT_BASE is not a port, when the disk has less free space than
+ * `minFreeGb` (#23), when `dir` is not on a branch of FLOWS, or when a stray `<dir>-main` is not one of its worktrees.
  */
 export async function verify(dir: string, report: Report, opts: VerifyOptions = {}): Promise<VerifyResult> {
   const deps: VerifyDeps = { ...realDeps(), ...opts.deps }
@@ -297,6 +297,7 @@ export async function verify(dir: string, report: Report, opts: VerifyOptions = 
   const root = resolve(dir)
   const demo = opts.demo === true
   const out = opts.out ?? join(root, '.rollout')
+  const ports = rolloutPorts()
   // #23: Docker failed with I/O errors twice in the expansion at 2.5 GB free. Stop before touching
   // anything. The demo builds no site, and CI runners have less than 15 GB to spare.
   if (!demo) {
@@ -430,7 +431,7 @@ export async function verify(dir: string, report: Report, opts: VerifyOptions = 
    */
   const entryOf = (dir: string) => (ssr ? ssrEntry(dir).entry : undefined)
   const mainPreview = async (step: string, lines: string[]) => {
-    let p = await deps.preview(mainDir!, PORTS.main, ssr, entryOf(mainDir!))
+    let p = await deps.preview(mainDir!, ports.main, ssr, entryOf(mainDir!))
     previews.push(p)
     let restarted = false
     return {
@@ -446,12 +447,12 @@ export async function verify(dir: string, report: Report, opts: VerifyOptions = 
           // The new preview starts the log afresh, and it is the only clue to why main stopped.
           let log = ''
           try {
-            log = readFileSync(previewLog(PORTS.main), 'utf8')
+            log = readFileSync(previewLog(ports.main), 'utf8')
           } catch {
             // no log (tests, or it was never written)
           }
           try {
-            p = await deps.preview(mainDir!, PORTS.main, ssr, entryOf(mainDir!))
+            p = await deps.preview(mainDir!, ports.main, ssr, entryOf(mainDir!))
           } catch (again) {
             throw new Error(`main's preview stopped answering (${message}) and did not restart: ${firstLine(again)}`, { cause: again })
           }
@@ -597,7 +598,7 @@ export async function verify(dir: string, report: Report, opts: VerifyOptions = 
         const say = (e: ReturnType<typeof ssrEntry>) => `${e.entry} (${e.from === 'start' ? 'the start script' : 'default'})`
         lines.push(b.entry === m.entry ? `SSR entry: ${say(b)}` : `SSR entry: branch ${say(b)}, main ${say(m)}`)
       }
-      branch = await deps.preview(root, PORTS.branch, ssr, demo ? 'server/entry.mjs' : entryOf(root))
+      branch = await deps.preview(root, ports.branch, ssr, demo ? 'server/entry.mjs' : entryOf(root))
       previews.push(branch)
       const c = await getChecks()
       paths = await c.pages(branch.url, { distDir: demo ? root : join(root, 'dist'), ssr })
