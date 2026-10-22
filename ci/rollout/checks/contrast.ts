@@ -20,9 +20,10 @@
 // point; a layer in another method relies on the sampled search for its mixes' extremes (the same
 // search as one gradient's). Each fold but an opaque colour or an opaque sRGB gradient that covers
 // the box is widened by one 8-bit level past rounding outward (see widen): stops are read back in 8
-// bits and the page rounds what it paints. One gradient and plain colours are not widened: they give
-// the worst point as read, exact for opaque colours and stops, within a level or two per channel with
-// translucent ones (near 4.5, up to about 0.08 in the ratio). A url(), a
+// bits and the page rounds what it paints. One gradient and plain colours give the worst point as
+// read, exact for opaque colours and stops, within a level or two per channel with translucent ones
+// (near 4.5, up to about 0.08 in the ratio); `ok` allows for that rounding, and for translucent
+// text's, without moving the ratio shown (#96). A url(), a
 // stop or mix the page does not resolve, or a prelude keyword the parser does not know stays
 // indeterminate.
 //
@@ -519,7 +520,7 @@ const SLICES = 16
  * lower bound, overlapping ones give 1. Opaque text has one luminance, so the whole box is exact;
  * translucent text follows the background, so the box is sliced to keep the bound tight.
  */
-function boxWorst(fg: Rgba, box: Box): { bg: Rgb; ratio: number } {
+function boxWorst(fg: Rgba, box: Box, textMargin = 0): { bg: Rgb; ratio: number } {
   const n = fg[3] === 255 ? 1 : SLICES
   const cuts = (k: (typeof CHANNELS)[number]) => Array.from({ length: n + 1 }, (_, i) => box.lo[k] + ((box.hi[k] - box.lo[k]) * i) / n)
   const [rs, gs, bs] = CHANNELS.map(cuts) as [number[], number[], number[]]
@@ -530,7 +531,8 @@ function boxWorst(fg: Rgba, box: Box): { bg: Rgb; ratio: number } {
         const lo = { r: rs[i]!, g: gs[j]!, b: bs[k]! }
         const hi = { r: rs[i + 1]!, g: gs[j + 1]!, b: bs[k + 1]! }
         const [bgLo, bgHi] = [luminance(lo), luminance(hi)]
-        const [fgLo, fgHi] = [luminance(over(fg, lo)), luminance(over(fg, hi))]
+        const text = widen({ lo: over(fg, lo), hi: over(fg, hi) }, textMargin)
+        const [fgLo, fgHi] = [luminance(text.lo), luminance(text.hi)]
         // Overlapping: the corner nearer the text in luminance is shown.
         const found =
           fgLo > bgHi
@@ -611,11 +613,12 @@ function evaluate(r: RawContrast, { margin = 1 }: ContrastOptions = {}): Evaluat
   }
   // Several gradients: every layer bottom-up over the box of what lies below it, from white as above.
   const methods = new Set<string>()
+  // An opaque colour or an opaque sRGB gradient that covers the box paints exactly the 8-bit values
+  // read back, and nothing outside its stops; every other layer the page composites and rounds.
+  const exact = (e: Entry) => opaqueCover(e, r.colours) && !(e.kind === 'gradient' && e.method)
+  let box: Box = { lo: WHITE, hi: WHITE }
   if (gradients.length > 1) {
-    // Each fold is widened by a level (see widen), except an opaque colour or an opaque sRGB gradient
-    // that covers the box: those paint exactly the 8-bit values read back, and nothing outside their stops.
-    const exact = (e: Entry) => opaqueCover(e, r.colours) && !(e.kind === 'gradient' && e.method)
-    let box: Box = { lo: WHITE, hi: WHITE }
+    // Each fold is widened by a level (see widen), except an exact one.
     for (const e of shown) {
       if (e.kind === 'colour') box = exact(e) ? overBox(e.c, box) : widen(overBox(e.c, box), margin)
       else if (e.kind === 'gradient') {
@@ -639,18 +642,44 @@ function evaluate(r: RawContrast, { margin = 1 }: ContrastOptions = {}): Evaluat
         : !opaque
           ? 'no opaque background; composited over white'
           : undefined
-  const note = unresolved
-    ? undefined
-    : g
-      ? `gradient, ${worst.stop ? 'worst stop' : 'worst point between stops'}${g.method ? `; interpolated in ${g.method}` : ''}`
-      : gradients.length > 1
-        ? `${gradients.length} gradients, bound over all stops${methods.size ? `; points between stops sampled in ${[...methods].join(', ')}` : ''}`
-        : undefined
+  // ok allows for the page's 8-bit rounding (#96); the ratio and colours stay the worst point as read.
+  // The page rounds each translucent layer it composites, and translucent text once more, so a painted
+  // pixel can lie a level per such layer past that point. One gradient and plain colours: the point
+  // widened by a level per translucent layer (and the gradient's, unless it is exact there). Several
+  // gradients: the box is widened already; only the text's own rounding is added.
+  const softText = fgBase[3] < 255
+  let painted = worst.ratio
+  if (!indeterminate && worst.ratio >= 4.5) {
+    if (gradients.length > 1) {
+      if (softText) painted = boxWorst(fgBase, box, margin).ratio
+    } else {
+      const layers = shown.filter((e) => e.kind === 'colour' && e.c[3] > 0 && e.c[3] < 255).length + (g && !(exact(g) && worst.stop) ? 1 : 0)
+      if (layers || softText) {
+        let around: Box = { lo: worst.bg, hi: worst.bg }
+        for (let i = 0; i < layers; i++) around = widen(around, margin)
+        painted = boxWorst(fgBase, around, softText ? margin : 0).ratio
+      }
+    }
+  }
+  const marginal = painted < 4.5 && worst.ratio >= 4.5 ? 'within the 8-bit margin of 4.5' : undefined
+  const note =
+    [
+      unresolved
+        ? undefined
+        : g
+          ? `gradient, ${worst.stop ? 'worst stop' : 'worst point between stops'}${g.method ? `; interpolated in ${g.method}` : ''}`
+          : gradients.length > 1
+            ? `${gradients.length} gradients, bound over all stops${methods.size ? `; points between stops sampled in ${[...methods].join(', ')}` : ''}`
+            : undefined,
+      marginal,
+    ]
+      .filter(Boolean)
+      .join('; ') || undefined
   const row: ContrastRow = {
     kind: r.kind,
     button: r.label,
     ratio: worst.ratio,
-    ok: worst.ratio >= 4.5 && !indeterminate,
+    ok: worst.ratio >= 4.5 && painted >= 4.5 && !indeterminate,
     fg: round(over(fgBase, worst.bg)),
     bg: round(worst.bg),
     ...(indeterminate ? { indeterminate } : {}),
