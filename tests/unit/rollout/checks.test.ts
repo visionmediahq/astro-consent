@@ -10,7 +10,7 @@ import { type BgImage, contrastRows, coversBackground, formatContrast, gradientS
 import { compareEmbedHeights, type EmbedBox } from '../../../ci/rollout/checks/embed-size'
 import { extractLinks, listPages, MISSING_PREFIX } from '../../../ci/rollout/checks/pages'
 import { blockUmami, freshPage, isBlocked, isUmamiUrl, notRequested, umamiScriptSrcs } from '../../../ci/rollout/checks/requests'
-import { wcagContrast } from '../../../ci/rollout/lib/colour'
+import { type Rgb, wcagContrast } from '../../../ci/rollout/lib/colour'
 
 const dirs: string[] = []
 afterEach(() => {
@@ -75,7 +75,7 @@ describe('listPages (ssr crawl)', () => {
     return `http://127.0.0.1:${(server!.address() as AddressInfo).port}`
   }
 
-  it('linjegods: a linked endpoint that answers 2xx with a file (no extension) is not a page; a broken link still is', async () => {
+  it('a client site: a linked endpoint that answers 2xx with a file (no extension) is not a page; a broken link still is', async () => {
     const base = await site({
       '/': [200, 'text/html', '<a href="/om/">om</a> <a href="/api/blankett">blankett</a> <a href="/api/data">data</a> <a href="/borta/">borta</a>'],
       '/om/': [200, 'text/html; charset=utf-8', '<html>om</html>'],
@@ -106,7 +106,7 @@ describe('extractLinks (ssr crawl)', () => {
     expect(extractLinks(html, `${base}/sida/`, base)).toEqual(['/om', '/kontakt/', '/sida/tjanster'])
   })
 
-  it('linjegods: skips /cdn-cgi/, which Cloudflare reserves and answers itself (email obfuscation)', () => {
+  it('a client site: skips /cdn-cgi/, which Cloudflare reserves and answers itself (email obfuscation)', () => {
     const html = `
       <a href="/cdn-cgi/l/email-protection#a1c8cfc7cee1">Mejl</a>
       <a href="https://exempel.se/cdn-cgi/l/email-protection">Mejl igen</a>
@@ -273,14 +273,14 @@ describe('contrast', () => {
     expect(rows[2]!.ratio).toBeGreaterThan(4.5)
   })
 
-  it('placeholder rows (#46: the embed placeholder on a dark theme, knutssonsbil) get the same maths', () => {
+  it('placeholder rows (#46: the embed placeholder on the dark theme of a client site) get the same maths', () => {
     // Light text from a dark theme's --color-base-content on daisyUI's light bg-base-200.
-    const [row] = contrastRows([raw({ kind: 'placeholder', label: 'Knutssons Bil AB hämtas från Google Maps', fg: [218, 234, 245, 255], layers: [[248, 248, 248, 255]] })])
+    const [row] = contrastRows([raw({ kind: 'placeholder', label: 'Exempel AB hämtas från Google Maps', fg: [218, 234, 245, 255], layers: [[248, 248, 248, 255]] })])
     expect(row).toMatchObject({ kind: 'placeholder', ok: false })
     expect(row!.ratio).toBeLessThan(1.5)
   })
 
-  describe('gradients of solid colours (nanolfs-villan: the footer is a linear-gradient, the text white/70)', () => {
+  describe('gradients of solid colours (a client footer is a linear-gradient, the text white/70)', () => {
     const PRIMARY = 'rgb(0, 75, 133)'
     const DARK = 'rgb(0, 55, 95)'
     const FOOTER = `linear-gradient(180deg, ${PRIMARY} 0%, ${DARK} 100%)`
@@ -348,7 +348,7 @@ describe('contrast', () => {
     })
 
     it('a url() image with the gradient stays indeterminate', () => {
-      // A photo on top of the gradient, and nanolfs-villan's hero: a translucent gradient over a photo.
+      // A photo on top of the gradient, and a client site's hero: a translucent gradient over a photo.
       for (const value of [`url("/bg.jpg"), ${FOOTER}`, 'linear-gradient(rgba(0, 0, 0, 0.5), rgb(0, 0, 0) 100%), url("/hero.jpg")']) {
         const [row] = contrastRows([footer(value)])
         expect(row, value).toMatchObject({ ok: false, indeterminate: 'background image behind the text' })
@@ -523,15 +523,21 @@ describe('contrast', () => {
         const a = top[3] / 255
         return { r: a * top[0] + (1 - a) * below[0], g: a * top[1] + (1 - a) * below[1], b: a * top[2] + (1 - a) * below[2] }
       }
+      /** A composite moved outward by the bound's 8-bit margin: rounded away and one level further. */
+      const lighter = (c: Rgb): Rgb => ({ r: Math.min(255, Math.ceil(c.r) + 1), g: Math.min(255, Math.ceil(c.g) + 1), b: Math.min(255, Math.ceil(c.b) + 1) })
+      const darker = (c: Rgb): Rgb => ({ r: Math.max(0, Math.floor(c.r) - 1), g: Math.max(0, Math.floor(c.g) - 1), b: Math.max(0, Math.floor(c.b) - 1) })
 
-      it('a client footer: #dbe6ef over a faint radial glow on a dark linear gradient passes at its lightest point, 8.71:1', () => {
+      it('a client footer: #dbe6ef over a faint radial glow on a dark linear gradient passes; lightest point 8.70:1, bound 8.50:1', () => {
         const value = 'radial-gradient(at 80% 0%, rgba(127, 183, 226, 0.18), rgba(0, 0, 0, 0) 55%), linear-gradient(158deg, rgb(21, 36, 47), rgb(13, 25, 34))'
         const [row] = contrastRows([two([219, 230, 239, 255], value)])
         expect(row!.indeterminate).toBeUndefined()
-        expect(row).toMatchObject({ ok: true, note: '2 gradients, bound over all stops', bg: { r: 40, g: 63, b: 79 } })
-        // The glow at full strength over the lighter end of the linear gradient.
-        expect(row!.ratio).toBeCloseTo(wcagContrast({ r: 219, g: 230, b: 239 }, mix([127, 183, 226, 46], [21, 36, 47])), 5)
-        expect(row!.ratio).toBeCloseTo(8.71, 1)
+        // The glow at full strength (alpha 0.18, read back as 46/255) over the lighter end of the linear
+        // gradient: 8.70:1. The opaque sRGB gradient is exact; the glow's fold gets the 8-bit margin.
+        const lightest = mix([127, 183, 226, 46], [21, 36, 47])
+        expect(wcagContrast({ r: 219, g: 230, b: 239 }, lightest)).toBeCloseTo(8.7, 2)
+        expect(row).toMatchObject({ ok: true, note: '2 gradients, bound over all stops', bg: { r: 42, g: 64, b: 81 } })
+        expect(row!.ratio).toBeCloseTo(wcagContrast({ r: 219, g: 230, b: 239 }, lighter(lightest)), 5)
+        expect(row!.ratio).toBeCloseTo(8.5, 2)
       })
 
       it('light text: a translucent white layer over a blue one fails at the lightest composite', () => {
@@ -539,15 +545,15 @@ describe('contrast', () => {
         const [row] = contrastRows([two([255, 255, 255, 255], value)])
         expect(row!.indeterminate).toBeUndefined()
         expect(row!.ok).toBe(false)
-        expect(row!.ratio).toBeCloseTo(wcagContrast({ r: 255, g: 255, b: 255 }, mix([255, 255, 255, 128], [0, 75, 133])), 5)
+        expect(row!.ratio).toBeCloseTo(wcagContrast({ r: 255, g: 255, b: 255 }, lighter(mix([255, 255, 255, 128], [0, 75, 133]))), 5)
       })
 
       it('dark text: the bound flips to the darkest composite', () => {
         const value = 'linear-gradient(rgba(0, 0, 0, 0.25), rgba(0, 0, 0, 0)), linear-gradient(rgb(250, 250, 250), rgb(200, 200, 200))'
         const [row] = contrastRows([two([0, 0, 0, 255], value)])
         expect(row!.indeterminate).toBeUndefined()
-        const darkest = mix([0, 0, 0, 64], [200, 200, 200])
-        expect(row).toMatchObject({ ok: true, bg: { r: Math.round(darkest.r), g: Math.round(darkest.g), b: Math.round(darkest.b) } })
+        const darkest = darker(mix([0, 0, 0, 64], [200, 200, 200]))
+        expect(row).toMatchObject({ ok: true, bg: darkest })
         expect(row!.ratio).toBeCloseTo(wcagContrast({ r: 0, g: 0, b: 0 }, darkest), 5)
       })
 
@@ -594,6 +600,183 @@ describe('contrast', () => {
         expect(row).toMatchObject({ ok: false, indeterminate: 'gradient colour the page did not resolve' })
         expect(pendingColours([two([255, 255, 255, 255], `linear-gradient(rgba(9, 9, 9, 0.5), rgba(0, 0, 0, 0)), ${FOOTER}`)])).toEqual(['rgba(9, 9, 9, 0.5)'])
       })
+
+      describe('brute force (#92 review): the bound is never above the worst point the stack can show', () => {
+        type C = RawContrast['fg']
+        const toLin = (c: number) => {
+          const v = c / 255
+          return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4
+        }
+        const fromLin = (v: number) => 255 * (v <= 0.0031308 ? v * 12.92 : 1.055 * v ** (1 / 2.4) - 0.055)
+        /** color-mix(in srgb-linear, a, b t): premultiplied in linear light, exact (no 8-bit rounding). */
+        const mixLinear = (a: C, b: C, t: number): C => {
+          const alpha = a[3] * (1 - t) + b[3] * t
+          if (alpha === 0) return [0, 0, 0, 0]
+          const ch = (j: number) => fromLin((toLin(a[j]!) * a[3] * (1 - t) + toLin(b[j]!) * b[3] * t) / alpha)
+          return [ch(0), ch(1), ch(2), alpha]
+        }
+        /** Premultiplied sRGB, as a gradient without an `in` method is painted. */
+        const mixSrgb = (a: C, b: C, t: number): C => {
+          const alpha = a[3] * (1 - t) + b[3] * t
+          if (alpha === 0) return [0, 0, 0, 0]
+          const ch = (j: number) => (a[j]! * a[3] * (1 - t) + b[j]! * b[3] * t) / alpha
+          return [ch(0), ch(1), ch(2), alpha]
+        }
+        const parse = (css: string): C | undefined => {
+          const m = /^rgba?\((\d+), (\d+), (\d+)(?:, ([\d.]+))?\)$/.exec(css)
+          return m ? [Number(m[1]), Number(m[2]), Number(m[3]), m[4] === undefined ? 255 : Number(m[4]) * 255] : undefined
+        }
+        const MIX = /^color-mix\(in srgb-linear, (rgba?\([^)]*\)) [\d.]+%, (rgba?\([^)]*\)) ([\d.]+)%\)$/
+        /** The page: stops as written, srgb-linear mixes computed exactly; every mix null when `refuse`. */
+        const linearPage = (rows: RawContrast[], refuse = false) => {
+          let first = true
+          return {
+            evaluate: async (src: string) => {
+              if (first) return ((first = false), rows)
+              return (JSON.parse(/\)\((\[.*\])\)$/s.exec(src)![1]!) as string[]).map((css) => {
+                const m = MIX.exec(css)
+                if (!m) return parse(css) ?? null
+                return refuse ? null : mixLinear(parse(m[1]!)!, parse(m[2]!)!, Number(m[3]) / 100)
+              })
+            },
+          }
+        }
+        const overC = (top: C, below: Rgb): Rgb => {
+          const a = top[3] / 255
+          return { r: a * top[0] + (1 - a) * below.r, g: a * top[1] + (1 - a) * below.g, b: a * top[2] + (1 - a) * below.b }
+        }
+
+        type Grad = { stops: [string, C][]; linear: boolean; covers: boolean }
+        const value = (gs: Grad[]) =>
+          [...gs]
+            .reverse()
+            .map((g) => `linear-gradient(${g.linear ? 'in srgb-linear, ' : ''}${g.stops.map(([s]) => s).join(', ')})`)
+            .join(', ')
+        const image = (gs: Grad[], at: number): BgImage => {
+          const top = [...gs].reverse()
+          return {
+            value: value(gs),
+            at,
+            size: top.map((g) => (g.covers ? 'auto' : '50% 50%')).join(', '),
+            repeat: top.map((g) => (g.covers ? 'repeat' : 'no-repeat')).join(', '),
+            position: top.map(() => '0% 0%').join(', '),
+          }
+        }
+        /** Every colour a layer can show, sampled finely; undefined where it may leave the box uncovered. */
+        const SAMPLES = 8
+        const points = (g: Grad): (C | undefined)[] => {
+          const out: (C | undefined)[] = g.covers ? [] : [undefined]
+          for (let i = 1; i < g.stops.length; i++)
+            for (let k = 0; k <= SAMPLES; k++) out.push((g.linear ? mixLinear : mixSrgb)(g.stops[i - 1]![1], g.stops[i]![1], k / SAMPLES))
+          return out
+        }
+        /** The true worst ratio over every combination of sampled points, bottom-up. */
+        const truth = (fg: C, base: C, below: Grad[], mid: C | undefined, above: Grad[]) => {
+          let bgs: Rgb[] = [{ r: base[0], g: base[1], b: base[2] }]
+          const fold = (pts: (C | undefined)[]) => (bgs = bgs.flatMap((bg) => pts.map((p) => (p ? overC(p, bg) : bg))))
+          for (const g of below) fold(points(g))
+          if (mid) fold([mid])
+          for (const g of above) fold(points(g))
+          return Math.min(...bgs.map((bg) => wcagContrast(overC(fg, bg), bg)))
+        }
+
+        let seed = 92
+        const rnd = () => (seed = (seed * 1103515245 + 12345) % 2 ** 31) / 2 ** 31
+        const byte = () => Math.floor(rnd() * 256)
+        const rgb = (): [number, number, number] => {
+          const x = rnd()
+          return x < 0.15 ? [0, 0, 0] : x < 0.3 ? [255, 255, 255] : [byte(), byte(), byte()]
+        }
+        /** An opaque, transparent or translucent stop, as the computed value writes it and the page reads it. */
+        const stop = (): [string, C] => {
+          const [r, g, b] = rgb()
+          const x = rnd()
+          if (x < 0.3) return [`rgb(${r}, ${g}, ${b})`, [r, g, b, 255]]
+          const a = x < 0.5 ? 0 : Math.round(5 + rnd() * 90) / 100
+          return [`rgba(${r}, ${g}, ${b}, ${a})`, [r, g, b, a * 255]]
+        }
+        const grad = (linear: boolean): Grad => ({ stops: Array.from({ length: rnd() < 0.7 ? 2 : 3 }, stop), linear, covers: rnd() < 0.65 })
+
+        const CASES = 300
+        it(`${CASES} random stacks of 2–3 gradients (sRGB and srgb-linear), a colour layer between, opaque and translucent text`, async () => {
+          let worstGap = -Infinity
+          let close = 0
+          for (let n = 0; n < CASES; n++) {
+            const count = rnd() < 0.6 ? 2 : 3
+            const linearAt = Math.floor(rnd() * count)
+            const gs = Array.from({ length: count }, (_, i) => grad(i === linearAt || rnd() < 0.3))
+            const base: C = [...rgb(), 255]
+            // A translucent colour on an element between two of the gradients, or none.
+            const split = rnd() < 0.4 ? 1 + Math.floor(rnd() * (count - 1)) : 0
+            const mid: C | undefined = split ? [...rgb(), Math.round(25 + rnd() * 205)] : undefined
+            const [below, above] = split ? [gs.slice(0, split), gs.slice(split)] : [gs, []]
+            const fg: C = [...rgb(), rnd() < 0.6 ? 255 : 128 + Math.floor(rnd() * 127)]
+            const row = raw(
+              mid
+                ? { fg, layers: [mid, base], images: [image(above, 0), image(below, 1)] }
+                : { fg, layers: [base], images: [image(below, 0)] },
+            )
+            const [got] = await measureContrast(linearPage([row]) as never)
+            const exact = truth(fg, base, below, mid, above)
+            const at = `case ${n}: ${JSON.stringify({ fg, base, mid, value: value(gs), coversBottomUp: gs.map((g) => g.covers) })}`
+            expect(got!.indeterminate, at).toBeUndefined()
+            expect(got!.ratio, at).toBeLessThanOrEqual(exact + 1e-6)
+            if (exact < 4.5) expect(got!.ok, at).toBe(false)
+            worstGap = Math.max(worstGap, got!.ratio - exact)
+            if (got!.ratio > exact * 0.8) close++
+          }
+          // Not vacuous: most bounds are close to the truth, not 1:1 everywhere.
+          expect(close).toBeGreaterThan(CASES / 2)
+          expect(worstGap).toBeLessThanOrEqual(1e-6)
+        }, 60_000)
+        it('a color-mix the page answers with null, in one of several layers, stays indeterminate', async () => {
+          const rows = [two([255, 255, 255, 255], 'linear-gradient(rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0)), linear-gradient(in srgb-linear, rgb(0, 0, 139), rgb(139, 0, 0))')]
+          rows[0]!.colours = undefined
+          const [got] = await measureContrast(linearPage(rows, true) as never)
+          expect(got).toMatchObject({ ok: false, indeterminate: 'gradient colour the page did not resolve' })
+          expect(got!.note).toBeUndefined()
+        })
+      })
+
+      it('8-bit rounding (#92 review): the bound stays at or below the lightest pixel Chromium paints', () => {
+        // The canvas reads rgba(255, 255, 255, 0.15) back as alpha 38/255 = 0.149, a little less than
+        // the 0.15 the page paints with. Unrounded, the bound came out at 6.97:1, above the lightest
+        // pixel headless Chromium paints for this background, rgb(67, 82, 96): 6.92:1 against #eee.
+        const value = 'repeating-conic-gradient(rgba(0, 0, 0, 0.4) 0deg 10deg, rgba(255, 255, 255, 0.15) 10deg 20deg), radial-gradient(closest-side, rgb(34, 51, 68), rgb(17, 34, 51))'
+        const colours: RawContrast['colours'] = {
+          'rgba(0, 0, 0, 0.4)': [0, 0, 0, 102],
+          'rgba(255, 255, 255, 0.15)': [255, 255, 255, 38],
+          'rgb(34, 51, 68)': [34, 51, 68, 255],
+          'rgb(17, 34, 51)': [17, 34, 51, 255],
+        }
+        const [row] = contrastRows([raw({ fg: [238, 238, 238, 255], layers: [[255, 255, 255, 255]], images: [img(value)], colours })])
+        const painted = wcagContrast({ r: 238, g: 238, b: 238 }, { r: 67, g: 82, b: 96 })
+        expect(painted).toBeCloseTo(6.92, 2)
+        expect(row!.indeterminate).toBeUndefined()
+        expect(row!.ratio).toBeLessThanOrEqual(painted)
+        // A margin of a level or two per layer, not a different answer.
+        expect(row!.ratio).toBeGreaterThan(painted - 0.4)
+        expect(row!.ok).toBe(true)
+      })
+
+      it('a colour layer between two gradients is composited between them', () => {
+        // Dark text; a translucent black on the inner element between a light gradient below and a
+        // fading white one above. The darkest point: the black over rgb(200, 200, 200), the top faded out.
+        const row = raw({
+          fg: [0, 0, 0, 255],
+          layers: [[0, 0, 0, 64], [244, 246, 248, 255]],
+          images: [img('linear-gradient(rgba(255, 255, 255, 0.5), rgba(0, 0, 0, 0))', 0), img('linear-gradient(rgb(250, 250, 250), rgb(200, 200, 200))', 1)],
+          colours: more,
+        })
+        const [got] = contrastRows([row])
+        expect(got!.indeterminate).toBeUndefined()
+        const darkest = mix([0, 0, 0, 64], [200, 200, 200])
+        const exact = wcagContrast({ r: 0, g: 0, b: 0 }, darkest)
+        expect(got!.ratio).toBeLessThanOrEqual(exact + 1e-9)
+        expect(got!.ratio).toBeGreaterThan(wcagContrast({ r: 0, g: 0, b: 0 }, { r: darkest.r - 3, g: darkest.g - 3, b: darkest.b - 3 }))
+        expect(got).toMatchObject({ ok: true, note: '2 gradients, bound over all stops' })
+      })
+
     })
   })
 
@@ -647,7 +830,7 @@ describe('contrast', () => {
   })
 })
 
-describe('embed heights (#46: knutssonsbil, an in-flow wrapper in a padding-ratio box)', () => {
+describe('embed heights (#46: a client site, an in-flow wrapper in a padding-ratio box)', () => {
   const box = (path: string, width: number, h: number, service: EmbedBox['service'] = 'google-maps'): EmbedBox => ({ path, width, service, h })
 
   it('pairs main iframes with branch placeholders in page order per path and width', () => {
@@ -667,7 +850,7 @@ describe('embed heights (#46: knutssonsbil, an in-flow wrapper in a padding-rati
     expect(r.rows.map((x) => x.ok)).toEqual([false, true, true])
   })
 
-  it('different counts on a page are not compared, and say so (a map main built in a script, stromsbacka)', () => {
+  it('different counts on a page are not compared, and say so (a map main built in a script, on a client site)', () => {
     const r = compareEmbedHeights([], [box('/kontakt', 1280, 420)])
     expect(r.rows).toEqual([])
     expect(r.notes).toEqual(['/kontakt 1280px google-maps: 0 registry iframes on main, 1 embed on the branch: heights not compared'])
@@ -689,7 +872,7 @@ describe('embed heights (#46: knutssonsbil, an in-flow wrapper in a padding-rati
   })
 })
 
-describe('root styles (faluridklubb: daisyUI added where main had none)', () => {
+describe('root styles (a client site: daisyUI added where main had none)', () => {
   const main = { 'html scrollbar-color': 'auto', 'html background-color': 'rgb(247, 247, 245)' }
 
   it('the same on main and the branch: no lines', () => {

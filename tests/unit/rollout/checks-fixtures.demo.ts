@@ -66,8 +66,8 @@ const cutPlaceholder = (box: string) =>
 // open link inherits the text colour, as daisyUI's .link does.
 const placeholder = (style: string) =>
   `<div data-consent-embed="google-maps" style="${style}"><div data-placeholder><div><p>Kartan hämtas från Google Maps.</p></div><div><button data-load>Visa</button><label><input type="checkbox" data-remember> Visa alltid</label><a data-open href="${MAPS}" style="color:inherit">Öppna</a></div></div></div>`
-// knutssonsbil's shape: a box whose height is padding (40 % of the width) plus a min-height (here
-// content-box, so 40 % + 320px; the shape, not knutssonsbil's numbers, is what matters).
+// A client site's shape: a box whose height is padding (40 % of the width) plus a min-height (here
+// content-box, so 40 % + 320px; the shape, not the site's numbers, is what matters).
 const ratioBox = (inner: string) => `<div style="position:relative;padding-bottom:40%;min-height:320px">${inner}</div>`
 const gradientFooter = (background: string, footer = '', links = 'color:rgb(255 255 255 / 0.7)') =>
   `<style>:root{--color-primary:#004b85;--brand-dark:#00375f}footer{background:${background};color:#fff;padding:24px;${footer}}</style><footer><div data-privacy-links style="${links}"><button data-consent-open style="color:inherit;background:none;border:0">Cookie-inställningar</button> <a href="/integritet" style="color:inherit">Integritetspolicy</a></div></footer>`
@@ -101,12 +101,12 @@ const FIXTURES: Record<string, string> = {
   sticky: embedPage(`add(el); localStorage.setItem('sticky', '1')`, `if (localStorage.getItem('sticky')) document.querySelectorAll('[data-consent-embed]').forEach(add)`),
   other: embedPage(`add(el); const s = document.createElement('script'); s.src = '${PIXEL}'; document.head.appendChild(s)`),
   oneoff: embedPage(`add(el)`),
-  // A loaded map keeps fetching tiles until the page goes away (knutssonsbil#2 live: tile and RPC
+  // A loaded map keeps fetching tiles until the page goes away (a client PR live: tile and RPC
   // requests from the old map fired as the reload started and were counted as "after reload").
   // Visa that leaves no embed behind but makes the reloaded page request the registry anyway.
   ghost: embedPage(`add(el); localStorage.setItem('ghost', '1')`, `if (localStorage.getItem('ghost')) new Image().src = '${MAPS}&ghost'`),
   busy: embedPage(`add(el); let i = 0; setInterval(() => { new Image().src = '${MAPS}&tile=' + i++ }, 50)`),
-  // Visa that loads an iframe the page then squashes to nothing (salviablommor: a scoped display:block
+  // Visa that loads an iframe the page then squashes to nothing (a client site: a scoped display:block
   // on the wrapper beat `grid`, so the loaded map was 0px tall).
   flat: embedPage(`add(el); el.querySelector('iframe').style.height = '0'`),
   // The real mechanism: ConsentEmbed's iframe is absolute inset-0, so once the placeholder is gone an
@@ -122,7 +122,7 @@ const FIXTURES: Record<string, string> = {
   // #46: light text on the light placeholder (a dark theme without base-200), and a readable control.
   darkph: page(placeholder('background:#f8f8f8;color:#daeaf5')),
   okph: page(placeholder('background:#f8f8f8;color:#1f2937')),
-  // nanolfs-villan: a footer whose background is a gradient of two brand blues through var(), and
+  // A client site: a footer whose background is a gradient of two brand blues through var(), and
   // PrivacyLinks in white/70. A gradient ending near white fails; a photo over the gradient is unknown.
   gradfoot: page(gradientFooter('linear-gradient(180deg, var(--color-primary) 0%, var(--brand-dark) 100%)')),
   gradfail: page(gradientFooter('linear-gradient(180deg, var(--brand-dark) 0%, #fafafa 100%)')),
@@ -138,7 +138,7 @@ const FIXTURES: Record<string, string> = {
   gradfade: page(gradientFooter('#00375f', 'opacity:0.4', 'color:#fff')),
   linksfade: page(gradientFooter('#00375f', '', 'color:#fff;opacity:0.7')),
   // PR #72 re-review. The starter's [data-animate]: opacity 0 in CSS, faded in by Motion's inView
-  // when scrolled to. Below the fold: a placeholder inside one (ernstedt, knutssonsbil, …), and a
+  // when scrolled to. Below the fold: a placeholder inside one (several client sites), and a
   // background-less one around PrivacyLinks; a slow 2.5 s fade, and an infinite spinner elsewhere
   // that must not hold the wait up.
   animated: page(`<style>[data-animate]{opacity:0}@keyframes spin{to{transform:rotate(360deg)}}</style>
@@ -151,7 +151,7 @@ const FIXTURES: Record<string, string> = {
       for (const el of document.querySelectorAll('[data-animate]'))
         new IntersectionObserver((es, o) => { if (es[0].isIntersecting) { o.disconnect(); el.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 'slow' in el.dataset ? 2500 : 500, fill: 'forwards' }) } }).observe(el)
     </script>`),
-  // ahatrafikskola: a 1px absolute gradient hairline at the top of the footer, and an a::after
+  // A client site: a 1px absolute gradient hairline at the top of the footer, and an a::after
   // underline at width 0: neither is over the text.
   hairline: page(`<style>footer{position:relative;background:#00375f;padding:24px}footer::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,#f00,#00f)}a{position:relative;color:#fff}a::after{content:'';position:absolute;left:0;bottom:-2px;width:0;height:2px;background:#fff}</style><footer><div data-privacy-links><a href="/integritet">Integritetspolicy</a></div></footer>`),
   // A white ::before at z-index -1 inside an isolated black footer paints over the black, under the
@@ -165,7 +165,7 @@ const FIXTURES: Record<string, string> = {
   pseudotransparent: page(`<style>footer{background:#000;position:relative;padding:24px}footer::before{content:'';position:absolute;inset:0;background:#fff}footer.flat::before{opacity:0;transition:opacity .2s}</style><footer class="flat"><div data-privacy-links><a href="/integritet" style="color:#fff">Integritetspolicy</a></div></footer>`),
   pseudoshown: page(`<style>footer{background:#000;position:relative;padding:24px}footer::before{content:'';position:absolute;inset:0;background:#fff}footer.flat::before{display:none}</style><footer><div data-privacy-links><a href="/integritet" style="color:#fff">Integritetspolicy</a></div></footer>`),
   pseudopulse: page(`<style>footer{background:#000;position:relative;padding:24px}footer::before{content:'';position:absolute;inset:0;background:#fff}@keyframes pulse{50%{opacity:1}}footer.flat::before{opacity:0;animation:pulse 2s infinite}</style><footer class="flat"><div data-privacy-links><a href="/integritet" style="color:#fff">Integritetspolicy</a></div></footer>`),
-  // Round 3. ernstedt: a fixed feTurbulence grain over everything at z-index 1, under a z-50 banner.
+  // Round 3. A client site: a fixed feTurbulence grain over everything at z-index 1, under a z-50 banner.
   grain: page(`<style>body::after{content:'';position:fixed;inset:0;z-index:1;pointer-events:none;opacity:.055;mix-blend-mode:multiply;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}</style>${banner('position:fixed;bottom:0;left:0;right:0;background:#fff;padding:8px;z-index:50')}<footer style="background:#000;padding:24px"><div data-privacy-links><a href="/integritet" style="color:#fff">Integritetspolicy</a></div></footer>`),
   // A solid fixed overlay at z-index 1: the z-50 banner paints above it, a footer below the fold does
   // not (the overlay is fixed: it is over the footer whenever the footer is scrolled to).
@@ -224,7 +224,7 @@ const FIXTURES: Record<string, string> = {
   pclearshadow: page(`<style>${PF}footer::before{content:"";position:absolute;left:0;top:0;width:100%;height:1px;background:#333;box-shadow:0 0 #0000}</style><footer>${whiteLink}</footer>`),
   // Above the opaque footer: a backdrop-filter cannot reach the text; an identity filter on the footer.
   backdropup: page(`<style>section{backdrop-filter:blur(4px)}footer{background:#000;padding:24px;filter:grayscale(0)}</style><section><footer><div data-privacy-links><a href="/integritet" style="color:#fff">Integritetspolicy</a></div></footer></section>`),
-  // #46 (knutssonsbil): main's absolute iframe fills the ratio box; the in-flow 320px wrapper does
+  // #46 (a client site): main's absolute iframe fills the ratio box; the in-flow 320px wrapper does
   // not (the map shrinks, an empty band below); absolute inset-0 fills it again.
   ratiomain: page(ratioBox(`<iframe src="${MAPS}" style="position:absolute;inset:0;width:100%;height:100%;border:0"></iframe>`)),
   ratiowrap: page(ratioBox(`<div style="display:grid;min-height:320px">${placeholder('')}</div>`)),
@@ -232,7 +232,7 @@ const FIXTURES: Record<string, string> = {
   // Item 7: a button inside its (too wide) container but outside the viewport; a page that scrolls sideways.
   offbtn: page(`<section data-consent-banner style="position:absolute;top:0;left:0;width:1000px;background:#fff"><button data-consent-action="none" style="margin-left:900px">Neka</button></section>`),
   wide: page(`${banner()}<div style="width:2000px;height:10px"></div>`),
-  // #43 (lbfastigheter): a parent 300px tall on phones with overflow:hidden cuts the placeholder's
+  // #43 (a client site): a parent 300px tall on phones with overflow:hidden cuts the placeholder's
   // buttons off below its edge; the same placeholder in a tall enough box (or one that scrolls) is fine.
   cutoff: page(`<style>.m{height:450px;overflow:hidden}@media (max-width:640px){.m{height:300px}}</style>${cutPlaceholder('m')}`),
   cutok: page(`<style>.m{height:450px;overflow:hidden}.s{height:200px;overflow:auto}</style>${cutPlaceholder('m')}${cutPlaceholder('s')}`),
@@ -379,7 +379,7 @@ try {
   {
     const links = async (path: string) => (await checkContrast(browser, BASE, [path], { stub: true })).filter((r) => r.kind === 'links')
     const foot = await links('/gradfoot/')
-    expect(foot.length === 2 && foot.every((r) => r.ok && !r.indeterminate && r.note === 'gradient, worst stop' && r.ratio > 5), '/gradfoot/ white/70 on a var() gradient of two blues passes against its worst stop (nanolfs-villan)', foot)
+    expect(foot.length === 2 && foot.every((r) => r.ok && !r.indeterminate && r.note === 'gradient, worst stop' && r.ratio > 5), '/gradfoot/ white/70 on a var() gradient of two blues passes against its worst stop (a client footer)', foot)
     const light = await links('/gradfail/')
     expect(light.length === 2 && light.every((r) => !r.ok && !r.indeterminate && r.ratio < 1.5), '/gradfail/ a gradient ending near white fails, determinately', light)
     const photo = await links('/gradphoto/')
@@ -401,11 +401,11 @@ try {
     const anim = await checkContrast(browser, BASE, ['/animated/'], { stub: true })
     expect(
       anim.filter((r) => r.kind === 'placeholder').length === 4 && anim.filter((r) => r.kind === 'links').length === 1 && anim.every((r) => r.ok && !r.indeterminate),
-      '/animated/ data-animate wrappers below the fold (opacity 0 until scrolled to, one slow) are measured settled: ok (ernstedt, knutssonsbil, …)',
+      '/animated/ data-animate wrappers below the fold (opacity 0 until scrolled to, one slow) are measured settled: ok (several client sites)',
       anim,
     )
     const hair = await links('/hairline/')
-    expect(hair.length === 1 && hair.every((r) => r.ok && !r.indeterminate), '/hairline/ a 1px ::before hairline and a width-0 a::after underline are not over the text (ahatrafikskola)', hair)
+    expect(hair.length === 1 && hair.every((r) => r.ok && !r.indeterminate), '/hairline/ a 1px ::before hairline and a width-0 a::after underline are not over the text (a client footer)', hair)
     for (const [path, what] of [['/pseudohidden/', 'display: none'], ['/pseudoinvisible/', 'visibility: hidden'], ['/pseudotransparent/', 'opacity: 0 at rest']] as const) {
       const rows = await links(path)
       expect(rows.length === 1 && rows.every((r) => r.ok && !r.indeterminate), `${path} a white ::before overlay switched off with ${what} paints nothing`, rows)
@@ -420,7 +420,7 @@ try {
     }
     {
       const all = await checkContrast(browser, BASE, ['/grain/'], { stub: true })
-      expect(all.filter((r) => r.kind === 'banner').length === 2 && all.filter((r) => r.kind === 'links').length === 1 && all.every((r) => r.ok && !r.indeterminate), '/grain/ a fixed feTurbulence grain at z-index 1 under a z-50 banner does not count (ernstedt)', all)
+      expect(all.filter((r) => r.kind === 'banner').length === 2 && all.filter((r) => r.kind === 'links').length === 1 && all.every((r) => r.ok && !r.indeterminate), '/grain/ a fixed feTurbulence grain at z-index 1 under a z-50 banner does not count (a client site)', all)
     }
     {
       const all = await checkContrast(browser, BASE, ['/overlay/'], { stub: true })
@@ -482,7 +482,7 @@ try {
     const as = (bs: Awaited<ReturnType<typeof boxes>>) => bs.map((b) => ({ ...b, path: '/kontakt' }))
     const main = as(await boxes('/ratiomain/'))
     const wrap = compareEmbedHeights(main, as(await boxes('/ratiowrap/')))
-    expect(main.length === 2 && wrap.rows.length === 2 && !wrap.rows.find((r) => r.width === 1280)!.ok, '/ratiowrap/ an in-flow wrapper in a padding-ratio box is shorter than main at 1280px (#46, knutssonsbil)', { main, wrap })
+    expect(main.length === 2 && wrap.rows.length === 2 && !wrap.rows.find((r) => r.width === 1280)!.ok, '/ratiowrap/ an in-flow wrapper in a padding-ratio box is shorter than main at 1280px (#46, a client site)', { main, wrap })
     const fill = compareEmbedHeights(main, as(await boxes('/ratiofill/')))
     expect(fill.rows.length === 2 && fill.rows.every((r) => r.ok), '/ratiofill/ control: absolute inset-0 fills the box as main did', fill)
   }
