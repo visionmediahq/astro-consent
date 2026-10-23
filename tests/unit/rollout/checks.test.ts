@@ -272,8 +272,11 @@ describe('contrast', () => {
       expect(row!.ratio).toBeCloseTo(4.518, 3)
     })
 
-    it('one opaque sRGB gradient is not exact either: Chromium dithers it, a level past a stop', () => {
+    it('one opaque sRGB gradient always gets a level for its dither, even at a stop (conservative)', () => {
       // #97 review, in headless Chromium: rows at 4.51–4.54:1 at a stop painted at 4.48–4.50.
+      // Dither never leaves the stops' per-channel range, so when every channel runs the same way,
+      // as here, the lighter stop already bounds the gradient and this FAIL is conservative. The
+      // check does not tell the two cases apart: it always counts a level for one gradient.
       const [a, b] = ['rgb(0, 129, 160)', 'rgb(0, 40, 90)']
       const colours: RawContrast['colours'] = { [a]: [0, 129, 160, 255], [b]: [0, 40, 90, 255] }
       const [row] = contrastRows([raw({ images: [img(`linear-gradient(${a}, ${b})`)], colours })])
