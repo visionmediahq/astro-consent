@@ -8,15 +8,21 @@
 // the ratio is still given, but it is not proof: such a row's `ok` is always false. DaisyUI's noise texture on buttons (an inline SVG
 // feTurbulence at 20 % opacity) is decoration on top of the button colour and does not count.
 //
-// Gradients of colours are not images in that sense (nanolfs-villan's footer is a linear-gradient of
-// two brand blues). Their stops are read from the computed value (var() already resolved) and
+// Gradients of colours are not images in that sense (a client footer is a linear-gradient of two
+// brand blues). Their stops are read from the computed value (var() already resolved) and
 // rasterised by the page. Each segment between two stops is searched for its worst point: on a grid,
 // then refined around every local minimum. sRGB segments are interpolated here (premultiplied, as
 // browsers paint them); any other space or hue method is mixed by the page itself with color-mix()
 // in the same method. Several gradients that show (a client footer's faint radial glow on a dark linear
 // gradient) are bounded instead: bottom-up, per channel, the lowest and highest value every layer can
 // composite to, and the text against the worst point of that box (see boxWorst). Compositing and
-// luminance are monotone per channel, so the bound is never above the true worst point. A url(), a
+// luminance are monotone per channel, so over sRGB layers the bound is never above the true worst
+// point; a layer in another method relies on the sampled search for its mixes' extremes (the same
+// search as one gradient's). Each fold but an opaque colour or an opaque sRGB gradient that covers
+// the box is widened by one 8-bit level past rounding outward (see widen): stops are read back in 8
+// bits and the page rounds what it paints. One gradient and plain colours are not widened: they give
+// the worst point as read, exact for opaque colours and stops, within a level or two per channel with
+// translucent ones (near 4.5, up to about 0.08 in the ratio). A url(), a
 // stop or mix the page does not resolve, or a prelude keyword the parser does not know stays
 // indeterminate.
 //
@@ -98,7 +104,7 @@ const MEASURE = `(() => {
   // transform, or Tailwind v4's individual translate/scale/rotate.
   const moved = (s) => s.transform !== 'none' || s.translate !== 'none' || s.scale !== 'none' || s.rotate !== 'none'
   const zoomed = (s) => !!s.zoom && s.zoom !== '1' && s.zoom !== 'normal'
-  // Faint feTurbulence grain (ernstedt's body::after at opacity .055) is decoration: an SVG whose
+  // Faint feTurbulence grain (a client site's body::after at opacity .055) is decoration: an SVG whose
   // every shape is drawn through a filter, on a pseudo at opacity 0.2 or less with nothing else.
   const NOISE_URL = /url\\("data:image\\/svg\\+xml,([^"]*feTurbulence[^"]*)"\\)/g
   const SHAPES = /<(?:rect|path|circle|ellipse|polygon|polyline|line|image|text|use)\\b[^>]*>/gi
@@ -225,7 +231,7 @@ const MEASURE = `(() => {
     ...[...document.querySelectorAll('[data-consent-banner] button')].filter(visible).map((e) => row('banner', e)),
     ...[...document.querySelectorAll('[data-privacy-links] button, [data-privacy-links] a')].filter(visible).map((e) => row('links', e)),
     // A dark theme that sets base-content but not base-200 leaves light text on the light
-    // placeholder (knutssonsbil, about 1.2:1). Only embeds that have not loaded show one.
+    // placeholder (a client site, about 1.2:1). Only embeds that have not loaded show one.
     ...[...document.querySelectorAll(['> div:first-child', '[data-load]', 'label', 'a[data-open]'].map((s) => '[data-consent-embed]:not([data-active]) [data-placeholder] ' + s).join(', '))].filter(visible).map((e) => row('placeholder', e)),
   ]
 })()`
@@ -450,6 +456,14 @@ const boxOf = (f: (k: (typeof CHANNELS)[number]) => [number, number]): Box => {
 const union = (xs: Box[]): Box => boxOf((k) => [Math.min(...xs.map((x) => x.lo[k])), Math.max(...xs.map((x) => x.hi[k]))])
 /** `top` over every colour of the box: source-over is monotone in the colour below, per channel. */
 const overBox = (top: Rgba, below: Box): Box => ({ lo: over(top, below.lo), hi: over(top, below.hi) })
+/**
+ * The box rounded outward to whole 8-bit levels and widened by `margin` more, clamped to 0..255. The
+ * colours are read back from the canvas in 8 bits (alpha 0.15 comes back as 38/255 = 0.149), and the
+ * page rounds every layer it paints, so a painted pixel can lie a level outside the unrounded box.
+ * Margin 0 leaves the box as it is (a test checks the fold maths alone that way).
+ */
+const widen = (b: Box, margin: number): Box =>
+  margin ? boxOf((k) => [Math.max(0, Math.floor(b.lo[k]) - margin), Math.min(255, Math.ceil(b.hi[k]) + margin)]) : b
 
 /**
  * What one gradient layer can show over `below`. sRGB: composited over a fixed colour, a premultiplied
@@ -535,7 +549,12 @@ interface Evaluated {
   missing: string[]
 }
 
-function evaluate(r: RawContrast): Evaluated {
+/** `margin`: 8-bit levels each fold of several gradients is widened by (see widen). */
+export interface ContrastOptions {
+  margin?: number
+}
+
+function evaluate(r: RawContrast, { margin = 1 }: ContrastOptions = {}): Evaluated {
   const missing = new Set<string>()
   const colour = (s: string): Rgba | undefined => {
     const c = r.colours?.[s]
@@ -593,13 +612,16 @@ function evaluate(r: RawContrast): Evaluated {
   // Several gradients: every layer bottom-up over the box of what lies below it, from white as above.
   const methods = new Set<string>()
   if (gradients.length > 1) {
+    // Each fold is widened by a level (see widen), except an opaque colour or an opaque sRGB gradient
+    // that covers the box: those paint exactly the 8-bit values read back, and nothing outside their stops.
+    const exact = (e: Entry) => opaqueCover(e, r.colours) && !(e.kind === 'gradient' && e.method)
     let box: Box = { lo: WHITE, hi: WHITE }
     for (const e of shown) {
-      if (e.kind === 'colour') box = overBox(e.c, box)
+      if (e.kind === 'colour') box = exact(e) ? overBox(e.c, box) : widen(overBox(e.c, box), margin)
       else if (e.kind === 'gradient') {
         if (e.method) methods.add(e.method)
         const next = gradientBox(e, box, colour)
-        if (next) box = next
+        if (next) box = exact(e) ? next : widen(next, margin)
         else unresolved = true // keep going: the layers above still ask for their colours
       }
     }
@@ -638,8 +660,8 @@ function evaluate(r: RawContrast): Evaluated {
 }
 
 /** Pure: composites the page's raw colours and computes the WCAG ratio for each row. */
-export function contrastRows(raw: RawContrast[]): ContrastRow[] {
-  return raw.map((r) => evaluate(r).row)
+export function contrastRows(raw: RawContrast[], opts: ContrastOptions = {}): ContrastRow[] {
+  return raw.map((r) => evaluate(r, opts).row)
 }
 
 /** The stop and color-mix() strings the rows still need the page to resolve. */
@@ -648,7 +670,7 @@ export function pendingColours(raw: RawContrast[]): string[] {
 }
 
 /** Banner buttons, PrivacyLinks text and unloaded embed placeholders on the page as it is now. */
-export async function measureContrast(page: Pick<Page, 'evaluate'>): Promise<ContrastRow[]> {
+export async function measureContrast(page: Pick<Page, 'evaluate'>, opts: ContrastOptions = {}): Promise<ContrastRow[]> {
   let raw = (await page.evaluate(MEASURE)) as RawContrast[]
   // A scroll-in fade still running on the way: wait for it once, then read again.
   if (raw.some((r) => r.animating)) {
@@ -664,7 +686,7 @@ export async function measureContrast(page: Pick<Page, 'evaluate'>): Promise<Con
     const got = (await page.evaluate(`${RASTER}(${JSON.stringify(wanted)})`)) as (Rgba | null)[]
     for (const [i, c] of wanted.entries()) colours[c] = got[i] ?? null
   }
-  return contrastRows(raw)
+  return contrastRows(raw, opts)
 }
 
 /**

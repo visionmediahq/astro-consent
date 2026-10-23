@@ -290,7 +290,7 @@ npx tsx ci/rollout/run.ts help
   (`name`, `version`, `engines`, `license`, `bin`, `funding`) may change only to exactly the branch
   `package.json`'s value: main's lockfile was stale (another `engines`, astro-starter's `name`) and
   npm resynced it. daisyUI 5 (`REQUIRED`) may be added to `dependencies` where main had none: the
-  banner needs it, so a site without it gets it in its own commit (faluridklubb). daisyUI's base
+  banner needs it, so a site without it gets it in its own commit (a client site). daisyUI's base
   styles then reach the whole site, so add it like this, with the primary set to the site's colour:
 
   ```css
@@ -317,31 +317,39 @@ npx tsx ci/rollout/run.ts help
   top of it (a site's fixed mobile call bar), the button is reported as covered.
 - `verify` step 5 also compares the computed `scrollbar-color`, `scrollbar-width`,
   `scrollbar-gutter` and `background-color` of `html`, and `body`'s background, on `/` with main. Any
-  difference fails: it shows on every page, and the screenshots cannot show a scrollbar (faluridklubb).
+  difference fails: it shows on every page, and the screenshots cannot show a scrollbar (a client site).
   A page that scrolls sideways fails only if it is wider than on main at that width, so a site's
   own overflow is noted with main's width, not blamed on the banner.
 - `verify` step 5 also measures each embed placeholder against the registry iframe it replaced on
   main, paired per service in page order, at 360 and 1280 px: a placeholder more than 10 % shorter
-  fails (knutssonsbil: an in-flow wrapper in a padding-ratio box left the map 320px tall with an
+  fails (a client site: an in-flow wrapper in a padding-ratio box left the map 320px tall with an
   empty band below). Where main and the branch have different counts of a service on a page (a map
   main built in a script) that service is noted, not compared.
 - `verify` step 6 measures the placeholder of every embed that has not loaded too: its info text,
   Visa button, "Visa alltid" label and "Öppna i" link. A dark theme that sets `--color-base-content`
-  but not `--color-base-200` leaves light text on the light placeholder (knutssonsbil, about 1.2:1).
+  but not `--color-base-200` leaves light text on the light placeholder (a client site, about 1.2:1).
   `live post-merge` runs the same contrast check, so live sites are measured as well.
-- A background that is one gradient of colours (nanolfs-villan's footer: two brand blues) is
+- A background that is one gradient of colours (a client footer: two brand blues) is
   measured, not reported indeterminate. Each segment between two stops is searched for its worst
   point (a grid, refined around every local minimum), alpha composited over what is beneath:
   `5.25:1 ok (gradient, worst stop)`. sRGB segments are interpolated by the tool; any other method
   (`in oklch`, `in hsl longer hue`, the oklab default for oklch stops) is mixed by the page with
   `color-mix()` in the same method, and the line names it. Several gradients that show
-  (a faint radial glow over a dark linear gradient, seen on a client footer) are bounded: bottom-up, per
-  channel, the lowest and highest value each layer can composite to over the range below it
-  (stops, points between them in another method, and the layer below through translucent
-  stops), then the text against the worst point of that range: `8.70:1 ok (2 gradients, bound
-  over all stops)`. Compositing and luminance only grow with each channel, so the bound is never
-  above the true worst point. A `url()` image that shows, or a stop or mix the page cannot
-  resolve stays indeterminate.
+  (a faint radial glow over a dark linear gradient, seen on a client footer) are bounded:
+  bottom-up, per channel, the lowest and highest value each layer can composite to over the range
+  below it (its stops; in another method, the extremes of the page's mixes, found by the same
+  sampled search; and the range below wherever the layer has translucent stops or may not cover
+  the box), then the text against the worst point of that range. Each layer other than an opaque
+  colour or an opaque sRGB gradient that covers the box widens the range by one 8-bit level past
+  rounding outward: the canvas reads colours back in 8 bits (alpha 0.15 as 38/255 = 0.149) and the
+  page rounds each layer it paints. That client footer's lightest point is 8.70:1; its line reads
+  `8.50:1 ok (2 gradients, bound over all stops)`. Compositing and luminance only grow with each
+  channel, so with sRGB layers the bound is not above any pixel the page paints; with another
+  method it is as good as the sampled search for each segment's extremes. A brute-force unit test
+  checks it against random stacks. A `url()` image that shows, or a stop or mix the page cannot
+  resolve stays indeterminate. One gradient and plain colours are not widened: they report the
+  worst point as read, which is exact for opaque colours and opaque sRGB stops; with translucent
+  layers it can be a level or two off what is painted (near 4.5, up to about 0.08 in the ratio).
 - Effects the colours do not show are indeterminate: `background-blend-mode`, `background-clip:
   text`, `opacity` on an element with a background or above it, `mix-blend-mode` or a filter that
   changes something (`grayscale(0)` does not) on the text or any ancestor, and `backdrop-filter`
@@ -349,7 +357,7 @@ npx tsx ci/rollout/run.ts help
   on the links) fades the text colour and is measured.
 - A positioned `::before`/`::after` that paints (a background colour or image, a visible border, or a
   `backdrop-filter`), on the text or any ancestor, counts only when its box overlaps the text's
-  (ahatrafikskola's 1px footer hairline and a width-0 link underline do not). A `box-shadow` with a
+  (a client footer's 1px hairline and a width-0 link underline do not). A `box-shadow` with a
   visible colour (Tailwind's resting `0 0 #0000` is not), an outline, a filter that changes
   something (drop-shadow, blur) or any `content` other than `""` (text, glyphs, a url() image)
   reaches outside the box and always counts. A fixed one counts on any horizontal overlap, wherever
@@ -360,7 +368,7 @@ npx tsx ci/rollout/run.ts help
   `contain`, `content-visibility` or a matching `will-change` capturing it); any other containing
   block, a transform, individual transform property, `zoom` or `offset-path` on the pseudo-element,
   or `direction: rtl` on it is indeterminate.
-- Pseudo-elements that do not count: faint feTurbulence grain (ernstedt's fixed `body::after`: an SVG
+- Pseudo-elements that do not count: faint feTurbulence grain (a client site's fixed `body::after`: an SVG
   whose every shape is drawn through a filter, with no other paint), while the grain opacities on a
   row's path add up to 0.2 or less; and a negative z-index above the opaque background with no
   z-index on or between them, which paints beneath it. The grain exemption is a bounded error, not
@@ -425,7 +433,7 @@ npx tsx ci/rollout/run.ts help
   - every page at 360 and 1280 px with every Google Fonts request aborted and counted: none may be
     attempted, and every `/fonts/*.woff2` must answer 200. A CMS admin shell (`/admin`,
     `/admin/…`) is left out and listed as skipped, here, in step 9 and live: its editor (Sveltia
-    CMS from unpkg on lj-trim) loads Google Fonts for its own UI, which visitors never get;
+    CMS from unpkg on a client site) loads Google Fonts for its own UI, which visitors never get;
   - every family of fonts.css a visible element renders with has the face CSS font matching picks
     for its weight and style loaded in `document.fonts` (compared with fonts.css, not main: main
     cannot load its fonts with Google blocked);
@@ -523,11 +531,11 @@ npx tsx ci/rollout/run.ts help
   or in an HTML element's attribute (``data-map-src={`…&output=embed`}``; not `href`, not a
   component prop), is a home-made click-to-load that ignores the banner: the site is needs-human
   with `script-built embed google-maps in <file> (<attribute> | script)`, for a person to rewire as
-  a `ConsentEmbed` (arjangs-elmontage, stromsbacka). When the URL comes through a variable
+  a `ConsentEmbed` (two client sites). When the URL comes through a variable
   (`data-src={mapSrc}`), a `.astro` file whose `<script>` calls `createElement('iframe')` gets
   `(createElement)` if a Maps or Calendar host and an embed marker appear anywhere in the file
   (outside literal `<iframe>` tags) or in a relative non-`.astro` module it imports, even split
-  over several literals (tranemoglas, gron-kontor). Other registry URLs in a script stay
+  over several literals (two client sites). Other registry URLs in a script stay
   `tracker <service>`.
 - **Elfsight.** Recognised only as one loader `<script>` (`https://elfsightcdn.com/platform.js` or
   `https://static.elfsight.com/platform/platform.js`; other attributes only `async` and `is:inline`)
