@@ -640,10 +640,10 @@ function importsEntry(files: SiteFiles, file: string, entry: string, seen = new 
  * file read but such Markdown, scanned on its own): some glob may reach the project root, or the
  * file's top folder (a root file: its name) is a loader base or is named there (an import, a
  * path). Root-wide, conservatively: a `glob()` loader whose options are not an inline object with
- * literal values (`...`, a `${…}` or computed base), whose base or pattern has `..`, or whose base
- * is none or `.` with a pattern not starting in a folder; `glob` imported under another name; an
- * `import.meta.glob` (type argument or not) that is not one literal resolving inside src/. A built
- * `.mdx` adds its import lines, until nothing new is built.
+ * literal values (`...`, a `${…}` or computed base or pattern), that has `..` anywhere, or whose
+ * base is none or `.` with a pattern not starting in a folder; `glob` imported under another name;
+ * an `import.meta.glob` (type argument or not) that is not one literal resolving inside src/, or
+ * has a `base` option. A built `.mdx` is read whole, until nothing new is built.
  */
 function markdownBuilt(files: SiteFiles, codeFiles: string[], outsideMd: string[]): (file: string) => boolean {
   // Text only: a binary file builds nothing, and a site's images joined can pass V8's string limit.
@@ -671,19 +671,23 @@ function markdownBuilt(files: SiteFiles, codeFiles: string[], outsideMd: string[
         else if (code[end] === '}' && --depth === 0) break
       }
       const arg = code.slice(m.index, end + 1)
-      if (/\.\.\./.test(arg)) rootWide = true
+      // `..` anywhere (a base or pattern climbing out, `...` spread options) or a computed pattern.
+      if (/\.\./.test(arg)) rootWide = true
       const base = literal(arg, 'base')
       const pattern = literal(arg, 'pattern')
-      if (base?.includes('..') || pattern?.includes('..')) rootWide = true
-      if (base === null) rootWide = true
+      if (base === null || pattern === null) rootWide = true
       else if (base === undefined || strip(base) === '' || strip(base) === '.') {
         if (typeof pattern !== 'string' || !/^[\w.-]+\//.test(strip(pattern))) rootWide = true
       } else tops.add(strip(base).split('/')[0]!)
     }
     for (const m of code.matchAll(/import\.meta\.glob\b/g)) {
       // An optional type argument (`import.meta.glob<{ default: ImageMetadata }>(…)`), then one literal.
-      const lit = /^\s*(?:<(?:[^<>]|<(?:[^<>]|<[^<>]*>)*>)*>)?\s*\(\s*(['"`])([^'"`]*)\1/.exec(code.slice(m.index + m[0].length))
+      const rest = code.slice(m.index + m[0].length)
+      const lit = /^\s*(?:<(?:[^<>]|<(?:[^<>]|<[^<>]*>)*>)*>)?\s*\(\s*(['"`])([^'"`]*)\1/.exec(rest)
       const p = lit?.[2]
+      // Vite resolves the pattern against an options `base`, not the file.
+      const options = lit ? rest.slice(lit[0].length, lit[0].length + 400) : ''
+      if (/\bbase\s*:/.test(options.slice(0, options.indexOf(')') + 1 || undefined))) rootWide = true
       if (p === undefined || p.includes('${') || !/^(?:\/|\.\.?\/)/.test(p) || p.replace(/^(?:\.\.?\/)+/, '').includes('..')) {
         rootWide = true
         continue
@@ -711,8 +715,8 @@ function markdownBuilt(files: SiteFiles, codeFiles: string[], outsideMd: string[
     grew = false
     for (const f of outsideMd) {
       if (texts.has(f) || !isBuilt(f)) continue
-      // Only MDX imports: a Markdown file's prose builds nothing.
-      const t = f.endsWith('.mdx') ? [...files.read(f).matchAll(/^(?:import|export)\b.*$/gm)].map((x) => x[0]).join('\n') : ''
+      // MDX whole (imports over several lines, globs in body expressions); Markdown prose builds nothing.
+      const t = f.endsWith('.mdx') ? files.read(f) : ''
       texts.set(f, t)
       scan(f, t)
       cache.clear()

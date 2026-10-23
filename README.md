@@ -532,7 +532,8 @@ npx tsx ci/rollout/run.ts help
   may reach the project root (loader options not written inline, a computed or `${…}` base,
   base `.` or none with a pattern not starting in a folder, `glob` imported under another name;
   an `import.meta.glob` (type argument or not) whose one literal pattern does not resolve inside
-  `src/`; `..` in a loader base or pattern, or `...` in its options), or a built `.mdx` imports it.
+  `src/` or that has a `base` option; `..` anywhere in a loader's options, or a computed pattern),
+  or a built `.mdx` (read whole) names it.
   So `docs/`, `README.md` or `CLAUDE.md` that nothing builds are not read. Not seen: a loader
   called under another variable name, or code walking the project itself (`fast-glob`,
   `readdirSync`); verify's request check still covers the built pages), the Web Font Loader (its script or
