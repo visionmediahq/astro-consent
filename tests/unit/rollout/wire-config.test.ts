@@ -66,22 +66,22 @@ const config = (text: string, path = 'astro.config.ts') =>
   wired(wireConfig, memSite({ [path]: text }), report({ config: { path } }), path)
 
 describe('wireConfig', () => {
-  test('multi-line integrations with a trailing comma: consent() appended in the same style (domeij fixture)', () => {
-    const site = 'domeijstapetserarverkstad'
+  test('multi-line integrations with a trailing comma: consent() appended in the same style (pilot fixture)', () => {
+    const site = 'site-1243511314'
     const { plan, text } = wired(wireConfig, fixtureSite(join(FIXTURES, site, 'before')), report(), 'astro.config.ts')
     expect(plan.ok).toBe(true)
     expect(text).toBe(fixtureText(site, 'expected', 'astro.config.ts'))
   })
 
   test('the other pilot configs with integrations come out as expected/', () => {
-    for (const site of ['munkforstradgardstjanst', 'traforadling', 'vasshallakatthotell']) {
+    for (const site of ['site-1286040212', 'site-1243335919', 'site-1245311266']) {
       const { text } = wired(wireConfig, fixtureSite(join(FIXTURES, site, 'before')), report(), 'astro.config.ts')
       expect(text, site).toBe(fixtureText(site, 'expected', 'astro.config.ts'))
     }
   })
 
-  test('no integrations (aspomad fixture): integrations: [consent()], added as the last property', () => {
-    const site = 'aspomad'
+  test('no integrations (pilot fixture): integrations: [consent()], added as the last property', () => {
+    const site = 'site-1218869363'
     const { plan, text } = wired(
       wireConfig,
       fixtureSite(join(FIXTURES, site, 'before')),
@@ -220,7 +220,7 @@ const css = (path: string, text: string) => wired(wireCss, memSite({ [path]: tex
 
 describe('wireCss', () => {
   test('src/styles/global.css → ../../node_modules (every pilot fixture)', () => {
-    for (const site of ['aspomad', 'domeijstapetserarverkstad', 'munkforstradgardstjanst', 'traforadling', 'vasshallakatthotell']) {
+    for (const site of ['site-1218869363', 'site-1243511314', 'site-1286040212', 'site-1243335919', 'site-1245311266']) {
       const path = 'src/styles/global.css'
       const { plan, text } = wired(wireCss, fixtureSite(join(FIXTURES, site, 'before')), report(), path)
       expect(plan.ok, site).toBe(true)

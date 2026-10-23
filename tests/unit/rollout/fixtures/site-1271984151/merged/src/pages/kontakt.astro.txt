@@ -1,0 +1,39 @@
+---
+import Base from '../layouts/Base.astro';
+import Header from '../components/Header.astro';
+import Footer from '../components/Footer.astro';
+import PageHero from '../components/PageHero.astro';
+import KontaktForm from '../components/KontaktForm.astro';
+import KontaktMap from '../components/KontaktMap.astro';
+
+export const prerender = true;
+---
+
+<Base
+  title="Kontakt – Exempel Takläggare Exempelby"
+  description="Kontakta Exempel Tak AB i Exempelby. Ring oss på 08-123 45 67 eller skicka ett meddelande. Vi hjälper med taklösningar i hela Exempellän."
+  canonical="https://site-1271984151.se/kontakt/"
+  ogImage="/og-image.jpg"
+  schema={{
+    name: 'Exempel Tak AB',
+    url: 'https://site-1271984151.se/',
+    telephone: '+4681234567',
+    email: 'info@site-1271984151.se',
+    address: {
+      streetAddress: 'Exempelgatan 1',
+      addressLocality: 'Exempelby',
+      postalCode: '123 45',
+      addressCountry: 'SE',
+    },
+    description: 'Kontakta Exempel Tak AB i Exempelby för takläggning, tätskikt och renoveringar i Exempellän.',
+    image: 'https://site-1271984151.se/og-image.jpg',
+  }}
+>
+  <Header />
+  <main>
+    <PageHero title="Kontakt" backgroundImage="/images/kontakt.webp" />
+    <KontaktForm />
+    <KontaktMap />
+  </main>
+  <Footer />
+</Base>

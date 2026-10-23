@@ -62,7 +62,7 @@ async function killGroup(pid: number): Promise<void> {
 export const DEFAULT_SSR_ENTRY = 'dist/server/entry.mjs'
 
 /**
- * The file an SSR site's server runs (#60). kajsa-landgren starts `node ./dist/server-entry.mjs`,
+ * The file an SSR site's server runs (#60). site 1280190874 starts `node ./dist/server-entry.mjs`,
  * its own server around the Astro handler; `dist/server/entry.mjs` there only exports the handler
  * and exits. So a `start` script that is exactly `node <file>`, with the file inside `dir` and
  * present after the build, gives the entry. Anything else keeps Astro's default: no script, `astro

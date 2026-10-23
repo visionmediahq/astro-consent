@@ -383,7 +383,7 @@ describe('review of #76: the banner property and fail-closed edges', () => {
   })
 })
 
-describe('step 8 skips CMS admin shells (lj-trim)', () => {
+describe('step 8 skips CMS admin shells', () => {
   // public/admin/index.html loads Sveltia CMS from unpkg, which asks Google Fonts for the editor UI.
   const ADMIN = '<!doctype html><html><head><script src="https://unpkg.com/@sveltia/cms@0.165.2/dist/sveltia-cms.js"></script></head><body></body></html>'
   const googleOn =

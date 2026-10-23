@@ -19,12 +19,15 @@ import { classificationLine } from './lib/report'
 import { diskSite } from './lib/site-files'
 import type { PoolRow, Report } from './types'
 
+/** Sites left out of the pool, by numeric GitHub repo ID (`gh api repositories/<id>`): the tree names no client. */
 export interface Exclusions {
-  pilot7: string[]
-  spamGuard: string[]
+  pilot7: number[]
+  spamGuard: number[]
 }
 
 export interface OrgRepo {
+  /** The numeric GitHub repo ID, which exclusions.json lists. */
+  id: number
   name: string
   isArchived: boolean
   /** Whether package.json depends on `astro`. */
@@ -61,7 +64,7 @@ const unquote = (v: string): string =>
 
 /**
  * The `label` of each entry under `sites:` in a stats-config client file. `enabled` is ignored on
- * purpose: vasshalla and domeij were `enabled: false` yet live. Labels deeper down (landing pages)
+ * purpose: two pilot sites were `enabled: false` yet live. Labels deeper down (landing pages)
  * are not sites.
  */
 export function statsLabels(yml: string): string[] {
@@ -132,13 +135,31 @@ export function domainsFor(repo: OrgRepo, apps: App[], labels: string[]): string
   return out
 }
 
+const excludedIds = (exclusions: Exclusions): Set<number> => new Set([...exclusions.pilot7, ...exclusions.spamGuard])
+
+/**
+ * The org listing from `gh api --paginate orgs/<org>/repos` with ORG_REPO_FIELDS: one JSON object per
+ * line. A repo without a numeric id could never match exclusions.json, so it is an error.
+ */
+export function parseOrgRepos(out: string): Omit<OrgRepo, 'astro'>[] {
+  return out
+    .split(/\r?\n/)
+    .filter((line) => line.trim())
+    .map((line) => {
+      const r = JSON.parse(line) as Partial<Omit<OrgRepo, 'astro'>>
+      if (!Number.isSafeInteger(r.id)) throw new Error(`org repo listing: no numeric id in ${line}`)
+      if (typeof r.name !== 'string' || !r.name) throw new Error(`org repo listing: no name in ${line}`)
+      return { id: r.id!, name: r.name, isArchived: Boolean(r.isArchived), homepageUrl: r.homepageUrl ?? null }
+    })
+}
+
 export function planPool(input: PoolInput): { repos: PoolTarget[]; unmatched: string[] } {
-  const excluded = new Set([...input.exclusions.pilot7, ...input.exclusions.spamGuard])
+  const excluded = excludedIds(input.exclusions)
   const repos: PoolTarget[] = []
   const unmatched: string[] = []
   const sorted = [...input.orgRepos].sort((a, b) => a.name.localeCompare(b.name))
   for (const r of sorted) {
-    if (r.isArchived || !r.astro || excluded.has(r.name)) continue
+    if (r.isArchived || !r.astro || excluded.has(r.id)) continue
     const domains = domainsFor(r, input.apps, input.statsDomains)
     if (domains.length) repos.push({ repo: r.name, domains })
     else unmatched.push(r.name)
@@ -202,6 +223,8 @@ export async function scanPool(
 // The real run: gh, git, Coolify (read-only), the filesystem.
 
 const ORG = 'visionmediahq'
+/** The jq filter for `gh api orgs/<org>/repos`: the REST listing carries the numeric `id`, `gh repo list` does not. */
+const ORG_REPO_FIELDS = '.[] | {id, name, isArchived: .archived, homepageUrl: .homepage}'
 
 function gh(args: string[]): string {
   return execFileSync('gh', args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 64 * 1024 * 1024 })
@@ -276,9 +299,9 @@ async function main(argv: string[]): Promise<number> {
   const existing = readPool(args.out)
   const scanned = new Set(existing.rows.filter((r) => !r.error).map((r) => r.repo))
 
-  const listed = JSON.parse(gh(['repo', 'list', ORG, '--limit', '1000', '--json', 'name,isArchived,homepageUrl'])) as Omit<OrgRepo, 'astro'>[]
-  const excluded = new Set([...exclusions.pilot7, ...exclusions.spamGuard])
-  const candidates = listed.filter((r) => !r.isArchived && !excluded.has(r.name) && (args.only.length === 0 || args.only.includes(r.name)))
+  const listed = parseOrgRepos(gh(['api', '--paginate', `orgs/${ORG}/repos?per_page=100`, '-q', ORG_REPO_FIELDS]))
+  const excluded = excludedIds(exclusions)
+  const candidates = listed.filter((r) => !r.isArchived && !excluded.has(r.id) && (args.only.length === 0 || args.only.includes(r.name)))
   const missing = args.only.filter((name) => !listed.some((r) => r.name === name))
   if (missing.length) throw new Error(`--only names no repo in ${ORG}: ${missing.join(', ')}`)
 

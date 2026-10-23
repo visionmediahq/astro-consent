@@ -1,4 +1,4 @@
-// aspokarlsson: the site's fixed mobile call bar (z-50, later in the DOM) sat on top of the banner
+// site 1249159919: the site's fixed mobile call bar (z-50, later in the DOM) sat on top of the banner
 // and hid its OK button, and step 5 passed because it only measured widths. A banner button that
 // another element covers is now reported.
 import { createServer, type Server } from 'node:http'

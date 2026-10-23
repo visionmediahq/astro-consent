@@ -17,9 +17,9 @@ import { CHROME_UA, type FontFetch, planFonts } from '../../../ci/rollout/wire/f
 const FIXTURES = join(import.meta.dirname, 'fixtures')
 const ENTRY = 'src/styles/global.css'
 const DATE = new Date('2026-10-20T12:00:00Z')
-const URL_KNUT = 'https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Barlow:ital,wght@0,300;0,400;0,500;0,600;1,400&display=swap'
+const URL_OSWALD_BARLOW = 'https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Barlow:ital,wght@0,300;0,400;0,500;0,600;1,400&display=swap'
 const CSS_V1 = readFileSync(join(FIXTURES, 'fonts-wire/css2/css1-oswald-lato.css.txt'), 'utf8')
-const CSS_KNUT = readFileSync(join(FIXTURES, 'fonts-wire/css2/knut.css.txt'), 'utf8')
+const CSS_OSWALD_BARLOW = readFileSync(join(FIXTURES, 'fonts-wire/css2/oswald-barlow.css.txt'), 'utf8')
 
 interface Answer {
   status: number
@@ -36,9 +36,9 @@ function network(over: Record<string, Answer | Error> = {}): FontFetch & { calls
     const o = over[url]
     if (o instanceof Error) throw o
     if (o) return o
-    if (url === URL_KNUT) {
+    if (url === URL_OSWALD_BARLOW) {
       expect(headers['User-Agent']).toBe(CHROME_UA)
-      return text(CSS_KNUT, 'text/css; charset=utf-8')
+      return text(CSS_OSWALD_BARLOW, 'text/css; charset=utf-8')
     }
     if (/^https:\/\/fonts\.gstatic\.com\/.+\.woff2$/.test(url)) return { status: 200, contentType: 'font/woff2', body: fakeWoff2(url) }
     const ofl = /^https:\/\/raw\.githubusercontent\.com\/google\/fonts\/main\/ofl\/([a-z0-9]+)\/OFL\.txt$/.exec(url)
@@ -53,11 +53,11 @@ afterEach(() => {
   for (const d of temps.splice(0)) rmSync(d, { recursive: true, force: true })
 })
 
-/** A generated site on disk: knutssonsbil's layout and stylesheet, the way the Builder leaves them. */
+/** A generated site on disk: site 1228881255's layout and stylesheet, the way the Builder leaves them. */
 function generatedSite(extra: Record<string, string> = {}): string {
   const dir = mkdtempSync(join(tmpdir(), 'fonts-files-'))
   temps.push(dir)
-  const src = join(FIXTURES, 'fonts/knutssonsbil')
+  const src = join(FIXTURES, 'fonts/site-1228881255')
   const visit = (d: string): void => {
     for (const e of readdirSync(d, { withFileTypes: true })) {
       const full = join(d, e.name)
@@ -104,7 +104,7 @@ describe('runFontsFiles', () => {
   test('writes exactly the files wire writes for the same URL (woff2, licences, fonts.css), nothing else', async () => {
     const dir = generatedSite()
     const before = tree(dir)
-    const { code, output } = await runFontsFiles({ dir, url: URL_KNUT, entry: null, dryRun: false }, { fetch: network(), now: DATE })
+    const { code, output } = await runFontsFiles({ dir, url: URL_OSWALD_BARLOW, entry: null, dryRun: false }, { fetch: network(), now: DATE })
     expect(code).toBe(0)
     const after = tree(dir)
     const added = [...after.keys()].filter((k) => !before.has(k))
@@ -114,10 +114,10 @@ describe('runFontsFiles', () => {
     expect(output).toContain('src/styles/fonts.css')
 
     // Reference: the rollout's own plan for the same site and URL.
-    const files = fixtureSite(join(FIXTURES, 'fonts/knutssonsbil'))
+    const files = fixtureSite(join(FIXTURES, 'fonts/site-1228881255'))
     const plan = await planFonts(files, { fonts: detectFonts(files, ENTRY), css: { entry: ENTRY } }, { fetch: network(), now: DATE })
     if (!plan.ok) throw new Error('reference plan refused')
-    expect(plan.url).toBe(URL_KNUT)
+    expect(plan.url).toBe(URL_OSWALD_BARLOW)
     for (const f of plan.newFiles) expect(after.get(f.path)!.toString('utf8')).toBe(f.text)
     for (const f of plan.fontFiles) expect(after.get(f.path)!.equals(Buffer.from(f.bytes))).toBe(true)
     expect(added.length).toBe(plan.newFiles.length + plan.fontFiles.length)
@@ -125,9 +125,9 @@ describe('runFontsFiles', () => {
 
   test('the generated stylesheet keeps the face names, weights and unicode-ranges and no Google host outside the header', async () => {
     const dir = generatedSite()
-    await runFontsFiles({ dir, url: URL_KNUT, entry: null, dryRun: false }, { fetch: network(), now: DATE })
+    await runFontsFiles({ dir, url: URL_OSWALD_BARLOW, entry: null, dryRun: false }, { fetch: network(), now: DATE })
     const css = readFileSync(join(dir, 'src/styles/fonts.css'), 'utf8')
-    expect(css).toContain(`Generated from ${URL_KNUT}`)
+    expect(css).toContain(`Generated from ${URL_OSWALD_BARLOW}`)
     expect(css).toContain('on 2026-10-20')
     expect(css).toContain("font-family: 'Oswald'")
     expect(css).toContain('font-display: swap')
@@ -152,7 +152,7 @@ describe('runFontsFiles', () => {
     const dir = generatedSite()
     const entry = readFileSync(join(dir, ENTRY), 'utf8')
     const layout = readFileSync(join(dir, 'src/layouts/Base.astro'), 'utf8')
-    const { code } = await runFontsFiles({ dir, url: URL_KNUT, entry: ENTRY, dryRun: false }, { fetch: network(), now: DATE })
+    const { code } = await runFontsFiles({ dir, url: URL_OSWALD_BARLOW, entry: ENTRY, dryRun: false }, { fetch: network(), now: DATE })
     expect(code).toBe(0)
     const now = readFileSync(join(dir, ENTRY), 'utf8')
     expect(now.replace('\n@import "./fonts.css";', '')).toBe(entry)
@@ -164,14 +164,14 @@ describe('runFontsFiles', () => {
   test('without --entry the stylesheet entry is untouched', async () => {
     const dir = generatedSite()
     const entry = readFileSync(join(dir, ENTRY), 'utf8')
-    await runFontsFiles({ dir, url: URL_KNUT, entry: null, dryRun: false }, { fetch: network(), now: DATE })
+    await runFontsFiles({ dir, url: URL_OSWALD_BARLOW, entry: null, dryRun: false }, { fetch: network(), now: DATE })
     expect(readFileSync(join(dir, ENTRY), 'utf8')).toBe(entry)
   })
 
   test('--dry-run fetches but writes nothing, and says what it would write', async () => {
     const dir = generatedSite()
     const before = tree(dir)
-    const { code, output } = await runFontsFiles({ dir, url: URL_KNUT, entry: ENTRY, dryRun: true }, { fetch: network(), now: DATE })
+    const { code, output } = await runFontsFiles({ dir, url: URL_OSWALD_BARLOW, entry: ENTRY, dryRun: true }, { fetch: network(), now: DATE })
     expect(code).toBe(0)
     expect([...tree(dir).keys()]).toEqual([...before.keys()])
     expect(output).toMatch(/dry run/i)
@@ -180,9 +180,9 @@ describe('runFontsFiles', () => {
 
   test('subsets follow the site text: Cyrillic in src/ keeps the cyrillic faces', async () => {
     const plain = generatedSite()
-    await runFontsFiles({ dir: plain, url: URL_KNUT, entry: null, dryRun: false }, { fetch: network(), now: DATE })
+    await runFontsFiles({ dir: plain, url: URL_OSWALD_BARLOW, entry: null, dryRun: false }, { fetch: network(), now: DATE })
     const russian = generatedSite({ 'src/pages/index.astro': '<h1>Привет</h1>\n' })
-    await runFontsFiles({ dir: russian, url: URL_KNUT, entry: null, dryRun: false }, { fetch: network(), now: DATE })
+    await runFontsFiles({ dir: russian, url: URL_OSWALD_BARLOW, entry: null, dryRun: false }, { fetch: network(), now: DATE })
     expect(readFileSync(join(russian, 'src/styles/fonts.css'), 'utf8')).toContain('/* cyrillic */')
     expect(readFileSync(join(plain, 'src/styles/fonts.css'), 'utf8')).not.toContain('/* cyrillic */')
   })
@@ -203,24 +203,24 @@ describe('runFontsFiles', () => {
       expect(net.calls).toEqual([])
     })
     test('the stylesheet or the folder is already there', async () => {
-      expect(await refusal(generatedSite({ 'src/styles/fonts.css': '/* x */' }), URL_KNUT, network())).toContain('src/styles/fonts.css already exists')
-      expect(await refusal(generatedSite({ 'public/fonts/a.woff2': 'x' }), URL_KNUT, network())).toContain('public/fonts/ already exists')
+      expect(await refusal(generatedSite({ 'src/styles/fonts.css': '/* x */' }), URL_OSWALD_BARLOW, network())).toContain('src/styles/fonts.css already exists')
+      expect(await refusal(generatedSite({ 'public/fonts/a.woff2': 'x' }), URL_OSWALD_BARLOW, network())).toContain('public/fonts/ already exists')
     })
     test('an entry without @import "tailwindcss", or one that is missing', async () => {
       const noTw = generatedSite({ [ENTRY]: 'body { color: red }\n' })
-      expect(await refusal(noTw, URL_KNUT, network())).toContain('expected exactly 1')
-      expect(await refusal(generatedSite(), URL_KNUT, network(), 'src/styles/nope.css')).toContain('src/styles/nope.css')
+      expect(await refusal(noTw, URL_OSWALD_BARLOW, network())).toContain('expected exactly 1')
+      expect(await refusal(generatedSite(), URL_OSWALD_BARLOW, network(), 'src/styles/nope.css')).toContain('src/styles/nope.css')
     })
     test('a failed request, an HTML answer, a file that is not woff2', async () => {
-      expect(await refusal(generatedSite(), URL_KNUT, network({ [URL_KNUT]: new Error('getaddrinfo ENOTFOUND') }))).toContain('ENOTFOUND')
-      expect(await refusal(generatedSite(), URL_KNUT, network({ [URL_KNUT]: text('<p>Sorry</p>', 'text/html') }))).toContain('no @font-face')
-      const first = parseCss2(CSS_KNUT).find((f) => f.subset === 'latin')!.src
-      expect(await refusal(generatedSite(), URL_KNUT, network({ [first]: text('not a font', 'font/woff2') }))).toContain('not a woff2 file')
+      expect(await refusal(generatedSite(), URL_OSWALD_BARLOW, network({ [URL_OSWALD_BARLOW]: new Error('getaddrinfo ENOTFOUND') }))).toContain('ENOTFOUND')
+      expect(await refusal(generatedSite(), URL_OSWALD_BARLOW, network({ [URL_OSWALD_BARLOW]: text('<p>Sorry</p>', 'text/html') }))).toContain('no @font-face')
+      const first = parseCss2(CSS_OSWALD_BARLOW).find((f) => f.subset === 'latin')!.src
+      expect(await refusal(generatedSite(), URL_OSWALD_BARLOW, network({ [first]: text('not a font', 'font/woff2') }))).toContain('not a woff2 file')
     })
     test('no licence in google/fonts', async () => {
       const net = network()
       const bad: FontFetch = async (url, h) => (/\/ofl\/oswald\/OFL\.txt$/.test(url) ? text('nope', 'text/plain', 404) : net(url, h))
-      expect(await refusal(generatedSite(), URL_KNUT, bad)).toContain('no licence for Oswald')
+      expect(await refusal(generatedSite(), URL_OSWALD_BARLOW, bad)).toContain('no licence for Oswald')
     })
   })
 })
@@ -248,16 +248,16 @@ describe('IO errors leave the site byte-identical, so a retry works', () => {
     const dirs = dirsOf(dir)
     chmodSync(join(dir, 'public'), 0o555)
     try {
-      const r = await runFontsFiles({ dir, url: URL_KNUT, entry: ENTRY, dryRun: false }, { fetch: network(), now: DATE }).catch((e: Error) => e)
+      const r = await runFontsFiles({ dir, url: URL_OSWALD_BARLOW, entry: ENTRY, dryRun: false }, { fetch: network(), now: DATE }).catch((e: Error) => e)
       expect(r).toBeInstanceOf(Error)
       same(dir, before)
       expect(dirsOf(dir)).toEqual(dirs)
-      expect(await main([dir, '--url', URL_KNUT])).toBe(1)
+      expect(await main([dir, '--url', URL_OSWALD_BARLOW])).toBe(1)
     } finally {
       chmodSync(join(dir, 'public'), 0o755)
     }
     same(dir, before)
-    expect((await runFontsFiles({ dir, url: URL_KNUT, entry: ENTRY, dryRun: false }, { fetch: network(), now: DATE })).code).toBe(0)
+    expect((await runFontsFiles({ dir, url: URL_OSWALD_BARLOW, entry: ENTRY, dryRun: false }, { fetch: network(), now: DATE })).code).toBe(0)
   })
 
   test('a read-only entry with --entry: exit 1, no fonts.css, licences or woff2 left, entry unchanged, the retry succeeds', async () => {
@@ -266,13 +266,13 @@ describe('IO errors leave the site byte-identical, so a retry works', () => {
     const dirs = dirsOf(dir)
     chmodSync(join(dir, ENTRY), 0o444)
     try {
-      await expect(runFontsFiles({ dir, url: URL_KNUT, entry: ENTRY, dryRun: false }, { fetch: network(), now: DATE })).rejects.toThrow(/EACCES|not writable/)
+      await expect(runFontsFiles({ dir, url: URL_OSWALD_BARLOW, entry: ENTRY, dryRun: false }, { fetch: network(), now: DATE })).rejects.toThrow(/EACCES|not writable/)
       same(dir, before)
       expect(dirsOf(dir)).toEqual(dirs)
     } finally {
       chmodSync(join(dir, ENTRY), 0o644)
     }
-    expect((await runFontsFiles({ dir, url: URL_KNUT, entry: ENTRY, dryRun: false }, { fetch: network(), now: DATE })).code).toBe(0)
+    expect((await runFontsFiles({ dir, url: URL_OSWALD_BARLOW, entry: ENTRY, dryRun: false }, { fetch: network(), now: DATE })).code).toBe(0)
   })
 
   test('a write that fails half way (what no preflight sees) is rolled back: files, new directories and the entry', async () => {
@@ -284,11 +284,11 @@ describe('IO errors leave the site byte-identical, so a retry works', () => {
       if (++n === 4) throw Object.assign(new Error('ENOSPC: no space left on device'), { code: 'ENOSPC' })
       writeFileSync(path, data)
     }
-    await expect(runFontsFiles({ dir, url: URL_KNUT, entry: ENTRY, dryRun: false }, { fetch: network(), now: DATE, write })).rejects.toThrow(/ENOSPC/)
+    await expect(runFontsFiles({ dir, url: URL_OSWALD_BARLOW, entry: ENTRY, dryRun: false }, { fetch: network(), now: DATE, write })).rejects.toThrow(/ENOSPC/)
     expect(n).toBe(4)
     same(dir, before)
     expect(dirsOf(dir)).toEqual(dirs)
-    expect((await runFontsFiles({ dir, url: URL_KNUT, entry: ENTRY, dryRun: false }, { fetch: network(), now: DATE })).code).toBe(0)
+    expect((await runFontsFiles({ dir, url: URL_OSWALD_BARLOW, entry: ENTRY, dryRun: false }, { fetch: network(), now: DATE })).code).toBe(0)
   })
 
   test('a failure while writing the entry itself restores the entry', async () => {
@@ -301,7 +301,7 @@ describe('IO errors leave the site byte-identical, so a retry works', () => {
       }
       writeFileSync(path, data)
     }
-    await expect(runFontsFiles({ dir, url: URL_KNUT, entry: ENTRY, dryRun: false }, { fetch: network(), now: DATE, write })).rejects.toThrow(/EIO/)
+    await expect(runFontsFiles({ dir, url: URL_OSWALD_BARLOW, entry: ENTRY, dryRun: false }, { fetch: network(), now: DATE, write })).rejects.toThrow(/EIO/)
     same(dir, before)
   })
 
@@ -312,7 +312,7 @@ describe('IO errors leave the site byte-identical, so a retry works', () => {
       order.push(relative(dir, path))
       writeFileSync(path, data)
     }
-    await runFontsFiles({ dir, url: URL_KNUT, entry: ENTRY, dryRun: false }, { fetch: network(), now: DATE, write })
+    await runFontsFiles({ dir, url: URL_OSWALD_BARLOW, entry: ENTRY, dryRun: false }, { fetch: network(), now: DATE, write })
     expect(order.slice(-2)).toEqual(['src/styles/fonts.css', ENTRY])
   })
 })
@@ -322,7 +322,7 @@ describe('--entry must stay inside the site', () => {
     const dir = generatedSite()
     const net = network()
     const before = tree(dir)
-    const r = await runFontsFiles({ dir, url: URL_KNUT, entry, dryRun: false }, { fetch: net, now: DATE })
+    const r = await runFontsFiles({ dir, url: URL_OSWALD_BARLOW, entry, dryRun: false }, { fetch: net, now: DATE })
     expect(r.code).toBe(3)
     expect(r.output).toContain('--entry must be a path inside the site')
     expect(net.calls).toEqual([])
@@ -337,7 +337,7 @@ describe('main', () => {
     expect(await main(['/nowhere', '--url', 'u', '--bogus'])).toBe(2)
   })
   test('a site dir that does not exist exits 1', async () => {
-    expect(await main(['/nonexistent-site-dir', '--url', URL_KNUT])).toBe(1)
+    expect(await main(['/nonexistent-site-dir', '--url', URL_OSWALD_BARLOW])).toBe(1)
   })
 })
 

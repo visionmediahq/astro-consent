@@ -5,7 +5,7 @@ import { deEmbed } from '../../src/embed-url'
 // opens the visitor's own location. The link is rebuilt from the place name or the coordinates.
 const PB_PLACE =
   'https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d2196.5!2d14.6357!3d63.1792!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1' +
-  '!3m3!1m2!1s0x466fcd5d2b1d0a1f%3A0x2b1c4e5b6a7d8e9f!2sStorgatan+1%2C+831+30+%C3%96stersund!5e0!3m2!1ssv!2sse!4v1700000000000!5m2!1ssv!2sse'
+  '!3m3!1m2!1s0x0000000000000000%3A0x0000000000000000!2sStorgatan+1%2C+831+30+%C3%96stersund!5e0!3m2!1ssv!2sse!4v1700000000000!5m2!1ssv!2sse'
 
 test('turns a pb= embed with a place name into a Maps search for that name', () => {
   expect(deEmbed(PB_PLACE)).toBe('https://www.google.com/maps/search/?api=1&query=Storgatan+1%2C+831+30+%C3%96stersund')

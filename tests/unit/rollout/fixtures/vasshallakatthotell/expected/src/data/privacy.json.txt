@@ -1,6 +1,0 @@
-{
-  "services": [
-    "google-maps"
-  ],
-  "policy_url": "https://vasshallakatthotell.se/gdpr"
-}

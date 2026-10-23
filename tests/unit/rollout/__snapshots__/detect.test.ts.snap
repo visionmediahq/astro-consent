@@ -1,6 +1,475 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
-exports[`detect > pilot a-tak: needs-human, matching the committed snapshot 1`] = `
+exports[`detect > pilot site-1218869363: consent, matching the committed snapshot 1`] = `
+{
+  "alreadyWired": [],
+  "astro": {
+    "major": 6,
+    "output": "server",
+  },
+  "banners": [],
+  "classification": "consent",
+  "config": {
+    "hasIntegrations": false,
+    "hasTailwindVite": true,
+    "isDefineConfigObject": true,
+    "path": "astro.config.ts",
+  },
+  "css": {
+    "daisyuiMajor": 5,
+    "entry": "src/styles/global.css",
+    "primaries": [
+      "#8B4513",
+      "#570df8",
+    ],
+    "tailwindMajor": 4,
+  },
+  "domains": [
+    "site-1218869363.se",
+  ],
+  "fonts": {
+    "csp": [],
+    "locations": [
+      {
+        "end": 1537,
+        "file": "src/layouts/Base.astro",
+        "kind": "preconnect",
+        "start": 1476,
+      },
+      {
+        "end": 1612,
+        "file": "src/layouts/Base.astro",
+        "kind": "preconnect",
+        "start": 1542,
+      },
+      {
+        "end": 1763,
+        "file": "src/layouts/Base.astro",
+        "kind": "link",
+        "start": 1617,
+      },
+    ],
+    "reasons": [],
+    "status": "wire",
+    "url": "https://fonts.googleapis.com/css2?family=Montserrat:wght@100;200;300;400&family=Poppins:wght@300;400&display=swap",
+    "urls": [
+      "https://fonts.googleapis.com/css2?family=Montserrat:wght@100;200;300;400&family=Poppins:wght@300;400&display=swap",
+    ],
+  },
+  "footerless": [],
+  "footers": [
+    {
+      "alignment": "centred",
+      "centred": true,
+      "end": 5538,
+      "file": "src/components/Footer.astro",
+      "kind": "component",
+      "start": 629,
+      "textClass": "text-neutral-content",
+    },
+  ],
+  "iframes": [
+    {
+      "classes": null,
+      "dataPath": "src/data/kontakt.json",
+      "end": 352,
+      "file": "src/components/ContactMap.astro",
+      "height": "100%",
+      "host": "www.google.com",
+      "service": "google-maps",
+      "src": "https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d2150.8471873476244!2d18.0622!3d59.3322!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x0000000000000000%3A0x0000000000000000!2sExempelgatan%2C%20123%2045%20Exempelby!5e0!3m2!1ssv!2sse!4v1234567890123!5m2!1ssv!2sse",
+      "srcKind": "data-file",
+      "start": 112,
+      "style": "border:0;",
+      "title": "Karta till Exempel Café",
+    },
+  ],
+  "inventedMaps": [
+    "https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d2150.8471873476244!2d18.0622!3d59.3322!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x0000000000000000%3A0x0000000000000000!2sExempelgatan%2C%20123%2045%20Exempelby!5e0!3m2!1ssv!2sse!4v1234567890123!5m2!1ssv!2sse",
+  ],
+  "layouts": [
+    {
+      "file": "src/layouts/Base.astro",
+      "footerRef": {
+        "name": "Footer",
+        "start": 4442,
+      },
+      "pages": [
+        "src/pages/404.astro",
+        "src/pages/kontakt.astro",
+      ],
+    },
+  ],
+  "policyPage": null,
+  "reasons": [],
+  "recaptcha": false,
+  "services": [
+    "google-maps",
+  ],
+  "site": "site-1218869363",
+  "trackers": [],
+  "widgets": [],
+}
+`;
+
+exports[`detect > pilot site-1243335919: consent, matching the committed snapshot 1`] = `
+{
+  "alreadyWired": [],
+  "astro": {
+    "major": 6,
+    "output": "server",
+  },
+  "banners": [],
+  "classification": "consent",
+  "config": {
+    "hasIntegrations": true,
+    "hasTailwindVite": true,
+    "isDefineConfigObject": true,
+    "path": "astro.config.ts",
+  },
+  "css": {
+    "daisyuiMajor": 5,
+    "entry": "src/styles/global.css",
+    "primaries": [
+      "#2C5F3A",
+      "#005229",
+      "#0460c7",
+    ],
+    "tailwindMajor": 4,
+  },
+  "domains": [
+    "site-1243335919.se",
+  ],
+  "fonts": {
+    "csp": [],
+    "locations": [
+      {
+        "end": 1442,
+        "file": "src/layouts/Base.astro",
+        "kind": "preconnect",
+        "start": 1381,
+      },
+      {
+        "end": 1517,
+        "file": "src/layouts/Base.astro",
+        "kind": "preconnect",
+        "start": 1447,
+      },
+      {
+        "end": 1666,
+        "file": "src/layouts/Base.astro",
+        "kind": "link",
+        "start": 1522,
+      },
+    ],
+    "reasons": [],
+    "status": "wire",
+    "url": "https://fonts.googleapis.com/css2?family=Raleway:wght@400;500;600;700;800&family=Lato:wght@400;700&display=swap",
+    "urls": [
+      "https://fonts.googleapis.com/css2?family=Raleway:wght@400;500;600;700;800&family=Lato:wght@400;700&display=swap",
+    ],
+  },
+  "footerless": [
+    "src/pages/404.astro",
+    "src/pages/index.astro",
+  ],
+  "footers": [
+    {
+      "alignment": "unknown",
+      "centred": false,
+      "end": 1802,
+      "file": "src/components/FooterSag.astro",
+      "kind": "component",
+      "start": 47,
+      "textClass": null,
+    },
+    {
+      "alignment": "unknown",
+      "centred": false,
+      "end": 2622,
+      "file": "src/components/FooterTra.astro",
+      "kind": "component",
+      "start": 107,
+      "textClass": null,
+    },
+  ],
+  "iframes": [
+    {
+      "callSites": [
+        {
+          "file": "src/pages/kontakt-sag.astro",
+          "src": "https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d2116.3748!2d18.0633!3d59.3333!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x0000000000000000%3A0x0000000000000000!2sExempelv%C3%A4gen+2%2C+123+46+Exempelby!5e0!3m2!1ssv!2sse!4v1700000000000!5m2!1ssv!2sse",
+        },
+        {
+          "file": "src/pages/kontakt.astro",
+          "src": "https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d2127.8!2d18.1!3d59.3!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x0%3A0x0!2sExempel+Tr%C3%A4+AB!5e0!3m2!1ssv!2sse!4v1700000000000!5m2!1ssv!2sse",
+        },
+      ],
+      "classes": null,
+      "end": 2132,
+      "file": "src/components/ContactFormSection.astro",
+      "height": "320",
+      "host": "www.google.com",
+      "service": "google-maps",
+      "src": null,
+      "srcKind": "expression",
+      "start": 1305,
+      "style": "border:0; display:block;",
+      "title": "{isSag ? 'Karta till Exempel Såg AB' : 'Karta till Exempel Trä AB'}",
+    },
+  ],
+  "inventedMaps": [
+    "https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d2116.3748!2d18.0633!3d59.3333!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x0000000000000000%3A0x0000000000000000!2sExempelv%C3%A4gen+2%2C+123+46+Exempelby!5e0!3m2!1ssv!2sse!4v1700000000000!5m2!1ssv!2sse",
+    "https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d2127.8!2d18.1!3d59.3!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x0%3A0x0!2sExempel+Tr%C3%A4+AB!5e0!3m2!1ssv!2sse!4v1700000000000!5m2!1ssv!2sse",
+  ],
+  "layouts": [
+    {
+      "file": "src/layouts/Base.astro",
+      "footerRef": {
+        "name": "VisionFooter",
+        "start": 4875,
+      },
+      "pages": [
+        "src/pages/404.astro",
+        "src/pages/index.astro",
+        "src/pages/kontakt-sag.astro",
+        "src/pages/kontakt.astro",
+      ],
+    },
+  ],
+  "policyPage": null,
+  "reasons": [],
+  "recaptcha": true,
+  "services": [
+    "google-maps",
+  ],
+  "site": "site-1243335919",
+  "trackers": [],
+  "widgets": [],
+}
+`;
+
+exports[`detect > pilot site-1243511314: consent, matching the committed snapshot 1`] = `
+{
+  "alreadyWired": [],
+  "astro": {
+    "major": 6,
+    "output": "server",
+  },
+  "banners": [],
+  "classification": "consent",
+  "config": {
+    "hasIntegrations": true,
+    "hasTailwindVite": true,
+    "isDefineConfigObject": true,
+    "path": "astro.config.ts",
+  },
+  "css": {
+    "daisyuiMajor": 5,
+    "entry": "src/styles/global.css",
+    "primaries": [
+      "#eb5e28",
+    ],
+    "tailwindMajor": 4,
+  },
+  "domains": [
+    "site-1243511314.se",
+  ],
+  "fonts": {
+    "csp": [],
+    "locations": [
+      {
+        "end": 1853,
+        "file": "src/layouts/Base.astro",
+        "kind": "preconnect",
+        "start": 1792,
+      },
+      {
+        "end": 1928,
+        "file": "src/layouts/Base.astro",
+        "kind": "preconnect",
+        "start": 1858,
+      },
+      {
+        "end": 2103,
+        "file": "src/layouts/Base.astro",
+        "kind": "link",
+        "start": 1933,
+      },
+    ],
+    "reasons": [],
+    "status": "wire",
+    "url": "https://fonts.googleapis.com/css2?family=Gloock&family=Raleway:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap",
+    "urls": [
+      "https://fonts.googleapis.com/css2?family=Gloock&family=Raleway:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap",
+    ],
+  },
+  "footerless": [
+    "src/pages/404.astro",
+  ],
+  "footers": [
+    {
+      "alignment": "unknown",
+      "centred": false,
+      "end": 2561,
+      "file": "src/components/Footer.astro",
+      "kind": "component",
+      "start": 55,
+      "textClass": null,
+    },
+  ],
+  "iframes": [
+    {
+      "classes": null,
+      "end": 4260,
+      "file": "src/components/Contact.astro",
+      "height": "100%",
+      "host": "www.google.com",
+      "service": "google-maps",
+      "src": "https://www.google.com/maps?q=Exempelgatan+1%2C+123+45+Exempelstad&output=embed",
+      "srcKind": "literal",
+      "start": 3827,
+      "style": "border:0; display:block; width:100%; min-height:480px;",
+      "title": "Karta till Exempel tapetserare, Exempelgatan 1, Exempelstad",
+    },
+  ],
+  "inventedMaps": [],
+  "layouts": [
+    {
+      "file": "src/layouts/Base.astro",
+      "footerRef": null,
+      "pages": [
+        "src/pages/404.astro",
+        "src/pages/index.astro",
+      ],
+    },
+  ],
+  "policyPage": null,
+  "reasons": [],
+  "recaptcha": false,
+  "services": [
+    "google-maps",
+  ],
+  "site": "site-1243511314",
+  "trackers": [],
+  "widgets": [],
+}
+`;
+
+exports[`detect > pilot site-1245311266: consent, matching the committed snapshot 1`] = `
+{
+  "alreadyWired": [],
+  "astro": {
+    "major": 7,
+    "output": "server",
+  },
+  "banners": [],
+  "classification": "consent",
+  "config": {
+    "hasIntegrations": true,
+    "hasTailwindVite": true,
+    "isDefineConfigObject": true,
+    "path": "astro.config.ts",
+  },
+  "css": {
+    "daisyuiMajor": 5,
+    "entry": "src/styles/global.css",
+    "primaries": [
+      "#2aa5a5",
+    ],
+    "tailwindMajor": 4,
+  },
+  "domains": [
+    "site-1245311266.se",
+  ],
+  "fonts": {
+    "csp": [],
+    "locations": [
+      {
+        "end": 1418,
+        "file": "src/layouts/Base.astro",
+        "kind": "preconnect",
+        "start": 1357,
+      },
+      {
+        "end": 1493,
+        "file": "src/layouts/Base.astro",
+        "kind": "preconnect",
+        "start": 1423,
+      },
+      {
+        "end": 1725,
+        "file": "src/layouts/Base.astro",
+        "kind": "link",
+        "start": 1498,
+      },
+    ],
+    "reasons": [],
+    "status": "wire",
+    "url": "https://fonts.googleapis.com/css2?family=Eczar:wght@400;600;700;800&family=Literata:opsz,wght@7..72,400;7..72,500;7..72,700;7..72,800&family=Nunito+Sans:wght@300;400;500;600;700;800&display=swap",
+    "urls": [
+      "https://fonts.googleapis.com/css2?family=Eczar:wght@400;600;700;800&family=Literata:opsz,wght@7..72,400;7..72,500;7..72,700;7..72,800&family=Nunito+Sans:wght@300;400;500;600;700;800&display=swap",
+    ],
+  },
+  "footerless": [
+    "src/pages/404.astro",
+  ],
+  "footers": [
+    {
+      "alignment": "left",
+      "centred": false,
+      "end": 7437,
+      "file": "src/components/Footer.astro",
+      "kind": "component",
+      "start": 100,
+      "textClass": null,
+    },
+  ],
+  "iframes": [
+    {
+      "classes": null,
+      "end": 4456,
+      "file": "src/components/ContactSection.astro",
+      "height": "100%",
+      "host": "maps.google.com",
+      "service": "google-maps",
+      "src": "https://maps.google.com/maps?q=59.329300,18.068600&hl=sv&z=15&output=embed",
+      "srcKind": "literal",
+      "start": 4081,
+      "style": "border:0;",
+      "title": "Karta till Exempel Katthotell i Exempelby",
+    },
+  ],
+  "inventedMaps": [],
+  "layouts": [
+    {
+      "file": "src/layouts/Base.astro",
+      "footerRef": {
+        "name": "VisionFooter",
+        "start": 4475,
+      },
+      "pages": [
+        "src/pages/404.astro",
+        "src/pages/gdpr.astro",
+        "src/pages/hitta-hit-kontakt.astro",
+        "src/pages/index.astro",
+        "src/pages/om-oss.astro",
+      ],
+    },
+  ],
+  "policyPage": "/gdpr",
+  "reasons": [],
+  "recaptcha": true,
+  "services": [
+    "google-maps",
+  ],
+  "site": "site-1245311266",
+  "trackers": [],
+  "widgets": [],
+}
+`;
+
+exports[`detect > pilot site-1271984151: needs-human, matching the committed snapshot 1`] = `
 {
   "alreadyWired": [],
   "astro": {
@@ -27,7 +496,7 @@ exports[`detect > pilot a-tak: needs-human, matching the committed snapshot 1`] 
     "tailwindMajor": 4,
   },
   "domains": [
-    "a-tak.se",
+    "site-1271984151.se",
   ],
   "fonts": {
     "csp": [],
@@ -71,7 +540,7 @@ exports[`detect > pilot a-tak: needs-human, matching the committed snapshot 1`] 
     {
       "alignment": "left",
       "centred": false,
-      "end": 3836,
+      "end": 3850,
       "file": "src/components/Footer.astro",
       "kind": "component",
       "start": 110,
@@ -81,20 +550,20 @@ exports[`detect > pilot a-tak: needs-human, matching the committed snapshot 1`] 
   "iframes": [
     {
       "classes": null,
-      "end": 1380,
+      "end": 1368,
       "file": "src/components/KontaktMap.astro",
       "height": "420",
       "host": "www.google.com",
       "service": "google-maps",
       "src": null,
       "srcKind": "unresolved",
-      "start": 1033,
+      "start": 1027,
       "style": "border:0; display:none; position:absolute; inset:0;",
-      "title": "Karta – Annebergsvägens Tak AB, Varberg",
+      "title": "Karta – Exempel Tak AB, Exempelby",
     },
   ],
   "inventedMaps": [
-    "https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d2196.5!2d12.2558!3d57.1058!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x465169e2e2e2e2e3%3A0x0!2sAnnebergsv%C3%A4gen+12%2C+432+48+Varberg!5e0!3m2!1ssv!2sse!4v1700000000000!5m2!1ssv!2sse",
+    "https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d2196.5!2d18.0611!3d59.3311!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x000000e2e2e2e2e3%3A0x0!2sExempelgatan+1%2C+123+45+Exempelby!5e0!3m2!1ssv!2sse!4v1700000000000!5m2!1ssv!2sse",
   ],
   "layouts": [
     {
@@ -117,21 +586,21 @@ exports[`detect > pilot a-tak: needs-human, matching the committed snapshot 1`] 
   ],
   "recaptcha": true,
   "services": [],
-  "site": "a-tak",
+  "site": "site-1271984151",
   "trackers": [],
   "widgets": [],
 }
 `;
 
-exports[`detect > pilot aspomad: consent, matching the committed snapshot 1`] = `
+exports[`detect > pilot site-1277834673: needs-human, matching the committed snapshot 1`] = `
 {
   "alreadyWired": [],
   "astro": {
-    "major": 6,
+    "major": 7,
     "output": "server",
   },
   "banners": [],
-  "classification": "consent",
+  "classification": "needs-human",
   "config": {
     "hasIntegrations": false,
     "hasTailwindVite": true,
@@ -142,152 +611,47 @@ exports[`detect > pilot aspomad: consent, matching the committed snapshot 1`] = 
     "daisyuiMajor": 5,
     "entry": "src/styles/global.css",
     "primaries": [
-      "#8B4513",
       "#570df8",
+      "#a05200",
     ],
     "tailwindMajor": 4,
   },
   "domains": [
-    "aspomad.se",
+    "site-1277834673.se",
   ],
   "fonts": {
     "csp": [],
     "locations": [
       {
-        "end": 1537,
+        "end": 2034,
         "file": "src/layouts/Base.astro",
         "kind": "preconnect",
-        "start": 1476,
+        "start": 1973,
       },
       {
-        "end": 1612,
+        "end": 2109,
         "file": "src/layouts/Base.astro",
         "kind": "preconnect",
-        "start": 1542,
+        "start": 2039,
       },
       {
-        "end": 1763,
+        "end": 2357,
         "file": "src/layouts/Base.astro",
-        "kind": "link",
-        "start": 1617,
+        "kind": "preload",
+        "start": 2114,
+      },
+      {
+        "end": 2554,
+        "file": "src/layouts/Base.astro",
+        "kind": "noscript",
+        "start": 2362,
       },
     ],
     "reasons": [],
     "status": "wire",
-    "url": "https://fonts.googleapis.com/css2?family=Montserrat:wght@100;200;300;400&family=Poppins:wght@300;400&display=swap",
+    "url": "https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700;800&family=Nunito:wght@400;500;600;700&display=swap",
     "urls": [
-      "https://fonts.googleapis.com/css2?family=Montserrat:wght@100;200;300;400&family=Poppins:wght@300;400&display=swap",
-    ],
-  },
-  "footerless": [],
-  "footers": [
-    {
-      "alignment": "centred",
-      "centred": true,
-      "end": 5545,
-      "file": "src/components/Footer.astro",
-      "kind": "component",
-      "start": 631,
-      "textClass": "text-neutral-content",
-    },
-  ],
-  "iframes": [
-    {
-      "classes": null,
-      "dataPath": "src/data/kontakt.json",
-      "end": 359,
-      "file": "src/components/ContactMap.astro",
-      "height": "100%",
-      "host": "www.google.com",
-      "service": "google-maps",
-      "src": "https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d2150.8471873476244!2d15.587845!3d56.167886!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x4657d0b4c8c8c8c8%3A0x4c8c8c8c8c8c8c8c!2sMadviksv%C3%A4gen%2C%20373%2064%20Drottningsk%C3%A4r!5e0!3m2!1ssv!2sse!4v1234567890123!5m2!1ssv!2sse",
-      "srcKind": "data-file",
-      "start": 112,
-      "style": "border:0;",
-      "title": "Karta till Aspö Mad Vin & Café",
-    },
-  ],
-  "inventedMaps": [
-    "https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d2150.8471873476244!2d15.587845!3d56.167886!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x4657d0b4c8c8c8c8%3A0x4c8c8c8c8c8c8c8c!2sMadviksv%C3%A4gen%2C%20373%2064%20Drottningsk%C3%A4r!5e0!3m2!1ssv!2sse!4v1234567890123!5m2!1ssv!2sse",
-  ],
-  "layouts": [
-    {
-      "file": "src/layouts/Base.astro",
-      "footerRef": {
-        "name": "Footer",
-        "start": 4442,
-      },
-      "pages": [
-        "src/pages/404.astro",
-        "src/pages/kontakt.astro",
-      ],
-    },
-  ],
-  "policyPage": null,
-  "reasons": [],
-  "recaptcha": false,
-  "services": [
-    "google-maps",
-  ],
-  "site": "aspomad",
-  "trackers": [],
-  "widgets": [],
-}
-`;
-
-exports[`detect > pilot domeijstapetserarverkstad: consent, matching the committed snapshot 1`] = `
-{
-  "alreadyWired": [],
-  "astro": {
-    "major": 6,
-    "output": "server",
-  },
-  "banners": [],
-  "classification": "consent",
-  "config": {
-    "hasIntegrations": true,
-    "hasTailwindVite": true,
-    "isDefineConfigObject": true,
-    "path": "astro.config.ts",
-  },
-  "css": {
-    "daisyuiMajor": 5,
-    "entry": "src/styles/global.css",
-    "primaries": [
-      "#eb5e28",
-    ],
-    "tailwindMajor": 4,
-  },
-  "domains": [
-    "domeijstapetserarverkstad.se",
-  ],
-  "fonts": {
-    "csp": [],
-    "locations": [
-      {
-        "end": 1873,
-        "file": "src/layouts/Base.astro",
-        "kind": "preconnect",
-        "start": 1812,
-      },
-      {
-        "end": 1948,
-        "file": "src/layouts/Base.astro",
-        "kind": "preconnect",
-        "start": 1878,
-      },
-      {
-        "end": 2123,
-        "file": "src/layouts/Base.astro",
-        "kind": "link",
-        "start": 1953,
-      },
-    ],
-    "reasons": [],
-    "status": "wire",
-    "url": "https://fonts.googleapis.com/css2?family=Gloock&family=Raleway:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap",
-    "urls": [
-      "https://fonts.googleapis.com/css2?family=Gloock&family=Raleway:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap",
+      "https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700;800&family=Nunito:wght@400;500;600;700&display=swap",
     ],
   },
   "footerless": [
@@ -295,54 +659,58 @@ exports[`detect > pilot domeijstapetserarverkstad: consent, matching the committ
   ],
   "footers": [
     {
-      "alignment": "unknown",
-      "centred": false,
-      "end": 2595,
+      "alignment": "centred",
+      "centred": true,
+      "end": 5783,
       "file": "src/components/Footer.astro",
       "kind": "component",
-      "start": 55,
-      "textClass": null,
+      "start": 512,
+      "textClass": "text-white",
     },
   ],
   "iframes": [
     {
       "classes": null,
-      "end": 4303,
-      "file": "src/components/Contact.astro",
-      "height": "100%",
-      "host": "www.google.com",
-      "service": "google-maps",
-      "src": "https://www.google.com/maps?q=%C3%85ngpannegatan+2E%2C+417+05+G%C3%B6teborg&output=embed",
-      "srcKind": "literal",
-      "start": 3855,
-      "style": "border:0; display:block; width:100%; min-height:480px;",
-      "title": "Karta till Domeijs tapetserarverkstad, Ångpannegatan 2E, Göteborg",
+      "end": 3343,
+      "file": "src/pages/kalendrar.astro",
+      "height": "700",
+      "host": "calendar.google.com",
+      "service": "google-calendar",
+      "src": null,
+      "srcKind": "unresolved",
+      "start": 3073,
+      "style": null,
+      "title": "{cal.title}",
     },
   ],
   "inventedMaps": [],
   "layouts": [
     {
       "file": "src/layouts/Base.astro",
-      "footerRef": null,
+      "footerRef": {
+        "name": "VisionFooter",
+        "start": 4980,
+      },
       "pages": [
         "src/pages/404.astro",
         "src/pages/index.astro",
+        "src/pages/kalendrar.astro",
       ],
     },
   ],
   "policyPage": null,
-  "reasons": [],
-  "recaptcha": false,
-  "services": [
-    "google-maps",
+  "reasons": [
+    "unresolved iframe src in src/pages/kalendrar.astro",
   ],
-  "site": "domeijstapetserarverkstad",
+  "recaptcha": false,
+  "services": [],
+  "site": "site-1277834673",
   "trackers": [],
   "widgets": [],
 }
 `;
 
-exports[`detect > pilot munkforstradgardstjanst: notice, matching the committed snapshot 1`] = `
+exports[`detect > pilot site-1286040212: notice, matching the committed snapshot 1`] = `
 {
   "alreadyWired": [],
   "astro": {
@@ -367,7 +735,7 @@ exports[`detect > pilot munkforstradgardstjanst: notice, matching the committed 
     "tailwindMajor": 4,
   },
   "domains": [
-    "munkforstradgardstjanst.se",
+    "site-1286040212.se",
   ],
   "fonts": {
     "csp": [],
@@ -384,7 +752,7 @@ exports[`detect > pilot munkforstradgardstjanst: notice, matching the committed 
     {
       "alignment": "left",
       "centred": false,
-      "end": 5246,
+      "end": 5240,
       "file": "src/components/Footer.astro",
       "kind": "component",
       "start": 116,
@@ -410,375 +778,7 @@ exports[`detect > pilot munkforstradgardstjanst: notice, matching the committed 
   "reasons": [],
   "recaptcha": false,
   "services": [],
-  "site": "munkforstradgardstjanst",
-  "trackers": [],
-  "widgets": [],
-}
-`;
-
-exports[`detect > pilot nhrk: needs-human, matching the committed snapshot 1`] = `
-{
-  "alreadyWired": [],
-  "astro": {
-    "major": 7,
-    "output": "server",
-  },
-  "banners": [],
-  "classification": "needs-human",
-  "config": {
-    "hasIntegrations": false,
-    "hasTailwindVite": true,
-    "isDefineConfigObject": true,
-    "path": "astro.config.ts",
-  },
-  "css": {
-    "daisyuiMajor": 5,
-    "entry": "src/styles/global.css",
-    "primaries": [
-      "#570df8",
-      "#a05200",
-    ],
-    "tailwindMajor": 4,
-  },
-  "domains": [
-    "nhrk.se",
-  ],
-  "fonts": {
-    "csp": [],
-    "locations": [
-      {
-        "end": 2022,
-        "file": "src/layouts/Base.astro",
-        "kind": "preconnect",
-        "start": 1961,
-      },
-      {
-        "end": 2097,
-        "file": "src/layouts/Base.astro",
-        "kind": "preconnect",
-        "start": 2027,
-      },
-      {
-        "end": 2345,
-        "file": "src/layouts/Base.astro",
-        "kind": "preload",
-        "start": 2102,
-      },
-      {
-        "end": 2542,
-        "file": "src/layouts/Base.astro",
-        "kind": "noscript",
-        "start": 2350,
-      },
-    ],
-    "reasons": [],
-    "status": "wire",
-    "url": "https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700;800&family=Nunito:wght@400;500;600;700&display=swap",
-    "urls": [
-      "https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700;800&family=Nunito:wght@400;500;600;700&display=swap",
-    ],
-  },
-  "footerless": [
-    "src/pages/404.astro",
-  ],
-  "footers": [
-    {
-      "alignment": "centred",
-      "centred": true,
-      "end": 5747,
-      "file": "src/components/Footer.astro",
-      "kind": "component",
-      "start": 501,
-      "textClass": "text-white",
-    },
-  ],
-  "iframes": [
-    {
-      "classes": null,
-      "end": 3342,
-      "file": "src/pages/kalendrar.astro",
-      "height": "700",
-      "host": "calendar.google.com",
-      "service": "google-calendar",
-      "src": null,
-      "srcKind": "unresolved",
-      "start": 3072,
-      "style": null,
-      "title": "{cal.title}",
-    },
-  ],
-  "inventedMaps": [],
-  "layouts": [
-    {
-      "file": "src/layouts/Base.astro",
-      "footerRef": {
-        "name": "VisionFooter",
-        "start": 4968,
-      },
-      "pages": [
-        "src/pages/404.astro",
-        "src/pages/index.astro",
-        "src/pages/kalendrar.astro",
-      ],
-    },
-  ],
-  "policyPage": null,
-  "reasons": [
-    "unresolved iframe src in src/pages/kalendrar.astro",
-  ],
-  "recaptcha": false,
-  "services": [],
-  "site": "nhrk",
-  "trackers": [],
-  "widgets": [],
-}
-`;
-
-exports[`detect > pilot traforadling: consent, matching the committed snapshot 1`] = `
-{
-  "alreadyWired": [],
-  "astro": {
-    "major": 6,
-    "output": "server",
-  },
-  "banners": [],
-  "classification": "consent",
-  "config": {
-    "hasIntegrations": true,
-    "hasTailwindVite": true,
-    "isDefineConfigObject": true,
-    "path": "astro.config.ts",
-  },
-  "css": {
-    "daisyuiMajor": 5,
-    "entry": "src/styles/global.css",
-    "primaries": [
-      "#2C5F3A",
-      "#005229",
-      "#0460c7",
-    ],
-    "tailwindMajor": 4,
-  },
-  "domains": [
-    "traforadling.se",
-  ],
-  "fonts": {
-    "csp": [],
-    "locations": [
-      {
-        "end": 1457,
-        "file": "src/layouts/Base.astro",
-        "kind": "preconnect",
-        "start": 1396,
-      },
-      {
-        "end": 1532,
-        "file": "src/layouts/Base.astro",
-        "kind": "preconnect",
-        "start": 1462,
-      },
-      {
-        "end": 1681,
-        "file": "src/layouts/Base.astro",
-        "kind": "link",
-        "start": 1537,
-      },
-    ],
-    "reasons": [],
-    "status": "wire",
-    "url": "https://fonts.googleapis.com/css2?family=Raleway:wght@400;500;600;700;800&family=Lato:wght@400;700&display=swap",
-    "urls": [
-      "https://fonts.googleapis.com/css2?family=Raleway:wght@400;500;600;700;800&family=Lato:wght@400;700&display=swap",
-    ],
-  },
-  "footerless": [
-    "src/pages/404.astro",
-    "src/pages/index.astro",
-  ],
-  "footers": [
-    {
-      "alignment": "unknown",
-      "centred": false,
-      "end": 1865,
-      "file": "src/components/FooterLevene.astro",
-      "kind": "component",
-      "start": 47,
-      "textClass": null,
-    },
-    {
-      "alignment": "unknown",
-      "centred": false,
-      "end": 2656,
-      "file": "src/components/FooterSkaraborg.astro",
-      "kind": "component",
-      "start": 107,
-      "textClass": null,
-    },
-  ],
-  "iframes": [
-    {
-      "callSites": [
-        {
-          "file": "src/pages/kontakt-levene.astro",
-          "src": "https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d2116.3748!2d12.8920!3d58.3268!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x464c19c12a7fc1f1%3A0x1b1c4e5b6a7d8e9f!2sLevene+Furubacken+1%2C+534+93+Stora+Levene!5e0!3m2!1ssv!2sse!4v1700000000000!5m2!1ssv!2sse",
-        },
-        {
-          "file": "src/pages/kontakt.astro",
-          "src": "https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d2127.8!2d14.1!3d58.7!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x0%3A0x0!2sSkaraborgs+Tr%C3%A4f%C3%B6r%C3%A4dling+AB!5e0!3m2!1ssv!2sse!4v1700000000000!5m2!1ssv!2sse",
-        },
-      ],
-      "classes": null,
-      "end": 2209,
-      "file": "src/components/ContactFormSection.astro",
-      "height": "320",
-      "host": "www.google.com",
-      "service": "google-maps",
-      "src": null,
-      "srcKind": "expression",
-      "start": 1340,
-      "style": "border:0; display:block;",
-      "title": "{isLevene ? 'Karta till Levene Såg AB' : 'Karta till Skaraborgs Träförädling AB'}",
-    },
-  ],
-  "inventedMaps": [
-    "https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d2116.3748!2d12.8920!3d58.3268!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x464c19c12a7fc1f1%3A0x1b1c4e5b6a7d8e9f!2sLevene+Furubacken+1%2C+534+93+Stora+Levene!5e0!3m2!1ssv!2sse!4v1700000000000!5m2!1ssv!2sse",
-    "https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d2127.8!2d14.1!3d58.7!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x0%3A0x0!2sSkaraborgs+Tr%C3%A4f%C3%B6r%C3%A4dling+AB!5e0!3m2!1ssv!2sse!4v1700000000000!5m2!1ssv!2sse",
-  ],
-  "layouts": [
-    {
-      "file": "src/layouts/Base.astro",
-      "footerRef": {
-        "name": "VisionFooter",
-        "start": 4904,
-      },
-      "pages": [
-        "src/pages/404.astro",
-        "src/pages/index.astro",
-        "src/pages/kontakt-levene.astro",
-        "src/pages/kontakt.astro",
-      ],
-    },
-  ],
-  "policyPage": null,
-  "reasons": [],
-  "recaptcha": true,
-  "services": [
-    "google-maps",
-  ],
-  "site": "traforadling",
-  "trackers": [],
-  "widgets": [],
-}
-`;
-
-exports[`detect > pilot vasshallakatthotell: consent, matching the committed snapshot 1`] = `
-{
-  "alreadyWired": [],
-  "astro": {
-    "major": 7,
-    "output": "server",
-  },
-  "banners": [],
-  "classification": "consent",
-  "config": {
-    "hasIntegrations": true,
-    "hasTailwindVite": true,
-    "isDefineConfigObject": true,
-    "path": "astro.config.ts",
-  },
-  "css": {
-    "daisyuiMajor": 5,
-    "entry": "src/styles/global.css",
-    "primaries": [
-      "#2aa5a5",
-    ],
-    "tailwindMajor": 4,
-  },
-  "domains": [
-    "vasshallakatthotell.se",
-  ],
-  "fonts": {
-    "csp": [],
-    "locations": [
-      {
-        "end": 1418,
-        "file": "src/layouts/Base.astro",
-        "kind": "preconnect",
-        "start": 1357,
-      },
-      {
-        "end": 1493,
-        "file": "src/layouts/Base.astro",
-        "kind": "preconnect",
-        "start": 1423,
-      },
-      {
-        "end": 1725,
-        "file": "src/layouts/Base.astro",
-        "kind": "link",
-        "start": 1498,
-      },
-    ],
-    "reasons": [],
-    "status": "wire",
-    "url": "https://fonts.googleapis.com/css2?family=Eczar:wght@400;600;700;800&family=Literata:opsz,wght@7..72,400;7..72,500;7..72,700;7..72,800&family=Nunito+Sans:wght@300;400;500;600;700;800&display=swap",
-    "urls": [
-      "https://fonts.googleapis.com/css2?family=Eczar:wght@400;600;700;800&family=Literata:opsz,wght@7..72,400;7..72,500;7..72,700;7..72,800&family=Nunito+Sans:wght@300;400;500;600;700;800&display=swap",
-    ],
-  },
-  "footerless": [
-    "src/pages/404.astro",
-  ],
-  "footers": [
-    {
-      "alignment": "left",
-      "centred": false,
-      "end": 7468,
-      "file": "src/components/Footer.astro",
-      "kind": "component",
-      "start": 100,
-      "textClass": null,
-    },
-  ],
-  "iframes": [
-    {
-      "classes": null,
-      "end": 4474,
-      "file": "src/components/ContactSection.astro",
-      "height": "100%",
-      "host": "maps.google.com",
-      "service": "google-maps",
-      "src": "https://maps.google.com/maps?q=57.698734,13.042359&hl=sv&z=15&output=embed",
-      "srcKind": "literal",
-      "start": 4096,
-      "style": "border:0;",
-      "title": "Karta till Vasshalla Katthotell i Gånghester",
-    },
-  ],
-  "inventedMaps": [],
-  "layouts": [
-    {
-      "file": "src/layouts/Base.astro",
-      "footerRef": {
-        "name": "VisionFooter",
-        "start": 4475,
-      },
-      "pages": [
-        "src/pages/404.astro",
-        "src/pages/gdpr.astro",
-        "src/pages/hitta-hit-kontakt.astro",
-        "src/pages/index.astro",
-        "src/pages/om-oss.astro",
-      ],
-    },
-  ],
-  "policyPage": "/gdpr",
-  "reasons": [],
-  "recaptcha": true,
-  "services": [
-    "google-maps",
-  ],
-  "site": "vasshallakatthotell",
+  "site": "site-1286040212",
   "trackers": [],
   "widgets": [],
 }

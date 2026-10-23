@@ -286,13 +286,13 @@ export function detectStructure(files: SiteFiles): DetectedStructure {
     return footers > 1 ? [{ page, footers }] : []
   })
 
-  // #61 (schloetter): the glob order put `/en/gdpr` before `/gdpr`. A route under another language's
+  // #61 (site 1369693991): the glob order put `/en/gdpr` before `/gdpr`. A route under another language's
   // prefix (`/en/`, `/de/`…) comes last; then a cookie page or a slug with the word only later on
   // (#65: `/om-oss/integritetspolicy` beats `/cookies`); then fewer segments, the word, the shorter path.
   const foreign = (route: string): number => (FOREIGN_PREFIX.test(route) ? 1 : 0)
   const depth = (route: string): number => route.split('/').length
   // A Swedish privacy word first, then gdpr, then English, then a cookie page, then a slug that only
-  // has the word later on (kajsa-landgren: kopvillkor-och-integritetspolicy-gdpr).
+  // has the word later on (site 1280190874: kopvillkor-och-integritetspolicy-gdpr).
   const rank = (route: string): number => {
     const leaf = leafOf(route)
     if (!POLICY.test(leaf)) return 4

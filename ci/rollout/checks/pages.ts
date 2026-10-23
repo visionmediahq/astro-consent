@@ -15,7 +15,7 @@ export const isCmsAdminRoute = (path: string): boolean => path === '/admin' || p
 
 /**
  * The pages step 8 (fonts) checks, verify and live: a CMS admin shell is left out, since its editor
- * (Sveltia CMS from unpkg on lj-trim) loads Google Fonts of its own for the editor UI, which visitors
+ * (Sveltia CMS from unpkg on site 1276703313) loads Google Fonts of its own for the editor UI, which visitors
  * never get. `lines` names each page left out, for the evidence.
  */
 export function fontsCheckPaths(paths: string[]): { paths: string[]; lines: string[] } {

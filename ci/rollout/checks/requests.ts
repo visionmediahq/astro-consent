@@ -139,7 +139,7 @@ export async function freshPage(
  */
 /**
  * Opens `url` for a check: the load event, then up to 10 s for networkidle. A looping background
- * video (aspokarlsson), polling or a websocket keeps the network busy for as long as the page is
+ * video (site 1249159919), polling or a websocket keeps the network busy for as long as the page is
  * open, so networkidle alone would time out; blocked requests are recorded whenever they fire.
  */
 export async function gotoPage(page: Page, url: string): Promise<void> {

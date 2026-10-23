@@ -1,0 +1,42 @@
+---
+import Base from '../layouts/Base.astro';
+import Header from '../components/Header.astro';
+import Footer from '../components/Footer.astro';
+import HomeHero from '../components/HomeHero.astro';
+import HomeServices from '../components/HomeServices.astro';
+import HomeAbout from '../components/HomeAbout.astro';
+import ContactForm from '../components/ContactForm.astro';
+
+export const prerender = true;
+---
+
+<Base
+  title="Exempel Trädgård – Butik, Verkstad & Skötsel"
+  description="Exempel Trädgård erbjuder butik för skog och trädgård, fastighetsskötsel samt auktoriserad verkstad. Besök oss i Exempelby, vardagar 09–18."
+  canonical="https://site-1286040212.se/"
+  ogImage="/og-image.jpg"
+  schema={{
+    name: "Exempel Trädgård",
+    url: "https://site-1286040212.se/",
+    telephone: "010-123 45 69",
+    email: "placeholder@example.invalid",
+    address: {
+      streetAddress: "Exempelgatan 1",
+      addressLocality: "Exempelby",
+      postalCode: "123 45",
+      addressCountry: "SE",
+    },
+    openingHours: ["Mo-Fr 09:00-18:00"],
+    description: "Exempel Trädgård erbjuder butik för skog och trädgård, fastighetsskötsel samt auktoriserad verkstad i Exempelby.",
+    image: "/images/logo_red_svart-f08874b4.webp",
+  }}
+>
+  <Header />
+  <main id="main-content">
+    <HomeHero />
+    <HomeServices />
+    <HomeAbout />
+    <ContactForm />
+  </main>
+  <Footer />
+</Base>

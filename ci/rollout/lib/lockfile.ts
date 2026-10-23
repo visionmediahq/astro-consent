@@ -34,13 +34,13 @@ export const ALLOWLIST: readonly AllowRule[] = [
     name: 'lightningcss',
     platformBuilds: true,
     changes: ['dev'],
-    why: 'npm may drop the dev flag from lightningcss and its platform builds (seen on munkforstradgardstjanst in the pilot)',
+    why: 'npm may drop the dev flag from lightningcss and its platform builds (seen on a pilot site)',
   },
 ]
 
 /**
  * A package the banner needs that a site may not have: added at `major` where main had none of it,
- * it is part of the wiring (faluridklubb had no daisyUI). An install on main, or another major, is not.
+ * it is part of the wiring (site 1243331215 had no daisyUI). An install on main, or another major, is not.
  */
 export const REQUIRED = {
   name: 'daisyui',
@@ -264,7 +264,7 @@ const npmCompare = (a: string, b: string): number => a.localeCompare(b, 'en')
  * marked `optional` (or `devOptional`) on main, and no package on main outside that set names it in
  * `dependencies`, `optionalDependencies`, `devDependencies` or a non-optional peer, so a package and
  * the platform builds only it requires go together. Vite 8 sites still had esbuild 0.28.2 and its 26
- * @esbuild/* builds on main, which vite lists only as an optional peer (trippolo, midvatten): `npm ci`
+ * @esbuild/* builds on main, which vite lists only as an optional peer (site 1240501458, site 1219936814): `npm ci`
  * with them kept installs main's tree. Any other removal is left for verify step 1.
  *
  * Returns the new lockfile text (in the file's own indent and line ending, the kept entries' values

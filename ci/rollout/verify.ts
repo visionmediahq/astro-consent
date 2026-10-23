@@ -648,13 +648,13 @@ export async function verify(dir: string, report: Report, opts: VerifyOptions = 
       const rows = await c.clip(branch!.url, [...new Set(['/', ...mapPages])])
       // A page that already scrolls sideways on main (a site's own wide hamburger) is not the
       // banner's doing: main is measured for those paths, and only a wider branch fails.
-      // Site-wide styles (daisyUI's scrollbar and :root background, faluridklubb) are compared with
+      // Site-wide styles (daisyUI's scrollbar and :root background, site 1243331215) are compared with
       // main too: a difference shows on every page, and the screenshots cannot show a scrollbar.
       const mainW = new Map<string, number>()
       const wide = rows.filter((r) => r.kind === 'page' && r.clipped)
       let rootDiff: string[] | null = null
       const mainLines: string[] = []
-      // #46: each placeholder must be about as tall as the iframe it replaced (knutssonsbil).
+      // #46: each placeholder must be about as tall as the iframe it replaced (site 1228881255).
       let heights: ReturnType<typeof compareEmbedHeights> | null = null
       if (!demo) {
         const main = await mainPreview('5 clip', mainLines)

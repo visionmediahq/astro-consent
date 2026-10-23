@@ -98,7 +98,7 @@ describe('parseAstro', () => {
   })
 
   // compiler-rs rejects an HTML comment between `(` and the element in a `{…}` conditional; Astro's
-  // own compiler builds it (anab, fonsterdekor, nnf).
+  // own compiler builds it (site 1229678815, site 1232876997, site 1249028649).
   const CONDITIONAL = '{wide ? (\n  <!-- wide -->\n  <iframe src="https://maps.google.com/maps?q=a&output=embed" title="a"></iframe>\n) : (\n  <!-- narrow -->\n  <p>x</p>\n)}\n'
 
   test('an HTML comment inside a {…} conditional parses, offsets kept', () => {
@@ -122,7 +122,7 @@ describe('parseAstro', () => {
     expect(elements(parseAstro(text).root, 'script')).toHaveLength(1)
   })
 
-  test('an escaped quote inside an attribute still throws (byggk, bringekonomi)', () => {
+  test('an escaped quote inside an attribute still throws', () => {
     expect(() => parseAstro('<div style="background: url(\\"data:image/svg+xml,%3Csvg xmlns=\\"http://www.w3.org/2000/svg\\"%3E%3C/svg%3E\\")"></div>\n')).toThrow(/Astro parse error/)
   })
 })

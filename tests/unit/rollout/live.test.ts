@@ -29,7 +29,7 @@ function siteDir(
   const dir = mkdtempSync(join(tmpdir(), 'live-'))
   dirs.push(dir)
   mkdirSync(join(dir, '.rollout'), { recursive: true })
-  const report: Report = { ...DEMO, site: opts.site ?? 'nhrk', domains: opts.domains ?? ['nhrk.se'], classification: 'consent' }
+  const report: Report = { ...DEMO, site: opts.site ?? 'site-1277834673', domains: opts.domains ?? ['site-1277834673.se'], classification: 'consent' }
   const { services: _s, widgets: _w, ...old } = report
   writeFileSync(join(dir, '.rollout/report.json'), JSON.stringify(opts.oldReport ? { ...old, classification: 'maps' } : report))
   if (opts.baseline !== null) writeFileSync(join(dir, '.rollout/live-baseline.txt'), opts.baseline ?? '')
@@ -44,14 +44,14 @@ function siteDir(
 const app = (uuid: string, fqdns: string[], autoDeploy: boolean, over: Partial<App> = {}) => ({
   uuid,
   name: uuid,
-  repo: 'nhrk',
+  repo: 'site-1277834673',
   branch: 'main',
   fqdns,
   autoDeploy,
   lastDeployed: autoDeploy ? MAIN : 'e'.repeat(40),
   ...over,
 })
-const NHRK: RecordedApps = { head: MAIN, apps: [app('web', ['nhrk.se', 'www.nhrk.se'], true), app('cms', ['nhrk.vmedia.se'], false)] }
+const CMS_SITE: RecordedApps = { head: MAIN, apps: [app('web', ['site-1277834673.se', 'www.site-1277834673.se'], true), app('cms', ['site-1277834673.vmedia.se'], false)] }
 
 const req = (path: string, over: Partial<RequestResult> = {}): RequestResult => ({
   path,
@@ -110,11 +110,11 @@ function fakeGh(issues: { title: string; url: string }[] = []) {
   const exec: Exec = async (cmd, args) => {
     calls.push([cmd, ...args])
     if (cmd === 'gh' && args[0] === 'issue' && args[1] === 'list') return { code: 0, out: JSON.stringify(issues) }
-    if (cmd === 'gh' && args[0] === 'issue' && args[1] === 'create') return { code: 0, out: 'https://github.com/visionmediahq/nhrk/issues/99\n' }
+    if (cmd === 'gh' && args[0] === 'issue' && args[1] === 'create') return { code: 0, out: 'https://github.com/visionmediahq/site-1277834673/issues/99\n' }
     const line = [cmd, ...args].join(' ')
     if (line === 'git fetch origin main') return { code: 0, out: '' }
     if (line === 'git rev-parse origin/main') return { code: 0, out: `${MAIN}\n` }
-    if (line === 'git remote get-url origin') return { code: 0, out: 'git@github.com:visionmediahq/nhrk.git\n' }
+    if (line === 'git remote get-url origin') return { code: 0, out: 'git@github.com:visionmediahq/site-1277834673.git\n' }
     if (line === 'git rev-parse --abbrev-ref HEAD') return { code: 0, out: 'consent-banner\n' }
     return { code: 1, out: `unexpected ${cmd} ${args.join(' ')}` }
   }
@@ -149,41 +149,41 @@ function deps(
 describe('baseline encoding', () => {
   test('one error per line, the domain\'s host as a placeholder, newlines kept', () => {
     const text = encodeBaseline([
-      { host: 'nhrk.se', errors: ['Failed to load https://nhrk.se/x.js', 'Error: a\nb'] },
-      { host: 'www.nhrk.se', errors: ['Failed to load https://www.nhrk.se/x.js'] },
+      { host: 'site-1277834673.se', errors: ['Failed to load https://site-1277834673.se/x.js', 'Error: a\nb'] },
+      { host: 'www.site-1277834673.se', errors: ['Failed to load https://www.site-1277834673.se/x.js'] },
     ])
     expect(text.trimEnd().split('\n')).toHaveLength(2)
-    expect(decodeBaseline(text, 'www.nhrk.se')).toEqual(new Set(['Failed to load https://www.nhrk.se/x.js', 'Error: a\nb']))
+    expect(decodeBaseline(text, 'www.site-1277834673.se')).toEqual(new Set(['Failed to load https://www.site-1277834673.se/x.js', 'Error: a\nb']))
   })
 })
 
 describe('live baseline', () => {
   test('a report stored before services and widgets (classification maps) is read without error', async () => {
-    const dir = siteDir({ baseline: null, domains: ['nhrk.se'], oldReport: true })
+    const dir = siteDir({ baseline: null, domains: ['site-1277834673.se'], oldReport: true })
     const { checks } = fakeChecks([(base, p) => p.map((x) => req(x, { banner: false, ok: false, errors: [`Failed to load ${base}/a.js`] }))])
     const r = await live(dir, 'baseline', undefined, { deps: deps({ checks }).deps })
     expect(r.status).toBe('red')
   })
 
   test('writes the console baseline and returns red when the live site has no banner', async () => {
-    const dir = siteDir({ baseline: null, domains: ['nhrk.se'] })
+    const dir = siteDir({ baseline: null, domains: ['site-1277834673.se'] })
     const { checks, calls } = fakeChecks([(base, p) => p.map((x) => req(x, { banner: false, banners: 0, ok: false, errors: [`Failed to load ${base}/a.js`] }))])
     const d = deps({ checks })
     const r = await live(dir, 'baseline', undefined, { deps: d.deps })
     expect(r.status).toBe('red')
     expect(readFileSync(join(dir, '.rollout/live-baseline.txt'), 'utf8')).toBe('Failed to load https://{host}/a.js\n')
-    expect(calls.filter((c) => c.what === 'requests').map((c) => c.base)).toEqual(['https://nhrk.se'])
+    expect(calls.filter((c) => c.what === 'requests').map((c) => c.base)).toEqual(['https://site-1277834673.se'])
     expect(calls.some((c) => c.what === 'consentPaths')).toBe(false)
     expect(d.sleeps).toEqual([])
   })
 
   test('finding 5 (Ruling 37): baselines report.domains and every host of the Coolify apps that follow main, and records them', async () => {
-    const dir = siteDir({ baseline: null, domains: ['nhrk.se'] })
+    const dir = siteDir({ baseline: null, domains: ['site-1277834673.se'] })
     const { checks, calls } = fakeChecks([(base, p) => p.map((x) => req(x, { banner: false, ok: false, errors: [`Failed to load ${base}/a.js`] }))])
     const apps: App[] = [
-      { uuid: 'web', name: 'Website', repo: 'nhrk', branch: 'main', fqdns: ['nhrk.se', 'www.nhrk.se'], autoDeploy: true },
-      { uuid: 'cms', name: 'CMS', repo: 'nhrk', branch: 'main', fqdns: ['nhrk.vmedia.se'], autoDeploy: true },
-      { uuid: 'stg', name: 'Staging', repo: 'nhrk', branch: 'staging', fqdns: ['stg.nhrk.se'], autoDeploy: true },
+      { uuid: 'web', name: 'Website', repo: 'site-1277834673', branch: 'main', fqdns: ['site-1277834673.se', 'www.site-1277834673.se'], autoDeploy: true },
+      { uuid: 'cms', name: 'CMS', repo: 'site-1277834673', branch: 'main', fqdns: ['site-1277834673.vmedia.se'], autoDeploy: true },
+      { uuid: 'stg', name: 'Staging', repo: 'site-1277834673', branch: 'staging', fqdns: ['stg.site-1277834673.se'], autoDeploy: true },
       { uuid: 'other', name: 'Other', repo: 'annan', branch: 'main', fqdns: ['annan.se'], autoDeploy: true },
     ]
     const deployments: Record<string, Deployment[]> = {
@@ -195,11 +195,11 @@ describe('live baseline', () => {
     const d = deps({ checks, listApps: async () => apps, deployments: async (uuid) => deployments[uuid] ?? [] })
     const r = await live(dir, 'baseline', undefined, { deps: d.deps })
     expect(r.status).toBe('red')
-    expect(calls.filter((c) => c.what === 'requests').map((c) => c.base)).toEqual(['https://nhrk.se', 'https://www.nhrk.se'])
+    expect(calls.filter((c) => c.what === 'requests').map((c) => c.base)).toEqual(['https://site-1277834673.se', 'https://www.site-1277834673.se'])
     expect(JSON.parse(readFileSync(join(dir, '.rollout/live-baseline-hosts.json'), 'utf8'))).toEqual({
       head: MAIN,
-      hosts: ['nhrk.se', 'www.nhrk.se'],
-      apps: [{ uuid: 'web', name: 'Website', fqdns: ['nhrk.se', 'www.nhrk.se'] }],
+      hosts: ['site-1277834673.se', 'www.site-1277834673.se'],
+      apps: [{ uuid: 'web', name: 'Website', fqdns: ['site-1277834673.se', 'www.site-1277834673.se'] }],
     })
     expect(readFileSync(join(dir, '.rollout/live-baseline.txt'), 'utf8')).toBe('Failed to load https://{host}/a.js\n')
   })
@@ -250,24 +250,24 @@ describe('live baseline', () => {
 
 describe('live post-merge', () => {
   test('CASE non-autoDeploy app → issue opened and its domains skipped; only following apps are waited for and checked', async () => {
-    const dir = siteDir({ apps: NHRK, baseline: 'Failed to load https://{host}/a.js\n' })
+    const dir = siteDir({ apps: CMS_SITE, baseline: 'Failed to load https://{host}/a.js\n' })
     const { checks, calls } = fakeChecks()
     const gh = fakeGh()
     const d = deps({ checks, exec: gh.exec })
     const r = await live(dir, 'post-merge', SHA, { deps: d.deps })
     expect(r.status).toBe('pass')
     expect(d.waited).toEqual([`web@${SHA}`])
-    expect(r.skipped).toEqual(['nhrk.vmedia.se'])
+    expect(r.skipped).toEqual(['site-1277834673.vmedia.se'])
     const create = gh.calls.find((c) => c[1] === 'issue' && c[2] === 'create')!
     expect(create).toBeDefined()
-    expect(create).toContain('visionmediahq/nhrk')
-    expect(create[create.indexOf('-t') + 1]).toBe('nhrk.vmedia.se redeployar inte från main')
-    expect(issueTitle('nhrk.vmedia.se')).toBe('nhrk.vmedia.se redeployar inte från main')
-    expect(r.issues).toEqual(['https://github.com/visionmediahq/nhrk/issues/99'])
+    expect(create).toContain('visionmediahq/site-1277834673')
+    expect(create[create.indexOf('-t') + 1]).toBe('site-1277834673.vmedia.se redeployar inte från main')
+    expect(issueTitle('site-1277834673.vmedia.se')).toBe('site-1277834673.vmedia.se redeployar inte från main')
+    expect(r.issues).toEqual(['https://github.com/visionmediahq/site-1277834673/issues/99'])
     const bases = [...new Set(calls.map((c) => c.base))]
-    expect(bases).toEqual(['https://nhrk.se', 'https://www.nhrk.se'])
+    expect(bases).toEqual(['https://site-1277834673.se', 'https://www.site-1277834673.se'])
     const first = calls.find((c) => c.what === 'requests')!
-    expect(first.baseline).toEqual(new Set(['Failed to load https://nhrk.se/a.js']))
+    expect(first.baseline).toEqual(new Set(['Failed to load https://site-1277834673.se/a.js']))
     // consent paths on map pages, contrast over the pages
     expect(calls.find((c) => c.what === 'consentPaths')!.paths).toEqual(['/kontakt'])
     expect(calls.find((c) => c.what === 'contrast')!.paths).toEqual(['/', '/kontakt', '/finns-inte-x'])
@@ -275,7 +275,7 @@ describe('live post-merge', () => {
   })
 
   test('finding 3: post-merge checks CMS admin pages without expecting a banner and leaves them out of the consent paths', async () => {
-    const dir = siteDir({ apps: { head: MAIN, apps: [app('web', ['nhrk.se'], true)] } })
+    const dir = siteDir({ apps: { head: MAIN, apps: [app('web', ['site-1277834673.se'], true)] } })
     const { checks, calls } = fakeChecks()
     checks.pages = async () => ['/', '/kontakt', '/admin/', '/finns-inte-x']
     checks.embedPages = async (_b, p) => p.filter((x) => x === '/kontakt' || x === '/admin/')
@@ -288,20 +288,20 @@ describe('live post-merge', () => {
   })
 
   test('an open issue with the same title is not opened again', async () => {
-    const dir = siteDir({ apps: NHRK })
+    const dir = siteDir({ apps: CMS_SITE })
     const gh = fakeGh([
-      { title: 'nhrk.vmedia.se redeployar inte från main (gammal)', url: 'https://github.com/visionmediahq/nhrk/issues/1' },
-      { title: 'nhrk.vmedia.se redeployar inte från main', url: 'https://github.com/visionmediahq/nhrk/issues/61' },
+      { title: 'site-1277834673.vmedia.se redeployar inte från main (gammal)', url: 'https://github.com/visionmediahq/site-1277834673/issues/1' },
+      { title: 'site-1277834673.vmedia.se redeployar inte från main', url: 'https://github.com/visionmediahq/site-1277834673/issues/61' },
     ])
     const r = await live(dir, 'post-merge', SHA, { deps: deps({ exec: gh.exec }).deps })
     expect(r.status).toBe('pass')
     expect(gh.calls.some((c) => c[2] === 'create')).toBe(false)
-    expect(r.issues).toEqual(['https://github.com/visionmediahq/nhrk/issues/61'])
-    expect(r.skipped).toEqual(['nhrk.vmedia.se'])
+    expect(r.issues).toEqual(['https://github.com/visionmediahq/site-1277834673/issues/61'])
+    expect(r.skipped).toEqual(['site-1277834673.vmedia.se'])
   })
 
   test('CASE check fails then passes after 30 s → pass', async () => {
-    const dir = siteDir({ apps: { head: MAIN, apps: [app('web', ['nhrk.se'], true)] } })
+    const dir = siteDir({ apps: { head: MAIN, apps: [app('web', ['site-1277834673.se'], true)] } })
     const { checks } = fakeChecks([(_, p) => p.map((x) => req(x, { banner: false, ok: false })), (_, p) => p.map((x) => req(x))])
     const d = deps({ checks })
     const r = await live(dir, 'post-merge', SHA, { deps: d.deps })
@@ -311,7 +311,7 @@ describe('live post-merge', () => {
 
   test('records the tool commit in live-<mode>.json, a STOP included; formatLive prints it first', async () => {
     const tool = { sha: TOOL_SHA, dirty: false }
-    const dir = siteDir({ apps: { head: MAIN, apps: [app('web', ['nhrk.se'], true)] } })
+    const dir = siteDir({ apps: { head: MAIN, apps: [app('web', ['site-1277834673.se'], true)] } })
     const r = await live(dir, 'post-merge', SHA, { deps: { ...deps().deps, toolVersion: () => tool } })
     expect(r.status).toBe('pass')
     expect(r.tool).toEqual(tool)
@@ -325,7 +325,7 @@ describe('live post-merge', () => {
   })
 
   test('a pass deletes the clone\'s node_modules and dist and says so (#23)', async () => {
-    const dir = siteDir({ apps: { head: MAIN, apps: [app('web', ['nhrk.se'], true)] } })
+    const dir = siteDir({ apps: { head: MAIN, apps: [app('web', ['site-1277834673.se'], true)] } })
     for (const d of ['node_modules/x', 'dist/client']) mkdirSync(join(dir, d), { recursive: true })
     const { checks } = fakeChecks()
     const r = await live(dir, 'post-merge', SHA, { deps: deps({ checks }).deps })
@@ -337,24 +337,24 @@ describe('live post-merge', () => {
   })
 
   test('a pass with nothing to delete says nothing about cleanup', async () => {
-    const dir = siteDir({ apps: { head: MAIN, apps: [app('web', ['nhrk.se'], true)] } })
+    const dir = siteDir({ apps: { head: MAIN, apps: [app('web', ['site-1277834673.se'], true)] } })
     const r = await live(dir, 'post-merge', SHA, { deps: deps({ checks: fakeChecks().checks }).deps })
     expect(r.status).toBe('pass')
     expect(r.lines.some((l) => l.startsWith('cleanup:'))).toBe(false)
   })
 
   test('CASE check fails twice → stop with a reason', async () => {
-    const dir = siteDir({ apps: { head: MAIN, apps: [app('web', ['nhrk.se'], true)] } })
+    const dir = siteDir({ apps: { head: MAIN, apps: [app('web', ['site-1277834673.se'], true)] } })
     const { checks } = fakeChecks([(_, p) => p.map((x) => req(x, { blocked: ['https://maps.google.com/x'], ok: false }))])
     const d = deps({ checks })
     const r = await live(dir, 'post-merge', SHA, { deps: d.deps })
     expect(r.status).toBe('stop')
-    expect(r.reason).toMatch(/nhrk\.se/)
+    expect(r.reason).toMatch(/site-1277834673\.se/)
     expect(d.sleeps).toEqual([30_000])
   })
 
   test('a stop keeps node_modules and dist: the site may need another verify (#23)', async () => {
-    const dir = siteDir({ apps: { head: MAIN, apps: [app('web', ['nhrk.se'], true)] } })
+    const dir = siteDir({ apps: { head: MAIN, apps: [app('web', ['site-1277834673.se'], true)] } })
     mkdirSync(join(dir, 'node_modules/x'), { recursive: true })
     const { checks } = fakeChecks([(_, p) => p.map((x) => req(x, { blocked: ['https://maps.google.com/x'], ok: false }))])
     expect((await live(dir, 'post-merge', SHA, { deps: deps({ checks }).deps })).status).toBe('stop')
@@ -362,7 +362,7 @@ describe('live post-merge', () => {
   })
 
   test('a failing contrast row or consent path fails the check too', async () => {
-    const dir = siteDir({ apps: { head: MAIN, apps: [app('web', ['nhrk.se'], true)] } })
+    const dir = siteDir({ apps: { head: MAIN, apps: [app('web', ['site-1277834673.se'], true)] } })
     const { checks } = fakeChecks()
     checks.contrast = async (_b, p) => p.map((x) => row({ path: x, ratio: 3.2, ok: false }))
     expect((await live(dir, 'post-merge', SHA, { deps: deps({ checks }).deps })).status).toBe('stop')
@@ -373,7 +373,7 @@ describe('live post-merge', () => {
 
   test('a failed, cancelled or timed-out deployment stops before any check', async () => {
     for (const status of ['failed', 'cancelled', 'timeout'] as const) {
-      const dir = siteDir({ apps: NHRK })
+      const dir = siteDir({ apps: CMS_SITE })
       const { checks, calls } = fakeChecks()
       const r = await live(dir, 'post-merge', SHA, { deps: deps({ checks, deploy: async () => status }).deps })
       expect(r.status).toBe('stop')
@@ -384,7 +384,7 @@ describe('live post-merge', () => {
 
   test('without the apps recorded before the merge, or without a baseline, it stops', async () => {
     expect((await live(siteDir({}), 'post-merge', SHA, { deps: deps().deps })).reason).toMatch(/apps\.json/)
-    expect((await live(siteDir({ apps: NHRK, baseline: null }), 'post-merge', SHA, { deps: deps().deps })).reason).toMatch(/live-baseline/)
+    expect((await live(siteDir({ apps: CMS_SITE, baseline: null }), 'post-merge', SHA, { deps: deps().deps })).reason).toMatch(/live-baseline/)
   })
 })
 
@@ -395,20 +395,20 @@ function mergeExec(o: { moved?: boolean; head: { sha: string }; rebaseFails?: bo
     const line = `${cmd} ${args.join(' ')}`
     calls.push(line)
     if (line === 'git rev-parse --abbrev-ref HEAD') return { code: 0, out: 'consent-banner\n' }
-    if (line === 'git remote get-url origin') return { code: 0, out: 'git@github.com:visionmediahq/nhrk.git\n' }
+    if (line === 'git remote get-url origin') return { code: 0, out: 'git@github.com:visionmediahq/site-1277834673.git\n' }
     if (line === 'git fetch origin main') return { code: 0, out: '' }
     if (line === 'git rev-parse HEAD') return { code: 0, out: `${o.head.sha}\n` }
     if (line === 'git rev-parse origin/main') return { code: 0, out: `${MAIN}\n` }
     if (line.startsWith('git merge-base --is-ancestor origin/main ')) return { code: o.moved && line.endsWith(HEAD) ? 1 : 0, out: '' }
     if (line === 'git rebase origin/main') return o.rebaseFails ? { code: 1, out: 'CONFLICT' } : { code: 0, out: '' }
     if (line === 'git rebase --abort') return { code: 0, out: '' }
-    if (line.startsWith('gh pr view 7 -R visionmediahq/nhrk --json state,headRefName'))
+    if (line.startsWith('gh pr view 7 -R visionmediahq/site-1277834673 --json state,headRefName'))
       return { code: 0, out: JSON.stringify({ state: o.state ?? 'OPEN', headRefName: 'consent-banner' }) }
     if (line.startsWith('gh pr merge 7 ')) return { code: 0, out: '' }
-    if (line === 'gh pr view 7 -R visionmediahq/nhrk --json mergeCommit') return { code: 0, out: JSON.stringify({ mergeCommit: { oid: SHA } }) }
+    if (line === 'gh pr view 7 -R visionmediahq/site-1277834673 --json mergeCommit') return { code: 0, out: JSON.stringify({ mergeCommit: { oid: SHA } }) }
     // No fonts-selfhost branch or PR on GitHub.
     if (line === 'git ls-remote --heads origin refs/heads/fonts-selfhost') return { code: 0, out: '' }
-    if (line === 'gh pr list -R visionmediahq/nhrk --head fonts-selfhost --state open --json url,title') return { code: 0, out: '[]' }
+    if (line === 'gh pr list -R visionmediahq/site-1277834673 --head fonts-selfhost --state open --json url,title') return { code: 0, out: '[]' }
     return { code: 1, out: `unexpected: ${line}` }
   }
   return { exec, calls }
@@ -424,9 +424,9 @@ function mergeDeps(exec: Exec, head: { sha: string }) {
     cms: [{ id: 1, commit: 'e'.repeat(40), status: 'finished', pullRequestId: 0 }],
   }
   const apps: App[] = [
-    { uuid: 'web', name: 'Website', repo: 'nhrk', branch: 'main', fqdns: ['nhrk.se'], autoDeploy: true },
-    { uuid: 'cms', name: 'CMS', repo: 'nhrk', branch: 'main', fqdns: ['nhrk.vmedia.se'], autoDeploy: true },
-    { uuid: 'stg', name: 'Staging', repo: 'nhrk', branch: 'staging', fqdns: ['stg.nhrk.se'], autoDeploy: true },
+    { uuid: 'web', name: 'Website', repo: 'site-1277834673', branch: 'main', fqdns: ['site-1277834673.se'], autoDeploy: true },
+    { uuid: 'cms', name: 'CMS', repo: 'site-1277834673', branch: 'main', fqdns: ['site-1277834673.vmedia.se'], autoDeploy: true },
+    { uuid: 'stg', name: 'Staging', repo: 'site-1277834673', branch: 'staging', fqdns: ['stg.site-1277834673.se'], autoDeploy: true },
   ]
   return {
     order,
@@ -482,7 +482,7 @@ describe('merge', () => {
     const r = await merge(dir, 7, { deps: m.deps })
     expect(r).toMatchObject({ status: 'done', mergeCommit: SHA })
     expect(m.order).toEqual(['gh pr merge', `live post-merge ${SHA}`])
-    expect(g.calls.find((c) => c.startsWith('gh pr merge'))).toBe(`gh pr merge 7 -R visionmediahq/nhrk --squash --delete-branch --match-head-commit ${HEAD}`)
+    expect(g.calls.find((c) => c.startsWith('gh pr merge'))).toBe(`gh pr merge 7 -R visionmediahq/site-1277834673 --squash --delete-branch --match-head-commit ${HEAD}`)
   })
 
   test('returns the tool of the verify it merged on: the stored one, or the rerun after main moved', async () => {
@@ -532,10 +532,10 @@ describe('merge', () => {
       [
         { verify: VERIFIED(HEAD) },
         { head: { sha: HEAD } },
-        /www\.nhrk\.se[\s\S]*live <dir> baseline/,
+        /www\.site-1277834673\.se[\s\S]*live <dir> baseline/,
         (d) => {
           const listApps = d.listApps
-          d.listApps = async () => (await listApps()).map((a) => (a.uuid === 'web' ? { ...a, fqdns: ['nhrk.se', 'www.nhrk.se'] } : a))
+          d.listApps = async () => (await listApps()).map((a) => (a.uuid === 'web' ? { ...a, fqdns: ['site-1277834673.se', 'www.site-1277834673.se'] } : a))
         },
       ],
       // Ruling 37: a baseline from before the hosts were recorded.
@@ -555,11 +555,11 @@ describe('merge', () => {
 
   test('finding 5 (Ruling 37): a following host outside report.domains that the baseline recorded does not stop the merge', async () => {
     const head = { sha: HEAD }
-    const dir = siteDir({ verify: VERIFIED(HEAD), domains: ['nhrk.se'], baselined: ['nhrk.se', 'www.nhrk.se'] })
+    const dir = siteDir({ verify: VERIFIED(HEAD), domains: ['site-1277834673.se'], baselined: ['site-1277834673.se', 'www.site-1277834673.se'] })
     const g = mergeExec({ head })
     const m = mergeDeps(g.exec, head)
     const listApps = m.deps.listApps
-    m.deps.listApps = async () => (await listApps()).map((a) => (a.uuid === 'web' ? { ...a, fqdns: ['nhrk.se', 'www.nhrk.se'] } : a))
+    m.deps.listApps = async () => (await listApps()).map((a) => (a.uuid === 'web' ? { ...a, fqdns: ['site-1277834673.se', 'www.site-1277834673.se'] } : a))
     expect((await merge(dir, 7, { deps: m.deps })).status).toBe('done')
   })
 
@@ -568,7 +568,7 @@ describe('merge', () => {
     const dir = siteDir({ verify: VERIFIED(HEAD) })
     const g = mergeExec({ head })
     const exec: Exec = async (cmd, args, cwd) =>
-      [cmd, ...args].join(' ') === 'gh pr view 7 -R visionmediahq/nhrk --json mergeCommit' ? { code: 1, out: 'HTTP 502' } : g.exec(cmd, args, cwd)
+      [cmd, ...args].join(' ') === 'gh pr view 7 -R visionmediahq/site-1277834673 --json mergeCommit' ? { code: 1, out: 'HTTP 502' } : g.exec(cmd, args, cwd)
     const m = mergeDeps(exec, head)
     const r = await merge(dir, 7, { deps: m.deps })
     expect(r.status).toBe('stop')
@@ -580,7 +580,7 @@ describe('merge', () => {
     const dir = siteDir({ verify: VERIFIED(HEAD) })
     const g = mergeExec({ head })
     const m = mergeDeps(g.exec, head)
-    m.deps.live = async () => ({ status: 'stop', reason: 'nhrk.se failed twice', lines: [], skipped: [], issues: [] })
-    expect(await merge(dir, 7, { deps: m.deps })).toMatchObject({ status: 'stop', reason: 'nhrk.se failed twice', mergeCommit: SHA })
+    m.deps.live = async () => ({ status: 'stop', reason: 'site-1277834673.se failed twice', lines: [], skipped: [], issues: [] })
+    expect(await merge(dir, 7, { deps: m.deps })).toMatchObject({ status: 'stop', reason: 'site-1277834673.se failed twice', mergeCommit: SHA })
   })
 })

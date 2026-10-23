@@ -10,12 +10,12 @@
 //   the min-height (`grid h-full min-h-[500px]`). The iframe's own inline min-height goes along too;
 // - a scoped rule that sets the iframe's height (`.box iframe { height: 100% }`) beats its height
 //   attribute and a layered Tailwind height, as in CSS (#43); an inline style still beats the rule;
-// - an iframe absolutely positioned to fill a `position: relative` parent (#45, knutssonsbil's
+// - an iframe absolutely positioned to fill a `position: relative` parent (#45, site 1228881255's
 //   padding-ratio box) becomes `absolute inset-0 grid` with `aspect="auto"`: the parent keeps sizing
 //   the box and nothing carries a min-height. An absolute iframe that does not fill, or whose parent is
 //   not relative, is a refusal, and so is a padding-ratio parent (`padding-bottom: 40%`) without one;
 // - an iframe that fills a parent holding only it and sized only by an aspect class (#65,
-//   champsoflogging: `aspect-video`) replaces that parent: `<ConsentEmbed … aspect="16 / 9">`, inside
+//   site 1218955344: `aspect-video`) replaces that parent: `<ConsentEmbed … aspect="16 / 9">`, inside
 //   the parent's element with its other classes and attributes if it has any; the embed's own box
 //   grows with the placeholder where `grid h-full` inside the aspect box clipped it on phones;
 // - otherwise the classes go on the wrapper as they are and the component keeps its own aspect.
@@ -253,7 +253,7 @@ export const ownRules = (el: AstroNode, rules: CssRule[]): CssRule[] => {
 function definiteHeight(parent: AstroNode, rules: CssRule[]): boolean {
   if (parent.type !== 'element') return false
   if ((classList(parent) ?? []).some((c) => FIXED_CLASS.test(c))) return true
-  // #61 (champsoflogging): `aspect-video w-full` takes its height from its width. A variant is unsure.
+  // #61 (site 1218955344): `aspect-video w-full` takes its height from its width. A variant is unsure.
   if ((classList(parent) ?? []).some((c) => ASPECT_CLASS.test(c))) return true
   const isHeight = (d: CssDecl): boolean => d.prop === 'height' && sized(unimportant(d.value))
   const style = attr(parent, 'style')
@@ -264,7 +264,7 @@ function definiteHeight(parent: AstroNode, rules: CssRule[]): boolean {
 }
 
 /**
- * ahatrafikskola: `.frame { aspect-ratio: 4 / 5 }`, 4 / 3 on phones. A plain ratio for one of the
+ * site 1230607492: `.frame { aspect-ratio: 4 / 5 }`, 4 / 3 on phones. A plain ratio for one of the
  * parent's classes outside an at-rule, and nothing else that could switch it off: no rule naming
  * the class, the element or its id in any selector (`.wrap .frame`, `.frame:hover`, `div`, inside
  * an at-rule) with another aspect-ratio value or a display other than a block-level one, no display
@@ -526,7 +526,7 @@ const DROPPED_IFRAME_CLASS = /^(?:w-full|h-full|border-0|block|absolute|inset-0|
 const DROPPED_IFRAME_STYLE = new Set(['position', 'inset', 'top', 'left', 'width', 'height', 'border', 'border-width', 'border-style', 'display', 'filter'])
 
 /**
- * #65 (champsoflogging): an iframe that fills a parent holding only it and sized only by an aspect
+ * #65 (site 1218955344): an iframe that fills a parent holding only it and sized only by an aspect
  * class, with nothing on the iframe that the embed would lose: the embed replaces the parent with
  * the class's ratio. Null when the parent has anything else that sizes it (another aspect, height,
  * min/max-height or display class, an inline or scoped rule for it) or the iframe has a class other
@@ -562,7 +562,7 @@ function boxOf(node: AstroNode, ancestors: AstroNode[], rules: CssRule[], text: 
  * A grid wrapper sizes the embed with `grid` and its height utility; the classes it keeps from the
  * iframe (Ruling 30) can carry scoped rules, which are unlayered and so beat those utilities. A rule
  * for a kept class that sets a `display` other than grid or none, or a height that is not definite
- * (`auto`, a percentage other than h-full's 100%, …), collapses the loaded iframe (salviablommor:
+ * (`auto`, a percentage other than h-full's 100%, …), collapses the loaded iframe (site 1243335100:
  * `.contact-map { display: block }`, the map was 0px tall): refused. A definite height still
  * stretches the grid's embed and is wired. Pseudo-element rules and classes inside `:not()` do not
  * style the wrapper. Misses (an attribute selector, `block-size`, `max-height`, global CSS) are left
@@ -641,7 +641,7 @@ function sizedBox(node: AstroNode, ancestors: AstroNode[], rules: CssRule[], tex
   }
   const n = inlineHeight !== undefined ? null : height?.kind === 'quoted' ? FIXED_ATTR.exec(height.value) : height?.kind === 'expression' ? /^\s*(\d+)()\s*$/.exec(height.value) : null
   if (n) return { classes: ['grid', `h-[${n[1]}${n[2] || 'px'}]`, ...classes], aspect: true }
-  // #61 (exakthaltagning): `aspect-ratio: 4/3; height: auto` would otherwise get the default 16:9.
+  // #61 (site 1250154895): `aspect-ratio: 4/3; height: auto` would otherwise get the default 16:9.
   const ratio = style?.kind === 'quoted' && (inlineHeight === undefined || inlineHeight === 'auto') ? declarations(style.value).findLast((d) => d.prop === 'aspect-ratio')?.value.trim() : undefined
   const r = ratio !== undefined ? RATIO.exec(ratio) : null
   return r ? { classes, aspect: false, ratio: r[2] ? `${r[1]} / ${r[2]}` : r[1]! } : { classes, aspect: false }

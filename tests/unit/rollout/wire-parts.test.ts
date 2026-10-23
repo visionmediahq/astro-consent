@@ -19,16 +19,16 @@ type Part = (p: Planner, r: Report) => void
 
 const FIXTURES = join(import.meta.dirname, 'fixtures')
 const WIRED = [
-  'aspomad',
+  'site-1218869363',
   'calendar-literal',
-  'domeijstapetserarverkstad',
+  'site-1243511314',
   'elfsight-v1',
   'elfsight-v2-after',
   'elfsight-v2-before',
   'elfsight-v3',
-  'munkforstradgardstjanst',
-  'traforadling',
-  'vasshallakatthotell',
+  'site-1286040212',
+  'site-1243335919',
+  'site-1245311266',
 ]
 const expectedText = (site: string, path: string) => readFileSync(join(FIXTURES, site, 'expected', `${path}.txt`), 'utf8')
 
@@ -283,8 +283,8 @@ describe('wireLinks', () => {
     const POLICY_PAGE = { 'src/pages/integritetspolicy.astro': PAGE }
     const tags = (text: string): number => text.split('<PrivacyLinks').length - 1
 
-    test('stadsbudskontoret: in the bar after ©, before "Drivs av"; white text (the footer CSS sets color: #fff)', () => {
-      const text = wire([wireLinks], site(real('stadsbudskontoret')), 'src/components/Footer.astro')
+    test('a client footer: in the bar after ©, before "Drivs av"; white text (the footer CSS sets color: #fff)', () => {
+      const text = wire([wireLinks], site(real('site-1264859170')), 'src/components/Footer.astro')
       expect(text).toContain(
         'Alla rättigheter förbehållna.\n      </p>\n      <PrivacyLinks class="text-white/70" />\n      <p class="text-xs" style="color: rgba(255,255,255,0.5);">\n        Drivs av',
       )
@@ -292,15 +292,15 @@ describe('wireLinks', () => {
       expect(tags(text)).toBe(1)
     })
 
-    test('ekostrateg (DaisyUI .footer grid): between © and the logo; colours only in CSS variables, so no class', () => {
-      const text = wire([wireLinks], site(real('ekostrateg')), 'src/components/Footer.astro')
+    test('a DaisyUI .footer grid: between © and the logo; colours only in CSS variables, so no class', () => {
+      const text = wire([wireLinks], site(real('site-1224521538')), 'src/components/Footer.astro')
       expect(text).toContain('Alla rättigheter förbehållna.</p>\n    <PrivacyLinks />\n    <Image\n')
       expect(text).toContain('    />\n  </div>\n</footer>')
       expect(tags(text)).toBe(1)
     })
 
-    test("landqvistmekaniska: the bar's own Integritetspolicy link to policy_url is replaced (PrivacyLinks renders it)", () => {
-      const text = wire([wireLinks], site(real('landqvistmekaniska'), POLICY_PAGE), 'src/components/Footer.astro')
+    test("a © bar with its own Integritetspolicy link: the bar's own link to policy_url is replaced (PrivacyLinks renders it)", () => {
+      const text = wire([wireLinks], site(real('site-1236396223'), POLICY_PAGE), 'src/components/Footer.astro')
       expect(text).toContain('Verkstad AB.\n      </p>\n      <PrivacyLinks class="text-white/70" />\n    </div>\n  </div>\n</footer>')
       expect(text).not.toContain('<p class="footer-legal">')
       // The column link above the bar stays.
@@ -308,35 +308,35 @@ describe('wireLinks', () => {
       expect(tags(text)).toBe(1)
     })
 
-    test('landqvistmekaniska with an existing privacy.json: its policy_url path decides', () => {
+    test('the same © bar with an existing privacy.json: its policy_url path decides', () => {
       const privacy = (url: string) => ({ 'src/data/privacy.json': JSON.stringify({ services: [], policy_url: url }) })
-      const same = wire([wireLinks], site(real('landqvistmekaniska'), privacy('https://x.se/integritetspolicy')), 'src/components/Footer.astro')
+      const same = wire([wireLinks], site(real('site-1236396223'), privacy('https://x.se/integritetspolicy')), 'src/components/Footer.astro')
       expect(same).not.toContain('<p class="footer-legal">')
-      const other = wire([wireLinks], site(real('landqvistmekaniska'), { ...POLICY_PAGE, ...privacy('https://x.se/gdpr/') }), 'src/components/Footer.astro')
+      const other = wire([wireLinks], site(real('site-1236396223'), { ...POLICY_PAGE, ...privacy('https://x.se/gdpr/') }), 'src/components/Footer.astro')
       expect(other).toContain('<p class="footer-legal">')
     })
 
     test.each([
       ['no policy page', {}],
       ['a policy page at another path', { 'src/pages/gdpr.astro': PAGE }],
-    ])('landqvistmekaniska with %s: the link stays, the links go after ©', (_name, extra) => {
-      const text = wire([wireLinks], site(real('landqvistmekaniska'), extra), 'src/components/Footer.astro')
+    ])('the same © bar with %s: the link stays, the links go after ©', (_name, extra) => {
+      const text = wire([wireLinks], site(real('site-1236396223'), extra), 'src/components/Footer.astro')
       expect(text).toContain('Verkstad AB.\n      </p>\n      <PrivacyLinks class="text-white/70" />\n      <p class="footer-legal">')
     })
 
     // #61: the bar's own policy link deeper than the © row's siblings.
-    test('exakthaltagning: a policy link in a neighbouring flex div of the bar is replaced in place', () => {
+    test('a policy link in a neighbouring flex div of the bar is replaced in place', () => {
       const text = wire(
         [wireLinks],
-        site('<footer class="text-white">\n  <div class="grid"><p>a</p><p>b</p></div>\n  <div class="flex justify-between">\n    <p>© Firma</p>\n    <div class="flex items-center gap-5">\n      <a href="/integritetspolicy/" class="text-xs">Integritetspolicy</a>\n      <span class="text-xs">Slöinge</span>\n    </div>\n  </div>\n</footer>\n', POLICY_PAGE),
+        site('<footer class="text-white">\n  <div class="grid"><p>a</p><p>b</p></div>\n  <div class="flex justify-between">\n    <p>© Firma</p>\n    <div class="flex items-center gap-5">\n      <a href="/integritetspolicy/" class="text-xs">Integritetspolicy</a>\n      <span class="text-xs">Exempelby</span>\n    </div>\n  </div>\n</footer>\n', POLICY_PAGE),
         'src/components/Footer.astro',
       )
-      expect(text).toContain('    <p>© Firma</p>\n    <div class="flex items-center gap-5">\n      <PrivacyLinks class="text-white" />\n      <span class="text-xs">Slöinge</span>')
+      expect(text).toContain('    <p>© Firma</p>\n    <div class="flex items-center gap-5">\n      <PrivacyLinks class="text-white" />\n      <span class="text-xs">Exempelby</span>')
       expect(text).not.toContain('Integritetspolicy</a>')
       expect(tags(text)).toBe(1)
     })
 
-    test("schloetter: the GDPR item in the bar's link list, href from a localize() call, becomes the links (justify-start! in a block <li>)", () => {
+    test("the GDPR item in the bar's link list, href from a localize() call, becomes the links (justify-start! in a block <li>)", () => {
       const text = wire(
         [wireLinks],
         site("<footer class=\"text-white\">\n  <div class=\"grid\"><p>a</p><p>b</p></div>\n  <div class=\"flex flex-col\">\n    <p>© {year} Firma</p>\n    <ul class=\"flex gap-x-6\">\n      <li><a href=\"mailto:x@y.se\">x@y.se</a></li>\n      <li><a href={localize('/gdpr/', lang)} class=\"topbar-link\">GDPR</a></li>\n    </ul>\n  </div>\n</footer>\n", { 'src/pages/gdpr.astro': PAGE }),
@@ -460,10 +460,10 @@ describe('wireLinks', () => {
       expect(text).toContain('    <div>© Firma <a href="/integritetspolicy/">P</a></div>\n    <PrivacyLinks class="text-white" />\n    <p>VM</p>')
     })
 
-    test('#65 (lhiab): a © paragraph that is itself the container: a div takes its classes and holds it and the links', () => {
-      const text = wire([wireLinks], site(real('lhiab'), POLICY_PAGE), 'src/components/Footer.astro')
+    test('#65: a © paragraph that is itself the container: a div takes its classes and holds it and the links', () => {
+      const text = wire([wireLinks], site(real('site-1369745148'), POLICY_PAGE), 'src/components/Footer.astro')
       expect(text).toContain(
-        '  <div class="border-t border-base-300">\n    <div class="site-container py-5 text-sm">\n      <p>\n        &copy; Copyright {new Date().getFullYear()}, Henriksson Ing. Byrå AB\n      </p>\n      <PrivacyLinks class="justify-start! mt-2" />\n    </div>\n  </div>\n</footer>',
+        '  <div class="border-t border-base-300">\n    <div class="site-container py-5 text-sm">\n      <p>\n        &copy; Copyright {new Date().getFullYear()}, Exempel Ingenjörsbyrå AB\n      </p>\n      <PrivacyLinks class="justify-start! mt-2" />\n    </div>\n  </div>\n</footer>',
       )
       expect(tags(text)).toBe(1)
     })
@@ -515,7 +515,7 @@ describe('wireLinks', () => {
       }
       const inline = wire([wireLinks], site('<footer class="text-white">\n  <div class="grid"><p>a</p><p>b</p></div>\n  <div class="border-t">\n    <p class="container" style="white-space: pre-wrap">\n      © Firma\n    </p>\n  </div>\n</footer>\n'), 'src/components/Footer.astro')
       expect(inline).toContain('      <p style="white-space: pre-wrap">\n      © Firma\n    </p>\n      <PrivacyLinks')
-      // Otherwise re-indented, as for lhiab.
+      // Otherwise re-indented, as for site 1369745148.
       const plain = wire([wireLinks], site('<footer class="text-white">\n  <div class="grid"><p>a</p><p>b</p></div>\n  <div class="border-t">\n    <p class="container">\n      © Firma\n    </p>\n  </div>\n</footer>\n'), 'src/components/Footer.astro')
       expect(plain).toContain('      <p>\n        © Firma\n      </p>\n      <PrivacyLinks')
     })
@@ -584,19 +584,19 @@ describe('wireLinks', () => {
       expect(tags(text)).toBe(1)
     })
 
-    test('adarate: dark background in scoped CSS, no text colour → text-white/70 after ©', () => {
-      const text = wire([wireLinks], site(real('adarate')), 'src/components/Footer.astro')
-      expect(text).toContain('Adarate Systems AB</p>\n    <PrivacyLinks class="text-white/70" />\n    <p class="site-footer__address">')
+    test('a client footer with a dark background in scoped CSS, no text colour → text-white/70 after ©', () => {
+      const text = wire([wireLinks], site(real('site-1236342450')), 'src/components/Footer.astro')
+      expect(text).toContain('Exempel AB</p>\n    <PrivacyLinks class="text-white/70" />\n    <p class="site-footer__address">')
       expect(tags(text)).toBe(1)
     })
 
-    test('adarate with a light scoped background: no class', () => {
-      const text = wire([wireLinks], site(real('adarate').replace('background: #0d1219;', 'background: #f4f1ea;')), 'src/components/Footer.astro')
-      expect(text).toContain('Adarate Systems AB</p>\n    <PrivacyLinks />\n')
+    test('the same footer with a light scoped background: no class', () => {
+      const text = wire([wireLinks], site(real('site-1236342450').replace('background: #0d1219;', 'background: #f4f1ea;')), 'src/components/Footer.astro')
+      expect(text).toContain('Exempel AB</p>\n    <PrivacyLinks />\n')
     })
 
-    test('ostansjobilskrot: dark inline background, bar inside the single wrapper → text-white/70 after ©, no justify-start!', () => {
-      const text = wire([wireLinks], site(real('ostansjobilskrot')), 'src/components/Footer.astro')
+    test('a dark inline background, bar inside the single wrapper → text-white/70 after ©, no justify-start!', () => {
+      const text = wire([wireLinks], site(real('site-1248890993')), 'src/components/Footer.astro')
       expect(text).toContain('förbehållna.\n            </p>\n            <PrivacyLinks class="text-white/70" />\n            <a\n')
       expect(tags(text)).toBe(1)
     })
@@ -649,9 +649,9 @@ describe('wireLinks', () => {
     })
 
     // Review of #59, I1: the background that counts is the nearest one above the links.
-    test('tvafroknar: plain <footer>, © bar inside a bg-neutral block → text-neutral-content, centred bar: mt-2 only', () => {
-      const text = wire([wireLinks], site(real('tvafroknar')), 'src/components/Footer.astro')
-      expect(text).toContain('Två Fröknar AB</p>\n        <PrivacyLinks class="text-neutral-content mt-2" />\n      </div>\n    </div>\n  </div>\n\n</footer>')
+    test('a plain <footer>, © bar inside a bg-neutral block → text-neutral-content, centred bar: mt-2 only', () => {
+      const text = wire([wireLinks], site(real('site-1241411107')), 'src/components/Footer.astro')
+      expect(text).toContain('Exempel AB</p>\n        <PrivacyLinks class="text-neutral-content mt-2" />\n      </div>\n    </div>\n  </div>\n\n</footer>')
       expect(tags(text)).toBe(1)
     })
 
@@ -665,16 +665,16 @@ describe('wireLinks', () => {
     })
 
     test('a dark background set only inside @media does not count', () => {
-      const css = real('adarate').replace('background: #0d1219;', 'background: #f4f1ea;').replace('</style>', '  @media (min-width: 768px) {\n    .site-footer { background: #0d1219; }\n  }\n</style>')
+      const css = real('site-1236342450').replace('background: #0d1219;', 'background: #f4f1ea;').replace('</style>', '  @media (min-width: 768px) {\n    .site-footer { background: #0d1219; }\n  }\n</style>')
       const text = wire([wireLinks], site(css), 'src/components/Footer.astro')
-      expect(text).toContain('Adarate Systems AB</p>\n    <PrivacyLinks />\n')
+      expect(text).toContain('Exempel AB</p>\n    <PrivacyLinks />\n')
     })
 
     // #61: a background in a CSS variable is unknown; white text on the footer's own surface says it is dark.
     test.each([
-      ['evabekonomi (text-white/NN classes)', '<footer style="background-color: var(--color-on-secondary);">\n  <div class="grid"><p class="text-white/50">a</p><p>b</p></div>\n  <div class="flex">\n    <p class="text-white/45">© Firma</p>\n    <p>VM</p>\n  </div>\n</footer>\n', '<p class="text-white/45">© Firma</p>'],
-      ['milodahlmann (inline rgba white)', '<footer style="background: var(--color-primary);">\n  <div class="grid"><p style="color: rgba(255,255,255,0.6);">a</p><p>b</p></div>\n  <div class="flex">\n    <p style="color: rgba(255,255,255,0.4);">© Firma</p>\n    <p>VM</p>\n  </div>\n</footer>\n', '<p style="color: rgba(255,255,255,0.4);">© Firma</p>'],
-      ['landhsel (text-white headings, colour in a variable)', '<footer style="background: var(--dark-surface); color: var(--dark-text-secondary);">\n  <div class="grid"><h4 class="text-white">Om oss</h4><p>b</p></div>\n  <div class="flex">\n    <p>© Firma</p>\n    <p>VM</p>\n  </div>\n</footer>\n', '<p>© Firma</p>'],
+      ['site-1253341044 (text-white/NN classes)', '<footer style="background-color: var(--color-on-secondary);">\n  <div class="grid"><p class="text-white/50">a</p><p>b</p></div>\n  <div class="flex">\n    <p class="text-white/45">© Firma</p>\n    <p>VM</p>\n  </div>\n</footer>\n', '<p class="text-white/45">© Firma</p>'],
+      ['site-1244371378 (inline rgba white)', '<footer style="background: var(--color-primary);">\n  <div class="grid"><p style="color: rgba(255,255,255,0.6);">a</p><p>b</p></div>\n  <div class="flex">\n    <p style="color: rgba(255,255,255,0.4);">© Firma</p>\n    <p>VM</p>\n  </div>\n</footer>\n', '<p style="color: rgba(255,255,255,0.4);">© Firma</p>'],
+      ['site-1243539503 (text-white headings, colour in a variable)', '<footer style="background: var(--dark-surface); color: var(--dark-text-secondary);">\n  <div class="grid"><h4 class="text-white">Om oss</h4><p>b</p></div>\n  <div class="flex">\n    <p>© Firma</p>\n    <p>VM</p>\n  </div>\n</footer>\n', '<p>© Firma</p>'],
     ])('%s: unknown background with white text → text-white/70', (_name, footer, mark) => {
       expect(wire([wireLinks], site(footer), 'src/components/Footer.astro')).toContain(`    ${mark}\n    <PrivacyLinks class="text-white/70" />\n    <p>VM</p>`)
     })
@@ -723,7 +723,7 @@ describe('wireLinks', () => {
       expect(text).toContain('    <p>© Firma</p>\n    <PrivacyLinks />\n    <p>VM</p>')
     })
 
-    // Review of #59, I2 (mibfastighetsteknik, transfix, wmtmiljo): a block bar with a left-aligned ©.
+    // Review of #59, I2 (site 1249140272, site 1276898577, site 1273269910): a block bar with a left-aligned ©.
     test('a block bar with no alignment (detect: unknown) → justify-start! mt-2 under ©', () => {
       const text = wire(
         [wireLinks],
@@ -1029,14 +1029,14 @@ describe('wireEmbeds', () => {
 
   // A percentage height against a parent with only a min-height resolves to auto: `grid h-full`
   // alone shrinks to the placeholder (120px where the site had 500px), so the min-height goes on
-  // the wrapper (fbop, pdlmotor, bellevueconditori and ramsmora were wired by hand like this).
+  // the wrapper (site 1217803084, site 1246505973, site 1231784589 and site 1217008669 were wired by hand like this).
   test('fills a parent that only has a min-height → the wrapper carries it as min-h-*', () => {
     expect(
       embed(
         `<div class="karta">\n  <iframe src="https://www.google.com/maps/embed?pb=!1" height="100%" title="Karta"></iframe>\n</div>\n<style>\n  .karta { min-height: 30vh; }\n</style>\n`,
       ),
     ).toContain('<div class="grid h-full min-h-[30vh]"><ConsentEmbed')
-    // fbop: h-full on the parent is not a definite height; its min-h-[500px] is.
+    // site 1217803084: h-full on the parent is not a definite height; its min-h-[500px] is.
     expect(
       embed(`<div class="h-full min-h-[500px] rounded-lg">\n  <iframe src="https://www.google.com/maps/embed?pb=!1" width="100%" height="100%" title="Karta"></iframe>\n</div>\n`),
     ).toContain('  <div class="grid h-full min-h-[500px]"><ConsentEmbed service="google-maps" src="https://www.google.com/maps/embed?pb=!1" title="Karta" aspect="auto" /></div>\n')
@@ -1062,14 +1062,14 @@ describe('wireEmbeds', () => {
     ).toEqual(["the map's parent is a padding-ratio box (padding-bottom: 56.25%) and the iframe does not fill it absolutely"])
   })
 
-  test("the iframe's own inline min-height goes on the wrapper (pdlmotor, bellevueconditori, ramsmora)", () => {
-    // pdlmotor: parent min-h-[360px], iframe style min-height: 360px: one min-h, the iframe's.
+  test("the iframe's own inline min-height goes on the wrapper (site-1246505973, site-1231784589, site-1217008669)", () => {
+    // site 1246505973: parent min-h-[360px], iframe style min-height: 360px: one min-h, the iframe's.
     expect(
       embed(
         `<div class="lg:col-span-3 min-h-[360px]">\n  <iframe src="https://www.google.com/maps/embed?pb=!1" width="100%" height="100%" style="border: 0; min-height: 360px; display: block;" title="Karta"></iframe>\n</div>\n`,
       ),
     ).toContain('<div class="grid h-full min-h-[360px]"><ConsentEmbed')
-    // ramsmora: the parent is h-full (unknown); the iframe's min-height makes the box definite.
+    // site 1217008669: the parent is h-full (unknown); the iframe's min-height makes the box definite.
     expect(
       embed(`<div class="h-full">\n  <iframe src="https://www.google.com/maps/embed?pb=!1" height="100%" style="border:0; min-height: 500px;" title="Karta"></iframe>\n</div>\n`),
     ).toContain('<div class="grid h-full min-h-[500px]"><ConsentEmbed')
@@ -1095,7 +1095,7 @@ describe('wireEmbeds', () => {
 
   // #43: a stylesheet rule beats the presentational height attribute (and a Tailwind utility,
   // which is layered), so `.box iframe { height: 100% }` makes the iframe fill its parent.
-  test('scoped CSS height on the iframe beats its height attribute (#43, lbfastigheter)', () => {
+  test('scoped CSS height on the iframe beats its height attribute (#43)', () => {
     const lb = `<div class="kontakt-map__embed">\n  <iframe src="https://www.google.com/maps/embed?pb=!1" width="100%" height="450" style="border:0;" title="Karta"></iframe>\n</div>\n<style>\n  .kontakt-map__embed { height: 450px; overflow: hidden; }\n  .kontakt-map__embed iframe { width: 100%; height: 100%; display: block; }\n  @media (max-width: 640px) { .kontakt-map__embed { height: 300px; } }\n</style>\n`
     expect(embed(lb)).toContain('  <div class="grid h-full"><ConsentEmbed service="google-maps" src="https://www.google.com/maps/embed?pb=!1" title="Karta" aspect="auto" /></div>\n')
     // A fixed value: the rule's, not the attribute's; also through `>` and for a bare `iframe`.
@@ -1105,8 +1105,8 @@ describe('wireEmbeds', () => {
     expect(
       embed(`<section>\n  <iframe src="https://www.google.com/maps/embed?pb=!1" height="450" title="Karta"></iframe>\n</section>\n<style>\n  iframe { height: 25rem; }\n</style>\n`),
     ).toContain('<div class="grid h-[25rem]"><ConsentEmbed')
-    // Rules inside @media set the height on some screens only: the base height stays (bruksgarden:
-    // height="400", 260px on phones; restaurangharnet: 460px, 260px on phones). Verify step 5
+    // Rules inside @media set the height on some screens only: the base height stays (site 1241411946:
+    // height="400", 260px on phones; site 1243303811: 460px, 260px on phones). Verify step 5
     // measures the phone widths.
     expect(
       embed(`<section>\n  <div>\n    <iframe src="https://www.google.com/maps/embed?pb=!1" height="400" title="Karta"></iframe>\n  </div>\n</section>\n<style>\n  @media (max-width: 640px) {\n    section iframe { height: 260px; }\n  }\n</style>\n`),
@@ -1164,7 +1164,7 @@ describe('wireEmbeds', () => {
     ).toContain('<div class="grid h-[450px] w-full"><ConsentEmbed service="google-maps" src="https://www.google.com/maps/embed?pb=!1" title="Karta" aspect="auto" /></div>')
   })
 
-  test("an inline aspect-ratio on an iframe without a fixed height becomes the embed's aspect (#61, exakthaltagning)", () => {
+  test("an inline aspect-ratio on an iframe without a fixed height becomes the embed's aspect (#61, site-1250154895)", () => {
     expect(
       embed(`<iframe class="w-full" src="https://www.google.com/maps/embed?pb=!1" style="border:0; aspect-ratio: 4/3; height: auto" title="Karta"></iframe>\n`),
     ).toContain('<div class="w-full"><ConsentEmbed service="google-maps" src="https://www.google.com/maps/embed?pb=!1" title="Karta" aspect="4 / 3" /></div>')
@@ -1191,7 +1191,7 @@ describe('wireEmbeds', () => {
     }
   })
 
-  // #65 (champsoflogging): `grid h-full` inside the aspect box can't grow past it, and at 320px the
+  // #65 (site 1218955344): `grid h-full` inside the aspect box can't grow past it, and at 320px the
   // 16:9 box clipped the placeholder's Visa button. The aspect parent itself becomes the embed, with
   // that ratio; the embed's own box grows with its content. Deliberately replaces #61's output, which
   // put `<div class="grid h-full">` inside the aspect parent.
@@ -1246,26 +1246,26 @@ describe('wireEmbeds', () => {
     )
   })
 
-  // #45 (knutssonsbil, MapSection.astro): the iframe was absolutely positioned and filled a
+  // #45 (site 1228881255, MapSection.astro): the iframe was absolutely positioned and filled a
   // padding-ratio box. An in-flow `grid h-full min-h-[320px]` wrapper left the map 320px tall with
   // an empty band below; the wrapper takes the iframe's place instead, and the box keeps its size.
   test('an absolute iframe that fills a position: relative padding-ratio box → wrapper "absolute inset-0 grid", no min-height (#45)', () => {
-    const knutssonsbil = `<div class="overflow-hidden" style="border: 1px solid var(--kb-line);" data-animate data-animate-delay="0.1">
+    const site = `<div class="overflow-hidden" style="border: 1px solid var(--kb-line);" data-animate data-animate-delay="0.1">
   <div style="position: relative; padding-bottom: 40%; min-height: 320px;">
     <iframe
-      src="https://maps.google.com/maps?q=Bengt+Knutssons+Bil+AB%2C+H%C3%A4rlunda%2C+Skara&t=&z=13&ie=UTF8&iwloc=&output=embed"
+      src="https://maps.google.com/maps?q=Exempel+Bil+AB%2C+Exempelby&t=&z=13&ie=UTF8&iwloc=&output=embed"
       style="position: absolute; inset: 0; width: 100%; height: 100%; border: 0; display: block; filter: grayscale(0.3) contrast(1.1);"
       allowfullscreen
       loading="lazy"
       referrerpolicy="no-referrer-when-downgrade"
-      title="Knutssons Bil AB — Härlunda 1, Skara"
+      title="Exempel Bil AB — Exempelgatan 1, Exempelby"
     ></iframe>
   </div>
 </div>
 `
-    const text = embed(knutssonsbil, 'src/components/MapSection.astro')
+    const text = embed(site, 'src/components/MapSection.astro')
     expect(text).toContain(
-      `  <div style="position: relative; padding-bottom: 40%; min-height: 320px;">\n    <div class="absolute inset-0 grid"><ConsentEmbed service="google-maps" src="https://maps.google.com/maps?q=Bengt+Knutssons+Bil+AB%2C+H%C3%A4rlunda%2C+Skara&t=&z=13&ie=UTF8&iwloc=&output=embed" title="Knutssons Bil AB — Härlunda 1, Skara" aspect="auto" /></div>\n  </div>`,
+      `  <div style="position: relative; padding-bottom: 40%; min-height: 320px;">\n    <div class="absolute inset-0 grid"><ConsentEmbed service="google-maps" src="https://maps.google.com/maps?q=Exempel+Bil+AB%2C+Exempelby&t=&z=13&ie=UTF8&iwloc=&output=embed" title="Exempel Bil AB — Exempelgatan 1, Exempelby" aspect="auto" /></div>\n  </div>`,
     )
     expect(text).toContain('div :global(iframe) {\n    filter: grayscale(0.3) contrast(1.1);\n  }')
   })
@@ -1289,7 +1289,7 @@ describe('wireEmbeds', () => {
 
   test('a padding-ratio box without an absolute filling iframe, an absolute iframe that does not fill, or a parent that is not relative: refused (#45)', () => {
     const src = 'src="https://www.google.com/maps/embed?pb=!1" title="Karta"'
-    // knutssonsbil's box with an in-flow iframe: before #45 this became `grid h-full min-h-[320px]`.
+    // site 1228881255's box with an in-flow iframe: before #45 this became `grid h-full min-h-[320px]`.
     expect(refused(`<div style="position: relative; padding-bottom: 40%; min-height: 320px;">\n  <iframe ${src} height="100%"></iframe>\n</div>\n`)).toEqual([
       "the map's parent is a padding-ratio box (padding-bottom: 40%) and the iframe does not fill it absolutely",
     ])
@@ -1315,7 +1315,7 @@ describe('wireEmbeds', () => {
     expect(
       refused(`<div class="relative">\n  <iframe class="absolute inset-0 w-full h-full" ${src}></iframe>\n  <div class="relative z-10 p-8"><h2>Hitta hit</h2></div>\n</div>\n`),
     ).toEqual(['the map iframe fills its parent absolutely, but the parent holds more than the map'])
-    // A comment beside it is no content (aremaskin's KontaktSection holds only the iframe).
+    // A comment beside it is no content (site 1218365709's KontaktSection holds only the iframe).
     expect(embed(`<div class="relative min-h-[400px] lg:min-h-0" data-animate>\n  <!-- karta -->\n  <iframe class="absolute inset-0 w-full h-full" style="border: 0; display: block;" ${src}></iframe>\n</div>\n`)).toContain(
       '<div class="absolute inset-0 grid"><ConsentEmbed',
     )
@@ -1327,7 +1327,7 @@ describe('wireEmbeds', () => {
     }
   })
 
-  test('a parent sized by a scoped aspect-ratio is definite (ahatrafikskola: .contact-info-map-frame)', () => {
+  test('a parent sized by a scoped aspect-ratio is definite (.contact-info-map-frame)', () => {
     const map = `<iframe src="https://www.google.com/maps/embed?pb=!1" width="100%" height="100%" style="border:0;" title="Karta"></iframe>`
     const aha = `<div class="frame">\n  ${map}\n</div>\n<style>\n  .frame {\n    aspect-ratio: 4 / 5;\n    overflow: hidden;\n  }\n  @media (max-width: 900px) {\n    .frame { aspect-ratio: 4 / 3; }\n  }\n</style>\n`
     expect(embed(aha)).toContain(`<div class="frame">\n  <div class="grid h-full"><ConsentEmbed service="google-maps" src="https://www.google.com/maps/embed?pb=!1" title="Karta" aspect="auto" /></div>\n</div>`)
@@ -1373,7 +1373,7 @@ describe('wireEmbeds', () => {
     ])
   })
 
-  test("scoped CSS for a class the wrapper keeps sets display or another height: refused (salviablommor: the map was 0px tall)", () => {
+  test("scoped CSS for a class the wrapper keeps sets display or another height: refused (a client map was 0px tall)", () => {
     const wrap = `<div class="karta">\n  <iframe class="contact-map" src="https://www.google.com/maps/embed?pb=!1" height="100%" title="Karta"></iframe>\n</div>\n`
     expect(refused(`${wrap}<style>\n  .karta { min-height: 500px; }\n  .contact-map {\n    width: 100%;\n    height: 100%;\n    display: block;\n  }\n</style>\n`)).toEqual([
       "scoped CSS for the iframe's class .contact-map sets display: block, which beats the wrapper's grid",
@@ -1405,7 +1405,7 @@ describe('wireEmbeds', () => {
     ])
   })
 
-  test('inline style="filter: grayscale(0.2)" → a scoped div :global(iframe) rule carries the filter (as aspomad/merged)', () => {
+  test('inline style="filter: grayscale(0.2)" → a scoped div :global(iframe) rule carries the filter (as site-1218869363/merged)', () => {
     expect(
       embed(
         `<section>\n  <iframe src="https://www.google.com/maps/embed?pb=!1" style="border:0; filter: grayscale(0.2)" title="Karta"></iframe>\n</section>\n`,
@@ -1433,7 +1433,7 @@ describe('wireEmbeds', () => {
   })
 
   // A Tailwind filter utility on the iframe would grey the placeholder (and the Visa button) on the
-  // wrapper; it goes on the wrapper as `[&_iframe]:<utility>` so it reaches only the loaded map (abacum).
+  // wrapper; it goes on the wrapper as `[&_iframe]:<utility>` so it reaches only the loaded map (site 1253343488).
   test("class 'w-full h-full grayscale' → wrapper '[&_iframe]:grayscale', not 'grayscale'", () => {
     const text = embed(
       `<div class="h-72">\n  <iframe class="w-full h-full grayscale" src="https://www.google.com/maps/embed?pb=!1" title="Karta"></iframe>\n</div>\n`,
@@ -1483,10 +1483,10 @@ describe('wireEmbeds', () => {
   })
 
   test.each([
-    ['aspomad', 'src/components/ContactMap.astro'],
-    ['domeijstapetserarverkstad', 'src/components/Contact.astro'],
-    ['traforadling', 'src/components/ContactFormSection.astro'],
-    ['vasshallakatthotell', 'src/components/ContactSection.astro'],
+    ['site-1218869363', 'src/components/ContactMap.astro'],
+    ['site-1243511314', 'src/components/Contact.astro'],
+    ['site-1243335919', 'src/components/ContactFormSection.astro'],
+    ['site-1245311266', 'src/components/ContactSection.astro'],
   ])('%s: the map component comes out as expected/ (scoped-style rewrites included)', (site, path) => {
     const { files, result } = fixturePlan(site)
     expect(after(result, files, path)).toBe(expectedText(site, path))

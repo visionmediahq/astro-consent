@@ -1,0 +1,30 @@
+---
+import Base from '../layouts/Base.astro';
+import HeaderSag from '../components/HeaderSag.astro';
+import FooterSag from '../components/FooterSag.astro';
+import HeroSag from '../components/HeroSag.astro';
+import ContactCardsSag from '../components/ContactCardsSag.astro';
+import ContactFormSection from '../components/ContactFormSection.astro';
+
+export const prerender = true;
+---
+
+<Base
+  title="Kontakt Exempel Såg AB – Exempel Trä"
+  description="Kontakta Exempel Såg AB i Exempelby. Hitta telefonnummer, e-postadresser och karta till oss. Öppet mån–fre 07.00–16.00."
+  canonical="https://site-1243335919.se/kontakt-sag/"
+  ogImage="/og-image.jpg"
+  brand="sag"
+>
+  <HeaderSag currentPath={Astro.url.pathname} />
+  <main id="main-content">
+    <HeroSag
+      title="Kontakt"
+      ctaLabel="Produkter"
+      ctaHref="/sag-produkter/"
+    />
+    <ContactCardsSag />
+    <ContactFormSection formTarget="sag" />
+  </main>
+  <FooterSag />
+</Base>

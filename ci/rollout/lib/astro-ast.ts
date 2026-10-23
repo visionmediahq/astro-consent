@@ -181,7 +181,7 @@ export function blankComments(text: string): string {
  * placeholder element named `this` at 0-0), and the caller should hand the file to a human.
  *
  * compiler-rs rejects an HTML comment between `(` and the element in a `{…}` conditional, which
- * Astro's own compiler builds (anab, fonsterdekor, nnf). On an error the file is parsed once more
+ * Astro's own compiler builds (site 1229678815, site 1232876997, site 1249028649). On an error the file is parsed once more
  * with its comments blanked (`blankComments`); the first error is thrown if that fails too.
  */
 export function parseAstro(text: string): { frontmatter: Frontmatter | null; root: AstroNode } {

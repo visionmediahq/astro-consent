@@ -123,19 +123,19 @@ function deploymentsApi(pages: ReturnType<typeof dep>[][]) {
 
 describe('appsFor', () => {
   const raw = [
-    { uuid: 'cms', name: 'CMS', git_repository: 'visionmediahq/nhrk', git_branch: 'main', fqdn: 'https://nhrk.vmedia.se', is_auto_deploy_enabled: false },
-    { uuid: 'web', name: 'Website', git_repository: 'git@github.com:visionmediahq/nhrk.git', git_branch: 'main', fqdn: 'https://nhrk.se,https://www.nhrk.se' },
-    { uuid: 'stg', name: 'Staging', git_repository: 'visionmediahq/nhrk', git_branch: 'staging', fqdn: 'https://stg.nhrk.se' },
-    { uuid: 'oth', name: 'Other', git_repository: 'visionmediahq/nhrk-old', git_branch: 'main', fqdn: 'https://old.se' },
-    { uuid: 'own', name: 'Owner', git_repository: 'someone/nhrk', git_branch: 'main', fqdn: 'https://x.se' },
+    { uuid: 'cms', name: 'CMS', git_repository: 'visionmediahq/site-1277834673', git_branch: 'main', fqdn: 'https://site-1277834673.vmedia.se', is_auto_deploy_enabled: false },
+    { uuid: 'web', name: 'Website', git_repository: 'git@github.com:visionmediahq/site-1277834673.git', git_branch: 'main', fqdn: 'https://site-1277834673.se,https://www.site-1277834673.se' },
+    { uuid: 'stg', name: 'Staging', git_repository: 'visionmediahq/site-1277834673', git_branch: 'staging', fqdn: 'https://stg.site-1277834673.se' },
+    { uuid: 'oth', name: 'Other', git_repository: 'visionmediahq/site-1277834673-old', git_branch: 'main', fqdn: 'https://old.se' },
+    { uuid: 'own', name: 'Owner', git_repository: 'someone/site-1277834673', git_branch: 'main', fqdn: 'https://x.se' },
   ]
 
-  test('CASE appsFor filters branch main and repo; keeps both nhrk apps; marks autoDeploy from the field', () => {
-    const apps = appsFor(raw.map(toApp), 'nhrk')
+  test('CASE appsFor filters branch main and repo; keeps both apps of a site with a CMS app; marks autoDeploy from the field', () => {
+    const apps = appsFor(raw.map(toApp), 'site-1277834673')
     expect(apps.map((a) => a.uuid)).toEqual(['cms', 'web'])
     expect(apps.find((a) => a.uuid === 'cms')!.autoDeploy).toBe(false)
     expect(apps.find((a) => a.uuid === 'web')!.autoDeploy).toBe(true)
-    expect(apps.find((a) => a.uuid === 'web')!.fqdns).toEqual(['nhrk.se', 'www.nhrk.se'])
+    expect(apps.find((a) => a.uuid === 'web')!.fqdns).toEqual(['site-1277834673.se', 'www.site-1277834673.se'])
   })
 })
 
@@ -172,7 +172,7 @@ describe('followsMain (Ruling 14)', () => {
 })
 
 describe('waitDeployed', () => {
-  const app = toApp({ uuid: 'web', name: 'Website', git_repository: 'visionmediahq/nhrk', git_branch: 'main', fqdn: 'https://nhrk.se' })
+  const app = toApp({ uuid: 'web', name: 'Website', git_repository: 'visionmediahq/site-1277834673', git_branch: 'main', fqdn: 'https://site-1277834673.se' })
 
   test('CASE finished after 3 polls → finished, 20 s apart', async () => {
     const c = clock()

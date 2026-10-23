@@ -41,9 +41,9 @@ import SiteFooter from '../components/SiteFooter.astro'
 const FOOTER = `<footer class="bg-neutral text-neutral-content/80 py-6"><p>©</p></footer>\n`
 
 describe('detectStructure: pilot fixtures', () => {
-  test('munkfors: one layout whose footer component is the VisionFooter strip; client footer rendered by the start page', () => {
-    const r = detectStructure(pilot('munkforstradgardstjanst'))
-    const base = fixtureText('munkforstradgardstjanst', 'src/layouts/Base.astro')
+  test('one layout whose footer component is the VisionFooter strip; client footer rendered by the start page', () => {
+    const r = detectStructure(pilot('site-1286040212'))
+    const base = fixtureText('site-1286040212', 'src/layouts/Base.astro')
     expect(r.layouts).toEqual([
       {
         file: 'src/layouts/Base.astro',
@@ -51,7 +51,7 @@ describe('detectStructure: pilot fixtures', () => {
         footerRef: { name: 'VisionFooter', start: base.indexOf('<VisionFooter') },
       },
     ])
-    const footer = fixtureText('munkforstradgardstjanst', 'src/components/Footer.astro')
+    const footer = fixtureText('site-1286040212', 'src/components/Footer.astro')
     expect(r.footers).toEqual([
       {
         file: 'src/components/Footer.astro',
@@ -68,12 +68,12 @@ describe('detectStructure: pilot fixtures', () => {
     expect(r.parseErrors).toEqual([])
   })
 
-  test('vasshalla: the privacy page is /gdpr', () => {
-    expect(detectStructure(pilot('vasshallakatthotell')).policyPage).toBe('/gdpr')
+  test('the privacy page is /gdpr', () => {
+    expect(detectStructure(pilot('site-1245311266')).policyPage).toBe('/gdpr')
   })
 
-  test('domeij: the layout has no footer; the start page renders the footer itself; 404 is footerless', () => {
-    const r = detectStructure(pilot('domeijstapetserarverkstad'))
+  test('the layout has no footer; the start page renders the footer itself; 404 is footerless', () => {
+    const r = detectStructure(pilot('site-1243511314'))
     expect(r.layouts).toEqual([
       { file: 'src/layouts/Base.astro', pages: ['src/pages/404.astro', 'src/pages/index.astro'], footerRef: null },
     ])
@@ -84,33 +84,33 @@ describe('detectStructure: pilot fixtures', () => {
     expect(r.footerless).toEqual(['src/pages/404.astro'])
   })
 
-  test('traforadling: a meta-refresh redirect page is not footerless; the splash start page is', () => {
-    const site = withFiles(pilot('traforadling'), {
-      'src/pages/levene_sag_ab.astro': `---
+  test('a meta-refresh redirect page is not footerless; the splash start page is', () => {
+    const site = withFiles(pilot('site-1243335919'), {
+      'src/pages/sag_sag_ab.astro': `---
 ---
-<html><head><meta http-equiv="refresh" content="0; url=/kontakt-levene" /><title>Levene</title></head></html>
+<html><head><meta http-equiv="refresh" content="0; url=/kontakt-sag" /><title>Sag</title></head></html>
 `,
     })
     const r = detectStructure(site)
     expect(r.footerless).toEqual(['src/pages/404.astro', 'src/pages/index.astro'])
-    expect(r.footers.map((f) => f.file)).toEqual(['src/components/FooterLevene.astro', 'src/components/FooterSkaraborg.astro'])
+    expect(r.footers.map((f) => f.file)).toEqual(['src/components/FooterSag.astro', 'src/components/FooterTra.astro'])
     expect(r.layouts.map((l) => l.file)).toEqual(['src/layouts/Base.astro'])
   })
 
   test.each([
-    ['a-tak', 'VisionFooter', ['src/components/Footer.astro'], ['src/pages/404.astro']],
-    ['aspomad', 'Footer', ['src/components/Footer.astro'], []],
-    ['domeijstapetserarverkstad', null, ['src/components/Footer.astro'], ['src/pages/404.astro']],
-    ['munkforstradgardstjanst', 'VisionFooter', ['src/components/Footer.astro'], ['src/pages/404.astro']],
-    ['nhrk', 'VisionFooter', ['src/components/Footer.astro'], ['src/pages/404.astro']],
+    ['site-1271984151', 'VisionFooter', ['src/components/Footer.astro'], ['src/pages/404.astro']],
+    ['site-1218869363', 'Footer', ['src/components/Footer.astro'], []],
+    ['site-1243511314', null, ['src/components/Footer.astro'], ['src/pages/404.astro']],
+    ['site-1286040212', 'VisionFooter', ['src/components/Footer.astro'], ['src/pages/404.astro']],
+    ['site-1277834673', 'VisionFooter', ['src/components/Footer.astro'], ['src/pages/404.astro']],
     [
-      'traforadling',
+      'site-1243335919',
       'VisionFooter',
-      ['src/components/FooterLevene.astro', 'src/components/FooterSkaraborg.astro'],
+      ['src/components/FooterSag.astro', 'src/components/FooterTra.astro'],
       ['src/pages/404.astro', 'src/pages/index.astro'],
     ],
     // OmOssContent's <footer> belongs to a <blockquote>, not to the page.
-    ['vasshallakatthotell', 'VisionFooter', ['src/components/Footer.astro'], ['src/pages/404.astro']],
+    ['site-1245311266', 'VisionFooter', ['src/components/Footer.astro'], ['src/pages/404.astro']],
   ])('%s: footerRef, footers and footerless match where the pilot placed things', (site, ref, footers, footerless) => {
     const r = detectStructure(pilot(site))
     expect(r.layouts).toHaveLength(1)
@@ -180,27 +180,27 @@ describe('detectStructure: synthetic cases', () => {
   })
 
   test.each([
-    ['a-tak', [false]],
-    ['aspomad', [true]],
-    ['domeijstapetserarverkstad', [false]],
-    ['munkforstradgardstjanst', [false]],
-    ['nhrk', [true]],
-    ['traforadling', [false, false]],
-    ['vasshallakatthotell', [false]],
+    ['site-1271984151', [false]],
+    ['site-1218869363', [true]],
+    ['site-1243511314', [false]],
+    ['site-1286040212', [false]],
+    ['site-1277834673', [true]],
+    ['site-1243335919', [false, false]],
+    ['site-1245311266', [false]],
   ])('%s: centred follows the footer\'s last-child chain', (site, centred) => {
     expect(detectStructure(pilot(site)).footers.map((f) => f.centred)).toEqual(centred)
   })
 
   test.each([
-    ['a-tak', ['left']],
-    ['aspomad', ['centred']],
+    ['site-1271984151', ['left']],
+    ['site-1218869363', ['centred']],
     // the chain's only alignment is md:text-right
-    ['domeijstapetserarverkstad', ['unknown']],
-    ['munkforstradgardstjanst', ['left']],
-    ['nhrk', ['centred']],
+    ['site-1243511314', ['unknown']],
+    ['site-1286040212', ['left']],
+    ['site-1277834673', ['centred']],
     // centred by scoped CSS, which detect cannot see
-    ['traforadling', ['unknown', 'unknown']],
-    ['vasshallakatthotell', ['left']],
+    ['site-1243335919', ['unknown', 'unknown']],
+    ['site-1245311266', ['left']],
   ])('%s: alignment follows the footer\'s last-child chain', (site, alignment) => {
     const footers = detectStructure(pilot(site)).footers
     expect(footers.map((f) => f.alignment)).toEqual(alignment)
@@ -232,7 +232,7 @@ describe('detectStructure: synthetic cases', () => {
   test('centred: a text-center row at the end of the last-child chain', () => {
     const page = (footer: string) => inline({ 'src/pages/index.astro': `${footer}\n` })
     const centred = (footer: string) => detectStructure(page(footer)).footers[0]!.centred
-    // nhrk's shape: footer > wrapper > [grid, centred © row]
+    // site 1277834673's shape: footer > wrapper > [grid, centred © row]
     expect(centred('<footer><div class="mx-auto"><div class="grid"><p>a</p><p>b</p></div><div class="border-t text-center"><p>©</p></div></div></footer>')).toBe(true)
     expect(centred('<footer><div><div class="flex justify-center"><a>x</a></div></div></footer>')).toBe(true)
     // a split bottom row stops the chain, even with items-center on a flex-col
@@ -331,7 +331,7 @@ import Bottom from '../components/SiteFooter.astro'
     expect(detectStructure(inline({ 'src/pages/om-oss.astro': page })).policyPage).toBeNull()
     expect(detectStructure(inline({ 'src/pages/gdpr.astro': page })).policyPage).toBe('/gdpr')
     expect(detectStructure(inline({ 'src/pages/GDPR-policy.astro': page })).policyPage).toBe('/GDPR-policy')
-    // #61 (schloetter): `en/gdpr` sorts before `gdpr`; the Swedish page without a language prefix wins, then the shortest.
+    // #61 (site 1369693991): `en/gdpr` sorts before `gdpr`; the Swedish page without a language prefix wins, then the shortest.
     expect(detectStructure(inline({ 'src/pages/en/gdpr.astro': page, 'src/pages/gdpr.astro': page })).policyPage).toBe('/gdpr')
     expect(detectStructure(inline({ 'src/pages/de/datenschutz.astro': page, 'src/pages/en/privacy.astro': page, 'src/pages/sv/integritetspolicy.astro': page })).policyPage).toBe('/sv/integritetspolicy')
     expect(detectStructure(inline({ 'src/pages/info/integritetspolicy.astro': page, 'src/pages/integritetspolicy.astro': page })).policyPage).toBe('/integritetspolicy')
@@ -344,7 +344,7 @@ import Bottom from '../components/SiteFooter.astro'
     expect(detectStructure(inline({ 'src/pages/gdpr.astro': page, 'src/pages/cookiepolicy.astro': page })).policyPage).toBe('/gdpr')
     expect(detectStructure(inline({ 'src/pages/cookies.astro': page, 'src/pages/integritetspolicy.astro': page })).policyPage).toBe('/integritetspolicy')
     expect(detectStructure(inline({ 'src/pages/privacy.astro': page, 'src/pages/integritetspolicy.astro': page })).policyPage).toBe('/integritetspolicy')
-    // kajsa-landgren: the policy word inside the slug, after another word; a page that starts with one still wins.
+    // site 1280190874: the policy word inside the slug, after another word; a page that starts with one still wins.
     expect(detectStructure(inline({ 'src/pages/kopvillkor-och-integritetspolicy-gdpr.astro': page })).policyPage).toBe('/kopvillkor-och-integritetspolicy-gdpr')
     expect(detectStructure(inline({ 'src/pages/villkor-och-gdpr.astro': page, 'src/pages/integritetspolicy.astro': page })).policyPage).toBe('/integritetspolicy')
     expect(detectStructure(inline({ 'src/pages/blogg-om-gdprx.astro': page, 'src/pages/kontakt.astro': page })).policyPage).toBeNull()
@@ -427,13 +427,13 @@ import Bottom from '../components/SiteFooter.astro'
   })
 
   test('ownHtmlPages is empty on every pilot fixture', () => {
-    for (const site of ['a-tak', 'aspomad', 'domeijstapetserarverkstad', 'munkforstradgardstjanst', 'nhrk', 'traforadling', 'vasshallakatthotell']) {
+    for (const site of ['site-1271984151', 'site-1218869363', 'site-1243511314', 'site-1286040212', 'site-1277834673', 'site-1243335919', 'site-1245311266']) {
       expect(detectStructure(pilot(site)).ownHtmlPages, site).toEqual([])
     }
   })
 
   test('multiFooterPages is empty on every pilot fixture', () => {
-    for (const site of ['a-tak', 'aspomad', 'domeijstapetserarverkstad', 'munkforstradgardstjanst', 'nhrk', 'traforadling', 'vasshallakatthotell']) {
+    for (const site of ['site-1271984151', 'site-1218869363', 'site-1243511314', 'site-1286040212', 'site-1277834673', 'site-1243335919', 'site-1245311266']) {
       expect(detectStructure(pilot(site)).multiFooterPages, site).toEqual([])
     }
   })

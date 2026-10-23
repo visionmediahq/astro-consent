@@ -1,5 +1,7 @@
 # Rollout retro artifact: design
 
+Sites are named by GitHub repo ID (`gh api repositories/<id>`).
+
 Date: 2026-10-12. Status: approved design, not built.
 
 ## Purpose
@@ -53,7 +55,7 @@ Horizontal on desktop, vertical under 640 px. Milestones:
 | 2026-10-06 | Expansion spec and plan (20 sites + rollout tool) | site-factory e7b48f3, 4361955, a894bf4 |
 | 2026-10-07 | v1.0.2 (contrast, map button) | astro-consent f26fc72 |
 | 2026-10-08 | Rollout tool merged (#3); first expansion sites | astro-consent b458afa |
-| 2026-10-12 | 20 of 20 merged (faluridklubb last); tool PR #15 | astro-consent ca9b49d |
+| 2026-10-12 | 20 of 20 merged (site 1243331215 last); tool PR #15 | astro-consent ca9b49d |
 | 2026-10-15/19/26 | Observation days 3/7/14 (upcoming, dashed) | ledger |
 | after 10-26 | Task 27 retro (upcoming, dashed) | ledger |
 
@@ -94,24 +96,24 @@ Seed inventory (the build compiles the full list from the sources; these must al
 - Package: `pb=` map open link went to the visitor's location (v1.0.1); banner and map buttons
   failed WCAG AA on light primaries on three pilot sites (v1.0.2); map button repeated the embed
   title (v1.0.2).
-- Pilot: audit marked traforadling "no services" though it has a map (pilot Finding 1); wiring by
-  hand rather than by script (Finding 2); nhrk.vmedia.se CMS app did not redeploy (nhrk#61); rule
-  gaps → Rulings 16–25, domeij footer links unreadable → Ruling 20 contrast check.
-- Rollout tool PRs #5–#15, one finding each: stale root `engines` resync (mannature, #5); SSR
-  crawl hit file endpoints (#6); Cloudflare `/cdn-cgi/` links (linjegods, #7); load + bounded
-  networkidle (#8); mobile call bar covered the banner button (aspokarlsson, #9); empty dependency
+- Pilot: audit marked site 1243335919 "no services" though it has a map (pilot Finding 1); wiring by
+  hand rather than by script (Finding 2); site 1277834673's CMS app on vmedia.se did not redeploy (an issue in its repo); rule
+  gaps → Rulings 16–25, site 1243511314 footer links unreadable → Ruling 20 contrast check.
+- Rollout tool PRs #5–#15, one finding each: stale root `engines` resync (site 1286030122, #5); SSR
+  crawl hit file endpoints (#6); Cloudflare `/cdn-cgi/` links (site 1296282111, #7); load + bounded
+  networkidle (#8); mobile call bar covered the banner button (site 1249159919, #9); empty dependency
   map dropped by npm (#10); sideways-scrolling page (#11); any root field npm copies may resync
-  (#12); Docker build without `SITE_URL` (burnersverige, #13); daisyUI 5 added where main had none
-  (faluridklubb, #14); root scrollbar/background styles (#15).
-- Site branch fixes: burnersverige `??` → `||` for empty `SITE_URL`; aspokarlsson banner lifted
-  above the call bar; bbstad banner outside the `chrome` conditional and links on 404; scoped-CSS
-  footer at 1.13:1 fixed with `text-white/60`; faluridklubb daisyUI `exclude: scrollbar` and
-  reCAPTCHA loaded on focus; faluridklubb policy section (PR #34).
+  (#12); Docker build without `SITE_URL` (site 1346130035, #13); daisyUI 5 added where main had none
+  (site 1243331215, #14); root scrollbar/background styles (#15).
+- Site branch fixes: site 1346130035 `??` → `||` for empty `SITE_URL`; site 1249159919 banner lifted
+  above the call bar; site 1270076313 banner outside the `chrome` conditional and links on 404; scoped-CSS
+  footer at 1.13:1 fixed with `text-white/60`; site 1243331215 daisyUI `exclude: scrollbar` and
+  reCAPTCHA loaded on focus; site 1243331215 policy section (PR #34).
 - Infra/ops: Coolify had no deployment history for 7 apps → merge STOP, redeployed by hand; host
   disk full → Docker I/O errors; Docker "unable to lease content" after restart (not a finding);
-  preview server dropped mid-verify (afastigheter, bbstad; cause unknown); main moved mid-verify
+  preview server dropped mid-verify (site 1223253809, site 1270076313; cause unknown); main moved mid-verify
   (security-headers rollout).
-- False positives: detect's invented-map heuristic on 1life and aktivborr.
+- False positives: detect's invented-map heuristic on site 1233003545 and site 1270982253.
 
 Sources, in order of preference: `CHANGELOG.md`; `gh pr view` for astro-consent #1–#15 and the
 site PRs; ledger `.superpowers/sdd/2026-10-06-astro-consent-pilot-expansion-implementation/progress.md`;
@@ -131,7 +133,7 @@ lazy-load recipe); shared policy-section component; spam guards as registry serv
 honeypot; wire/detect blind to conditional footer rendering; wire blind to scoped-CSS footer
 colours; screenshots and contrast taken during entrance animations; Docker step lacks Coolify's
 build args; sample pages on large sites; detect's invented-map heuristic; pruned Coolify history
-blocks the follows-main check; the a-tak template's href paragraph does not fit every site; subagent
+blocks the follows-main check; the site 1271984151 template's href paragraph does not fit every site; subagent
 review caught what verify could not.
 
 ### 5. How it was caught

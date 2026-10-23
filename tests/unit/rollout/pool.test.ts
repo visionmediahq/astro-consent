@@ -5,6 +5,7 @@ import type { App } from '../../../ci/rollout/coolify'
 import {
   domainsFor,
   hasAstroDep,
+  parseOrgRepos,
   parsePoolArgs,
   planPool,
   poolRepos,
@@ -24,16 +25,39 @@ const app = (repo: string, fqdns: string[], branch = 'main'): App => ({
   fqdns,
   autoDeploy: true,
 })
-const repo = (name: string, extra: Partial<OrgRepo> = {}): OrgRepo => ({ name, isArchived: false, astro: true, homepageUrl: null, ...extra })
+let nextId = 1000
+const repo = (name: string, extra: Partial<OrgRepo> = {}): OrgRepo => ({ id: nextId++, name, isArchived: false, astro: true, homepageUrl: null, ...extra })
 const none: Exclusions = { pilot7: [], spamGuard: [] }
 
 describe('exclusions.json', () => {
-  test('lists the 7 pilot sites and the 10 spam-guard sites, jamtmaskin and eklimat included', () => {
+  test('lists the 7 pilot sites and the 10 spam-guard sites by numeric GitHub repo ID, no names', () => {
     const ex = JSON.parse(readFileSync(join(import.meta.dirname, '../../../ci/rollout/exclusions.json'), 'utf8')) as Exclusions
     expect(ex.pilot7).toHaveLength(7)
     expect(ex.spamGuard).toHaveLength(10)
-    expect(ex.spamGuard).toEqual(expect.arrayContaining(['jamtmaskin', 'eklimat']))
-    expect(ex.pilot7).toContain('vasshallakatthotell')
+    for (const id of [...ex.pilot7, ...ex.spamGuard]) expect(Number.isSafeInteger(id) && id > 0).toBe(true)
+    expect(new Set([...ex.pilot7, ...ex.spamGuard]).size).toBe(17)
+  })
+})
+
+describe('parseOrgRepos', () => {
+  test('reads the REST listing, one JSON object per line, into OrgRepo fields', () => {
+    const out = [
+      '{"homepageUrl":null,"id":101,"isArchived":false,"name":"a"}',
+      '',
+      '{"homepageUrl":"https://b.se","id":102,"isArchived":true,"name":"b"}',
+    ].join('\n')
+    expect(parseOrgRepos(out)).toEqual([
+      { id: 101, name: 'a', isArchived: false, homepageUrl: null },
+      { id: 102, name: 'b', isArchived: true, homepageUrl: 'https://b.se' },
+    ])
+  })
+
+  test('a line without a numeric id is an error, not a repo that can never be excluded', () => {
+    expect(() => parseOrgRepos('{"name":"a","isArchived":false,"homepageUrl":null}')).toThrow(/id/)
+  })
+
+  test('a line without a name is an error too, not a repo called "undefined"', () => {
+    expect(() => parseOrgRepos('{"id":101,"isArchived":false,"homepageUrl":null}')).toThrow(/name/)
   })
 })
 
@@ -91,8 +115,8 @@ describe('domainsFor', () => {
   })
 
   test('two apps on one repo: main-branch domains come first, each label once', () => {
-    const apps = [app('nhrk', ['nhrk.vmedia.se'], 'production'), app('nhrk', ['nhrk.se', 'www.nhrk.se'])]
-    expect(domainsFor(repo('nhrk', { homepageUrl: 'https://nhrk.se' }), apps, ['nhrk.vmedia.se', 'nhrk.se'])).toEqual(['nhrk.se', 'nhrk.vmedia.se'])
+    const apps = [app('site-1277834673', ['site-1277834673.vmedia.se'], 'production'), app('site-1277834673', ['site-1277834673.se', 'www.site-1277834673.se'])]
+    expect(domainsFor(repo('site-1277834673', { homepageUrl: 'https://site-1277834673.se' }), apps, ['site-1277834673.vmedia.se', 'site-1277834673.se'])).toEqual(['site-1277834673.se', 'site-1277834673.vmedia.se'])
   })
 })
 
@@ -107,9 +131,10 @@ describe('poolRepos', () => {
     repo('d'),
     repo('f'),
     repo('g'),
-    repo('nhrk'),
+    repo('h', { id: 7 }),
   ]
-  const exclusions: Exclusions = { pilot7: ['nhrk', 'd'], spamGuard: ['e'] }
+  const id = (name: string): number => orgRepos.find((r) => r.name === name)!.id
+  const exclusions: Exclusions = { pilot7: [7, id('d')], spamGuard: [id('e')] }
 
   test('CASE poolRepos: astro ∩ has a stats domain, minus exclusions, archived dropped, sorted', () => {
     expect(poolRepos({ orgRepos, statsDomains, exclusions, apps })).toEqual(['a'])

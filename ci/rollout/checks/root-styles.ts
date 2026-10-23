@@ -1,5 +1,5 @@
 // Site-wide styles on html and body, compared with main in step 5. daisyUI added where main had none
-// (faluridklubb) restyled the scrollbar on every page (`scrollbar-color` on :root) and painted :root
+// (site 1243331215) restyled the scrollbar on every page (`scrollbar-color` on :root) and painted :root
 // with its own background. Screenshots cannot show the scrollbar: Playwright hides it.
 import type { Browser } from '@playwright/test'
 import { freshPage, gotoPage } from './requests'
