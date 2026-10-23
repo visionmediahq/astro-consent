@@ -77,7 +77,7 @@ exports[`detect > pilot site-1218869363: consent, matching the committed snapsho
       "height": "100%",
       "host": "www.google.com",
       "service": "google-maps",
-      "src": "https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d2150.8471873476244!2d18.0622!3d59.3322!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x4657d0b4c8c8c8c8%3A0x4c8c8c8c8c8c8c8c!2sExempelgatan%2C%20123%2045%20Exempelby!5e0!3m2!1ssv!2sse!4v1234567890123!5m2!1ssv!2sse",
+      "src": "https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d2150.8471873476244!2d18.0622!3d59.3322!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x0000000000000000%3A0x0000000000000000!2sExempelgatan%2C%20123%2045%20Exempelby!5e0!3m2!1ssv!2sse!4v1234567890123!5m2!1ssv!2sse",
       "srcKind": "data-file",
       "start": 112,
       "style": "border:0;",
@@ -85,7 +85,7 @@ exports[`detect > pilot site-1218869363: consent, matching the committed snapsho
     },
   ],
   "inventedMaps": [
-    "https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d2150.8471873476244!2d18.0622!3d59.3322!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x4657d0b4c8c8c8c8%3A0x4c8c8c8c8c8c8c8c!2sExempelgatan%2C%20123%2045%20Exempelby!5e0!3m2!1ssv!2sse!4v1234567890123!5m2!1ssv!2sse",
+    "https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d2150.8471873476244!2d18.0622!3d59.3322!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x0000000000000000%3A0x0000000000000000!2sExempelgatan%2C%20123%2045%20Exempelby!5e0!3m2!1ssv!2sse!4v1234567890123!5m2!1ssv!2sse",
   ],
   "layouts": [
     {
@@ -198,7 +198,7 @@ exports[`detect > pilot site-1243335919: consent, matching the committed snapsho
       "callSites": [
         {
           "file": "src/pages/kontakt-sag.astro",
-          "src": "https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d2116.3748!2d18.0633!3d59.3333!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x464c19c12a7fc1f1%3A0x1b1c4e5b6a7d8e9f!2sExempelv%C3%A4gen+2%2C+123+46+Exempelby!5e0!3m2!1ssv!2sse!4v1700000000000!5m2!1ssv!2sse",
+          "src": "https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d2116.3748!2d18.0633!3d59.3333!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x0000000000000000%3A0x0000000000000000!2sExempelv%C3%A4gen+2%2C+123+46+Exempelby!5e0!3m2!1ssv!2sse!4v1700000000000!5m2!1ssv!2sse",
         },
         {
           "file": "src/pages/kontakt.astro",
@@ -219,7 +219,7 @@ exports[`detect > pilot site-1243335919: consent, matching the committed snapsho
     },
   ],
   "inventedMaps": [
-    "https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d2116.3748!2d18.0633!3d59.3333!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x464c19c12a7fc1f1%3A0x1b1c4e5b6a7d8e9f!2sExempelv%C3%A4gen+2%2C+123+46+Exempelby!5e0!3m2!1ssv!2sse!4v1700000000000!5m2!1ssv!2sse",
+    "https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d2116.3748!2d18.0633!3d59.3333!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x0000000000000000%3A0x0000000000000000!2sExempelv%C3%A4gen+2%2C+123+46+Exempelby!5e0!3m2!1ssv!2sse!4v1700000000000!5m2!1ssv!2sse",
     "https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d2127.8!2d18.1!3d59.3!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x0%3A0x0!2sExempel+Tr%C3%A4+AB!5e0!3m2!1ssv!2sse!4v1700000000000!5m2!1ssv!2sse",
   ],
   "layouts": [

@@ -1,11 +1,11 @@
 {
   "addressStreet": "Exempelgatan",
   "addressCity": "Exempelby",
-  "addressZip": "37364",
+  "addressZip": "12345",
   "addressCountry": "SE",
   "phone": "070-000 00 00",
   "email": "info@site-1218869363.se",
   "facebookUrl": "https://www.facebook.com/people/Exempel-Cafe/00000000000000/",
   "instagramUrl": "https://www.instagram.com/exempel_cafe/",
-  "googleMapsEmbedUrl": "https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d2150.8471873476244!2d18.0622!3d59.3322!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x4657d0b4c8c8c8c8%3A0x4c8c8c8c8c8c8c8c!2sExempelgatan%2C%20123%2045%20Exempelby!5e0!3m2!1ssv!2sse!4v1234567890123!5m2!1ssv!2sse"
+  "googleMapsEmbedUrl": "https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d2150.8471873476244!2d18.0622!3d59.3322!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x0000000000000000%3A0x0000000000000000!2sExempelgatan%2C%20123%2045%20Exempelby!5e0!3m2!1ssv!2sse!4v1234567890123!5m2!1ssv!2sse"
 }
