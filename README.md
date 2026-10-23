@@ -531,8 +531,11 @@ npx tsx ci/rollout/run.ts help
   `glob()` loader's base or is named anywhere in the files read (an import, a path), or a glob
   may reach the project root (loader options not written inline, a computed or `${…}` base,
   base `.` or none with a pattern not starting in a folder, `glob` imported under another name;
-  an `import.meta.glob` that is not one literal pattern inside `src/`). So `docs/`, `README.md`
-  or `CLAUDE.md` that nothing builds are not read), the Web Font Loader (its script or
+  an `import.meta.glob` (type argument or not) whose one literal pattern does not resolve inside
+  `src/`; `..` in a loader base or pattern, or `...` in its options), or a built `.mdx` imports it.
+  So `docs/`, `README.md` or `CLAUDE.md` that nothing builds are not read. Not seen: a loader
+  called under another variable name, or code walking the project itself (`fast-glob`,
+  `readdirSync`); verify's request check still covers the built pages), the Web Font Loader (its script or
   `WebFont.load`) or a font-loading dependency (`webfontloader`, `unplugin-fonts`, `astro-font`,
   `*google-fonts*`), an Astro `fonts` config, an existing `src/styles/fonts.css` or `public/fonts/`,
   a CSP whose `font-src` or `style-src` (or `default-src`) lacks `'self'`, or a file with a

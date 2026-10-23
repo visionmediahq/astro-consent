@@ -636,15 +636,22 @@ function importsEntry(files: SiteFiles, file: string, entry: string, seen = new 
 }
 
 /**
- * Whether a Markdown file outside src/ and public/ can be built, from the site's code (every file
- * read but such Markdown): some glob may reach the project root, or the file's top folder (a root
- * file: its name) is named there (a loader base, an import, a path). Root-wide, conservatively: a
- * `glob()` loader whose options are not an inline object with a literal base (none, `.`, or one
- * with `${…}` counts as the root) and, for the root, a literal pattern starting in a folder; `glob`
- * imported under another name; an `import.meta.glob` that is not one literal from inside src/.
+ * Whether a Markdown file outside src/ and public/ can be built, from the site's text files (each
+ * file read but such Markdown, scanned on its own): some glob may reach the project root, or the
+ * file's top folder (a root file: its name) is a loader base or is named there (an import, a
+ * path). Root-wide, conservatively: a `glob()` loader whose options are not an inline object with
+ * literal values (`...`, a `${…}` or computed base), whose base or pattern has `..`, or whose base
+ * is none or `.` with a pattern not starting in a folder; `glob` imported under another name; an
+ * `import.meta.glob` (type argument or not) that is not one literal resolving inside src/. A built
+ * `.mdx` adds its import lines, until nothing new is built.
  */
-function markdownBuilt(files: SiteFiles, codeFiles: string[]): (file: string) => boolean {
-  const code = codeFiles.map((f) => files.read(f)).join('\n')
+function markdownBuilt(files: SiteFiles, codeFiles: string[], outsideMd: string[]): (file: string) => boolean {
+  // Text only: a binary file builds nothing, and a site's images joined can pass V8's string limit.
+  const texts = new Map<string, string>()
+  for (const f of codeFiles) {
+    const t = files.read(f)
+    if (!t.includes('\u0000')) texts.set(f, t)
+  }
   const literal = (arg: string, key: string): string | null | undefined => {
     if (!new RegExp(`\\b${key}\\s*:`).test(arg)) return undefined
     const m = new RegExp(`\\b${key}\\s*:\\s*(['"\`])([^'"\`]*)\\1`).exec(arg)
@@ -652,35 +659,67 @@ function markdownBuilt(files: SiteFiles, codeFiles: string[]): (file: string) =>
   }
   const strip = (p: string): string => p.replace(/^(?:\.\/)+/, '').replace(/\/+$/, '')
   const tops = new Set<string>()
-  let rootWide = /\bglob\s+as\s+\w/.test(code) || /\bglob\s*\(\s*(?!\{)[^\s)]/.test(code.replace(/import\.meta\.glob/g, ''))
-  for (const m of code.matchAll(/\bglob\s*\(\s*\{/g)) {
-    if (code.slice(Math.max(0, m.index - 12), m.index).endsWith('import.meta.')) continue
-    // The loader's options object, to its closing brace.
-    let depth = 0
-    let end = m.index + m[0].length - 1
-    for (; end < code.length; end++) {
-      if (code[end] === '{') depth++
-      else if (code[end] === '}' && --depth === 0) break
-    }
-    const arg = code.slice(m.index, end + 1)
-    const base = literal(arg, 'base')
-    if (base === null) rootWide = true
-    else if (base === undefined || strip(base) === '' || strip(base) === '.') {
+  let rootWide = false
+  const scan = (file: string, code: string): void => {
+    if (/\bglob\s+as\s+\w/.test(code) || /\bglob\s*\(\s*(?!\{)[^\s)]/.test(code.replace(/import\.meta\.glob/g, ''))) rootWide = true
+    for (const m of code.matchAll(/\bglob\s*\(\s*\{/g)) {
+      if (code.slice(Math.max(0, m.index - 12), m.index).endsWith('import.meta.')) continue
+      let depth = 0
+      let end = m.index + m[0].length - 1
+      for (; end < code.length; end++) {
+        if (code[end] === '{') depth++
+        else if (code[end] === '}' && --depth === 0) break
+      }
+      const arg = code.slice(m.index, end + 1)
+      if (/\.\.\./.test(arg)) rootWide = true
+      const base = literal(arg, 'base')
       const pattern = literal(arg, 'pattern')
-      if (typeof pattern !== 'string' || !/^[\w.-]+\//.test(strip(pattern))) rootWide = true
-    } else tops.add(strip(base).split('/')[0]!)
+      if (base?.includes('..') || pattern?.includes('..')) rootWide = true
+      if (base === null) rootWide = true
+      else if (base === undefined || strip(base) === '' || strip(base) === '.') {
+        if (typeof pattern !== 'string' || !/^[\w.-]+\//.test(strip(pattern))) rootWide = true
+      } else tops.add(strip(base).split('/')[0]!)
+    }
+    for (const m of code.matchAll(/import\.meta\.glob\b/g)) {
+      // An optional type argument (`import.meta.glob<{ default: ImageMetadata }>(…)`), then one literal.
+      const lit = /^\s*(?:<(?:[^<>]|<(?:[^<>]|<[^<>]*>)*>)*>)?\s*\(\s*(['"`])([^'"`]*)\1/.exec(code.slice(m.index + m[0].length))
+      const p = lit?.[2]
+      if (p === undefined || p.includes('${') || !/^(?:\/|\.\.?\/)/.test(p) || p.replace(/^(?:\.\.?\/)+/, '').includes('..')) {
+        rootWide = true
+        continue
+      }
+      const at = p.startsWith('/') ? posix.normalize(p.slice(1)) : posix.join(posix.dirname(file), p)
+      if (!at.startsWith('src/')) rootWide = true
+    }
   }
-  for (const m of code.matchAll(/import\.meta\.glob\s*\(\s*(\S)/g)) {
-    const lit = /^(['"`])([^'"`]*)\1/.exec(code.slice(m.index + m[0].length - 1))
-    if (!lit || lit[2]!.includes('${') || /^(?:\/|(?:\.\.\/)+)[*{]/.test(lit[2]!) || /^\/(?!src\/)/.test(lit[2]!)) rootWide = true
+  for (const [f, t] of texts) scan(f, t)
+  const named = (name: string): boolean => {
+    const re = new RegExp(`(?<![\\w.-])${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?:/|['"\`]|(?![\\w-]))`)
+    for (const t of texts.values()) if (re.test(t)) return true
+    return false
   }
-  const named = (name: string): boolean => new RegExp(`(?<![\\w.-])${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?:/|['"\`]|(?![\\w-]))`).test(code)
-  return (file) => {
+  const cache = new Map<string, boolean>()
+  const topOf = (file: string): string => (file.includes('/') ? file.slice(0, file.indexOf('/')) : file)
+  const isBuilt = (file: string): boolean => {
     if (rootWide) return true
-    const slash = file.indexOf('/')
-    const top = slash < 0 ? file : file.slice(0, slash)
-    return tops.has(top) || named(top)
+    const top = topOf(file)
+    if (!cache.has(top)) cache.set(top, tops.has(top) || named(top))
+    return cache.get(top)!
   }
+  // Built Markdown can import other Markdown: add it to the code read, until nothing new is built.
+  for (let grew = true; grew && !rootWide; ) {
+    grew = false
+    for (const f of outsideMd) {
+      if (texts.has(f) || !isBuilt(f)) continue
+      // Only MDX imports: a Markdown file's prose builds nothing.
+      const t = f.endsWith('.mdx') ? [...files.read(f).matchAll(/^(?:import|export)\b.*$/gm)].map((x) => x[0]).join('\n') : ''
+      texts.set(f, t)
+      scan(f, t)
+      cache.clear()
+      grew = true
+    }
+  }
+  return isBuilt
 }
 
 function astroFontsConfig(files: SiteFiles): string | null {
@@ -706,7 +745,7 @@ export function detectFonts(files: SiteFiles, cssEntry: string | null): FontsInf
     .filter((f) => !SKIP.test(f))
     .filter((f) => /^(?:src|public)\//.test(f) || ANYWHERE.test(f) || f === '_headers' || /^\.env(?:\..+)?$/.test(f))
   const outside = (f: string): boolean => /\.mdx?$/.test(f) && !/^(?:src|public)\//.test(f)
-  const built = markdownBuilt(files, all.filter((f) => !outside(f)))
+  const built = markdownBuilt(files, all.filter((f) => !outside(f)), all.filter(outside))
   const read = all.filter((f) => !outside(f) || built(f))
   for (const file of read) {
     const text = files.read(file)

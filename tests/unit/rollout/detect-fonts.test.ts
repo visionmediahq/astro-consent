@@ -374,6 +374,18 @@ describe('detectFonts: review probes', () => {
     ['a .md file under a loader defined outside src/', base(L, { 'docs/a.md': `<link rel="stylesheet" href="${U}">`, 'lib/loaders.ts': "export const docs = glob({ pattern: '**/*.md', base: './docs/' })\n", 'src/content.config.ts': "import { docs } from '../lib/loaders'\nconst d = defineCollection({ loader: docs })\n" }), 'docs/a.md'],
     ['a root README.md a page imports', base(L, { 'README.md': `<link rel="stylesheet" href="${U}">`, 'src/pages/r.astro': "---\nimport { Content } from '../../README.md'\n---\n<Content />\n" }), 'README.md'],
     ['a root .md under an import.meta.glob array', base(L, { 'NOTES.md': `<link rel="stylesheet" href="${U}">`, 'src/pages/all.astro': "---\nconst all = import.meta.glob(['/*.md'])\n---\n" }), 'NOTES.md'],
+    ['a root .md under an import.meta.glob with a type argument', base(L, { 'README.md': `<link rel="stylesheet" href="${U}">`, 'src/pages/all.astro': "---\nconst all = import.meta.glob<{ default: unknown }>('/**/*.md')\n---\n" }), 'README.md'],
+    ['a root .md under a nested type argument and a relative pattern', base(L, { 'README.md': `<link rel="stylesheet" href="${U}">`, 'src/pages/all.astro': "---\nconst all = import.meta.glob<Record<string, () => Promise<X>>>('../../*.md')\n---\n" }), 'README.md'],
+    ['a root .md under ./../../ in import.meta.glob', base(L, { 'README.md': `<link rel="stylesheet" href="${U}">`, 'src/pages/all.astro': "---\nconst all = import.meta.glob('./../../*.md')\n---\n" }), 'README.md'],
+    ['a root .md under a character class pattern', base(L, { 'README.md': `<link rel="stylesheet" href="${U}">`, 'src/pages/all.astro': "---\nconst all = import.meta.glob('../../[A-Z]*.md')\n---\n" }), 'README.md'],
+    ['a root .md under a ? pattern', base(L, { 'README.md': `<link rel="stylesheet" href="${U}">`, 'src/pages/all.astro': "---\nconst all = import.meta.glob('../../?EADME.md')\n---\n" }), 'README.md'],
+    ['a root .md under /src/../', base(L, { 'README.md': `<link rel="stylesheet" href="${U}">`, 'src/pages/all.astro': "---\nconst all = import.meta.glob('/src/../*.md')\n---\n" }), 'README.md'],
+    ['a root .md under an aliased import.meta.glob pattern', base(L, { 'README.md': `<link rel="stylesheet" href="${U}">`, 'src/pages/all.astro': "---\nconst all = import.meta.glob('~/*.md')\n---\n" }), 'README.md'],
+    ['a root .md under a loader base climbing out of src/', base(L, { 'README.md': `<link rel="stylesheet" href="${U}">`, 'src/content.config.ts': "const d = defineCollection({ loader: glob({ base: './src/../', pattern: '*.md' }) })\n" }), 'README.md'],
+    ['a root .md under a loader pattern climbing out', base(L, { 'README.md': `<link rel="stylesheet" href="${U}">`, 'src/content.config.ts': "const d = defineCollection({ loader: glob({ base: './src/content', pattern: '../../*.md' }) })\n" }), 'README.md'],
+    ['a root .md under loader options spread over a base', base(L, { 'README.md': `<link rel="stylesheet" href="${U}">`, 'src/content.config.ts': "const opts = { base: '.', pattern: '*.md' }\nconst d = defineCollection({ loader: glob({ base: './docs', ...opts }) })\n" }), 'README.md'],
+    ['a .md file under an import.meta.glob outside src/', base(L, { 'lib/posts/a.md': `<link rel="stylesheet" href="${U}">`, 'lib/content.ts': "export const posts = import.meta.glob('./posts/*.md')\n" }), 'lib/posts/a.md'],
+    ['a .md file a built .mdx imports', base(L, { 'notes/b.md': `<link rel="stylesheet" href="${U}">`, 'docs/a.mdx': "import B from '../notes/b.md'\n\n<B />\n", 'src/content.config.ts': "const d = defineCollection({ loader: glob({ pattern: '**/*.mdx', base: './docs' }) })\n" }), 'notes/b.md'],
     ['a <link> in a page that only imports the layout as a type', base(L, { 'src/pages/t.astro': `---\nimport type { Props } from '../layouts/Base.astro'\n---\n<html><head>${L}</head><body /></html>` }), 'does not import'],
     ['a <link> in a page whose only named imports are inline types', base(L, { 'src/pages/t.astro': `---\nimport { type Props } from '../layouts/Base.astro'\n---\n<html><head>${L}</head><body /></html>` }), 'does not import'],
     ['a protocol-relative url beside a css2 url', base(`${L}<link rel="stylesheet" href="//fonts.googleapis.com/css2?family=Lato&display=swap" />`), 'not understood'],
@@ -459,6 +471,16 @@ describe('detectFonts: Markdown nothing builds, several urls, CSS entry through 
 
   test('a content collection inside src/ does not make docs/ count', () => {
     const r = fonts(site({ 'docs/a.md': `${U}\n`, 'src/content.config.ts': "const p = defineCollection({ loader: glob({ pattern: '**/*.json', base: './src/content/produkter' }) })\n" }))
+    expect(r).toMatchObject({ status: 'wire', url: U, reasons: [] })
+  })
+
+  test('a binary file naming a folder does not make its Markdown count', () => {
+    const r = fonts(site({ 'docs/a.md': `${U}\n`, 'src/assets/x.bin': 'docs/\u0000\u0001' }))
+    expect(r).toMatchObject({ status: 'wire', url: U, reasons: [] })
+  })
+
+  test('an import.meta.glob inside src/ does not make docs/ count', () => {
+    const r = fonts(site({ 'docs/a.md': `${U}\n`, 'src/pages/g.astro': "---\nconst imgs = import.meta.glob<{ default: ImageMetadata }>('/src/assets/images/*')\nconst more = import.meta.glob('../assets/*.png')\n---\n" }))
     expect(r).toMatchObject({ status: 'wire', url: U, reasons: [] })
   })
 
