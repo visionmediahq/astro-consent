@@ -31,8 +31,8 @@ function iframeSpan(text: string, from = 0): { start: number; end: number } {
 }
 
 const HEX_E2_PB =
-  'https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d2196.5!2d18.0611!3d59.3311!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x465169e2e2e2e2e3%3A0x0!2sExempelgatan+1%2C+123+45+Exempelby!5e0!3m2!1ssv!2sse!4v1700000000000!5m2!1ssv!2sse'
-const HEX_C8_PB =
+  'https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d2196.5!2d18.0611!3d59.3311!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x000000e2e2e2e2e3%3A0x0!2sExempelgatan+1%2C+123+45+Exempelby!5e0!3m2!1ssv!2sse!4v1700000000000!5m2!1ssv!2sse'
+const HEX_00_PB =
   'https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d2150.8471873476244!2d18.0622!3d59.3322!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x0000000000000000%3A0x0000000000000000!2sExempelgatan%2C%20123%2045%20Exempelby!5e0!3m2!1ssv!2sse!4v1234567890123!5m2!1ssv!2sse'
 const SAG_PB =
   'https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d2116.3748!2d18.0633!3d59.3333!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x0000000000000000%3A0x0000000000000000!2sExempelv%C3%A4gen+2%2C+123+46+Exempelby!5e0!3m2!1ssv!2sse!4v1700000000000!5m2!1ssv!2sse'
@@ -45,7 +45,7 @@ const REAL_PB =
 describe('isInventedPb', () => {
   test.each([
     ['repeating hex e2e2e2e2 and 4v1700000000000', HEX_E2_PB, true],
-    ['repeating hex c8c8c8c8 and 4v1234567890123', HEX_C8_PB, true],
+    ['repeating hex 00000000 and 4v1234567890123', HEX_00_PB, true],
     ['round timestamp only', SAG_PB, true],
     ['0x0:0x0 and round timestamp', TRA_PB, true],
     ['a real-looking place id with a non-round timestamp', REAL_PB, false],
@@ -88,7 +88,7 @@ describe('detectIframes: pilot fixtures', () => {
         file,
         ...iframeSpan(fixtureText('site-1218869363', file)),
         srcKind: 'data-file',
-        src: HEX_C8_PB,
+        src: HEX_00_PB,
         dataPath: 'src/data/kontakt.json',
         host: 'www.google.com',
         service: 'google-maps',
@@ -98,7 +98,7 @@ describe('detectIframes: pilot fixtures', () => {
         style: 'border:0;',
       },
     ])
-    expect(r.inventedMaps).toEqual([HEX_C8_PB])
+    expect(r.inventedMaps).toEqual([HEX_00_PB])
   })
 
   test('two maps chosen by a component prop; one iframe, resolved per call site', () => {
