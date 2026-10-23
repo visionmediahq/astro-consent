@@ -247,6 +247,107 @@ describe('contrast', () => {
     expect(row!.ratio).toBeCloseTo(wcagContrast({ r: 0, g: 0, b: 0 }, { r: 255, g: 127, b: 127 }), 5)
   })
 
+  describe('the 8-bit margin on ok (#96): the ratio is reported as read, ok allows for what the page rounds', () => {
+    it('a faint translucent layer: 4.53:1 as read, 4.49:1 painted, so not ok', () => {
+      // #95 review, in headless Chromium: rgba(176, 41, 2, 0.07) (read back as 18/255) over
+      // rgb(136, 144, 249), text #2c2c2c. Chromium paints rgb(138, 136, 231): 4.49:1.
+      const [row] = contrastRows([raw({ fg: [44, 44, 44, 255], layers: [[176, 41, 2, 18], [136, 144, 249, 255]] })])
+      expect(wcagContrast({ r: 44, g: 44, b: 44 }, { r: 138, g: 136, b: 231 })).toBeLessThan(4.5)
+      expect(row).toMatchObject({ ok: false, bg: { r: 139, g: 137, b: 232 }, note: 'within the 8-bit margin of 4.5' })
+      expect(row!.ratio).toBeCloseTo(4.534, 3)
+      expect(row!.indeterminate).toBeUndefined()
+    })
+
+    it('translucent text: the page rounds the blended text colour too', () => {
+      const [row] = contrastRows([raw({ fg: [255, 255, 255, 185], layers: [[0, 90, 160, 255]] })])
+      expect(row).toMatchObject({ ok: false, fg: { r: 185, g: 210, b: 229 }, note: 'within the 8-bit margin of 4.5' })
+      expect(row!.ratio).toBeCloseTo(4.506, 3)
+    })
+
+    it('one translucent gradient: its worst point is rounded when painted', () => {
+      const stop = 'rgba(255, 255, 255, 0.24)'
+      const colours: RawContrast['colours'] = { [stop]: [255, 255, 255, 61], 'rgba(255, 255, 255, 0)': [255, 255, 255, 0] }
+      const [row] = contrastRows([raw({ layers: [[20, 80, 140, 255]], images: [img(`linear-gradient(${stop}, rgba(255, 255, 255, 0))`)], colours })])
+      expect(row).toMatchObject({ ok: false, note: 'gradient, worst stop; within the 8-bit margin of 4.5' })
+      expect(row!.ratio).toBeCloseTo(4.518, 3)
+    })
+
+    it('one opaque sRGB gradient always gets a level for its dither, even at a stop (conservative)', () => {
+      // #97 review, in headless Chromium: other rows at 4.51–4.54:1 at a stop painted at 4.48–4.50.
+      // Dither never leaves the stops' per-channel range, so when every channel runs the same way,
+      // as here, the lighter stop already bounds the gradient and this FAIL is conservative. The
+      // check does not tell the two cases apart: it always counts a level for one gradient.
+      const [a, b] = ['rgb(0, 129, 160)', 'rgb(0, 40, 90)']
+      const colours: RawContrast['colours'] = { [a]: [0, 129, 160, 255], [b]: [0, 40, 90, 255] }
+      const [row] = contrastRows([raw({ images: [img(`linear-gradient(${a}, ${b})`)], colours })])
+      expect(row).toMatchObject({ ok: false, note: 'gradient, worst stop; within the 8-bit margin of 4.5' })
+      expect(row!.ratio).toBeCloseTo(4.518, 3)
+    })
+
+    it('a level per translucent layer: three stacked layers at 4.62:1 are not ok', () => {
+      const [row] = contrastRows([raw({ fg: [99, 99, 99, 255], layers: [[255, 255, 255, 40], [200, 220, 255, 60], [240, 240, 240, 90], [210, 210, 210, 255]] })])
+      expect(row).toMatchObject({ ok: false, note: 'within the 8-bit margin of 4.5' })
+      expect(row!.ratio).toBeCloseTo(4.618, 3)
+    })
+
+    it('a heavy translucent layer (alpha 200/255) counts like a faint one', () => {
+      const [row] = contrastRows([raw({ layers: [[142, 142, 142, 200], [30, 30, 30, 255]] })])
+      expect(row).toMatchObject({ ok: false, note: 'within the 8-bit margin of 4.5' })
+      expect(row!.ratio).toBeCloseTo(4.552, 3)
+    })
+
+    it('dark translucent text: its blend may round lighter', () => {
+      const [row] = contrastRows([raw({ fg: [0, 0, 0, 176], layers: [[150, 150, 150, 255]] })])
+      expect(row).toMatchObject({ ok: false, note: 'within the 8-bit margin of 4.5' })
+      expect(row!.ratio).toBeCloseTo(4.561, 3)
+    })
+
+    it('a translucent layer beneath a translucent gradient counts too', () => {
+      const stop = 'rgba(255, 255, 255, 0.1)'
+      const [row] = contrastRows([
+        raw({ layers: [[0, 0, 0, 0], [255, 255, 255, 60], [20, 60, 60, 255]], images: [img(`linear-gradient(${stop}, ${stop})`)], colours: { [stop]: [255, 255, 255, 26] } }),
+      ])
+      expect(row).toMatchObject({ ok: false, note: 'gradient, worst stop; within the 8-bit margin of 4.5' })
+      // Two levels (the layer and the gradient) fail it; the gradient's alone would not.
+      expect(row!.ratio).toBeCloseTo(4.68, 2)
+    })
+
+    it('opaque text on a mid-tone opaque colour, and over several gradients, gets no margin', () => {
+      // Grey text and no clamp at 0 or 255 nearby, so a level anywhere would show.
+      const s = 'rgb(35, 114, 140)'
+      const value = `linear-gradient(rgba(0, 0, 0, 0), rgba(0, 0, 0, 0)), linear-gradient(${s}, ${s})`
+      const [plain, several] = contrastRows([
+        raw({ fg: [235, 235, 235, 255], layers: [[21, 116, 140, 255]] }),
+        raw({ fg: [235, 235, 235, 255], layers: [[244, 246, 248, 255]], images: [img(value)], colours: { [s]: [35, 114, 140, 255], 'rgba(0, 0, 0, 0)': [0, 0, 0, 0] } }),
+      ])
+      expect(plain).toMatchObject({ ok: true })
+      expect(plain!.note).toBeUndefined()
+      expect(plain!.ratio).toBeCloseTo(4.507, 3)
+      expect(several).toMatchObject({ ok: true, note: '2 gradients, bound over all stops' })
+      expect(several!.ratio).toBeCloseTo(4.503, 3)
+    })
+
+    it('opaque text over a translucent layer: the layer gets its level, the text none', () => {
+      const [row] = contrastRows([raw({ fg: [201, 201, 201, 255], layers: [[116, 116, 116, 90], [10, 70, 120, 255]] })])
+      expect(row).toMatchObject({ ok: true })
+      expect(row!.note).toBeUndefined()
+      expect(row!.ratio).toBeCloseTo(4.652, 3)
+    })
+
+    it('opaque text on opaque colours is exact: 4.54:1 stays ok, and a clear pass with translucent layers too', () => {
+      const rows = contrastRows([
+        raw({ fg: [118, 118, 118, 255], layers: [[255, 255, 255, 255]] }),
+        raw({ fg: [255, 255, 255, 185], layers: [[0, 0, 0, 128], [0, 90, 160, 255]] }),
+      ])
+      expect(rows[0]).toMatchObject({ ok: true })
+      expect(rows[0]!.ratio).toBeCloseTo(4.542, 3)
+      expect(rows[0]!.note).toBeUndefined()
+      expect(rows[1]!.ratio).toBeGreaterThan(6)
+      expect(rows[1]).toMatchObject({ ok: true })
+      expect(rows[1]!.note).toBeUndefined()
+    })
+  })
+
   it('a background image or no opaque ancestor is indeterminate, not guessed silently', () => {
     expect(contrastRows([raw({ images: [img('linear-gradient(red, blue)')] })])[0]!.indeterminate).toMatch(/image/)
     const [row] = contrastRows([raw({ fg: [0, 0, 0, 255], layers: [[0, 0, 0, 0]] })])
@@ -538,6 +639,15 @@ describe('contrast', () => {
         expect(row).toMatchObject({ ok: true, note: '2 gradients, bound over all stops', bg: { r: 42, g: 64, b: 81 } })
         expect(row!.ratio).toBeCloseTo(wcagContrast({ r: 219, g: 230, b: 239 }, lighter(lightest)), 5)
         expect(row!.ratio).toBeCloseTo(8.5, 2)
+      })
+
+      it('translucent text over several gradients (#96): ok allows for the text\'s own rounding too', () => {
+        const value = 'radial-gradient(at 80% 0%, rgba(127, 183, 226, 0.18), rgba(0, 0, 0, 0) 55%), linear-gradient(158deg, rgb(21, 36, 47), rgb(13, 25, 34))'
+        const [near, clear] = contrastRows([two([255, 255, 255, 142], value), two([255, 255, 255, 144], value)])
+        expect(near).toMatchObject({ ok: false, note: '2 gradients, bound over all stops; within the 8-bit margin of 4.5' })
+        expect(near!.ratio).toBeCloseTo(4.519, 3)
+        expect(clear).toMatchObject({ ok: true, note: '2 gradients, bound over all stops' })
+        expect(clear!.ratio).toBeCloseTo(4.601, 3)
       })
 
       it('light text: a translucent white layer over a blue one fails at the lightest composite', () => {

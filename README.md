@@ -347,9 +347,16 @@ npx tsx ci/rollout/run.ts help
   channel, so with sRGB layers the bound is not above any pixel the page paints; with another
   method it is as good as the sampled search for each segment's extremes. A brute-force unit test
   checks it against random stacks. A `url()` image that shows, or a stop or mix the page cannot
-  resolve stays indeterminate. One gradient and plain colours are not widened: they report the
-  worst point as read, which is exact for opaque colours and opaque sRGB stops; with translucent
-  layers it can be a level or two off what is painted (near 4.5, up to about 0.08 in the ratio).
+  resolve stays indeterminate. One gradient and plain colours report the worst point as read,
+  which is exact for opaque text on opaque colours. Chromium dithers a gradient per channel, a level
+  off the mix between two stops (never outside their range), and rounds each translucent layer or
+  text it blends, so the painted pixel can be a level or more past that point (near 4.5, about 0.1
+  in the ratio with several layers). So `ok`
+  allows for that (#96): the point is widened by a level per translucent layer and one for a
+  gradient, translucent text's own blend by one more (over several gradients too), and text that
+  passes only without that margin reads `4.53:1 FAIL (within the 8-bit margin of 4.5)`. The ratio
+  and colours shown do not move. The margin is strict: most rows it fails at 4.50–4.62 paint just
+  above 4.5.
 - Effects the colours do not show are indeterminate: `background-blend-mode`, `background-clip:
   text`, `opacity` on an element with a background or above it, `mix-blend-mode` or a filter that
   changes something (`grayscale(0)` does not) on the text or any ancestor, and `backdrop-filter`
