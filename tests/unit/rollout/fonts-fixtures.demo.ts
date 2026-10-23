@@ -55,6 +55,10 @@ const FIXTURES: Record<string, string> = {
   cyrillic: page('<p>Hej och Привет</p>'),
   // An emoji, which no Google text face has: a fallback on main too, so a note, not a failure.
   emoji: page('<p>Ring oss ☎ 📞</p>'),
+  // The 700 of /bold/ inside a closed <details>: it has a box but is never drawn, so its face never
+  // loads. A control; the same text in an open <details> is drawn and fails like /bold/.
+  closed: page('<details><summary>Läs mer</summary><p style="font-weight:700">Fet text</p></details>'),
+  open: page('<details open><summary>Läs mer</summary><p style="font-weight:700">Fet text</p></details>'),
 }
 
 const font = fontBytes()
@@ -97,6 +101,12 @@ try {
   {
     const judged = (await run('/bold/')).map((p) => judgeFontsPage(p, declared))
     expect(judged.every((j) => !j.ok && j.lines.some((l) => /404/.test(l)) && j.lines.some((l) => /Fixture Sans 700 normal/.test(l))), '/bold/ a used face whose file 404s fails (404 and not loaded)', judged)
+  }
+  {
+    const judged = (await run('/closed/')).map((p) => judgeFontsPage(p, declared))
+    expect(judged.every((j) => j.ok), '/closed/ control: text in a closed <details> is not drawn, its face not judged', judged)
+    const open = (await run('/open/')).map((p) => judgeFontsPage(p, declared))
+    expect(open.every((j) => !j.ok && j.lines.some((l) => /Fixture Sans 700 normal/.test(l))), '/open/ the same text in an open <details> fails', open)
   }
   {
     const pages = await run('/cyrillic/')
