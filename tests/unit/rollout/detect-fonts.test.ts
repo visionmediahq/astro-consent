@@ -366,6 +366,17 @@ describe('detectFonts: review probes', () => {
     ['a root .md file under a glob loader without a base', base(L, { 'README.md': `<link rel="stylesheet" href="${U}">`, 'src/content.config.ts': "const all = defineCollection({ loader: glob({ pattern: '**/*.md' }) })\n" }), 'README.md'],
     ['a .md file outside src/ under a glob loader with a computed base', base(L, { 'docs/a.md': `<link rel="stylesheet" href="${U}">`, 'src/content.config.ts': "const d = defineCollection({ loader: glob({ pattern: '**/*.md', base: new URL('../docs', import.meta.url) }) })\n" }), 'docs/a.md'],
     ['a .md file outside src/ under a root import.meta.glob', base(L, { 'docs/a.md': `<link rel="stylesheet" href="${U}">`, 'src/pages/all.astro': "---\nconst all = import.meta.glob('/**/*.md')\n---\n" }), 'docs/a.md'],
+    ['a .md file under a loader base naming its folder alone', base(L, { 'docs/a.md': `<link rel="stylesheet" href="${U}">`, 'src/content.config.ts': "const d = defineCollection({ loader: glob({ pattern: '**/*.md', base: './docs' }) })\n" }), 'docs/a.md'],
+    ['a .md file under a loader base without ./', base(L, { 'docs/a.md': `<link rel="stylesheet" href="${U}">`, 'src/content.config.ts': "const d = defineCollection({ loader: glob({ pattern: '**/*.md', base: 'docs' }) })\n" }), 'docs/a.md'],
+    ['a .md file under a template-literal loader base', base(L, { 'docs/a.md': `<link rel="stylesheet" href="${U}">`, 'src/content.config.ts': "const dir = 'docs'\nconst d = defineCollection({ loader: glob({ pattern: '**/*.md', base: `./${dir}` }) })\n" }), 'docs/a.md'],
+    ['a .md file under loader options held in a variable', base(L, { 'docs/a.md': `<link rel="stylesheet" href="${U}">`, 'src/content.config.ts': "const opts = { pattern: '**/*.md' }\nconst d = defineCollection({ loader: glob(opts) })\n" }), 'docs/a.md'],
+    ['a .md file under an aliased glob loader', base(L, { 'docs/a.md': `<link rel="stylesheet" href="${U}">`, 'src/content.config.ts': "import { glob as g } from 'astro/loaders'\nconst d = defineCollection({ loader: g({ pattern: '**/*.md' }) })\n" }), 'docs/a.md'],
+    ['a .md file under a loader defined outside src/', base(L, { 'docs/a.md': `<link rel="stylesheet" href="${U}">`, 'lib/loaders.ts': "export const docs = glob({ pattern: '**/*.md', base: './docs/' })\n", 'src/content.config.ts': "import { docs } from '../lib/loaders'\nconst d = defineCollection({ loader: docs })\n" }), 'docs/a.md'],
+    ['a root README.md a page imports', base(L, { 'README.md': `<link rel="stylesheet" href="${U}">`, 'src/pages/r.astro': "---\nimport { Content } from '../../README.md'\n---\n<Content />\n" }), 'README.md'],
+    ['a root .md under an import.meta.glob array', base(L, { 'NOTES.md': `<link rel="stylesheet" href="${U}">`, 'src/pages/all.astro': "---\nconst all = import.meta.glob(['/*.md'])\n---\n" }), 'NOTES.md'],
+    ['a <link> in a page that only imports the layout as a type', base(L, { 'src/pages/t.astro': `---\nimport type { Props } from '../layouts/Base.astro'\n---\n<html><head>${L}</head><body /></html>` }), 'does not import'],
+    ['a <link> in a page whose only named imports are inline types', base(L, { 'src/pages/t.astro': `---\nimport { type Props } from '../layouts/Base.astro'\n---\n<html><head>${L}</head><body /></html>` }), 'does not import'],
+    ['a protocol-relative url beside a css2 url', base(`${L}<link rel="stylesheet" href="//fonts.googleapis.com/css2?family=Lato&display=swap" />`), 'not understood'],
     ['a module outside src/', base(L, { 'integrations/fonts.ts': `export default { hooks: { 'astro:config:setup': ({ injectScript }) => injectScript('head-inline', "document.head.insertAdjacentHTML('beforeend','<link rel=stylesheet href=${U}>')") } }` }), 'integrations/fonts.ts'],
     ['an .astro file outside src/', base(L, { 'lib/Head.astro': `${L}\n` }), 'lib/Head.astro'],
     ['the Web Font Loader script', base(L, {}, undefined, '<script is:inline src="https://ajax.googleapis.com/ajax/libs/webfont/1.6.26/webfont.js"></script>'), 'Web Font Loader'],
@@ -509,6 +520,7 @@ describe('mergeCss2', () => {
     ['upright-only joins ital,wght as ital 0', [css2('Lato:wght@400'), css2('Lato:ital,wght@1,400')], css2('Lato:ital,wght@0,400;1,400')],
     ['a family alone joins the same family alone', [css2('Gloock'), css2('Gloock')], css2('Gloock')],
     ['opsz ranges kept as written', [css2('DM+Sans:opsz,wght@9..40,400'), css2('DM+Sans:opsz,wght@9..40,700')], css2('DM+Sans:opsz,wght@9..40,400;9..40,700')],
+    ['other parameters re-encoded', ['https://fonts.googleapis.com/css2?family=Oswald:wght@400&effect=a%26b', 'https://fonts.googleapis.com/css2?family=Oswald:wght@700&effect=a%26b'], 'https://fonts.googleapis.com/css2?family=Oswald:wght@400;700&effect=a%26b'],
   ])('%s', (_name, urls, want) => {
     expect(mergeCss2(urls)).toEqual({ url: want })
   })
@@ -519,6 +531,8 @@ describe('mergeCss2', () => {
     ['different display', [css2('Oswald:wght@400'), 'https://fonts.googleapis.com/css2?family=Oswald:wght@700&display=block'], 'display'],
     ['a range beside a single value of that axis', [css2('Oswald:wght@200..700'), css2('Oswald:wght@400')], 'range'],
     ['a tuple that does not fit its axes', [css2('Lato:ital,wght@0,400'), css2('Lato:ital,wght@400')], 'Lato'],
+    ['a url that does not parse', [css2('Oswald:wght@400'), '//fonts.googleapis.com/css2?family=Lato'], 'not understood'],
+    ['a url that is not css2', [css2('Oswald:wght@400'), 'https://fonts.googleapis.com/css?family=Lato'], 'not understood'],
   ])('%s: not merged', (_name, urls, fragment) => {
     const r = mergeCss2(urls)
     expect('problem' in r && r.problem.includes(fragment), JSON.stringify(r)).toBe(true)

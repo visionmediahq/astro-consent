@@ -17,7 +17,7 @@ import { posix } from 'node:path'
 import ts from 'typescript'
 import type { FontCsp, FontLocation, FontsInfo } from '../types'
 import { type AstroAttribute, type AstroNode, attr, parseAstro } from '../lib/astro-ast'
-import { findDefineConfig, importsOf, parseModule, propertyOf } from '../lib/ts-ast'
+import { findDefineConfig, parseModule, propertyOf } from '../lib/ts-ast'
 import type { SiteFiles } from '../lib/site-files'
 import { packageDeps } from './scripts'
 
@@ -95,8 +95,14 @@ export function mergeCss2(urls: string[]): { url: string } | { problem: string }
   const families = new Map<string, FamilySpec>()
   let others: string | null = null
   for (const raw of urls) {
-    const u = new URL(raw)
-    const rest = [...u.searchParams].filter(([k]) => k !== 'family').map(([k, v]) => `${k}=${v}`).join('&')
+    let u: URL
+    try {
+      u = new URL(raw)
+    } catch {
+      return { problem: `url not understood: ${raw}` }
+    }
+    if (u.protocol !== 'https:' || u.hostname !== 'fonts.googleapis.com' || u.pathname !== '/css2') return { problem: `url not understood: ${raw}` }
+    const rest = [...u.searchParams].filter(([k]) => k !== 'family').map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join('&')
     if (others === null) others = rest
     else if (rest !== others) return { problem: `other parameters differ: "${others}" and "${rest}" (display)` }
     for (const f of u.searchParams.getAll('family')) {
@@ -588,6 +594,18 @@ function headersFile(files: SiteFiles, file: string, c: Collector): void {
   }
 }
 
+/** Modules a file imports for their value: `import type` and imports of types alone are erased. */
+function valueImports(sf: ts.SourceFile): string[] {
+  return sf.statements.flatMap((stmt) => {
+    if (!ts.isImportDeclaration(stmt) || !ts.isStringLiteral(stmt.moduleSpecifier)) return []
+    const clause = stmt.importClause
+    if (clause?.isTypeOnly) return []
+    const named = clause?.namedBindings
+    if (clause && !clause.name && named && ts.isNamedImports(named) && named.elements.length > 0 && named.elements.every((e) => e.isTypeOnly)) return []
+    return [stmt.moduleSpecifier.text]
+  })
+}
+
 /** Extensions tried for a relative import written without one. */
 const IMPORT_EXTS = ['', '.ts', '.js', '.mjs', '.tsx', '.jsx', '/index.ts', '/index.js']
 
@@ -604,7 +622,7 @@ function importsEntry(files: SiteFiles, file: string, entry: string, seen = new 
   try {
     const text = files.read(file)
     const code = file.endsWith('.astro') ? parseAstro(text).frontmatter?.text : text
-    froms = code ? importsOf(parseModule(code)).map((i) => i.from) : []
+    froms = code ? valueImports(parseModule(code)) : []
   } catch {
     return false
   }
@@ -618,23 +636,25 @@ function importsEntry(files: SiteFiles, file: string, entry: string, seen = new 
 }
 
 /**
- * Whether a Markdown file outside src/ and public/ can be built: some glob reaches the project
- * root (a glob loader without a literal base, or with base `.`, whose pattern does not start in a
- * folder; an `import.meta.glob` from `/` or up out of src/), or its top folder is named in the
- * site's code or astro.config (`docs/`, a loader base, an import). A root file only in the first case.
+ * Whether a Markdown file outside src/ and public/ can be built, from the site's code (every file
+ * read but such Markdown): some glob may reach the project root, or the file's top folder (a root
+ * file: its name) is named there (a loader base, an import, a path). Root-wide, conservatively: a
+ * `glob()` loader whose options are not an inline object with a literal base (none, `.`, or one
+ * with `${…}` counts as the root) and, for the root, a literal pattern starting in a folder; `glob`
+ * imported under another name; an `import.meta.glob` that is not one literal from inside src/.
  */
-function markdownBuilt(files: SiteFiles): (file: string) => boolean {
-  const code = [...files.list('src/**').filter((f) => /\.(?:astro|mdx?|[cm]?[jt]s|[jt]sx)$/.test(f)), ...files.list('astro.config.*')]
-    .map((f) => files.read(f))
-    .join('\n')
+function markdownBuilt(files: SiteFiles, codeFiles: string[]): (file: string) => boolean {
+  const code = codeFiles.map((f) => files.read(f)).join('\n')
   const literal = (arg: string, key: string): string | null | undefined => {
     if (!new RegExp(`\\b${key}\\s*:`).test(arg)) return undefined
     const m = new RegExp(`\\b${key}\\s*:\\s*(['"\`])([^'"\`]*)\\1`).exec(arg)
-    return m ? m[2]! : null
+    return m && !m[2]!.includes('${') ? m[2]! : null
   }
   const strip = (p: string): string => p.replace(/^(?:\.\/)+/, '').replace(/\/+$/, '')
-  let rootWide = false
+  const tops = new Set<string>()
+  let rootWide = /\bglob\s+as\s+\w/.test(code) || /\bglob\s*\(\s*(?!\{)[^\s)]/.test(code.replace(/import\.meta\.glob/g, ''))
   for (const m of code.matchAll(/\bglob\s*\(\s*\{/g)) {
+    if (code.slice(Math.max(0, m.index - 12), m.index).endsWith('import.meta.')) continue
     // The loader's options object, to its closing brace.
     let depth = 0
     let end = m.index + m[0].length - 1
@@ -648,17 +668,18 @@ function markdownBuilt(files: SiteFiles): (file: string) => boolean {
     else if (base === undefined || strip(base) === '' || strip(base) === '.') {
       const pattern = literal(arg, 'pattern')
       if (typeof pattern !== 'string' || !/^[\w.-]+\//.test(strip(pattern))) rootWide = true
-    }
+    } else tops.add(strip(base).split('/')[0]!)
   }
-  for (const m of code.matchAll(/import\.meta\.glob\s*\(\s*(['"`])([^'"`]*)\1/g)) {
-    if (/^(?:\/|(?:\.\.\/)+)[*{]/.test(m[2]!) || /^\/(?!src\/)/.test(m[2]!)) rootWide = true
+  for (const m of code.matchAll(/import\.meta\.glob\s*\(\s*(\S)/g)) {
+    const lit = /^(['"`])([^'"`]*)\1/.exec(code.slice(m.index + m[0].length - 1))
+    if (!lit || lit[2]!.includes('${') || /^(?:\/|(?:\.\.\/)+)[*{]/.test(lit[2]!) || /^\/(?!src\/)/.test(lit[2]!)) rootWide = true
   }
+  const named = (name: string): boolean => new RegExp(`(?<![\\w.-])${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?:/|['"\`]|(?![\\w-]))`).test(code)
   return (file) => {
     if (rootWide) return true
     const slash = file.indexOf('/')
-    if (slash < 0) return false
-    const top = file.slice(0, slash).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-    return new RegExp(`(?:^|[^\\w.-])${top}/`).test(code)
+    const top = slash < 0 ? file : file.slice(0, slash)
+    return tops.has(top) || named(top)
   }
 }
 
@@ -684,8 +705,9 @@ export function detectFonts(files: SiteFiles, cssEntry: string | null): FontsInf
     .list('**')
     .filter((f) => !SKIP.test(f))
     .filter((f) => /^(?:src|public)\//.test(f) || ANYWHERE.test(f) || f === '_headers' || /^\.env(?:\..+)?$/.test(f))
-  const built = markdownBuilt(files)
-  const read = all.filter((f) => !/\.mdx?$/.test(f) || /^(?:src|public)\//.test(f) || built(f))
+  const outside = (f: string): boolean => /\.mdx?$/.test(f) && !/^(?:src|public)\//.test(f)
+  const built = markdownBuilt(files, all.filter((f) => !outside(f)))
+  const read = all.filter((f) => !outside(f) || built(f))
   for (const file of read) {
     const text = files.read(file)
     if (text.includes('\u0000')) {

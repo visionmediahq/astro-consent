@@ -517,7 +517,8 @@ npx tsx ci/rollout/run.ts help
   `locations` lists each element or statement with its offsets, `url` the URL. Several URLs (a
   page with its own `<link>`, say) become one when `mergeCss2` can join them: the same `display`
   and other parameters, and per family the same axes (a family without `ital` joins one with it as
-  `ital` 0), its tuples unioned and sorted, a range only beside the same range; `urls` keeps
+  `ital` 0), its tuples unioned and sorted, a range only beside the same range; a URL that is
+  not `https://fonts.googleapis.com/css2` is not joined; `urls` keeps
   every URL found. `csp` lists every
   CSP that mentions the Google hosts (a `<meta http-equiv>`, a `_headers` line, a module's directive
   strings). `self-hosted`: no Google reference but local font files, `@font-face`, `@fontsource` or
@@ -526,16 +527,17 @@ npx tsx ci/rollout/run.ts help
   outside comments (a module string that is not a bare CSP source token, a `<script>`, a data
   file, `public/`, `.env*`, and `.astro`/CSS/module files anywhere outside `node_modules`,
   `dist`, `.astro`, `.rollout` and `scout/`, and `.md`/`.mdx` under `src/` or `public/`, or
-  elsewhere when the site can build them: their top folder is named in `src/` code or
-  `astro.config` (a loader `base`, an import), or a glob reaches the project root (a `glob()`
-  loader with a computed base, or base `.` or none and a pattern not starting in a folder; an
-  `import.meta.glob` from `/` or out of `src/`); `docs/`, `README.md` or `CLAUDE.md` that nothing
-  builds are not read), the Web Font Loader (its script or
+  elsewhere when the site can build them: their top folder (a root file: its name) is a
+  `glob()` loader's base or is named anywhere in the files read (an import, a path), or a glob
+  may reach the project root (loader options not written inline, a computed or `${…}` base,
+  base `.` or none with a pattern not starting in a folder, `glob` imported under another name;
+  an `import.meta.glob` that is not one literal pattern inside `src/`). So `docs/`, `README.md`
+  or `CLAUDE.md` that nothing builds are not read), the Web Font Loader (its script or
   `WebFont.load`) or a font-loading dependency (`webfontloader`, `unplugin-fonts`, `astro-font`,
   `*google-fonts*`), an Astro `fonts` config, an existing `src/styles/fonts.css` or `public/fonts/`,
   a CSP whose `font-src` or `style-src` (or `default-src`) lacks `'self'`, or a file with a
-  stylesheet location whose relative imports (followed through `.astro` files and modules, not
-  aliases) never reach the Tailwind entry, the Web Font Loader by `WebFontConfig` or its script from any CDN, and
+  stylesheet location whose relative value imports (followed through `.astro` files and
+  modules; not aliases, not `import type`) never reach the Tailwind entry, the Web Font Loader by `WebFontConfig` or its script from any CDN, and
   an `@import` after another rule (browsers ignore it). Every CSP found (meta, `_headers`, each
   module directive string on its own) is checked for `'self'` in `font-src` and `style-src` (else
   `default-src`), whether it names Google or not; `*.googleapis.com`/`*.gstatic.com` count as
