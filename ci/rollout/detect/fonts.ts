@@ -8,11 +8,16 @@
 // `<link>` elements (stylesheet, preload as=style, preconnect/dns-prefetch) in .astro markup, a
 // `<noscript>` holding only such links, a frontmatter `const` used only as their href, a CSS
 // `@import`, and CSP strings (meta, `_headers`, a module's directive strings).
+//
+// Markdown outside src/ and public/ (docs/, README.md, CLAUDE.md) is read only when something can
+// build it: a folder named in the site's code (a glob loader base, an import), or a glob that
+// reaches the project root (see markdownBuilt). Several css2 URLs become one when mergeCss2 can
+// join them; every page that loads one must reach the Tailwind entry through its imports.
 import { posix } from 'node:path'
 import ts from 'typescript'
 import type { FontCsp, FontLocation, FontsInfo } from '../types'
 import { type AstroAttribute, type AstroNode, attr, parseAstro } from '../lib/astro-ast'
-import { findDefineConfig, importsOf, parseModule, propertyOf } from '../lib/ts-ast'
+import { findDefineConfig, parseModule, propertyOf } from '../lib/ts-ast'
 import type { SiteFiles } from '../lib/site-files'
 import { packageDeps } from './scripts'
 
@@ -62,6 +67,97 @@ function urlProblem(url: string): string | null {
   if (families.length === 0) return `url not understood (no family): ${url}`
   if (families.some((f) => /^Material (?:Icons|Symbols)/i.test(f))) return `icon family: ${url}`
   return null
+}
+
+interface FamilySpec {
+  /** Axis tags as written (`ital,wght`), or null for a family named alone (its default face). */
+  axes: string[] | null
+  /** Tuples by their text, one value per axis. */
+  tuples: Map<string, string[]>
+}
+
+const tupleOrder = (a: string[], b: string[]): number => {
+  for (let i = 0; i < a.length; i++) {
+    const d = Number.parseFloat(a[i]!) - Number.parseFloat(b[i]!)
+    if (d !== 0) return d
+  }
+  return 0
+}
+
+/**
+ * One css2 URL asking for every face the given css2 URLs ask for, or why they cannot be joined.
+ * Families keep their first-seen order and each family's tuples are unioned and sorted, as Google
+ * requires. Only plain unions are made: the same axes (a family without `ital` joins one with it
+ * as `ital` 0), a family named alone only beside itself named alone, a range only beside the same
+ * range, and every other parameter (`display`) the same in all of them. Anything else is a problem.
+ */
+export function mergeCss2(urls: string[]): { url: string } | { problem: string } {
+  const families = new Map<string, FamilySpec>()
+  let others: string | null = null
+  for (const raw of urls) {
+    let u: URL
+    try {
+      u = new URL(raw)
+    } catch {
+      return { problem: `url not understood: ${raw}` }
+    }
+    if (u.protocol !== 'https:' || u.hostname !== 'fonts.googleapis.com' || u.pathname !== '/css2') return { problem: `url not understood: ${raw}` }
+    const rest = [...u.searchParams].filter(([k]) => k !== 'family').map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join('&')
+    if (others === null) others = rest
+    else if (rest !== others) return { problem: `other parameters differ: "${others}" and "${rest}" (display)` }
+    for (const f of u.searchParams.getAll('family')) {
+      const colon = f.indexOf(':')
+      const name = colon < 0 ? f : f.slice(0, colon)
+      let spec: FamilySpec = { axes: null, tuples: new Map() }
+      if (colon >= 0) {
+        const m = /^([a-zA-Z,]+)@(.+)$/.exec(f.slice(colon + 1))
+        if (!m) return { problem: `${name}: "${f}" not understood` }
+        const axes = m[1]!.split(',')
+        spec = { axes, tuples: new Map() }
+        for (const t of m[2]!.split(';')) {
+          const values = t.split(',')
+          if (values.length !== axes.length) return { problem: `${name}: tuple "${t}" does not fit ${axes.join(',')}` }
+          spec.tuples.set(t, values)
+        }
+      }
+      const had = families.get(name)
+      if (!had) {
+        families.set(name, spec)
+        continue
+      }
+      if (had.axes === null || spec.axes === null) {
+        if (had.axes === spec.axes) continue
+        return { problem: `${name}: named alone beside ${name}:${(had.axes ?? spec.axes)!.join(',')}` }
+      }
+      // A family without ital joins one with it in front: its tuples are upright (ital 0).
+      const withItal = (a: string[], b: string[]): boolean => b[0] === 'ital' && a.join(',') === b.slice(1).join(',')
+      let into = had
+      if (withItal(had.axes, spec.axes)) {
+        into = { axes: spec.axes, tuples: new Map([...had.tuples.values()].map((v) => [['0', ...v].join(','), ['0', ...v]])) }
+        families.set(name, into)
+      } else if (withItal(spec.axes, had.axes)) {
+        spec = { axes: had.axes, tuples: new Map([...spec.tuples.values()].map((v) => [['0', ...v].join(','), ['0', ...v]])) }
+      } else if (had.axes.join(',') !== spec.axes.join(',')) {
+        return { problem: `${name}: axes ${had.axes.join(',')} and ${spec.axes.join(',')}` }
+      }
+      for (const [k, v] of spec.tuples) into.tuples.set(k, v)
+    }
+  }
+  const parts: string[] = []
+  for (const [name, spec] of families) {
+    if (spec.axes === null) {
+      parts.push(`family=${name.replaceAll(' ', '+')}`)
+      continue
+    }
+    const tuples = [...spec.tuples.values()]
+    for (let i = 0; i < spec.axes.length; i++) {
+      const values = new Set(tuples.map((t) => t[i]!))
+      if (values.size > 1 && [...values].some((v) => v.includes('..'))) return { problem: `${name}: a range on ${spec.axes[i]} beside other values` }
+    }
+    tuples.sort(tupleOrder)
+    parts.push(`family=${name.replaceAll(' ', '+')}:${spec.axes.join(',')}@${tuples.map((t) => t.join(',')).join(';')}`)
+  }
+  return { url: `https://fonts.googleapis.com/css2?${[...parts, ...(others ? [others] : [])].join('&')}` }
 }
 
 /**
@@ -498,11 +594,136 @@ function headersFile(files: SiteFiles, file: string, c: Collector): void {
   }
 }
 
-/** Whether `file` (an .astro file) imports the CSS entry `entry` in its frontmatter. */
-function importsEntry(files: SiteFiles, file: string, entry: string): boolean {
-  const fm = parseAstro(files.read(file)).frontmatter
-  if (!fm) return false
-  return importsOf(parseModule(fm.text)).some((i) => i.from.startsWith('.') && posix.normalize(posix.join(posix.dirname(file), i.from)) === entry)
+/** Modules a file imports for their value: `import type` and imports of types alone are erased. */
+function valueImports(sf: ts.SourceFile): string[] {
+  return sf.statements.flatMap((stmt) => {
+    if (!ts.isImportDeclaration(stmt) || !ts.isStringLiteral(stmt.moduleSpecifier)) return []
+    const clause = stmt.importClause
+    if (clause?.isTypeOnly) return []
+    const named = clause?.namedBindings
+    if (clause && !clause.name && named && ts.isNamedImports(named) && named.elements.length > 0 && named.elements.every((e) => e.isTypeOnly)) return []
+    return [stmt.moduleSpecifier.text]
+  })
+}
+
+/** Extensions tried for a relative import written without one. */
+const IMPORT_EXTS = ['', '.ts', '.js', '.mjs', '.tsx', '.jsx', '/index.ts', '/index.js']
+
+/**
+ * Whether `file` (an .astro file or a module) reaches the CSS entry `entry` through relative
+ * imports: its own, or those of the .astro files and modules it imports, and so on. Astro bundles
+ * the CSS of every module a page imports, rendered or not. An alias (`@/layouts/…`) is not
+ * followed, nor is a file that does not parse.
+ */
+function importsEntry(files: SiteFiles, file: string, entry: string, seen = new Set<string>()): boolean {
+  if (seen.has(file)) return false
+  seen.add(file)
+  let froms: string[]
+  try {
+    const text = files.read(file)
+    const code = file.endsWith('.astro') ? parseAstro(text).frontmatter?.text : text
+    froms = code ? valueImports(parseModule(code)) : []
+  } catch {
+    return false
+  }
+  for (const from of froms.filter((f) => f.startsWith('.'))) {
+    const path = posix.normalize(posix.join(posix.dirname(file), from))
+    if (path === entry) return true
+    const next = IMPORT_EXTS.map((e) => path + e).find((p) => (p.endsWith('.astro') || MODULE.test(p)) && files.exists(p))
+    if (next && importsEntry(files, next, entry, seen)) return true
+  }
+  return false
+}
+
+/**
+ * Whether a Markdown file outside src/ and public/ can be built, from the site's text files (each
+ * file read but such Markdown, scanned on its own): some glob may reach the project root, or the
+ * file's top folder (a root file: its name) is a loader base or is named there (an import, a
+ * path). Root-wide, conservatively: a `glob()` loader whose options are not an inline object with
+ * literal values (`...`, a `${…}` or computed base or pattern), that has `..` anywhere, or whose
+ * base is none or `.` with a pattern not starting in a folder; `glob` imported under another name;
+ * an `import.meta.glob` (type argument or not) that is not one literal resolving inside src/, or
+ * has a `base` option. A built `.mdx` is read whole, until nothing new is built.
+ */
+function markdownBuilt(files: SiteFiles, codeFiles: string[], outsideMd: string[]): (file: string) => boolean {
+  // Text only: a binary file builds nothing, and a site's images joined can pass V8's string limit.
+  const texts = new Map<string, string>()
+  for (const f of codeFiles) {
+    const t = files.read(f)
+    if (!t.includes('\u0000')) texts.set(f, t)
+  }
+  const literal = (arg: string, key: string): string | null | undefined => {
+    if (!new RegExp(`\\b${key}\\s*:`).test(arg)) return undefined
+    const m = new RegExp(`\\b${key}\\s*:\\s*(['"\`])([^'"\`]*)\\1`).exec(arg)
+    return m && !m[2]!.includes('${') ? m[2]! : null
+  }
+  const strip = (p: string): string => p.replace(/^(?:\.\/)+/, '').replace(/\/+$/, '')
+  const tops = new Set<string>()
+  let rootWide = false
+  const scan = (file: string, code: string): void => {
+    if (/\bglob\s+as\s+\w/.test(code) || /\bglob\s*\(\s*(?!\{)[^\s)]/.test(code.replace(/import\.meta\.glob/g, ''))) rootWide = true
+    for (const m of code.matchAll(/\bglob\s*\(\s*\{/g)) {
+      if (code.slice(Math.max(0, m.index - 12), m.index).endsWith('import.meta.')) continue
+      let depth = 0
+      let end = m.index + m[0].length - 1
+      for (; end < code.length; end++) {
+        if (code[end] === '{') depth++
+        else if (code[end] === '}' && --depth === 0) break
+      }
+      const arg = code.slice(m.index, end + 1)
+      // `..` anywhere (a base or pattern climbing out, `...` spread options) or a computed pattern.
+      if (/\.\./.test(arg)) rootWide = true
+      const base = literal(arg, 'base')
+      const pattern = literal(arg, 'pattern')
+      if (base === null || pattern === null) rootWide = true
+      else if (base === undefined || strip(base) === '' || strip(base) === '.') {
+        if (typeof pattern !== 'string' || !/^[\w.-]+\//.test(strip(pattern))) rootWide = true
+      } else tops.add(strip(base).split('/')[0]!)
+    }
+    for (const m of code.matchAll(/import\.meta\.glob\b/g)) {
+      // An optional type argument (`import.meta.glob<{ default: ImageMetadata }>(…)`), then one literal.
+      const rest = code.slice(m.index + m[0].length)
+      const lit = /^\s*(?:<(?:[^<>]|<(?:[^<>]|<[^<>]*>)*>)*>)?\s*\(\s*(['"`])([^'"`]*)\1/.exec(rest)
+      const p = lit?.[2]
+      // Vite resolves the pattern against an options `base`, not the file.
+      const options = lit ? rest.slice(lit[0].length, lit[0].length + 400) : ''
+      if (/\bbase\s*:/.test(options.slice(0, options.indexOf(')') + 1 || undefined))) rootWide = true
+      if (p === undefined || p.includes('${') || !/^(?:\/|\.\.?\/)/.test(p) || p.replace(/^(?:\.\.?\/)+/, '').includes('..')) {
+        rootWide = true
+        continue
+      }
+      const at = p.startsWith('/') ? posix.normalize(p.slice(1)) : posix.join(posix.dirname(file), p)
+      if (!at.startsWith('src/')) rootWide = true
+    }
+  }
+  for (const [f, t] of texts) scan(f, t)
+  const named = (name: string): boolean => {
+    const re = new RegExp(`(?<![\\w.-])${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?:/|['"\`]|(?![\\w-]))`)
+    for (const t of texts.values()) if (re.test(t)) return true
+    return false
+  }
+  const cache = new Map<string, boolean>()
+  const topOf = (file: string): string => (file.includes('/') ? file.slice(0, file.indexOf('/')) : file)
+  const isBuilt = (file: string): boolean => {
+    if (rootWide) return true
+    const top = topOf(file)
+    if (!cache.has(top)) cache.set(top, tops.has(top) || named(top))
+    return cache.get(top)!
+  }
+  // Built Markdown can import other Markdown: add it to the code read, until nothing new is built.
+  for (let grew = true; grew && !rootWide; ) {
+    grew = false
+    for (const f of outsideMd) {
+      if (texts.has(f) || !isBuilt(f)) continue
+      // MDX whole (imports over several lines, globs in body expressions); Markdown prose builds nothing.
+      const t = f.endsWith('.mdx') ? files.read(f) : ''
+      texts.set(f, t)
+      scan(f, t)
+      cache.clear()
+      grew = true
+    }
+  }
+  return isBuilt
 }
 
 function astroFontsConfig(files: SiteFiles): string | null {
@@ -520,13 +741,16 @@ function astroFontsConfig(files: SiteFiles): string | null {
  */
 export function detectFonts(files: SiteFiles, cssEntry: string | null): FontsInfo {
   const c = new Collector()
-  // Everything under src/ and public/; elsewhere markup, Markdown, CSS and modules (an integration,
-  // a content folder), root `_headers` and `.env*`. Binary files are told by a NUL byte, not by
+  // Everything under src/ and public/; elsewhere markup, Markdown that can be built (markdownBuilt),
+  // CSS and modules (an integration, a content folder), root `_headers` and `.env*`. Binary files are told by a NUL byte, not by
   // name: an HTML file saved as favicon.ico is still read.
-  const read = files
+  const all = files
     .list('**')
     .filter((f) => !SKIP.test(f))
     .filter((f) => /^(?:src|public)\//.test(f) || ANYWHERE.test(f) || f === '_headers' || /^\.env(?:\..+)?$/.test(f))
+  const outside = (f: string): boolean => /\.mdx?$/.test(f) && !/^(?:src|public)\//.test(f)
+  const built = markdownBuilt(files, all.filter((f) => !outside(f)), all.filter(outside))
+  const read = all.filter((f) => !outside(f) || built(f))
   for (const file of read) {
     const text = files.read(file)
     if (text.includes('\u0000')) {
@@ -561,7 +785,12 @@ export function detectFonts(files: SiteFiles, cssEntry: string | null): FontsInf
   }
 
   for (const r of c.cspReasons) c.reason(r)
-  if (c.urls.length > 1) c.reason(`${c.urls.length} distinct Google Fonts urls: ${c.urls.join(' ')}`)
+  let url = c.urls[0]
+  if (c.urls.length > 1) {
+    const merged = mergeCss2(c.urls)
+    if ('url' in merged) url = merged.url
+    else c.reason(`${c.urls.length} distinct Google Fonts urls that cannot be merged (${merged.problem}): ${c.urls.join(' ')}`)
+  }
   if (c.urls.length === 0 && c.reasons.length === 0) c.reason('preconnect to Google Fonts without a stylesheet')
   if (fontsConfig) c.reason(`${fontsConfig}: the Astro fonts config is already set`)
   if (files.exists('src/styles/fonts.css')) c.reason('src/styles/fonts.css already exists')
@@ -573,5 +802,5 @@ export function detectFonts(files: SiteFiles, cssEntry: string | null): FontsInf
     }
   }
   const wire = c.reasons.length === 0
-  return { status: wire ? 'wire' : 'needs-human', url: wire ? c.urls[0]! : null, urls: c.urls, locations, csp, reasons: c.reasons }
+  return { status: wire ? 'wire' : 'needs-human', url: wire ? url! : null, urls: c.urls, locations, csp, reasons: c.reasons }
 }
