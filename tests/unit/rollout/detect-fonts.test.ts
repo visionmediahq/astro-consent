@@ -1,6 +1,6 @@
 import { join } from 'node:path'
 import { describe, expect, test } from 'vitest'
-import { detectFonts } from '../../../ci/rollout/detect/fonts'
+import { detectFonts, mergeCss2 } from '../../../ci/rollout/detect/fonts'
 import { detect } from '../../../ci/rollout/detect/index'
 import { fixtureSite, globToRegExp, type SiteFiles } from '../../../ci/rollout/lib/site-files'
 import type { FontsInfo } from '../../../ci/rollout/types'
@@ -224,11 +224,16 @@ describe('detectFonts: needs-human', () => {
     needsHuman(fonts(mini('', { '.env.example': `PUBLIC_FONT_CSS=${OSWALD_BARLOW}\n` })), '.env.example')
   })
 
-  test('two distinct urls', () => {
-    const other = 'https://fonts.googleapis.com/css2?family=Lato:wght@400&display=swap'
+  test('two distinct urls that cannot be merged (one family, different axes)', () => {
+    const other = 'https://fonts.googleapis.com/css2?family=Oswald&display=swap'
     const r = fonts(mini(`${LINK}\n    <link rel="stylesheet" href="${other}" />`))
     needsHuman(r, '2 distinct')
     expect(r.urls).toEqual([OSWALD_BARLOW, other])
+  })
+
+  test('two distinct urls with different display', () => {
+    const other = 'https://fonts.googleapis.com/css2?family=Lato:wght@400&display=block'
+    needsHuman(fonts(mini(`${LINK}\n    <link rel="stylesheet" href="${other}" />`)), 'display')
   })
 
   test('the css v1 API', () => {
@@ -356,7 +361,11 @@ describe('detectFonts: review probes', () => {
   test.each<[string, SiteFiles, string]>([
     ['a module string with a directive and a <link>', base(L, { 'src/lib/head.ts': `export const h = "font-src 'self'; <link rel=stylesheet href=${U}>"` }), 'src/lib/head.ts'],
     ['a module template with a CSP meta and a <link>', base(L, { 'src/middleware.ts': "export const html = `<meta content=\"default-src 'self'; style-src 'self' https://fonts.googleapis.com\"><link rel=stylesheet href=\"" + U + "\">`" }), 'src/middleware.ts'],
-    ['a .md file outside src/', base(L, { 'content/blog/a.md': `<link rel="stylesheet" href="${U}">` }), 'content/blog/a.md'],
+    ['a .md file in a content collection outside src/', base(L, { 'content/blog/a.md': `<link rel="stylesheet" href="${U}">`, 'src/content.config.ts': "const blog = defineCollection({ loader: glob({ pattern: '**/*.md', base: './content/blog' }) })\n" }), 'content/blog/a.md'],
+    ['a .md file outside src/ that a page imports', base(L, { 'notes/a.md': `<link rel="stylesheet" href="${U}">`, 'src/pages/n.astro': "---\nimport { Content } from '../../notes/a.md'\n---\n<Content />\n" }), 'notes/a.md'],
+    ['a root .md file under a glob loader without a base', base(L, { 'README.md': `<link rel="stylesheet" href="${U}">`, 'src/content.config.ts': "const all = defineCollection({ loader: glob({ pattern: '**/*.md' }) })\n" }), 'README.md'],
+    ['a .md file outside src/ under a glob loader with a computed base', base(L, { 'docs/a.md': `<link rel="stylesheet" href="${U}">`, 'src/content.config.ts': "const d = defineCollection({ loader: glob({ pattern: '**/*.md', base: new URL('../docs', import.meta.url) }) })\n" }), 'docs/a.md'],
+    ['a .md file outside src/ under a root import.meta.glob', base(L, { 'docs/a.md': `<link rel="stylesheet" href="${U}">`, 'src/pages/all.astro': "---\nconst all = import.meta.glob('/**/*.md')\n---\n" }), 'docs/a.md'],
     ['a module outside src/', base(L, { 'integrations/fonts.ts': `export default { hooks: { 'astro:config:setup': ({ injectScript }) => injectScript('head-inline', "document.head.insertAdjacentHTML('beforeend','<link rel=stylesheet href=${U}>')") } }` }), 'integrations/fonts.ts'],
     ['an .astro file outside src/', base(L, { 'lib/Head.astro': `${L}\n` }), 'lib/Head.astro'],
     ['the Web Font Loader script', base(L, {}, undefined, '<script is:inline src="https://ajax.googleapis.com/ajax/libs/webfont/1.6.26/webfont.js"></script>'), 'Web Font Loader'],
@@ -375,7 +384,8 @@ describe('detectFonts: review probes', () => {
     ['a .mdx page', base(L, { 'src/content/a.mdx': `<link rel="stylesheet" href="${U}" />` }), 'src/content/a.mdx'],
     ['a vite plugin in astro.config', base(L, { 'astro.config.mjs': `export default { vite: { plugins: [{ transformIndexHtml: () => '<link href="${U}">' }] } }` }), 'astro.config.mjs'],
     ['set:html', base(L, {}, undefined, `<Fragment set:html={'<link rel="stylesheet" href="${U}">'} />`), 'expression'],
-    ['a <link> in a page slotted into the layout without its own CSS import', base(L, { 'src/pages/i.astro': `---\nimport B from '../layouts/Base.astro'\n---\n<B>${L}</B>` }), 'does not import'],
+    ['a <link> in a page whose imports never reach the CSS entry', base(L, { 'src/components/Box.astro': '<div><slot /></div>\n', 'src/pages/i.astro': `---\nimport B from '../components/Box.astro'\n---\n<B>${L}</B>` }), 'does not import'],
+    ['a <link> in a page that imports the layout through an alias', base(L, { 'src/pages/i.astro': `---\nimport B from '@/layouts/Base.astro'\n---\n<B>${L}</B>` }), 'does not import'],
     ['is:inline on the link', base(`<link is:inline rel="stylesheet" href="${U}" />`), 'is:inline'],
     ['an upper-case <LINK> (a component)', base(`<LINK rel="stylesheet" href="${U}" />`), 'outside'],
     ['a let href', base('<link rel="stylesheet" href={f} />', {}, `import '../styles/global.css'\nlet f = '${U}'`), 'outside'],
@@ -418,5 +428,99 @@ describe('detectFonts: review probes', () => {
   test("a CSP without 'self' on a site without Google Fonts is still none", () => {
     const r = fonts(base(`<meta http-equiv="Content-Security-Policy" content="default-src 'self'; font-src https://cdn.example.com" />`))
     expect(r).toMatchObject({ status: 'none', reasons: [], csp: [] })
+  })
+})
+
+// site-1239746715: plans under docs/ quote the old Google Fonts link. site-1251008931: the home
+// page and the 404 page each pass their own Google Fonts link into the layout's head slot.
+describe('detectFonts: Markdown nothing builds, several urls, CSS entry through imports', () => {
+  const U = 'https://fonts.googleapis.com/css2?family=Oswald:wght@400;700&display=swap'
+  const L = `<link rel="stylesheet" href="${U}" />`
+  const layout = (head: string): string => `---\nimport '../styles/global.css'\n---\n<html><head>${head}<slot name="head" /></head><body><slot /></body></html>\n`
+  const slotted = (link: string): string => `---\nimport Base from '../layouts/Base.astro'\n---\n<Base>\n  <Fragment slot="head">\n    ${link}\n  </Fragment>\n</Base>\n`
+  const site = (extra: Record<string, string>, head = L): SiteFiles =>
+    withFiles(null, { 'src/layouts/Base.astro': layout(head), 'src/styles/global.css': TW, ...extra })
+
+  test('Markdown outside src/ that nothing builds is not read', () => {
+    const r = fonts(site({ 'docs/plans/a.md': `Swap ${U} for files of our own.\n`, 'CLAUDE.md': 'No fonts.googleapis.com.\n' }))
+    expect(r).toMatchObject({ status: 'wire', url: U, reasons: [] })
+  })
+
+  test('a content collection inside src/ does not make docs/ count', () => {
+    const r = fonts(site({ 'docs/a.md': `${U}\n`, 'src/content.config.ts': "const p = defineCollection({ loader: glob({ pattern: '**/*.json', base: './src/content/produkter' }) })\n" }))
+    expect(r).toMatchObject({ status: 'wire', url: U, reasons: [] })
+  })
+
+  test('Markdown under src/ still counts', () => {
+    needsHuman(fonts(site({ 'src/content/blog/a.md': `${U}\n` })), 'src/content/blog/a.md')
+  })
+
+  test('a <link> slotted into a layout that imports the CSS entry', () => {
+    const files = site({ 'src/pages/index.astro': slotted(L) }, '')
+    expect(fonts(files)).toMatchObject({ status: 'wire', url: U, reasons: [] })
+  })
+
+  test('the CSS entry two imports away (page, layout, head component)', () => {
+    const files = withFiles(null, {
+      'src/components/Head.astro': "---\nimport '../styles/global.css'\n---\n<meta charset=\"utf-8\" />\n",
+      'src/layouts/Base.astro': "---\nimport Head from '../components/Head.astro'\n---\n<html><head><Head /><slot name=\"head\" /></head><body><slot /></body></html>\n",
+      'src/styles/global.css': TW,
+      'src/pages/index.astro': slotted(L),
+    })
+    expect(fonts(files)).toMatchObject({ status: 'wire', url: U, reasons: [] })
+  })
+
+  test('import cycles end', () => {
+    const files = withFiles(null, {
+      'src/components/A.astro': "---\nimport B from './B.astro'\n---\n<B />\n",
+      'src/components/B.astro': "---\nimport A from './A.astro'\n---\n<A />\n",
+      'src/styles/global.css': TW,
+      'src/pages/index.astro': `---\nimport A from '../components/A.astro'\n---\n<html><head>${L}</head><body><A /></body></html>\n`,
+    })
+    needsHuman(fonts(files), 'does not import')
+  })
+
+  test('two pages with different urls: one merged url, every location kept', () => {
+    const home = 'https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;1,400;1,500&family=Urbanist:wght@300;400;500;600&display=swap'
+    const missing = 'https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;1,400&family=Urbanist:wght@400;500&display=swap'
+    const files = site({ 'src/pages/index.astro': slotted(`<link href="${home}" rel="stylesheet" />`), 'src/pages/404.astro': slotted(`<link href="${missing}" rel="stylesheet" />`) }, '')
+    const r = fonts(files)
+    expect(r).toMatchObject({ status: 'wire', reasons: [] })
+    expect(r.url).toBe(home)
+    expect(r.urls).toEqual([missing, home])
+    expect(r.locations.map((l) => `${l.kind} ${l.file}`)).toEqual(['link src/pages/404.astro', 'link src/pages/index.astro'])
+  })
+
+  test('different families: their union, in file order', () => {
+    const a = 'https://fonts.googleapis.com/css2?family=Oswald:wght@700&display=swap'
+    const b = 'https://fonts.googleapis.com/css2?family=Lato:ital,wght@0,400;1,400&family=Oswald:wght@400&display=swap'
+    const r = fonts(site({ 'src/pages/index.astro': slotted(`<link rel="stylesheet" href="${b}" />`) }, `<link rel="stylesheet" href="${a}" />`))
+    expect(r.status).toBe('wire')
+    expect(r.url).toBe('https://fonts.googleapis.com/css2?family=Oswald:wght@400;700&family=Lato:ital,wght@0,400;1,400&display=swap')
+  })
+})
+
+describe('mergeCss2', () => {
+  const css2 = (...families: string[]): string => `https://fonts.googleapis.com/css2?${families.map((f) => `family=${f}`).join('&')}&display=swap`
+
+  test.each<[string, string[], string]>([
+    ['one url as it is', [css2('Oswald:wght@400;700')], css2('Oswald:wght@400;700')],
+    ['weights unioned and sorted numerically', [css2('Oswald:wght@700;900'), css2('Oswald:wght@300;700')], css2('Oswald:wght@300;700;900')],
+    ['upright-only joins ital,wght as ital 0', [css2('Lato:wght@400'), css2('Lato:ital,wght@1,400')], css2('Lato:ital,wght@0,400;1,400')],
+    ['a family alone joins the same family alone', [css2('Gloock'), css2('Gloock')], css2('Gloock')],
+    ['opsz ranges kept as written', [css2('DM+Sans:opsz,wght@9..40,400'), css2('DM+Sans:opsz,wght@9..40,700')], css2('DM+Sans:opsz,wght@9..40,400;9..40,700')],
+  ])('%s', (_name, urls, want) => {
+    expect(mergeCss2(urls)).toEqual({ url: want })
+  })
+
+  test.each<[string, string[], string]>([
+    ['a family alone beside the same family with axes', [css2('Oswald'), css2('Oswald:wght@700')], 'Oswald'],
+    ['different axes', [css2('Roboto+Flex:wght@400'), css2('Roboto+Flex:opsz,wght@8..144,400')], 'Roboto Flex'],
+    ['different display', [css2('Oswald:wght@400'), 'https://fonts.googleapis.com/css2?family=Oswald:wght@700&display=block'], 'display'],
+    ['a range beside a single value of that axis', [css2('Oswald:wght@200..700'), css2('Oswald:wght@400')], 'range'],
+    ['a tuple that does not fit its axes', [css2('Lato:ital,wght@0,400'), css2('Lato:ital,wght@400')], 'Lato'],
+  ])('%s: not merged', (_name, urls, fragment) => {
+    const r = mergeCss2(urls)
+    expect('problem' in r && r.problem.includes(fragment), JSON.stringify(r)).toBe(true)
   })
 })

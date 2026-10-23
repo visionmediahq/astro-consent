@@ -96,7 +96,7 @@ export interface FontCsp {
 
 export interface FontsInfo {
   status: FontsStatus
-  /** The css2 URL to self-host (`&amp;` decoded); null unless status is `wire`. */
+  /** The css2 URL to self-host (`&amp;` decoded; several joined by mergeCss2); null unless status is `wire`. */
   url: string | null
   /** Every distinct Google Fonts stylesheet URL found, in file order, whatever the status. */
   urls: string[]
