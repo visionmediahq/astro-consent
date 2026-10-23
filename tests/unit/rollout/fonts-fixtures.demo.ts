@@ -34,8 +34,8 @@ const LATIN = 'U+0000-00FF, U+0131, U+0152-0153, U+2000-206F, U+20AC'
 const CYRILLIC = 'U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116'
 const face = (weight: number, file: string, range = LATIN) =>
   `/* latin */\n@font-face {\n  font-family: 'Fixture Sans';\n  font-style: normal;\n  font-weight: ${weight};\n  font-display: swap;\n  src: url(/fonts/${file}) format('woff2');\n  unicode-range: ${range};\n}\n`
-/** The site's fonts.css: 400 and 700, latin only (700's file is missing on the /bold/ fixture). */
-const FONTS_CSS = `/*\n * Generated from https://fonts.googleapis.com/css2?family=Fixture+Sans:wght@400;700\n * on 2026-10-19 by the astro-consent rollout tool: Google's own faces, served from /fonts/.\n */\n${face(400, 'fixture-sans-normal-400-latin-00000000.woff2')}${face(700, 'fixture-sans-normal-700-latin-11111111.woff2')}`
+/** The site's fonts.css: 400, 600 and 700, latin only (700's file is missing on the /bold/ fixture). */
+const FONTS_CSS = `/*\n * Generated from https://fonts.googleapis.com/css2?family=Fixture+Sans:wght@400;600;700\n * on 2026-10-19 by the astro-consent rollout tool: Google's own faces, served from /fonts/.\n */\n${face(400, 'fixture-sans-normal-400-latin-00000000.woff2')}${face(600, 'fixture-sans-normal-600-latin-22222222.woff2')}${face(700, 'fixture-sans-normal-700-latin-11111111.woff2')}`
 /** Google's whole answer for the URL: latin and cyrillic, so a Cyrillic character was offered. */
 const GOOGLE: Face[] = [
   { subset: 'cyrillic', family: 'Fixture Sans', style: 'normal', weight: '400', src: '', block: '', ranges: parseUnicodeRange(CYRILLIC) },
@@ -55,9 +55,10 @@ const FIXTURES: Record<string, string> = {
   cyrillic: page('<p>Hej och Привет</p>'),
   // An emoji, which no Google text face has: a fallback on main too, so a note, not a failure.
   emoji: page('<p>Ring oss ☎ 📞</p>'),
-  // The 700 of /bold/ inside a closed <details>: it has a box but is never drawn, so its face never
-  // loads. A control; the same text in an open <details> is drawn and fails like /bold/.
-  closed: page('<details><summary>Läs mer</summary><p style="font-weight:700">Fet text</p></details>'),
+  // A 600 inside a closed <details>: it has a box but is never drawn, so its face is not loaded when
+  // the page is read. A control (its file exists: the check's own layout query may still fetch it
+  // afterwards). The 700 of /bold/ in an open <details> is drawn and fails like /bold/.
+  closed: page('<details><summary>Läs mer</summary><p style="font-weight:600">Halvfet text</p></details>'),
   open: page('<details open><summary>Läs mer</summary><p style="font-weight:700">Fet text</p></details>'),
 }
 
@@ -65,7 +66,7 @@ const font = fontBytes()
 const server = createServer((req, res) => {
   const url = (req.url ?? '/').split('?')[0]!
   if (url === '/fonts.css') return res.writeHead(200, { 'content-type': 'text/css' }).end(FONTS_CSS)
-  if (url === '/fonts/fixture-sans-normal-400-latin-00000000.woff2') return res.writeHead(200, { 'content-type': 'font/woff2' }).end(font)
+  if (url === '/fonts/fixture-sans-normal-400-latin-00000000.woff2' || url === '/fonts/fixture-sans-normal-600-latin-22222222.woff2') return res.writeHead(200, { 'content-type': 'font/woff2' }).end(font)
   const name = url.replace(/^\/|\/$/g, '')
   const html = FIXTURES[name]
   if (html) return res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' }).end(html)
