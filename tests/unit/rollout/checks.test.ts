@@ -273,7 +273,7 @@ describe('contrast', () => {
     })
 
     it('one opaque sRGB gradient always gets a level for its dither, even at a stop (conservative)', () => {
-      // #97 review, in headless Chromium: rows at 4.51–4.54:1 at a stop painted at 4.48–4.50.
+      // #97 review, in headless Chromium: other rows at 4.51–4.54:1 at a stop painted at 4.48–4.50.
       // Dither never leaves the stops' per-channel range, so when every channel runs the same way,
       // as here, the lighter stop already bounds the gradient and this FAIL is conservative. The
       // check does not tell the two cases apart: it always counts a level for one gradient.
