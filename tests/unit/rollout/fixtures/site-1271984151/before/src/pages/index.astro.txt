@@ -31,7 +31,7 @@ export const prerender = true;
     address={{
       streetAddress: 'Exempelgatan 1',
       addressLocality: 'Exempelby',
-      postalCode: '432 48',
+      postalCode: '123 45',
       addressCountry: 'SE',
     }}
     description="Professionell takläggning med mer än 30 års erfarenhet. Specialister inom tätskikt, omläggning och renovering i Exempelby, Exempelstad, Exempelhamn och Exempelvik."

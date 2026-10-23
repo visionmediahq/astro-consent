@@ -22,7 +22,7 @@ export const prerender = true;
     address: {
       streetAddress: 'Exempelgatan 1',
       addressLocality: 'Exempelby',
-      postalCode: '432 48',
+      postalCode: '123 45',
       addressCountry: 'SE',
     },
     description: 'Kontakta Exempel Tak AB i Exempelby för takläggning, tätskikt och renoveringar i Exempellän.',

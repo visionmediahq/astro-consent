@@ -14,7 +14,7 @@ import Sponsorer from '../components/Sponsorer.astro';
   title="Exempel Ridklubb – Familjärt, Glädjefyllt & Tryggt"
   description="Välkommen till Exempel Ridklubb! En ideell förening i Exempellän med ridskola, tävlingsverksamhet och medlemsstall. Familjärt, glädjefyllt och tryggt."
   canonical="https://site-1277834673.se/"
-  ogImage="/images/727314341_1590382656425402_6650807430265-7b5d709e.webp"
+  ogImage="/images/og-exempelbild-0000000000000000000000000000000000.webp"
 >
   <Header />
 

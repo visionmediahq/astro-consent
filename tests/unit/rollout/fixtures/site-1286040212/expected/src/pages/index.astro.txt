@@ -23,7 +23,7 @@ export const prerender = true;
     address: {
       streetAddress: "Exempelgatan 1",
       addressLocality: "Exempelby",
-      postalCode: "684 32",
+      postalCode: "123 45",
       addressCountry: "SE",
     },
     openingHours: ["Mo-Fr 09:00-18:00"],

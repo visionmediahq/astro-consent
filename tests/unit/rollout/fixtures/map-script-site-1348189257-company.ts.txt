@@ -4,7 +4,7 @@ export const company = {
 
   address: {
     street: 'Exempelgatan 1',
-    postalCode: '256 69',
+    postalCode: '123 45',
     city: 'Exempelstad',
     country: 'SE',
   },
