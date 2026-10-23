@@ -130,7 +130,9 @@ const PAGE_FONTS = `(async () => {
     const cs = getComputedStyle(el)
     const family = first(cs.fontFamily)
     chars[family] = (chars[family] || '') + text
-    if (el.getClientRects().length > 0 && cs.visibility !== 'hidden') {
+    // checkVisibility: text in a closed <details> (content-visibility: hidden) has a box but is
+    // never drawn, so its face never loads.
+    if (el.getClientRects().length > 0 && el.checkVisibility({ visibilityProperty: true })) {
       const weight = Number(cs.fontWeight) || 400
       const style = cs.fontStyle.startsWith('oblique') ? 'oblique' : cs.fontStyle
       used.set(family + '|' + weight + '|' + style, { family, weight, style })
