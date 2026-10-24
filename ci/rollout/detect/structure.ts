@@ -104,20 +104,14 @@ function componentUses(root: AstroNode): AstroNode[] {
   return out
 }
 
-/** A top-level `return Astro.redirect(…)` in the frontmatter. */
-function frontmatterRedirects(frontmatter: string): boolean {
-  if (!frontmatter.includes('Astro.redirect')) return false
-  return parseModule(frontmatter).statements.some((s) => {
-    if (!ts.isReturnStatement(s) || !s.expression) return false
-    const call = s.expression
-    return (
-      ts.isCallExpression(call) &&
-      ts.isPropertyAccessExpression(call.expression) &&
-      ts.isIdentifier(call.expression.expression) &&
-      call.expression.expression.text === 'Astro' &&
-      call.expression.name.text === 'redirect'
-    )
-  })
+/**
+ * A top-level `return` in the frontmatter: `Astro.redirect(…)`, or a bare `new Response(…)` such as
+ * an SSR catch-all that hands unmatched paths to the 404 page. Astro then never renders the
+ * template, so there is no page for a visitor to see. A `return` inside an `if` does not count.
+ */
+function frontmatterReturns(frontmatter: string): boolean {
+  if (!frontmatter.includes('return')) return false
+  return parseModule(frontmatter).statements.some((s) => ts.isReturnStatement(s) && s.expression !== undefined)
 }
 
 const REFRESH_ONLY = new Set(['html', 'head', 'body', 'meta', 'title', 'link', 'script'])
@@ -264,14 +258,14 @@ export function detectStructure(files: SiteFiles): DetectedStructure {
   const footerless = pages.filter((p) => {
     const { root, frontmatter } = parsed.get(p)!
     if (isCmsAdmin(p, texts.get(p)!)) return false
-    if (frontmatterRedirects(frontmatter) || metaRefreshOnly(root, texts.get(p)!)) return false
+    if (frontmatterReturns(frontmatter) || metaRefreshOnly(root, texts.get(p)!)) return false
     return ![...closures.get(p)!].some((f) => footersIn(f).length > 0)
   })
 
   const ownHtmlPages = pages.filter((p) => {
     const { root, frontmatter } = parsed.get(p)!
     if (!hasTag(p, 'html') || /^\/(?:404|500)$/.test(routeOf(p))) return false
-    if (isCmsAdmin(p, texts.get(p)!) || frontmatterRedirects(frontmatter) || metaRefreshOnly(root, texts.get(p)!)) return false
+    if (isCmsAdmin(p, texts.get(p)!) || frontmatterReturns(frontmatter) || metaRefreshOnly(root, texts.get(p)!)) return false
     return ![...closures.get(p)!].some((f) => layoutFiles.includes(f))
   })
 
