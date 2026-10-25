@@ -135,6 +135,24 @@ describe('detectStructure: synthetic cases', () => {
     expect(r.footerless).toEqual(['src/pages/new.astro'])
   })
 
+  test('a page whose frontmatter returns a Response is not footerless', () => {
+    // An SSR catch-all that only hands unmatched paths to the 404 page: its template never renders.
+    const r = detectStructure(
+      inline({
+        'src/pages/[...path].astro': '---\nexport const prerender = false\n\nreturn new Response(null, { status: 404 })\n---\n',
+        'src/pages/new.astro': '<main />\n',
+      }),
+    )
+    expect(r.footerless).toEqual(['src/pages/new.astro'])
+  })
+
+  test('a conditional return in the frontmatter still leaves the page footerless', () => {
+    const r = detectStructure(
+      inline({ 'src/pages/maybe.astro': '---\nif (Astro.url.search) return new Response(null, { status: 404 })\n---\n<main />\n' }),
+    )
+    expect(r.footerless).toEqual(['src/pages/maybe.astro'])
+  })
+
   test('a meta refresh next to visible content is not redirect-only', () => {
     const r = detectStructure(
       inline({
