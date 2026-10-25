@@ -29,6 +29,22 @@ describe('hasConsentEmbed', () => {
     expect(hasConsentEmbed(`<html><head>${INLINE_CSS}</head><body>${EMBED}${INLINE_SCRIPT}</body></html>`)).toBe(true)
   })
 
+  test('a commented-out unclosed script before an embed does not hide it', () => {
+    expect(hasConsentEmbed(`<!-- <script src="/old.js"> -->${EMBED}<script>window.x = 1</script>`)).toBe(true)
+  })
+
+  test('a commented-out embed is not an embed', () => {
+    expect(hasConsentEmbed('<!-- <div data-consent-embed="google-maps"></div> --><main>Hej</main>')).toBe(false)
+  })
+
+  test('a custom element whose name starts with style does not swallow the page', () => {
+    expect(hasConsentEmbed(`<style-box>x</style-box>${EMBED}<style>a{}</style>`)).toBe(true)
+  })
+
+  test('a > inside an earlier quoted attribute value does not hide the attribute', () => {
+    expect(hasConsentEmbed('<div title="a > b" data-consent-embed="google-maps"></div>')).toBe(true)
+  })
+
   test('a longer attribute name is not the embed attribute', () => {
     expect(hasConsentEmbed('<div data-consent-embedded="x"></div>')).toBe(false)
   })
