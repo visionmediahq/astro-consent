@@ -131,13 +131,26 @@ export const VERIFY_FILE = 'verify.json'
 
 const norm = (path: string): string => (path.length > 1 ? path.replace(/\/+$/, '') : path)
 
+/**
+ * Whether the page renders a ConsentEmbed or ConsentWidget: an element carrying `data-consent-embed`.
+ * The name alone is not enough: a site with `build.inlineStylesheets: 'always'` inlines the banner's
+ * CSS, whose selectors name the attribute, into every page; an inlined script can name it too.
+ * Comments go in the same left-to-right pass, so a commented-out `<script>` cannot swallow the page,
+ * and the tag body is read quote-aware, so a `>` in an earlier attribute value does not end it.
+ * The attribute may follow a closing quote with no space, as an HTML minifier writes it.
+ */
+export function hasConsentEmbed(html: string): boolean {
+  const markup = html.replace(/<!--[\s\S]*?-->|<(script|style)(?=[\s/>])[^>]*>[\s\S]*?<\/\1\s*>/gi, '')
+  return /<[a-z](?:[^>"']|"[^"]*"|'[^']*')*(?<=[\s"'])data-consent-embed(?=[\s=>/])/i.test(markup)
+}
+
 /** Fetches each path's HTML and keeps those with a ConsentEmbed (`data-consent-embed`). */
 export async function embedPagesByFetch(base: string, paths: string[]): Promise<string[]> {
   const out: string[] = []
   for (const path of paths) {
     try {
       const res = await fetch(base + path, { signal: AbortSignal.timeout(15_000) })
-      if ((await res.text()).includes('data-consent-embed')) out.push(path)
+      if (hasConsentEmbed(await res.text())) out.push(path)
     } catch {
       // unreachable page: step 3 reports it
     }
