@@ -45,6 +45,15 @@ describe('hasConsentEmbed', () => {
     expect(hasConsentEmbed('<div title="a > b" data-consent-embed="google-maps"></div>')).toBe(true)
   })
 
+  test('the attribute right after a closing quote, as a minifier writes it, still counts', () => {
+    expect(hasConsentEmbed('<div class="a"data-consent-embed="google-maps"></div>')).toBe(true)
+    expect(hasConsentEmbed("<div class='a'data-consent-embed></div>")).toBe(true)
+  })
+
+  test('the name inside a quoted attribute value is not the attribute', () => {
+    expect(hasConsentEmbed(`<div title='a "data-consent-embed" b'></div>`)).toBe(false)
+  })
+
   test('a longer attribute name is not the embed attribute', () => {
     expect(hasConsentEmbed('<div data-consent-embedded="x"></div>')).toBe(false)
   })
