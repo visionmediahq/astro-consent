@@ -237,6 +237,26 @@ describe('build-time ConsentEmbed scan', () => {
   })
 })
 
+// #103: a strict CSP (Astro's experimental.csp) blocks style attributes, and "auto" is the default anyway.
+test('ConsentEmbed renders no style attribute for aspect="auto", and the ratio otherwise', TIMEOUT, () => {
+  const build = buildDemo('consent', (dir) =>
+    writeFileSync(
+      join(dir, 'src/pages/aspect.astro'),
+      page(
+        ['export const prerender = true'],
+        [
+          '<ConsentEmbed id="auto" service="google-maps" src="https://www.google.com/maps/embed?pb=a" title="a" aspect="auto" />',
+          '<ConsentEmbed id="default" service="google-maps" src="https://www.google.com/maps/embed?pb=b" title="b" />',
+        ].join('\n'),
+      ),
+    ),
+  )
+  expect(build.code).toBe(0)
+  const html = build.html('aspect/index.html')
+  expect(html.querySelector('#auto')!.hasAttribute('style')).toBe(false)
+  expect(html.querySelector('#default')!.getAttribute('style')).toBe('aspect-ratio: 16 / 9')
+})
+
 const WIDGET_SCRIPT = 'https://elfsightcdn.com/platform.js'
 const WIDGET_IMPORT = "import ConsentWidget from '@visionmediahq/astro-consent/components/ConsentWidget.astro'"
 
@@ -365,6 +385,33 @@ describe('banner and footer markup', () => {
   test('the banner still carries card-actions', () => {
     expect(consentBuild.html('index.html').querySelector('[data-consent-banner] .card-actions')).not.toBeNull()
     expect(noticeBuild.html('index.html').querySelector('[data-consent-banner] .card-actions')).not.toBeNull()
+  })
+
+  // #116: astro-starter's mobile full-width rule leaves .btn-sm out, so the banner sets its own.
+  test('every banner action is full width below sm', () => {
+    for (const build of [consentBuild, noticeBuild]) {
+      const actions = build.html('index.html').querySelectorAll('[data-consent-banner] [data-consent-action]')
+      expect(actions.length).toBeGreaterThan(0)
+      for (const action of actions) expect(action.classList.contains('max-sm:w-full')).toBe(true)
+    }
+  })
+
+  // #117: the same for "Visa", and at least 16px text below sm (site-factory's mobile checks).
+  test('embed placeholder: Visa is full width and the text is text-base below sm', () => {
+    const placeholders = consentBuild.html('karta-efter-widget/index.html').querySelectorAll('[data-placeholder]')
+    expect(placeholders.length).toBeGreaterThan(1)
+    for (const placeholder of placeholders) {
+      expect(placeholder.querySelector('[data-load]')!.classList.contains('max-sm:w-full')).toBe(true)
+      const texts = [
+        placeholder.querySelector('[id$="-info"]')!,
+        placeholder.querySelector('[data-remember]')!.closest('label')!,
+        ...placeholder.querySelectorAll('[data-open]'),
+      ]
+      for (const text of texts) {
+        expect(text.classList.contains('text-base')).toBe(true)
+        expect(text.getAttribute('class')).not.toMatch(/(^|\s)text-(xs|sm)(\s|$)/)
+      }
+    }
   })
 
   test('no DaisyUI 4-only classes', () => {
