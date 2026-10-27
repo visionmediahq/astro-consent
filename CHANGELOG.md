@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.1.5
+
+- Fix: on a phone (below `sm`) the banner's actions are full width (`max-sm:w-full`), and stack.
+  astro-starter's mobile full-width rule leaves `.btn-sm` out on purpose, so the notice banner's
+  "OK" was 45px wide, a site-factory QA finding on every page of every site (#116). "Neka" and
+  "Acceptera alla" keep identical classes.
+- Fix: the embed placeholder's "Visa" button is full width below `sm` too, and its info text,
+  "Visa alltid" label and "Öppna i" link are `text-base` (16px) there, `text-sm`/`text-xs` from
+  `sm` up as before (#117). The box grows in normal flow on a phone, as before.
+- Fix: `ConsentEmbed` with `aspect="auto"` renders no `style` attribute (`aspect-ratio: auto` is
+  the browser default). A strict CSP that allows no style attributes (Astro's `experimental.csp`)
+  blocked it and logged an error on every embed page (#103). Other ratios still render
+  `style="aspect-ratio: …"`.
+- No wording change: `CONSENT_VERSION` is unchanged and no visitor is asked again.
+
 ## 1.1.4
 
 - Fix: the banner's settings toggles have an explicit boundary, `border-base-content/60` unchecked

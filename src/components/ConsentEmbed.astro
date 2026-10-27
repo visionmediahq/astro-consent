@@ -37,7 +37,7 @@ const openHref = href ?? deEmbed(src)
   id={id}
   data-consent-embed={service}
   class="relative flex flex-col rounded-box bg-base-200 text-base-content data-active:overflow-hidden"
-  style={`aspect-ratio: ${aspect}`}
+  style={aspect === 'auto' ? undefined : `aspect-ratio: ${aspect}`}
 >
   <template data-payload>
     <iframe

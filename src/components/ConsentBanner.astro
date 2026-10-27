@@ -35,7 +35,7 @@ const servicesIn = (category: Category): ServiceSlug[] =>
             )}
           </p>
           <div class="card-actions justify-end">
-            <button type="button" class="btn btn-primary btn-sm" data-consent-action="notice_ok">
+            <button type="button" class="btn btn-primary btn-sm max-sm:w-full" data-consent-action="notice_ok">
               {sv.notice.ok}
             </button>
           </div>
@@ -54,14 +54,14 @@ const servicesIn = (category: Category): ServiceSlug[] =>
               )}
             </p>
             <div class="card-actions justify-end gap-2">
-              <button type="button" class="btn btn-ghost btn-sm" data-consent-action="settings">
+              <button type="button" class="btn btn-ghost btn-sm max-sm:w-full" data-consent-action="settings">
                 {sv.consent.settings}
               </button>
               {/* Same classes as "Acceptera alla": declining must be as prominent as accepting. */}
-              <button type="button" class="btn btn-primary btn-sm" data-consent-action="none">
+              <button type="button" class="btn btn-primary btn-sm max-sm:w-full" data-consent-action="none">
                 {sv.consent.decline}
               </button>
-              <button type="button" class="btn btn-primary btn-sm" data-consent-action="all">
+              <button type="button" class="btn btn-primary btn-sm max-sm:w-full" data-consent-action="all">
                 {sv.consent.acceptAll}
               </button>
             </div>
@@ -112,10 +112,10 @@ const servicesIn = (category: Category): ServiceSlug[] =>
               </div>
             ))}
             <div class="card-actions justify-end gap-2">
-              <button type="button" class="btn btn-ghost btn-sm" data-consent-action="back">
+              <button type="button" class="btn btn-ghost btn-sm max-sm:w-full" data-consent-action="back">
                 {sv.consent.back}
               </button>
-              <button type="submit" class="btn btn-primary btn-sm" data-consent-action="custom">
+              <button type="submit" class="btn btn-primary btn-sm max-sm:w-full" data-consent-action="custom">
                 {sv.consent.save}
               </button>
             </div>

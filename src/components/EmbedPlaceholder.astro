@@ -22,7 +22,7 @@ const fill = (text: string, vars: Record<string, string>): string =>
 
 {/* In normal flow, not absolute: on a narrow screen the box grows instead of clipping. */}
 <div data-placeholder class="flex flex-1 flex-col justify-between gap-3 p-4">
-  <div class="text-sm" id={infoId}>
+  <div class="text-base sm:text-sm" id={infoId}>
     <slot>
       <p>{fill(sv.embed.info, { title, name })}</p>
     </slot>
@@ -30,17 +30,17 @@ const fill = (text: string, vars: Record<string, string>): string =>
   <div class="flex flex-wrap items-center gap-3">
     <button
       type="button"
-      class="btn btn-primary btn-sm h-auto min-h-8 whitespace-normal"
+      class="btn btn-primary btn-sm h-auto min-h-8 whitespace-normal max-sm:w-full"
       data-load
       aria-describedby={infoId}>{fill(sv.embed.show, { name })}</button
     >
-    <label class="flex cursor-pointer items-center gap-2 text-xs">
+    <label class="flex cursor-pointer items-center gap-2 text-base sm:text-xs">
       <input type="checkbox" class="checkbox checkbox-sm border-base-content/60" data-remember />
       {fill(sv.embed.remember, { name })}
     </label>
     {
       openHref && (
-        <a href={openHref} target="_blank" rel="noopener noreferrer" class="link text-xs text-base-content" data-open>
+        <a href={openHref} target="_blank" rel="noopener noreferrer" class="link text-base text-base-content sm:text-xs" data-open>
           {fill(sv.embed.open, { name })}
         </a>
       )
