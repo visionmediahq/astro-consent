@@ -142,6 +142,7 @@ describe('the CLI (Task 23)', () => {
     expect(USAGE).toMatch(/1[^\n]*error/i)
     expect(USAGE).toMatch(/2[^\n]*usage/i)
     expect(USAGE).toMatch(/3[^\n]*refused/i)
+    expect(USAGE).toMatch(/4[^\n]*ports are taken/i)
     expect(USAGE).toContain('.rollout/')
   })
 
@@ -204,5 +205,28 @@ describe('stored reports', () => {
     ])
     const url = 'https://fonts.googleapis.com/css2?family=Oswald&display=swap'
     expect(summary({ ...report, fonts: { ...fonts, status: 'wire', url, urls: [url], reasons: [] } }).split('\n').at(-1)).toBe(`  google fonts: wire ${url}`)
+  })
+})
+
+describe('verify exit code (#87)', () => {
+  afterEach(() => void vi.unstubAllEnvs())
+
+  test('ports held by another verify: exit 4, not the 1 of a failed site', async () => {
+    // A base no real verify uses, so the lock in the OS temp dir is this test's alone.
+    vi.stubEnv('ROLLOUT_PORT_BASE', '61397')
+    const dir = mkdtempSync(join(tmpdir(), 'run-busy-'))
+    const lock = join(tmpdir(), 'rollout-verify-61397.lock')
+    try {
+      mkdirSync(join(dir, '.rollout'))
+      writeFileSync(join(dir, '.rollout/report.json'), readFileSync(join(import.meta.dirname, 'fixtures/demo-report.json')))
+      writeFileSync(lock, `${process.ppid}\n`)
+      const err = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+      expect(await main(['verify', dir])).toBe(4)
+      expect(err.mock.calls.flat().join('\n')).toMatch(/another verify .* holds ports 61397-61399/)
+      err.mockRestore()
+    } finally {
+      rmSync(lock, { force: true })
+      rmSync(dir, { recursive: true, force: true })
+    }
   })
 })

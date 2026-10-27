@@ -745,8 +745,13 @@ export async function checkContrast(
       // Scrolled through and back, as the request check does: the starter's [data-animate] is
       // opacity 0 until Motion's inView fades it in, and ~25 sites wrap an embed in one.
       await open(page, base, path)
-      // DaisyUI buttons animate colour changes; read the settled value.
-      await page.addStyleTag({ content: '* { transition: none !important }' })
+      // DaisyUI buttons animate colour changes; read the settled value. A constructed sheet, not a
+      // <style>: a strict style-src CSP refuses an injected <style> and the step threw (#102).
+      await page.evaluate(() => {
+        const sheet = new CSSStyleSheet()
+        sheet.replaceSync('* { transition: none !important }')
+        document.adoptedStyleSheets = [...document.adoptedStyleSheets, sheet]
+      })
       await page.waitForTimeout(300)
       await page.evaluate(SETTLED)
       for (const row of await measureContrast(page)) rows.push({ path, ...row })

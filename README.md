@@ -426,7 +426,11 @@ npx tsx ci/rollout/run.ts help
   branch's on 4399. `ROLLOUT_PORT_BASE` moves all three (e.g. `4417` → 4417–4419), so two verifies
   can run on one machine at once with bases at least 3 apart. A value that is not a port from 1024 to
   65533 stops verify before any step rather than falling back to 4397. The two runs still share CPU
-  and disk: each needs the free space above.
+  and disk: each needs the free space above. A verify takes a lock for its base in the OS temp dir
+  (`rollout-verify-<base>.lock`, a killed run's lock is taken over) and checks that none of its
+  three ports answers yet. Either one taken stops it before the push and the builds with exit code 4,
+  naming the other process or the port, so a batch can log it as the machine's problem and rerun
+  (#87).
 - If main's local preview stops answering mid-step (a dropped connection, and nothing answers on
   its port), `verify` restarts it once and checks main again. The step output, the verify file
   (`restarts`) and the summary say so. A second drop, any other error, or a crash of the branch's
