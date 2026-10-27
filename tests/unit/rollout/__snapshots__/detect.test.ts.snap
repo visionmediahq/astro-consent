@@ -16,6 +16,12 @@ exports[`detect > pilot site-1218869363: consent, matching the committed snapsho
     "path": "astro.config.ts",
   },
   "css": {
+    "daisyui": {
+      "missing": [],
+      "ownClasses": [],
+      "plugin": true,
+      "prefix": "",
+    },
     "daisyuiMajor": 5,
     "entry": "src/styles/global.css",
     "primaries": [
@@ -128,6 +134,12 @@ exports[`detect > pilot site-1243335919: consent, matching the committed snapsho
     "path": "astro.config.ts",
   },
   "css": {
+    "daisyui": {
+      "missing": [],
+      "ownClasses": [],
+      "plugin": true,
+      "prefix": "",
+    },
     "daisyuiMajor": 5,
     "entry": "src/styles/global.css",
     "primaries": [
@@ -265,6 +277,12 @@ exports[`detect > pilot site-1243511314: consent, matching the committed snapsho
     "path": "astro.config.ts",
   },
   "css": {
+    "daisyui": {
+      "missing": [],
+      "ownClasses": [],
+      "plugin": true,
+      "prefix": "",
+    },
     "daisyuiMajor": 5,
     "entry": "src/styles/global.css",
     "primaries": [
@@ -372,6 +390,12 @@ exports[`detect > pilot site-1245311266: consent, matching the committed snapsho
     "path": "astro.config.ts",
   },
   "css": {
+    "daisyui": {
+      "missing": [],
+      "ownClasses": [],
+      "plugin": true,
+      "prefix": "",
+    },
     "daisyuiMajor": 5,
     "entry": "src/styles/global.css",
     "primaries": [
@@ -487,6 +511,12 @@ exports[`detect > pilot site-1271984151: needs-human, matching the committed sna
     "path": "astro.config.ts",
   },
   "css": {
+    "daisyui": {
+      "missing": [],
+      "ownClasses": [],
+      "plugin": true,
+      "prefix": "",
+    },
     "daisyuiMajor": 5,
     "entry": "src/styles/global.css",
     "primaries": [
@@ -608,6 +638,12 @@ exports[`detect > pilot site-1277834673: needs-human, matching the committed sna
     "path": "astro.config.ts",
   },
   "css": {
+    "daisyui": {
+      "missing": [],
+      "ownClasses": [],
+      "plugin": true,
+      "prefix": "",
+    },
     "daisyuiMajor": 5,
     "entry": "src/styles/global.css",
     "primaries": [
@@ -726,6 +762,12 @@ exports[`detect > pilot site-1286040212: notice, matching the committed snapshot
     "path": "astro.config.ts",
   },
   "css": {
+    "daisyui": {
+      "missing": [],
+      "ownClasses": [],
+      "plugin": true,
+      "prefix": "",
+    },
     "daisyuiMajor": 5,
     "entry": "src/styles/global.css",
     "primaries": [

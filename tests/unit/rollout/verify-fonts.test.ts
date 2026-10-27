@@ -116,6 +116,7 @@ function fake(o: { branch?: string; mainPkg?: string; mainLock?: string; diff?: 
     contrast: async () => (called.push('contrast'), []),
     shots: async () => (called.push('shots'), ['/tmp/x.png']),
     fonts: async (base, paths, opts) => (called.push(`fonts ${base} ${(opts?.widths ?? [360, 1280]).join(',')}`), paths.flatMap((p) => (opts?.widths ?? [360, 1280]).map((w) => okPage(p, w)))),
+    daisyuiParts: () => [],
     close: async () => undefined,
     ...o.checks,
   }
@@ -148,7 +149,8 @@ describe('verify on fonts-selfhost', () => {
     // The banner's state from earlier must stay as it was.
     mkdirSync(join(dir, '.rollout'), { recursive: true })
     writeFileSync(join(dir, '.rollout/verify.json'), '{"banner":true}')
-    const f = fake()
+    // A live site's banner is not this flow's to judge (#101): step 2 passes with a part missing.
+    const f = fake({ checks: { daisyuiParts: () => ['card'] } })
     const r = await verify(dir, report(), { deps: f.deps })
     expect(steps(r)).toEqual([
       [1, 'lockfile', 'pass'],
