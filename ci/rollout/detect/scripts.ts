@@ -11,6 +11,7 @@ import { type AstroNode, attr, elements, parseAstro } from '../lib/astro-ast'
 import { importsOf, parseModule } from '../lib/ts-ast'
 import type { SiteFiles } from '../lib/site-files'
 import { resolveRelative } from '../lib/site-imports'
+import { isSelfHostableBundle } from '../lib/sentry'
 
 /**
  * An iframe embed URL (a map, a calendar) outside an `<iframe>`: a click-to-load the site built
@@ -212,13 +213,13 @@ function servicesInScript(node: AstroNode, text: string): { trackers: ServiceSlu
 /**
  * Script hosts that need no consent, agreed one by one; each with its reason. A path prefix narrows
  * a shared CDN to the one package. Everything else outside the registry goes to a human.
+ *
+ * Sentry's CDNs (browser.sentry-cdn.com, jsDelivr's /npm/@sentry/) were here while the GlitchTip
+ * decision was parked. They are not any more (#93): wire self-hosts the bundle (wire/sentry.ts).
+ * The plain major-8 bundle wire can rewrite is detectSentry's to report (isSelfHostableBundle);
+ * any other script from those hosts (another bundle, another major, the Loader) is listed here.
  */
-const AGREED_SCRIPT_HOSTS: { host: string; path?: string; reason: string }[] = [
-  // Error reporting (GlitchTip) through Sentry's browser bundle: whether it counts as a service is
-  // parked (memory glitchtip-consent-paused), so the 80-odd sites that carry it are not held up.
-  { host: 'browser.sentry-cdn.com', reason: 'error reporting bundle, consent decision parked' },
-  { host: 'cdn.jsdelivr.net', path: '/npm/@sentry/', reason: 'error reporting bundle, consent decision parked' },
-]
+const AGREED_SCRIPT_HOSTS: { host: string; path?: string; reason: string }[] = []
 
 /** CMS admin shells load their editor from a CDN and are never part of what a visitor sees. */
 const ADMIN_SHELL = /^(?:public|src\/pages)\/admin(?:\/|\.)/
@@ -284,8 +285,9 @@ function htmlScriptSrcs(html: string): string[] {
 function unregisteredHosts(urls: string[]): string[] {
   const out: string[] = []
   for (const u of urls) {
-    // reCAPTCHA has its own report (`recaptcha`) and wire replaces it with spam-guard.
-    if (serviceOfUrl(u) !== null || RECAPTCHA.test(u)) continue
+    // reCAPTCHA has its own report (`recaptcha`) and wire replaces it with spam-guard. Sentry's
+    // bundle is detectSentry's to report, and wire's to self-host (#93).
+    if (serviceOfUrl(u) !== null || RECAPTCHA.test(u) || isSelfHostableBundle(u)) continue
     let parsed: URL
     try {
       parsed = new URL(u.startsWith('//') ? `https:${u}` : u)

@@ -204,7 +204,8 @@ Each choice also calls `window.umami?.track('consent', { choice })`.
 - **Umami is not gated.** It is cookie-free and first-party; the banner text says so.
 - **Not handled by this package:** scripts from jsdelivr and reCAPTCHA still load on sites that
   use them. Google Fonts are not the banner's job either: the rollout tool self-hosts them on the
-  site itself (`wire` does by default, `fonts` for a site already live; see "Rollout tool").
+  site itself (`wire` does by default, `fonts` for a site already live; see "Rollout tool"). The
+  same goes for Sentry's browser bundle behind GlitchTip error reporting (`wire` self-hosts it).
 - **A one-off "Visa"** loads that one embed for that page view and stores nothing. Declining in the
   banner afterwards keeps it on screen and loads nothing else.
 - **Withdrawing** something that is loaded deletes its first-party cookies (`_ga*`, `_gid`, `_gcl_*`,
@@ -228,7 +229,7 @@ from a checkout of this repo with `npx tsx`:
 
 ```bash
 npx tsx ci/rollout/run.ts detect <site dir> --domain <host> [--domain <host>]...
-npx tsx ci/rollout/run.ts wire   <site dir> [--dry-run] [--no-fonts]
+npx tsx ci/rollout/run.ts wire   <site dir> [--dry-run] [--no-fonts] [--no-sentry]
 npx tsx ci/rollout/run.ts fonts  <site dir> [--dry-run]   # Google Fonts alone, on branch fonts-selfhost
 npx tsx ci/rollout/run.ts fonts-files <site dir> --url <css/css2 url> [--entry <css file>] [--dry-run]   # files only, see below
 npx tsx ci/rollout/run.ts update <site dir>               # the lockfile on the latest release, branch astro-consent-update
@@ -243,7 +244,8 @@ npx tsx ci/rollout/run.ts help
 - `detect` reads the site and writes the report; `wire` plans every edit and either prints the
   diff (`--dry-run`, writes nothing) or applies it all on branch `consent-banner`: one commit for
   the banner and, when the site loads Google Fonts the tool can self-host, a second one for them
-  (`--no-fonts` skips it; below);
+  (`--no-fonts` skips it; below), then, when it loads Sentry's bundle from a CDN, one that
+  self-hosts it (`--no-sentry` skips it; below);
   `verify` runs the build and browser checks; `pr` opens the PR; `live baseline` records the live
   site before the merge; `merge` re-verifies if `main` moved, merges, waits for Coolify and runs
   `live post-merge`.
@@ -553,6 +555,48 @@ npx tsx ci/rollout/run.ts help
     mentions fonts stays. A `// note` after the const on its line goes with the const;
   - cuts `fonts.googleapis.com` / `fonts.gstatic.com` source tokens from each CSP, refusing if a
     directive (split on `;`, then whitespace) would be left with no source.
+- **Self-hosting Sentry's bundle (`wire`, #93).** The layouts load Sentry's browser bundle for
+  GlitchTip error reporting, behind `PUBLIC_GLITCHTIP_DSN`: from jsDelivr
+  (`@sentry/browser@8/build/bundle.min.js`, a 404: the npm package ships no browser bundle) or from
+  `browser.sentry-cdn.com`, which a visitor's browser then asks before any consent. GlitchTip is not
+  a consent service (no category, no `CONSENT_VERSION` change); the bundle is served from the site
+  instead, like the fonts.
+  - `detect` writes `report.sentry` (`detect/sentry.ts`): `wire` when every load is one of two
+    shapes in an `.astro` file, a `<script src>` with the plain major-8 `bundle.min.js` of either
+    CDN (any other attributes), or an inline script that sets `x.src = '<that URL>'` itself (with
+    optional `x.integrity = …` and `x.crossOrigin = …` lines). `self-hosted` when a `<script>`
+    loads a root-relative src with `sentry` in it and no CDN, `none` when neither. Anything else is
+    `needs-human` with reasons, and those are classification reasons too: another major or bundle
+    (`bundle.tracing.min.js`, the Loader's `js.sentry-cdn.com`), an expression `src` or
+    `integrity`, a URL in a const, a `fetch` or a non-`.astro` file, a file that names a CDN and
+    does not parse, a CDN load beside a local copy. A mention with a path after the host counts
+    wherever it is, except in HTML comments and in JS comments (frontmatter, scripts, `{/* … */}`);
+    a bare origin (a CSP's `https://browser.sentry-cdn.com`) does not. Sentry's own bundle files are
+    skipped. The two hosts are no longer agreed script hosts: the plain bundle is left to
+    `report.sentry`, every other script from them is an `unregistered script host`. On the 229
+    clones this changes no classification: 205 `wire` (183 jsDelivr and 18 Sentry CDN
+    `<script src>`, 4 inline scripts), 3 `self-hosted`, 21 `none`.
+  - `wire` (unless `--no-sentry`) adds a last commit on `consent-banner` ("feat: Sentry-bundlen för
+    felrapportering från sajten själv (self-hosted)"). It fetches
+    `https://browser.sentry-cdn.com/8.55.2/bundle.min.js` once and refuses it unless it hashes to
+    the SRI Sentry publishes for that file (`SENTRY_SRI` in `ci/rollout/lib/sentry.ts`, from
+    getsentry/sentry-release-registry), writes it byte for byte to `public/js/sentry-8.55.2.min.js`,
+    points each load at `/js/sentry-8.55.2.min.js` and cuts its `integrity` and `crossorigin`
+    (attributes or lines). Every other attribute stays (`defer`, `async`, `onload`, `data-dsn`), so
+    `Sentry.init` runs after the bundle as before. 8.55.2 is the newest 8.x: the sites load 8.55.0,
+    8.55.2 or jsDelivr's floating `@8`. A refused plan (a failed or mismatching download, the file
+    already there, a stale report, a report stored before Sentry detection) refuses the whole wire
+    (exit 3); `--no-sentry` wires without it. A CSP is not edited: every one seen allows `'self'`
+    for scripts.
+  - What the checks can see: `verify` builds without the DSN, so the block never renders locally.
+    Step 2 reads the branch's source instead (`checks/sentry.ts`): with the bundle committed, it
+    must hash to the SRI and `detect` must find no CDN load left and `/js/sentry-8.55.2.min.js`
+    loaded; without it, a CDN load is noted, not failed (`--no-sentry`). Step 3 (and steps 4 and 9)
+    count a request to either CDN as one before consent, as `live` does on the deployed site, where
+    the DSN may be set: there it is a failure on every page that makes it. Locally both are stubbed
+    with the registry. Not seen: whether the deployed bundle answers 200 (a 404 shows only as a
+    console error, and only where the DSN is set), and `lazyLoadIntegration`, with which the bundle
+    itself could fetch more from the CDN (no site calls it).
 - **Google Fonts detection.** `detect` also writes `report.fonts`, separate from the
   banner: it never changes `classification` or `reasons`. `status` is `wire` for literal `fonts.googleapis.com/css2` URLs loaded
   only by `<link rel="stylesheet">`, `<link rel="preload" as="style">` (any attribute order, split

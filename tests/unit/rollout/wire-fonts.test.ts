@@ -608,8 +608,8 @@ describe('run.ts wire: fonts as a second commit on consent-banner', () => {
   const pilotDir = (): string => checkout(treeOf(join(FIXTURES, 'site-1218869363', 'before')))
 
   test('parseWireArgs (PR 3): fonts are on by default, --no-fonts skips them; --fonts is gone and says so', () => {
-    expect(parseWireArgs(['site'])).toEqual({ dir: 'site', dryRun: false, fonts: true })
-    expect(parseWireArgs(['--dry-run', 'site', '--no-fonts'])).toEqual({ dir: 'site', dryRun: true, fonts: false })
+    expect(parseWireArgs(['site'])).toEqual({ dir: 'site', dryRun: false, fonts: true, sentry: true })
+    expect(parseWireArgs(['--dry-run', 'site', '--no-fonts'])).toEqual({ dir: 'site', dryRun: true, fonts: false, sentry: true })
     expect(() => parseWireArgs(['site', '--fonts'])).toThrow(/unknown option --fonts \(fonts are self-hosted by default now; --no-fonts skips them\)/)
   })
 
@@ -617,7 +617,7 @@ describe('run.ts wire: fonts as a second commit on consent-banner', () => {
     const dir = pilotDir()
     runDetect(dir, ['site-1218869363.se'])
     const net = pilotNet()
-    const { code, output } = await runWire(dir, { dryRun: false, fonts: false, fetch: net, install: () => {}, openPrs: noPrs })
+    const { code, output } = await runWire(dir, { sentry: false, dryRun: false, fonts: false, fetch: net, install: () => {}, openPrs: noPrs })
     expect(code).toBe(0)
     expect(output).toContain(`committed on ${BRANCH}\n`)
     expect(git(dir, 'log', '-1', '--format=%s')).toBe(COMMIT_MESSAGE)
@@ -631,7 +631,7 @@ describe('run.ts wire: fonts as a second commit on consent-banner', () => {
     const report = runDetect(dir, ['site-1218869363.se'])
     expect(report.fonts?.status).toBe('wire')
     // PR 3: no option needed, the fonts are self-hosted by default.
-    const { code, output } = await runWire(dir, { dryRun: false, fetch: pilotNet(), now: DATE, install: () => {}, openPrs: noPrs })
+    const { code, output } = await runWire(dir, { sentry: false, dryRun: false, fetch: pilotNet(), now: DATE, install: () => {}, openPrs: noPrs })
     expect(code).toBe(0)
     expect(output).toContain(`committed on ${BRANCH} (2 commits)`)
     expect(git(dir, 'branch', '--show-current')).toBe(BRANCH)
@@ -653,7 +653,7 @@ describe('run.ts wire: fonts as a second commit on consent-banner', () => {
   test('a refused fonts plan refuses the whole wire (exit 3, nothing written) and says how to wire the banner alone', async () => {
     const dir = pilotDir()
     runDetect(dir, ['site-1218869363.se'])
-    const { code, output } = await runWire(dir, { dryRun: false, fetch: pilotNet({ [PILOT_FONTS_URL]: new Error('offline') }), install: () => {}, openPrs: noPrs })
+    const { code, output } = await runWire(dir, { sentry: false, dryRun: false, fetch: pilotNet({ [PILOT_FONTS_URL]: new Error('offline') }), install: () => {}, openPrs: noPrs })
     expect(code).toBe(3)
     expect(output).toContain('wire --no-fonts wires the banner alone')
     expect(git(dir, 'branch', '--show-current')).toBe('main')
@@ -663,7 +663,7 @@ describe('run.ts wire: fonts as a second commit on consent-banner', () => {
   test('--dry-run shows the banner diff and the fonts diff, writes nothing', async () => {
     const dir = pilotDir()
     runDetect(dir, ['site-1218869363.se'])
-    const { code, output } = await runWire(dir, { dryRun: true, fetch: pilotNet(), now: DATE })
+    const { code, output } = await runWire(dir, { sentry: false, dryRun: true, fetch: pilotNet(), now: DATE })
     expect(code).toBe(0)
     expect(output).toContain("+import ConsentBanner from '@visionmediahq/astro-consent/components/ConsentBanner.astro'")
     expect(output).toContain('+++ b/src/styles/fonts.css')
@@ -681,7 +681,7 @@ describe('review of #75: stale reports, files changed on disk, recovery', () => 
     // The repro: detect, wire the banner, that branch becomes main, fonts without re-detecting.
     const dir = checkout(treeOf(join(FIXTURES, 'site-1218869363', 'before')))
     runDetect(dir, ['site-1218869363.se'])
-    expect((await runWire(dir, { dryRun: false, fonts: false, install: () => {}, openPrs: noPrs })).code).toBe(0)
+    expect((await runWire(dir, { sentry: false, dryRun: false, fonts: false, install: () => {}, openPrs: noPrs })).code).toBe(0)
     git(dir, 'push', '-q', 'origin', `${BRANCH}:main`)
     git(dir, 'fetch', '-q', 'origin')
     git(dir, 'switch', '-q', 'main')
@@ -916,14 +916,14 @@ describe('PR 3: wire refused while fonts-selfhost is open (the other direction o
     git(dir, 'branch', '-q', '-D', 'fonts-selfhost')
     git(dir, 'update-ref', '-d', 'refs/remotes/origin/fonts-selfhost')
     const asked: string[] = []
-    const branch = await runWire(dir, { dryRun: false, fonts: false, install: () => {}, openPrs: async (_r, b) => (asked.push(b), []) })
+    const branch = await runWire(dir, { sentry: false, dryRun: false, fonts: false, install: () => {}, openPrs: async (_r, b) => (asked.push(b), []) })
     expect(branch.code).toBe(3)
     expect(branch.output).toMatch(/origin has a fonts-selfhost branch \([0-9a-f]{7}\) that is not in origin\/main: .*merge or close the fonts first\. Then detect and wire again/)
     expect(asked).toEqual(['fonts-selfhost', 'astro-consent-update'])
     expect(git(dir, 'branch', '--show-current')).toBe('main')
 
     git(dir, 'push', '-q', 'origin', '--delete', 'fonts-selfhost')
-    const pr = await runWire(dir, { dryRun: false, fonts: false, install: () => {}, openPrs: async () => ['https://github.com/visionmediahq/site/pull/12'] })
+    const pr = await runWire(dir, { sentry: false, dryRun: false, fonts: false, install: () => {}, openPrs: async () => ['https://github.com/visionmediahq/site/pull/12'] })
     expect(pr.code).toBe(3)
     expect(pr.output).toContain('open fonts-selfhost PR https://github.com/visionmediahq/site/pull/12: merge or close it first, then detect and wire again')
     expect(status(dir)).toBe('')
@@ -936,9 +936,9 @@ describe('PR 3: wire refused while fonts-selfhost is open (the other direction o
     git(dir, 'push', '-q', 'origin', 'main:fonts-selfhost')
     let asked = 0
     const openPrs = async () => (asked++, ['https://github.com/visionmediahq/site/pull/12'])
-    expect((await runWire(dir, { dryRun: true, fonts: false, openPrs })).code).toBe(0)
+    expect((await runWire(dir, { sentry: false, dryRun: true, fonts: false, openPrs })).code).toBe(0)
     expect(asked).toBe(0)
-    expect((await runWire(dir, { dryRun: false, fonts: false, install: () => {}, openPrs: noPrs })).code).toBe(0)
+    expect((await runWire(dir, { sentry: false, dryRun: false, fonts: false, install: () => {}, openPrs: noPrs })).code).toBe(0)
   })
 
   test('runFonts asks GitHub about the other two flows: consent-banner, then astro-consent-update', async () => {

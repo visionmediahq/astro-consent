@@ -2,6 +2,7 @@
 // verify returns a VerifyResult, and the pool scan and selection work on PoolRow and Selection.
 import type { ServiceSlug } from '../../src/services'
 import type { DaisyuiPlugin } from './lib/daisyui'
+import type { SentryCdn } from './lib/sentry'
 import type { ToolVersion } from './lib/tool-version'
 
 export type Classification = 'consent' | 'notice' | 'needs-human'
@@ -108,6 +109,49 @@ export interface FontsInfo {
   reasons: string[]
 }
 
+/**
+ * How the site loads Sentry's browser bundle for GlitchTip error reporting (#93). `wire`: every
+ * load from a CDN is one the tool can point at a self-hosted copy (`loaders`). `self-hosted`: no
+ * CDN, and a layout loads a local copy. `none`: neither. `needs-human`: anything else, with `reasons`.
+ */
+export type SentryStatus = 'none' | 'self-hosted' | 'wire' | 'needs-human'
+
+export interface SentryLoader {
+  file: string
+  /** 1-based line of the URL. */
+  line: number
+  cdn: SentryCdn
+  /** The version in the URL as written: `8` (jsDelivr's floating major) or `8.55.0`. */
+  version: string
+  url: string
+  /** element: `<script src="…">`; script: `x.src = '…'` in an inline script that adds the element itself. */
+  kind: 'element' | 'script'
+  /** The URL inside its quotes, where wire writes the local src. */
+  src: { start: number; end: number }
+  /**
+   * What only made sense for the CDN, cut by wire: the integrity and crossorigin attributes (with
+   * the whitespace before each), or the `x.integrity = …` and `x.crossOrigin = …` lines.
+   */
+  cuts: { start: number; end: number; what: string }[]
+}
+
+export interface SentryInfo {
+  status: SentryStatus
+  loaders: SentryLoader[]
+  /** Local srcs a `<script>` loads Sentry from (`/js/sentry-8.55.0.min.js`), whatever the status. */
+  selfHosted: string[]
+  /** Why the site is `needs-human`; empty otherwise. */
+  reasons: string[]
+}
+
+/**
+ * Self-hosting the Sentry bundle: the text edits (offsets into the files as detect read them) and
+ * the bundle's bytes, or only refusals.
+ */
+export type SentryPlan =
+  | { ok: true; edits: Edit[]; file: { path: string; bytes: Uint8Array }; notes: string[] }
+  | { ok: false; refusals: Refusal[] }
+
 export interface Report {
   site: string
   domains: string[]
@@ -139,6 +183,11 @@ export interface Report {
    * `reasons`. Missing in reports stored before fonts detection; detect always sets it.
    */
   fonts?: FontsInfo
+  /**
+   * Sentry's browser bundle (#93). A `needs-human` status is also a classification reason, and a
+   * `wire` one keeps its CDN out of the script-host reasons. Missing in reports stored before it.
+   */
+  sentry?: SentryInfo
   classification: Classification
   reasons: string[]
   /** The tool commit that ran detect (runDetect sets it; detect() itself is pure). */

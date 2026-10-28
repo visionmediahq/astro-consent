@@ -96,6 +96,11 @@ const FIXTURES: Record<string, string> = {
   // Item 1: a lazy embed that is in the DOM but never requested, and one that loads only mid-page.
   lazy: page(`${banner()}<iframe data-src="${MAPS}"></iframe>`),
   late: page(LATE),
+  // #93: Sentry's bundle from either CDN before consent (a client layout with its DSN set); stubbed.
+  sentrycdn: page(`${banner()}<script src="https://browser.sentry-cdn.com/8.55.2/bundle.min.js"></script>`),
+  sentryjsdelivr: page(`${banner()}<script src="https://cdn.jsdelivr.net/npm/@sentry/browser@8/build/bundle.min.js"></script>`),
+  // The self-hosted copy is the site's own request.
+  sentrylocal: page(`${banner()}<script src="/js/sentry-8.55.2.min.js"></script>`),
   // The same with smooth scrolling (a fleet site's global.css sets it): scrollBy animates.
   smooth: page(`<style>html { scroll-behavior: smooth }</style>${LATE}`),
   // Item 4: "Visa" that is not one-off, and "Visa" that loads another service too.
@@ -311,6 +316,17 @@ try {
   {
     const r = await req('/lazy/')
     expect(r.blocked.some((b) => b.startsWith('in DOM, not requested:')) && !r.ok, '/lazy/ data-src iframe counted', r.blocked)
+  }
+  for (const [path, host] of [
+    ['/sentrycdn/', 'https://browser.sentry-cdn.com/'],
+    ['/sentryjsdelivr/', 'https://cdn.jsdelivr.net/npm/@sentry/'],
+  ] as const) {
+    const r = await req(path)
+    expect(r.blocked.some((b) => b.startsWith(host)) && !r.ok, `${path} Sentry's CDN before consent counted (#93)`, r.blocked)
+  }
+  {
+    const r = await req('/sentrylocal/')
+    expect(r.blocked.length === 0, '/sentrylocal/ control: the self-hosted bundle is not blocked', r.blocked)
   }
   for (const path of ['/late/', '/smooth/']) {
     const r = await req(path)

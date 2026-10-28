@@ -2,7 +2,7 @@
 // through .git/info/exclude, so stages can be rerun one at a time.
 //
 //   tsx ci/rollout/run.ts detect <site dir> --domain <d> [--domain <d2>]
-//   tsx ci/rollout/run.ts wire   <site dir> [--dry-run] [--no-fonts]
+//   tsx ci/rollout/run.ts wire   <site dir> [--dry-run] [--no-fonts] [--no-sentry]
 //   tsx ci/rollout/run.ts fonts  <site dir> [--dry-run]       Google Fonts alone, branch fonts-selfhost
 //   tsx ci/rollout/run.ts fonts-files <site dir> --url <css2 url> [--entry <css>] [--dry-run]   files only, no git
 //   tsx ci/rollout/run.ts update <site dir>              the lockfile on the latest release, branch astro-consent-update
@@ -27,18 +27,19 @@ import { toolLine, type ToolVersion, toolVersion } from './lib/tool-version'
 import { FLOWS, type FlowBranch, isFlowBranch, openPrsFrom, statePath } from './flows'
 import { diffLock, diffPackageJson } from './lib/lockfile'
 import { classificationLine, normaliseReport } from './lib/report'
-import type { Report } from './types'
+import type { Edit, Report } from './types'
 import { formatLive, live } from './live'
 import { merge } from './merge'
 import { openPr, originRepo } from './pr'
 import { PKG, verify, verifyOutput } from './verify'
 import { main as mainFontsFiles } from './fonts-files'
 import { commitFonts, FONTS_BRANCH, type FontFetch, type FontsFile, fontsFiles, fontsTargetsTaken, planFonts } from './wire/fonts'
+import { commitSentry, planSentry, type SentryFile, sentryFiles } from './wire/sentry'
 import { applyWire, BRANCH, changedPaths, commitAllowed, keepOrphans, planFiles, planWire, refusalLines, startBranch } from './wire/index'
 import { compareVersions, consentVersionAt, installedOf, npmUpdate, reaskLine, RELEASE, UPDATE_BRANCH, updateCommitMessage, updateSpec } from './wire/update'
 
 const DETECT_USAGE = 'usage: tsx ci/rollout/run.ts detect <site dir> --domain <domain> [--domain <domain>]'
-const WIRE_USAGE = 'usage: tsx ci/rollout/run.ts wire <site dir> [--dry-run] [--no-fonts]'
+const WIRE_USAGE = 'usage: tsx ci/rollout/run.ts wire <site dir> [--dry-run] [--no-fonts] [--no-sentry]'
 const FONTS_USAGE = 'usage: tsx ci/rollout/run.ts fonts <site dir> [--dry-run]'
 const FONTS_FILES_USAGE = 'usage: tsx ci/rollout/run.ts fonts-files <site dir> --url <css2 url> [--entry <css file>] [--dry-run]'
 const UPDATE_USAGE = 'usage: tsx ci/rollout/run.ts update <site dir>'
@@ -141,23 +142,33 @@ export function summary(report: Report): string {
     lines.push(`  google fonts: ${report.fonts.status}${report.fonts.url ? ` ${report.fonts.url}` : ''}`)
     for (const reason of report.fonts.reasons) lines.push(`    - ${reason}`)
   }
+  if (report.sentry) {
+    const s = report.sentry
+    const where = s.loaders.map((l) => `${l.url} (${l.file}:${l.line})`)
+    lines.push(`  sentry bundle: ${s.status}${where.length ? ` ${where.join(', ')}` : ''}${s.selfHosted.length ? ` local ${s.selfHosted.join(', ')}` : ''}`)
+  }
   return lines.join('\n')
 }
 
-/** Fonts are self-hosted by default (site-factory#220); `--no-fonts` wires the banner alone. */
-export function parseWireArgs(args: string[]): { dir: string; dryRun: boolean; fonts: boolean } {
+/**
+ * Fonts (site-factory#220) and Sentry's bundle (#93) are self-hosted by default; `--no-fonts` and
+ * `--no-sentry` leave them out.
+ */
+export function parseWireArgs(args: string[]): { dir: string; dryRun: boolean; fonts: boolean; sentry: boolean } {
   let dir: string | null = null
   let dryRun = false
   let fonts = true
+  let sentry = true
   for (const arg of args) {
     if (arg === '--dry-run') dryRun = true
     else if (arg === '--no-fonts') fonts = false
+    else if (arg === '--no-sentry') sentry = false
     else if (arg.startsWith('-')) throw new Error(`unknown option ${arg}${arg === '--fonts' ? ' (fonts are self-hosted by default now; --no-fonts skips them)' : ''}\n${WIRE_USAGE}`)
     else if (dir === null) dir = arg
     else throw new Error(`one site dir only\n${WIRE_USAGE}`)
   }
   if (dir === null) throw new Error(WIRE_USAGE)
-  return { dir, dryRun, fonts }
+  return { dir, dryRun, fonts, sentry }
 }
 
 export function parseFontsArgs(args: string[]): { dir: string; dryRun: boolean } {
@@ -196,6 +207,10 @@ export interface WireRunOptions {
   /** The network for the fonts; real fetch unless a test injects recordings. */
   fetch?: FontFetch
   now?: Date
+  /** Self-host Sentry's bundle too, as the last commit (default true; false: --no-sentry). */
+  sentry?: boolean
+  /** The pinned bundle, hash-checked; fetched from Sentry's CDN unless a test injects its own. */
+  sentryBundle?: () => Promise<Uint8Array>
   /** The npm install of the package; real unless a test injects its own. */
   install?: (dir: string) => void
   /** Open PRs from a branch on the site's GitHub repo; gh unless a test injects its own. */
@@ -221,6 +236,10 @@ function readReport(root: string): Report {
  * When `report.fonts.status` is `wire` (and not `fonts: false`, --no-fonts), the site's Google
  * Fonts are self-hosted too, planned in full (network included) before anything is written, and
  * committed as a second commit on consent-banner. A refused fonts plan refuses the whole wire.
+ *
+ * Likewise Sentry's bundle (#93) when `report.sentry.status` is `wire` (and not `sentry: false`,
+ * --no-sentry): fetched and hash-checked before anything is written, committed last. A report
+ * stored before Sentry detection is refused unless --no-sentry.
  */
 export async function runWire(dir: string, opts: WireRunOptions): Promise<{ code: number; output: string }> {
   const root = resolve(dir)
@@ -244,6 +263,7 @@ export async function runWire(dir: string, opts: WireRunOptions): Promise<{ code
   const files = planFiles(read, plan)
   let fonts: FontsFile[] | null = null
   let fontNotes: string[] = []
+  let fontEdits: Edit[] = []
   if (opts.fonts !== false && report.fonts?.status === 'wire') {
     const refusedFonts = (reasons: string[]) => {
       lines.push(`wire: google fonts refused, ${nothing} (wire --no-fonts wires the banner alone)`, ...reasons.map((l) => `  ${l}`))
@@ -259,6 +279,24 @@ export async function runWire(dir: string, opts: WireRunOptions): Promise<{ code
       return refusedFonts([(e as Error).message])
     }
     fontNotes = fp.notes
+    fontEdits = fp.edits
+  }
+  let sentry: SentryFile[] | null = null
+  let sentryNotes: string[] = []
+  if (opts.sentry !== false && report.sentry?.status !== 'none' && report.sentry?.status !== 'self-hosted') {
+    const refusedSentry = (reasons: string[]) => {
+      lines.push(`wire: sentry bundle refused, ${nothing} (wire --no-sentry wires without it)`, ...reasons.map((l) => `  ${l}`))
+      return { code: EXIT_REFUSED, output: `${lines.join('\n')}\n` }
+    }
+    const sp = await planSentry(site, report, opts.sentryBundle ? { bundle: opts.sentryBundle } : {})
+    if (!sp.ok) return refusedSentry(refusalLines(sp))
+    try {
+      // Applied on top of the banner's and the fonts' edits in the same files.
+      sentry = sentryFiles(read, sp, [...plan.edits, ...fontEdits])
+    } catch (e) {
+      return refusedSentry([(e as Error).message])
+    }
+    sentryNotes = sp.notes
   }
   lines.push(
     `wire: ${plan.edits.length} edits in ${new Set(plan.edits.map((e) => e.file)).size} files, ${plan.newFiles.length} new files, ${plan.skipped.length} skipped`,
@@ -266,14 +304,18 @@ export async function runWire(dir: string, opts: WireRunOptions): Promise<{ code
     ...plan.skipped.map((t) => `  skip ${t}`),
   )
   if (fonts) lines.push(...fontNotes, ...fileLines(fonts))
+  if (sentry) lines.push(...sentryNotes, ...fileLines(sentry))
   if (opts.dryRun) {
     const diff = diffOf(files)
     const fontsDiff = fonts ? diffOf(fonts, (p) => p.endsWith('.css')) : ''
-    return { code: 0, output: `${lines.join('\n')}\n\n${diff}${fontsDiff}` }
+    const sentryDiff = sentry ? diffOf(sentry) : ''
+    return { code: 0, output: `${lines.join('\n')}\n\n${diff}${fontsDiff}${sentryDiff}` }
   }
   lines.push(...applyWire(root, plan, { commit: true, ...(opts.install ? { install: opts.install } : {}) }))
   if (fonts) commitFonts(root, fonts, { onto: BRANCH })
-  lines.push(`committed on ${BRANCH}${fonts ? ' (2 commits)' : ''}`)
+  if (sentry) commitSentry(root, sentry, { onto: BRANCH })
+  const commits = 1 + (fonts ? 1 : 0) + (sentry ? 1 : 0)
+  lines.push(`committed on ${BRANCH}${commits > 1 ? ` (${commits} commits)` : ''}`)
   return { code: 0, output: `${lines.join('\n')}\n` }
 }
 
@@ -623,7 +665,7 @@ async function mainWire(rest: string[]): Promise<number> {
     return 2
   }
   try {
-    const { code, output } = await runWire(args.dir, { dryRun: args.dryRun, fonts: args.fonts })
+    const { code, output } = await runWire(args.dir, { dryRun: args.dryRun, fonts: args.fonts, sentry: args.sentry })
     process.stdout.write(output)
     return code
   } catch (e) {
