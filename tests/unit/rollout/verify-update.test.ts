@@ -69,6 +69,7 @@ function fake(o: { mainPkg?: string; mainLock?: string; diff?: string } = {}) {
   const ok = (path: string): RequestResult => ({ path, banner: true, banners: 1, blocked: [], errors: [], known: [], ok: true })
   const checks: Checks = {
     pages: async () => ['/', '/karta', '/karta-efter-widget', '/finns-inte-x'],
+    daisyuiParts: () => [],
     // The demo report's embeds (detect found them there).
     embedPages: async () => ['/karta', '/karta-efter-widget'],
     requests: async (_base, paths, opts) => paths.map((p) => ({ ...ok(p), banner: opts.expectBanner ? opts.expectBanner(p) : true })),
