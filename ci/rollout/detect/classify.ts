@@ -112,6 +112,8 @@ export function classify(f: Findings): { classification: Classification; reasons
   }
   for (const e of f.scriptBuilt) add(`script-built embed ${e.service} in ${e.file} (${e.where})`)
   for (const h of f.scriptHosts) if (!isOwnHost(h.host, f.domains)) add(`unregistered script host ${h.host} in ${h.file}`)
+  // #93: a Sentry load wire cannot point at the self-hosted bundle would stay on a CDN before consent.
+  if (f.sentry?.status === 'needs-human') for (const r of f.sentry.reasons) add(`sentry bundle: ${r}`)
   for (const t of f.trackers) add(`tracker ${t}: the batch wires notice and consent only`)
   for (const b of f.banners) add(`existing banner: ${b}`)
   for (const r of f.widgetReasons) add(r)

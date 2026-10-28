@@ -499,8 +499,8 @@ describe('applyWire', () => {
 
 describe('run.ts wire', () => {
   test('parseWireArgs: a dir and an optional --dry-run', () => {
-    expect(parseWireArgs(['site'])).toEqual({ dir: 'site', dryRun: false, fonts: true })
-    expect(parseWireArgs(['--dry-run', 'site'])).toEqual({ dir: 'site', dryRun: true, fonts: true })
+    expect(parseWireArgs(['site'])).toEqual({ dir: 'site', dryRun: false, fonts: true, sentry: true })
+    expect(parseWireArgs(['--dry-run', 'site'])).toEqual({ dir: 'site', dryRun: true, fonts: true, sentry: true })
     expect(() => parseWireArgs([])).toThrow(/usage/)
     expect(() => parseWireArgs(['site', '--dry'])).toThrow(/--dry/)
     expect(() => parseWireArgs(['a', 'b'])).toThrow(/one site dir/)
@@ -511,7 +511,7 @@ describe('run.ts wire', () => {
     runDetect(dir, ['site-1218869363.se'])
     const rollout = readdirSync(join(dir, '.rollout'))
     const tree = diskTree(dir)
-    const { code, output } = await runWire(dir, { dryRun: true, fonts: false })
+    const { code, output } = await runWire(dir, { sentry: false, dryRun: true, fonts: false })
     expect(code).toBe(0)
     expect(output).toContain('site (site-1218869363.se): consent')
     expect(output).toMatch(/edits in \d+ files/)
@@ -529,7 +529,7 @@ describe('run.ts wire', () => {
   test('--dry-run of a needs-human site prints the refusals and exits 3 (Ruling 32)', async () => {
     const dir = checkout('site-1271984151')
     runDetect(dir, ['site-1271984151.se'])
-    const { code, output } = await runWire(dir, { dryRun: true, fonts: false })
+    const { code, output } = await runWire(dir, { sentry: false, dryRun: true, fonts: false })
     expect(code).toBe(3)
     for (const reason of refusedReasons('site-1271984151')) expect(output).toContain(reason)
     expect(output).not.toContain('+++')
@@ -538,7 +538,7 @@ describe('run.ts wire', () => {
   test('a refused plan without --dry-run also exits 3 and leaves the checkout alone (Ruling 32)', async () => {
     const dir = checkout('site-1271984151')
     runDetect(dir, ['site-1271984151.se'])
-    const { code, output } = await runWire(dir, { dryRun: false, fonts: false })
+    const { code, output } = await runWire(dir, { sentry: false, dryRun: false, fonts: false })
     expect(code).toBe(3)
     expect(output).toContain('nothing was written')
     expect(git(dir, 'branch', '--show-current')).toBe('main')
@@ -547,6 +547,6 @@ describe('run.ts wire', () => {
 
   test('without .rollout/report.json: an error that says to run detect first', async () => {
     const dir = checkout('site-1218869363')
-    await expect(runWire(dir, { dryRun: true })).rejects.toThrow(/run detect first/)
+    await expect(runWire(dir, { sentry: false, dryRun: true })).rejects.toThrow(/run detect first/)
   })
 })

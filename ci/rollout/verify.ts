@@ -8,11 +8,13 @@
 //                 `npm ls astro vite @tailwindcss/vite` the same on both sides. fonts-selfhost:
 //                 package.json and package-lock.json exactly main's, and only the fonts' files changed
 //   2 build       npm run build on the branch; on consent-banner, every daisyUI part the banner
-//                 uses has a rule in the built CSS (#101; demo mode runs only this)
+//                 uses has a rule in the built CSS (#101; demo mode runs only this); with the tool's
+//                 Sentry bundle committed, it hashes to the recorded SRI and no source still loads
+//                 Sentry from a CDN (checks/sentry.ts; without it, a CDN load is noted) (#93)
 //   3 requests    main and branch previews over every built page: main RED (or noted green), the
-//                 branch shows the banner, requests nothing from the registry before consent and
-//                 logs no console error main didn't; a registry request on a page detect didn't
-//                 know is a detect miss
+//                 branch shows the banner, requests nothing from the registry (or Sentry's CDNs,
+//                 #93) before consent and logs no console error main didn't; a registry request on
+//                 a page detect didn't know is a detect miss
 //   4 consent-paths  Visa / Visa alltid / Neka on every page with an embed
 //   5 clip        no banner or embed button clipped or cut off by an overflow:hidden ancestor, no
 //                 banner button covered, no page wider than
@@ -56,7 +58,8 @@ import {
   shippedTexts,
 } from './checks/fonts'
 import { fontsCheckPaths, isCmsAdminRoute, listPages, MISSING_PREFIX } from './checks/pages'
-import { checkRequests, formatRequests, type RequestResult } from './checks/requests'
+import { checkRequests, formatRequests, isSentryEntry, type RequestResult } from './checks/requests'
+import { checkSentrySource } from './checks/sentry'
 import { shots } from './checks/shots'
 import { isRoute, routeOf } from './detect/structure'
 import { dockerCheck } from './docker'
@@ -64,6 +67,8 @@ import { type Exec, exec as realExec, tail } from './lib/exec'
 import { builtCss, neededParts, type Part, partsMissingFromBuild } from './lib/daisyui'
 import { diffLock, diffPackageJson } from './lib/lockfile'
 import { lockPorts, type Ports, PortsBusy, rolloutPorts } from './lib/ports'
+import { SENTRY_FILE } from './lib/sentry'
+import { diskSite } from './lib/site-files'
 import { toolLine, type ToolVersion, toolVersion } from './lib/tool-version'
 import { isUp, type Preview, previewLog, ssrEntry, startPreview } from './preview'
 import { type Flow, FLOWS, flowOf, FONTS_MARKER, isToolFontsCss, statePath, STEPS, type StepName } from './flows'
@@ -655,16 +660,25 @@ async function runVerify(dir: string, report: Report, opts: VerifyOptions, deps:
         lines.push('npm ci: done in step 1', `npm run build exit ${res.code}`, tail(res.out))
         if (res.code !== 0) return { pass: false, lines }
       }
+      // #93: the GlitchTip block renders only with PUBLIC_GLITCHTIP_DSN, which the build has not, so
+      // the source is read instead. The bundle counts only when it is committed (git ls-files).
+      let sentryOk = true
+      if (!demo) {
+        const tracked = (await git('ls-files', '--error-unmatch', SENTRY_FILE)).code === 0 && existsSync(join(root, SENTRY_FILE))
+        const s = checkSentrySource(diskSite(root), tracked ? new Uint8Array(readFileSync(join(root, SENTRY_FILE))) : null)
+        lines.push(...s.lines)
+        sentryOk = s.pass
+      }
       // #101: a daisyUI include/exclude list without card, toggle or badge built a half-styled banner
       // that every later step passed. The fonts flow leaves a live banner as it is, so it is not asked.
-      if (flow.branch === FONTS_BRANCH) return { pass: true, lines }
+      if (flow.branch === FONTS_BRANCH) return { pass: sentryOk, lines }
       const missing = neededParts((await getChecks()).daisyuiParts(demo ? root : join(root, 'dist')), report.services.length > 0)
       lines.push(
         missing.length > 0
           ? `daisyUI parts the banner uses, missing from the built CSS: ${missing.join(', ')} (add them to the @plugin "daisyui" list)`
           : 'daisyUI parts the banner uses: all in the built CSS',
       )
-      return { pass: missing.length === 0, lines }
+      return { pass: missing.length === 0 && sentryOk, lines }
     },
 
     async requests() {
@@ -706,7 +720,10 @@ async function runVerify(dir: string, report: Report, opts: VerifyOptions, deps:
       mapPages = (await c.embedPages(branch.url, paths)).filter(expectBanner)
       const knownPages = new Set([...known, ...mapPages.map(norm)])
       // A detect miss is an embed the banner wiring left unwrapped: no banner, no wiring to miss.
-      const misses = bannerOnMain ? [...new Set([...mainResults, ...results].filter((r) => r.blocked.length > 0 && !knownPages.has(norm(r.path))).map((r) => r.path))] : []
+      // Sentry's CDN (#93) is no embed: a request there fails the page above, never as a miss.
+      const misses = bannerOnMain
+        ? [...new Set([...mainResults, ...results].filter((r) => r.blocked.some((u) => !isSentryEntry(u)) && !knownPages.has(norm(r.path))).map((r) => r.path))]
+        : []
       lines.push(`pages with an embed: ${mapPages.join(' ') || '(none)'}`, ...misses.map((p) => `detect miss: ${p}`))
       return { pass: results.length > 0 && results.every((r) => r.ok) && misses.length === 0, lines }
     },

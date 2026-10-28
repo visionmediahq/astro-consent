@@ -99,6 +99,18 @@ Not part of the package (`files` is unchanged) and not a release.
   whose grid wrapper keeps a class with a scoped rule setting a `display` other than grid/none or a
   height that is not definite (a client site: `display: block` left the loaded map 0px tall).
 - CI: the `e2e` job runs `verify --demo demo/dist-consent` after the consent demo build.
+- `wire` self-hosts Sentry's browser bundle (GlitchTip error reporting, #93) in a last commit on
+  `consent-banner` (`--no-sentry` skips it): `https://browser.sentry-cdn.com/8.55.2/bundle.min.js`,
+  refused unless it hashes to the SRI Sentry publishes, written to `public/js/sentry-8.55.2.min.js`;
+  each layout's jsDelivr URL (a 404) or Sentry CDN URL points there, its `integrity` and
+  `crossorigin` cut. `detect` writes `report.sentry`; a load it cannot rewrite is a needs-human
+  reason. browser.sentry-cdn.com and jsDelivr's `/npm/@sentry/` are no longer agreed script hosts.
+  `verify` step 2 checks the committed bundle's hash and that no source still loads a CDN, and
+  steps 3, 4, 9 and `live` count requests to either CDN before consent. The banner PR body says
+  what the Sentry commit replaced. A preconnect or dns-prefetch link to the CDNs is cut with the
+  loads, a `<script src>` without `is:inline` is refused, and an `async`/`defer` bundle whose
+  `Sentry.init` runs first is noted (`initBeforeBundle`), not changed. A stored `report.json` from
+  before needs `detect` again.
 - `update <site dir>`: a third flow, `astro-consent-update`, moves a live site's lockfile to the
   latest release (only `package.json` and `package-lock.json`, one commit). It and the other two
   flows refuse each other's open PRs and unmerged branches (`others` in `FLOWS`); verify runs every

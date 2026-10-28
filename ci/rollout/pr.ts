@@ -1,6 +1,7 @@
 // The pr stage (spec C4): opens the PR of the checkout's flow (flows.ts) on a client site repo with
 // a Swedish body. consent-banner: built from the branch's src/data/privacy.json (which template
-// block: Ruling 40), plus a fonts paragraph when the branch self-hosts the Google Fonts.
+// block: Ruling 40), plus a fonts paragraph when the branch self-hosts the Google Fonts, and one
+// for Sentry's bundle when it self-hosts that (#93).
 // fonts-selfhost: from the families in the branch's src/styles/fonts.css. astro-consent-update: the
 // versions from main's and the branch's lockfiles, the CHANGELOG.md entries in between, and whether
 // every visitor is asked again (CONSENT_VERSION). Each takes the Report,
@@ -14,6 +15,7 @@ import { parseFontsCss } from './checks/fonts'
 import { currentFlow, FLOWS, fontsCssAt, openPrsFrom, statePath, unmergedBranch } from './flows'
 import { type Exec, exec as realExec, tail } from './lib/exec'
 import { normaliseReport } from './lib/report'
+import { SENTRY_FILE, SENTRY_SRC, type SentryCdn } from './lib/sentry'
 import { toolNote } from './lib/tool-version'
 import { SERVICES, type ServiceSlug } from '../../src/services'
 import sv from '../../src/text/sv.json'
@@ -43,6 +45,12 @@ export interface BodyInput {
   screenshots?: { file: string; url: string }[]
   /** The self-hosted families (fonts.css): the `{{#fonts}}` blocks are kept, and fill `{{families}}`. */
   fonts?: { families: string[] }
+  /**
+   * The branch self-hosts Sentry's bundle (#93): the `{{#sentry}}` blocks are kept, plus
+   * `{{#sentrycdn}}` / `{{#sentryjsdelivr}}` for the CDNs it replaced (report.sentry), and
+   * `{{#sentryinitlate}}` when a layout runs `Sentry.init` before its async/defer bundle.
+   */
+  sentry?: { cdns: SentryCdn[]; initBeforeBundle: boolean }
   /** astro-consent-update: the versions, the changelog entries in between, and `{{#reask}}` or `{{#noreask}}`. */
   update?: { from: string; to: string; reasks: boolean; changelog: { version: string; text: string }[] }
 }
@@ -71,17 +79,30 @@ function fontsStep(kind: BodyInput['kind'], services: ServiceSlug[]): string {
   return `${n}. Öppna webbläsarens nätverksflik och ladda om sidan: inga anrop till \`fonts.googleapis.com\` eller \`fonts.gstatic.com\`, typsnitten hämtas från \`/fonts/\`.`
 }
 
-/** Fills `{{name}}` values and `{{#consent}}`, `{{#notice}}`, `{{#fonts}}` … `{{/…}}` blocks. */
+/** The banner body's test step for the self-hosted Sentry bundle: after the banner's, and the fonts' when there is one. */
+function sentryStep(kind: BodyInput['kind'], services: ServiceSlug[], fonts: boolean): string {
+  const n = (kind === 'consent' ? services.length + 4 : 4) + (fonts ? 1 : 0)
+  return `${n}. I nätverksfliken: inga anrop till \`browser.sentry-cdn.com\` eller \`cdn.jsdelivr.net\`. Där felrapporteringen är påslagen hämtas \`${SENTRY_SRC}\` från sajten själv och svarar 200.`
+}
+
+/** Fills `{{name}}` values and `{{#consent}}`, `{{#notice}}`, `{{#fonts}}`, `{{#sentry}}` … `{{/…}}` blocks. */
 export function renderBody(template: string, input: BodyInput): string {
   const { kind, services, verify, issues, domain } = input
   if (!verify.pass) throw new Error('verify did not pass: no PR body')
-  const active = new Set<string>([kind, ...(input.fonts ? ['fonts'] : []), ...(input.update ? [input.update.reasks ? 'reask' : 'noreask'] : [])])
+  const active = new Set<string>([
+    kind,
+    ...(input.fonts ? ['fonts'] : []),
+    ...(input.update ? [input.update.reasks ? 'reask' : 'noreask'] : []),
+    ...(input.sentry ? ['sentry', ...input.sentry.cdns.map((c) => (c === 'jsdelivr' ? 'sentryjsdelivr' : 'sentrycdn')), ...(input.sentry.initBeforeBundle ? ['sentryinitlate'] : [])] : []),
+  ])
   const values: Record<string, string> = {
     domain,
     serviceNames: list(services.map((slug) => SERVICES[slug].name)),
     serviceSlugs: services.map((slug) => `\`${slug}\``).join(', '),
     consentSteps: consentSteps(services),
     fontsStep: fontsStep(kind, services),
+    sentryStep: sentryStep(kind, services, input.fonts !== undefined),
+    sentrySrc: SENTRY_SRC,
     families: list(input.fonts?.families ?? []),
     files: (input.files?.length ? input.files : ['(se diffen)']).map((f) => `- \`${f}\``).join('\n'),
     tool: toolNote(verify.tool),
@@ -93,7 +114,7 @@ export function renderBody(template: string, input: BodyInput): string {
     changelog: (input.update?.changelog ?? []).map((e) => `#### ${e.version}\n\n${e.text}`).join('\n\n'),
   }
   const out = template
-    .replace(/\{\{#(consent|notice|fonts|reask|noreask)\}\}([\s\S]*?)\{\{\/\1\}\}/g, (_, name: string, text: string) => (active.has(name) ? text : ''))
+    .replace(/\{\{#(consent|notice|fonts|reask|noreask|sentry|sentrycdn|sentryjsdelivr|sentryinitlate)\}\}([\s\S]*?)\{\{\/\1\}\}/g, (_, name: string, text: string) => (active.has(name) ? text : ''))
     .replace(/\{\{(\w+)\}\}/g, (m, name: string) => values[name] ?? m)
   const left = out.match(/\{\{[^}]*\}\}/)
   if (left) throw new Error(`unfilled placeholder ${left[0]} in the PR body template`)
@@ -254,6 +275,10 @@ export async function openPr(dir: string, opts: PrOptions): Promise<PrResult> {
     files: changed,
     screenshots: names.map((n) => ({ file: n, url: `${opts.screenshotsBase.replace(/\/+$/, '')}/${n}` })),
     ...(fontsCss !== null ? { fonts: { families: familiesOf(fontsCss) } } : {}),
+    // #93: the CDNs the commit replaced, as detect found them on main.
+    ...(changed.includes(SENTRY_FILE)
+      ? { sentry: { cdns: [...new Set((report.sentry?.loaders ?? []).map((l) => l.cdn))].sort(), initBeforeBundle: (report.sentry?.loaders ?? []).some((l) => l.initBeforeBundle) } }
+      : {}),
     ...(update ? { update } : {}),
   })
   const bodyFile = statePath(rollout, 'pr-body.md', branch)

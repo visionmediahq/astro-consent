@@ -1,17 +1,27 @@
 // Banner and request check (spec C3 step 3), ported from the pilot kit's check.ts. The blocked
-// hosts are the registry patterns of src/services.ts, never a list of their own.
+// hosts are the registry patterns of src/services.ts, never a list of their own, plus Sentry's
+// CDNs (#93): the sites self-host its bundle, so a request there is a third party before consent.
 import type { Browser, BrowserContext, Page, Response, Route } from '@playwright/test'
 import { parse } from 'node-html-parser'
 import { matchesRegistry } from '../../../src/services'
+import { sentryCdnOf } from '../lib/sentry'
 
 /** The demo's log endpoint (demo/privacy.*.json). Stubbed with the registry in local runs. */
 export const DEMO_LOG_HOST = 'log.demo.test'
 
 
-/** True for a URL that must not be requested before consent: it matches a registry pattern. */
+/**
+ * True for a URL that must not be requested before consent: it matches a registry pattern, or it
+ * is Sentry's CDN (browser.sentry-cdn.com, jsDelivr's /npm/@sentry/). Local runs stub both.
+ */
 export function isBlocked(url: string): boolean {
-  return matchesRegistry(url) !== null
+  return matchesRegistry(url) !== null || sentryCdnOf(url) !== null
 }
+
+const IN_DOM = 'in DOM, not requested: '
+
+/** A blocked entry (a URL, or `in DOM, not requested: <url>`) that is Sentry's CDN, not a registry service. */
+export const isSentryEntry = (entry: string): boolean => sentryCdnOf(entry.startsWith(IN_DOM) ? entry.slice(IN_DOM.length) : entry) !== null
 
 /**
  * Local runs: every registry request and every request to the demo log host is fulfilled here,
@@ -182,7 +192,7 @@ const DOM_URLS = `(() => {
 /** Registry URLs found in the DOM that were never requested, as 'in DOM, not requested: <url>'. */
 export function notRequested(domUrls: string[], requested: string[]): string[] {
   const seen = new Set(requested)
-  return [...new Set(domUrls)].filter((u) => isBlocked(u) && !seen.has(u)).map((u) => `in DOM, not requested: ${u}`)
+  return [...new Set(domUrls)].filter((u) => isBlocked(u) && !seen.has(u)).map((u) => `${IN_DOM}${u}`)
 }
 
 /** Registry URLs in the page's DOM that `requested` does not hold. */

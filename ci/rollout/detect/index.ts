@@ -9,6 +9,7 @@ import { detectAstroMajor, detectCss } from './css'
 import { detectFonts } from './fonts'
 import { detectIframes } from './iframes'
 import { detectScripts } from './scripts'
+import { detectSentry } from './sentry'
 import { detectStructure } from './structure'
 import { detectWidgets } from './widgets'
 
@@ -37,6 +38,7 @@ export function detect(files: SiteFiles, site: string, domains: string[]): Repor
     inventedMaps: frames.inventedMaps,
     alreadyWired: scripts.alreadyWired,
     widgets: widgets.widgets,
+    sentry: detectSentry(files),
   }
   const fonts = detectFonts(files, findings.css.entry)
   const { classification, reasons } = classify({

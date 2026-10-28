@@ -109,6 +109,34 @@ exports[`detect > pilot site-1218869363: consent, matching the committed snapsho
   "policyPage": null,
   "reasons": [],
   "recaptcha": false,
+  "sentry": {
+    "hints": [],
+    "loaders": [
+      {
+        "cdn": "jsdelivr",
+        "cuts": [
+          {
+            "end": 2544,
+            "start": 2510,
+            "what": "crossorigin",
+          },
+        ],
+        "file": "src/layouts/Base.astro",
+        "initBeforeBundle": false,
+        "kind": "element",
+        "line": 91,
+        "src": {
+          "end": 2509,
+          "start": 2443,
+        },
+        "url": "https://cdn.jsdelivr.net/npm/@sentry/browser@8/build/bundle.min.js",
+        "version": "8",
+      },
+    ],
+    "reasons": [],
+    "selfHosted": [],
+    "status": "wire",
+  },
   "services": [
     "google-maps",
   ],
@@ -252,6 +280,34 @@ exports[`detect > pilot site-1243335919: consent, matching the committed snapsho
   "policyPage": null,
   "reasons": [],
   "recaptcha": true,
+  "sentry": {
+    "hints": [],
+    "loaders": [
+      {
+        "cdn": "jsdelivr",
+        "cuts": [
+          {
+            "end": 2390,
+            "start": 2356,
+            "what": "crossorigin",
+          },
+        ],
+        "file": "src/layouts/Base.astro",
+        "initBeforeBundle": false,
+        "kind": "element",
+        "line": 82,
+        "src": {
+          "end": 2355,
+          "start": 2289,
+        },
+        "url": "https://cdn.jsdelivr.net/npm/@sentry/browser@8/build/bundle.min.js",
+        "version": "8",
+      },
+    ],
+    "reasons": [],
+    "selfHosted": [],
+    "status": "wire",
+  },
   "services": [
     "google-maps",
   ],
@@ -365,6 +421,13 @@ exports[`detect > pilot site-1243511314: consent, matching the committed snapsho
   "policyPage": null,
   "reasons": [],
   "recaptcha": false,
+  "sentry": {
+    "hints": [],
+    "loaders": [],
+    "reasons": [],
+    "selfHosted": [],
+    "status": "none",
+  },
   "services": [
     "google-maps",
   ],
@@ -484,6 +547,34 @@ exports[`detect > pilot site-1245311266: consent, matching the committed snapsho
   "policyPage": "/gdpr",
   "reasons": [],
   "recaptcha": true,
+  "sentry": {
+    "hints": [],
+    "loaders": [
+      {
+        "cdn": "jsdelivr",
+        "cuts": [
+          {
+            "end": 2480,
+            "start": 2446,
+            "what": "crossorigin",
+          },
+        ],
+        "file": "src/layouts/Base.astro",
+        "initBeforeBundle": false,
+        "kind": "element",
+        "line": 83,
+        "src": {
+          "end": 2445,
+          "start": 2379,
+        },
+        "url": "https://cdn.jsdelivr.net/npm/@sentry/browser@8/build/bundle.min.js",
+        "version": "8",
+      },
+    ],
+    "reasons": [],
+    "selfHosted": [],
+    "status": "wire",
+  },
   "services": [
     "google-maps",
   ],
@@ -615,6 +706,34 @@ exports[`detect > pilot site-1271984151: needs-human, matching the committed sna
     "existing banner: home-made gate: localStorage 'maps-consent' in src/components/KontaktMap.astro",
   ],
   "recaptcha": true,
+  "sentry": {
+    "hints": [],
+    "loaders": [
+      {
+        "cdn": "jsdelivr",
+        "cuts": [
+          {
+            "end": 2907,
+            "start": 2873,
+            "what": "crossorigin",
+          },
+        ],
+        "file": "src/layouts/Base.astro",
+        "initBeforeBundle": false,
+        "kind": "element",
+        "line": 96,
+        "src": {
+          "end": 2872,
+          "start": 2806,
+        },
+        "url": "https://cdn.jsdelivr.net/npm/@sentry/browser@8/build/bundle.min.js",
+        "version": "8",
+      },
+    ],
+    "reasons": [],
+    "selfHosted": [],
+    "status": "wire",
+  },
   "services": [],
   "site": "site-1271984151",
   "trackers": [],
@@ -739,6 +858,34 @@ exports[`detect > pilot site-1277834673: needs-human, matching the committed sna
     "unresolved iframe src in src/pages/kalendrar.astro",
   ],
   "recaptcha": false,
+  "sentry": {
+    "hints": [],
+    "loaders": [
+      {
+        "cdn": "jsdelivr",
+        "cuts": [
+          {
+            "end": 3375,
+            "start": 3341,
+            "what": "crossorigin",
+          },
+        ],
+        "file": "src/layouts/Base.astro",
+        "initBeforeBundle": true,
+        "kind": "element",
+        "line": 107,
+        "src": {
+          "end": 3340,
+          "start": 3274,
+        },
+        "url": "https://cdn.jsdelivr.net/npm/@sentry/browser@8/build/bundle.min.js",
+        "version": "8",
+      },
+    ],
+    "reasons": [],
+    "selfHosted": [],
+    "status": "wire",
+  },
   "services": [],
   "site": "site-1277834673",
   "trackers": [],
@@ -819,6 +966,34 @@ exports[`detect > pilot site-1286040212: notice, matching the committed snapshot
   "policyPage": null,
   "reasons": [],
   "recaptcha": false,
+  "sentry": {
+    "hints": [],
+    "loaders": [
+      {
+        "cdn": "jsdelivr",
+        "cuts": [
+          {
+            "end": 2090,
+            "start": 2056,
+            "what": "crossorigin",
+          },
+        ],
+        "file": "src/layouts/Base.astro",
+        "initBeforeBundle": false,
+        "kind": "element",
+        "line": 79,
+        "src": {
+          "end": 2055,
+          "start": 1989,
+        },
+        "url": "https://cdn.jsdelivr.net/npm/@sentry/browser@8/build/bundle.min.js",
+        "version": "8",
+      },
+    ],
+    "reasons": [],
+    "selfHosted": [],
+    "status": "wire",
+  },
   "services": [],
   "site": "site-1286040212",
   "trackers": [],

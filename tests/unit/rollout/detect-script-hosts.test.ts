@@ -141,7 +141,9 @@ describe('detectScripts: scripts from hosts outside the registry (#36)', () => {
 
   test('a trailing dot on the host is dropped, so the site-own check and the list still match', () => {
     expect(hostsOf({ 'src/layouts/Base.astro': page('<script src="https://dot.example./a.js"></script>') })).toEqual(['dot.example src/layouts/Base.astro'])
-    expect(hostsOf({ 'src/layouts/Base.astro': page('<script src="https://browser.sentry-cdn.com./8/bundle.min.js"></script>') })).toEqual([])
+    expect(hostsOf({ 'src/layouts/Base.astro': page('<script src="https://browser.sentry-cdn.com./8/bundle.min.js"></script>') })).toEqual([
+      'browser.sentry-cdn.com src/layouts/Base.astro',
+    ])
   })
 
   test('an unterminated HTML comment hides the rest of a plain HTML file, as a browser reads it', () => {
@@ -164,14 +166,24 @@ describe('detectScripts: scripts from hosts outside the registry (#36)', () => {
     expect(Date.now() - t).toBeLessThan(2000)
   })
 
-  test('an agreed host is not listed: error reporting through Sentry\'s CDN', () => {
+  test("Sentry's plain major-8 bundle is not listed: detectSentry reports it and wire self-hosts it (#93)", () => {
     expect(
       hostsOf({
         'src/layouts/Base.astro': page(
-          '<script src="https://browser.sentry-cdn.com/8.0.0/bundle.min.js"></script><script src="https://cdn.jsdelivr.net/npm/@sentry/browser@8/build/bundle.min.js"></script>',
+          '<script src="https://browser.sentry-cdn.com/8.55.0/bundle.min.js"></script><script src="https://cdn.jsdelivr.net/npm/@sentry/browser@8/build/bundle.min.js"></script>',
         ),
       }),
     ).toEqual([])
+  })
+
+  test('any other script from the Sentry CDNs is listed: they are no longer agreed hosts (#93)', () => {
+    expect(
+      hostsOf({
+        'src/layouts/Base.astro': page(
+          '<script src="https://browser.sentry-cdn.com/8.55.0/bundle.tracing.min.js"></script><script src="https://js.sentry-cdn.com/abc.min.js"></script><script src="https://cdn.jsdelivr.net/npm/@sentry/browser@7/build/bundle.min.js"></script>',
+        ),
+      }),
+    ).toEqual(['browser.sentry-cdn.com src/layouts/Base.astro', 'js.sentry-cdn.com src/layouts/Base.astro', 'cdn.jsdelivr.net src/layouts/Base.astro'])
   })
 
   test('the allowlist is by host and path: jsDelivr for something else is listed', () => {
@@ -243,5 +255,35 @@ describe('classify: unregistered script hosts', () => {
       'unregistered script host a.example in x.astro',
       'unregistered script host a.example in y.astro',
     ])
+  })
+})
+
+describe("classify: Sentry's bundle (#93)", () => {
+  const loader = {
+    file: 'src/layouts/Base.astro',
+    line: 9,
+    cdn: 'jsdelivr' as const,
+    version: '8',
+    url: 'https://cdn.jsdelivr.net/npm/@sentry/browser@8/build/bundle.min.js',
+    kind: 'element' as const,
+    src: { start: 0, end: 1 },
+    cuts: [],
+    initBeforeBundle: false,
+  }
+
+  test('a load wire self-hosts does not change the classification', () => {
+    expect(classify(clean({ sentry: { status: 'wire', loaders: [loader], selfHosted: [], reasons: [], hints: [] } }))).toEqual({ classification: 'notice', reasons: [] })
+  })
+
+  test('a load wire cannot rewrite sends the site to a human, with its reason', () => {
+    const reason = 'src/layouts/Base.astro:3 names browser.sentry-cdn.com/8.55.0/bundle.min.js…, not as a <script src> or x.src = \'…\' the tool can rewrite'
+    expect(classify(clean({ sentry: { status: 'needs-human', loaders: [], selfHosted: [], reasons: [reason], hints: [] } }))).toEqual({
+      classification: 'needs-human',
+      reasons: [`sentry bundle: ${reason}`],
+    })
+  })
+
+  test('a report stored before Sentry detection classifies as before', () => {
+    expect(classify(clean()).classification).toBe('notice')
   })
 })

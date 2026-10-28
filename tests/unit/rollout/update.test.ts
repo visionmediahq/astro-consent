@@ -169,7 +169,8 @@ const opts = (over: Partial<Parameters<typeof runUpdate>[1]> = {}): Parameters<t
   ...over,
 })
 
-describe('run.ts update', () => {
+// On-disk git work: each test clones and branches several times (20 s: the default timed out under full-suite load).
+describe('run.ts update', { timeout: 20_000 }, () => {
   test('parseUpdateArgs: one site dir', () => {
     expect(parseUpdateArgs(['site'])).toEqual({ dir: 'site' })
     expect(() => parseUpdateArgs([])).toThrow(/usage: tsx ci\/rollout\/run\.ts update <site dir>/)

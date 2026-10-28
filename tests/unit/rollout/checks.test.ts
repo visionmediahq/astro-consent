@@ -9,7 +9,7 @@ import { diffRootStyles } from '../../../ci/rollout/checks/root-styles'
 import { type BgImage, contrastRows, coversBackground, formatContrast, gradientStops, measureContrast, pendingColours, type RawContrast, type RawVeil, veilColours } from '../../../ci/rollout/checks/contrast'
 import { compareEmbedHeights, type EmbedBox } from '../../../ci/rollout/checks/embed-size'
 import { extractLinks, listPages, MISSING_PREFIX } from '../../../ci/rollout/checks/pages'
-import { blockUmami, freshPage, isBlocked, isUmamiUrl, notRequested, umamiScriptSrcs } from '../../../ci/rollout/checks/requests'
+import { blockUmami, freshPage, isBlocked, isSentryEntry, isUmamiUrl, notRequested, umamiScriptSrcs } from '../../../ci/rollout/checks/requests'
 import { type Rgb, wcagContrast } from '../../../ci/rollout/lib/colour'
 
 const dirs: string[] = []
@@ -122,6 +122,17 @@ describe('isBlocked', () => {
     expect(isBlocked('https://connect.facebook.net/en_US/fbevents.js')).toBe(true)
     expect(isBlocked('https://cloud.umami.is/script.js')).toBe(false)
     expect(isBlocked('https://exempel.se/')).toBe(false)
+  })
+
+  it("and Sentry's CDNs (#93): a request there before consent is a third party's, self-hosted or not", () => {
+    expect(isBlocked('https://browser.sentry-cdn.com/8.55.0/bundle.min.js')).toBe(true)
+    expect(isBlocked('https://js.sentry-cdn.com/abc.min.js')).toBe(true)
+    expect(isBlocked('https://cdn.jsdelivr.net/npm/@sentry/browser@8/build/bundle.min.js')).toBe(true)
+    expect(isBlocked('https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.js')).toBe(false)
+    expect(isBlocked('https://exempel.se/js/sentry-8.55.2.min.js')).toBe(false)
+    expect(isSentryEntry('https://browser.sentry-cdn.com/8.55.0/bundle.min.js')).toBe(true)
+    expect(isSentryEntry('in DOM, not requested: https://cdn.jsdelivr.net/npm/@sentry/browser@8/build/bundle.min.js')).toBe(true)
+    expect(isSentryEntry('https://www.google.com/maps/embed?pb=1')).toBe(false)
   })
 })
 
