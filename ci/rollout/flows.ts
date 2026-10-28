@@ -1,23 +1,26 @@
-// The two flows of the rollout tool, keyed by the branch they live on (site-factory#220):
+// The flows of the rollout tool, keyed by the branch they live on (site-factory#220):
 //
-//   consent-banner  wire: the banner, and (unless --no-fonts) a second commit self-hosting the
-//                   site's Google Fonts
-//   fonts-selfhost  fonts: the Google Fonts commit alone, for a site whose banner is already live
+//   consent-banner        wire: the banner, and (unless --no-fonts) a second commit self-hosting the
+//                         site's Google Fonts
+//   fonts-selfhost        fonts: the Google Fonts commit alone, for a site whose banner is already live
+//   astro-consent-update  update: the lockfile on the latest astro-consent release, for a site whose
+//                         banner is already live
 //
 // verify, pr, merge and live read the clone's current branch and refuse one that is not here.
 // consent-banner keeps the state names it always had in .rollout/ (`verify.json`, `pushed.txt`,
-// `pr-body.md`, …), which the operator's scripts read; fonts-selfhost has its own
-// (`verify-fonts-selfhost.json`, …), so a fonts run never overwrites or reads the banner's.
+// `pr-body.md`, …), which the operator's scripts read; every other flow has its own
+// (`verify-fonts-selfhost.json`, …), so one flow's run never overwrites or reads another's.
 import { join } from 'node:path'
 import { type Exec, tail } from './lib/exec'
 import { FONTS_BRANCH, FONTS_CSS } from './wire/fonts'
 import { BRANCH } from './wire/index'
+import { UPDATE_BRANCH } from './wire/update'
 
 /** verify's steps, in order; the number of a step is its place here (1-based) in every flow. */
 export const STEPS = ['lockfile', 'build', 'requests', 'consent-paths', 'clip', 'contrast', 'screenshots', 'fonts', 'docker'] as const
 export type StepName = (typeof STEPS)[number]
 
-export type FlowBranch = typeof BRANCH | typeof FONTS_BRANCH
+export type FlowBranch = typeof BRANCH | typeof FONTS_BRANCH | typeof UPDATE_BRANCH
 
 export interface Flow {
   branch: FlowBranch
@@ -33,8 +36,8 @@ export interface Flow {
    */
   steps: readonly StepName[]
   skipWhy: string
-  /** The other flow: its branch or open PR on GitHub refuses this one (they would conflict). */
-  other: FlowBranch
+  /** The other flows: an unmerged branch or an open PR of any of them on GitHub refuses this one (they would conflict). */
+  others: readonly FlowBranch[]
 }
 
 export const FLOWS: Record<FlowBranch, Flow> = {
@@ -46,7 +49,7 @@ export const FLOWS: Record<FlowBranch, Flow> = {
     template: join(import.meta.dirname, 'pr-body.sv.md'),
     steps: ['lockfile', 'build', 'requests', 'consent-paths', 'clip', 'contrast', 'screenshots', 'docker'],
     skipWhy: 'no self-hosted fonts on the branch (no src/styles/fonts.css from this tool)',
-    other: FONTS_BRANCH,
+    others: [FONTS_BRANCH, UPDATE_BRANCH],
   },
   'fonts-selfhost': {
     branch: FONTS_BRANCH,
@@ -55,7 +58,18 @@ export const FLOWS: Record<FlowBranch, Flow> = {
     template: join(import.meta.dirname, 'pr-body.fonts.sv.md'),
     steps: ['lockfile', 'build', 'requests', 'clip', 'screenshots', 'fonts', 'docker'],
     skipWhy: 'banner-only check: not run on fonts-selfhost (the banner is already live)',
-    other: BRANCH,
+    others: [BRANCH, UPDATE_BRANCH],
+  },
+  'astro-consent-update': {
+    branch: UPDATE_BRANCH,
+    // No version, like the banner's (#51): the commit message and the body name them.
+    title: 'Uppdatera astro-consent',
+    ownTitles: ['Uppdatera astro-consent'],
+    template: join(import.meta.dirname, 'pr-body.update.sv.md'),
+    // The banner, its texts and its styles change with the package: every banner step runs.
+    steps: ['lockfile', 'build', 'requests', 'consent-paths', 'clip', 'contrast', 'screenshots', 'docker'],
+    skipWhy: 'no self-hosted fonts on the branch (no src/styles/fonts.css from this tool)',
+    others: [BRANCH, FONTS_BRANCH],
   },
 }
 
