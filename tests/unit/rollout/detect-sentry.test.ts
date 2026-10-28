@@ -144,7 +144,7 @@ describe('detectSentry: the CDN loads wire can self-host', () => {
 
 describe('detectSentry: none and self-hosted', () => {
   test('no Sentry at all', () => {
-    expect(detectSentry(memSite({ 'src/layouts/Base.astro': '<html><head></head><body /></html>\n' }))).toEqual({ status: 'none', loaders: [], selfHosted: [], reasons: [] })
+    expect(detectSentry(memSite({ 'src/layouts/Base.astro': '<html><head></head><body /></html>\n' }))).toEqual({ status: 'none', loaders: [], selfHosted: [], reasons: [], hints: [] })
   })
 
   test('a local copy (site 1292225111): self-hosted, and the bundle itself is not a mention', () => {
@@ -153,7 +153,7 @@ describe('detectSentry: none and self-hosted', () => {
         'public/js/sentry-8.55.0.min.js': '/*! @sentry/browser 8.55.0 (abc) | https://github.com/getsentry/sentry-javascript */\nvar a="https://browser.sentry-cdn.com/8.55.0/x.js"',
       }),
     )
-    expect(info).toEqual({ status: 'self-hosted', loaders: [], selfHosted: ['/js/sentry-8.55.0.min.js'], reasons: [] })
+    expect(info).toEqual({ status: 'self-hosted', loaders: [], selfHosted: ['/js/sentry-8.55.0.min.js'], reasons: [], hints: [] })
   })
 
   test('the npm package bundled by Vite is not a CDN load', () => {
@@ -211,6 +211,73 @@ describe('detectSentry: needs-human', () => {
 describe('detectSentry: after wire', () => {
   test('an inline script that adds a local copy is self-hosted too', () => {
     const block = "<script is:inline>const s = document.createElement('script'); s.src = '/js/sentry-8.55.2.min.js'; document.head.appendChild(s)</script>"
-    expect(detectSentry(site(block))).toEqual({ status: 'self-hosted', loaders: [], selfHosted: ['/js/sentry-8.55.2.min.js'], reasons: [] })
+    expect(detectSentry(site(block))).toEqual({ status: 'self-hosted', loaders: [], selfHosted: ['/js/sentry-8.55.2.min.js'], reasons: [], hints: [] })
+  })
+})
+
+describe('detectSentry: resource hints to the CDNs (review of #126)', () => {
+  test('a preconnect to Sentry\'s CDN inside the GlitchTip block (site 1334143636) goes with the loader, as whole lines', () => {
+    const block = `<link rel="preconnect" href="https://browser.sentry-cdn.com" crossorigin="anonymous" />
+        <script is:inline defer src="${CDN}" crossorigin="anonymous"></script>`
+    const text = layout(block)
+    const info = detectSentry(memSite({ 'src/layouts/Base.astro': text }))
+    expect(info.status).toBe('wire')
+    expect(info.hints).toHaveLength(1)
+    expect(info.hints[0]).toMatchObject({ file: 'src/layouts/Base.astro', host: 'browser.sentry-cdn.com', rel: 'preconnect' })
+    expect(cut(text, info.hints[0]!)).toBe('        <link rel="preconnect" href="https://browser.sentry-cdn.com" crossorigin="anonymous" />\n')
+  })
+
+  test('a dns-prefetch to jsDelivr outside the block (a client site) goes too, when nothing else comes from jsDelivr', () => {
+    const fm = FM
+    const text = `${fm}<html lang="sv">\n  <head>\n    <link rel="dns-prefetch" href="https://cdn.jsdelivr.net" />\n    {glitchtipDsn && (\n      <>\n        ${STARTER}\n      </>\n    )}\n  </head>\n  <body />\n</html>\n`
+    const info = detectSentry(memSite({ 'src/layouts/Base.astro': text }))
+    expect(info.status).toBe('wire')
+    expect(info.hints.map((h) => [h.host, h.rel, cut(text, h)])).toEqual([['cdn.jsdelivr.net', 'dns-prefetch', '    <link rel="dns-prefetch" href="https://cdn.jsdelivr.net" />\n']])
+  })
+
+  test('a jsDelivr hint stays when the site loads something else from jsDelivr', () => {
+    const text = layout(`<link rel="preconnect" href="https://cdn.jsdelivr.net" /><script is:inline src="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.js"></script>\n        ${STARTER}`)
+    expect(detectSentry(memSite({ 'src/layouts/Base.astro': text })).hints).toEqual([])
+  })
+
+  test('a preload of the bundle, or any other link to Sentry\'s CDN, needs a look', () => {
+    expect(detectSentry(site(`<link rel="preload" as="script" href="${CDN}" />${STARTER}`)).status).toBe('needs-human')
+    expect(detectSentry(site(`<link rel="stylesheet" href="https://browser.sentry-cdn.com" />${STARTER}`)).status).toBe('needs-human')
+  })
+
+  test('a preconnect to Sentry\'s CDN with no CDN load (left over, or alone) needs a look', () => {
+    const left = detectSentry(site(`<link rel="preconnect" href="https://browser.sentry-cdn.com" /><script is:inline src="/js/sentry-8.55.2.min.js"></script>`))
+    expect(left.status).toBe('needs-human')
+    expect(left.reasons[0]).toMatch(/preconnect to browser\.sentry-cdn\.com/)
+    expect(detectSentry(memSite({ 'src/layouts/Base.astro': '<html><head><link rel="dns-prefetch" href="//browser.sentry-cdn.com" /></head></html>\n' })).status).toBe('needs-human')
+  })
+
+  test('any other element with a Sentry CDN URL as an attribute needs a look; a CSP meta does not', () => {
+    expect(detectSentry(site(`<img src="https://browser.sentry-cdn.com" alt="" />${STARTER}`)).status).toBe('needs-human')
+    const csp = `<meta http-equiv="Content-Security-Policy" content="script-src 'self' https://browser.sentry-cdn.com" />${STARTER}`
+    expect(detectSentry(site(csp)).status).toBe('wire')
+  })
+})
+
+describe('detectSentry: review of #126', () => {
+  test('a CDN <script src> without is:inline needs a look: Astro would bundle the local src', () => {
+    const info = detectSentry(site(`<script src="${CDN}"></script>`))
+    expect(info.status).toBe('needs-human')
+    expect(info.reasons[0]).toMatch(/without is:inline/)
+  })
+
+  test('initBeforeBundle: an async or defer bundle with the init in an inline script that runs at once', () => {
+    const init = (s: string) => detectSentry(site(s)).loaders[0]!.initBeforeBundle
+    // The starter: synchronous bundle, then the init.
+    expect(init(STARTER)).toBe(false)
+    expect(init(`<script is:inline async src="${CDN}"></script>`)).toBe(true)
+    expect(init(`<script is:inline defer src="${CDN}"></script>`)).toBe(true)
+    // onload on the bundle, or an init that waits for load (or, for defer, DOMContentLoaded): after the bundle.
+    expect(init(`<script is:inline async src="${CDN}" onload="Sentry.init({})"></script>`)).toBe(false)
+    const waits = (event: string, attr: string) =>
+      detectSentry(memSite({ 'src/layouts/Base.astro': `${FM}<html><head><script is:inline ${attr} src="${CDN}"></script><script is:inline define:vars={{ glitchtipDsn }}>addEventListener('${event}', () => Sentry.init({ dsn: glitchtipDsn }))</script></head></html>\n` })).loaders[0]!.initBeforeBundle
+    expect(waits('load', 'async')).toBe(false)
+    expect(waits('DOMContentLoaded', 'defer')).toBe(false)
+    expect(waits('DOMContentLoaded', 'async')).toBe(true)
   })
 })

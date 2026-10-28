@@ -268,15 +268,16 @@ describe("classify: Sentry's bundle (#93)", () => {
     kind: 'element' as const,
     src: { start: 0, end: 1 },
     cuts: [],
+    initBeforeBundle: false,
   }
 
   test('a load wire self-hosts does not change the classification', () => {
-    expect(classify(clean({ sentry: { status: 'wire', loaders: [loader], selfHosted: [], reasons: [] } }))).toEqual({ classification: 'notice', reasons: [] })
+    expect(classify(clean({ sentry: { status: 'wire', loaders: [loader], selfHosted: [], reasons: [], hints: [] } }))).toEqual({ classification: 'notice', reasons: [] })
   })
 
   test('a load wire cannot rewrite sends the site to a human, with its reason', () => {
     const reason = 'src/layouts/Base.astro:3 names browser.sentry-cdn.com/8.55.0/bundle.min.js…, not as a <script src> or x.src = \'…\' the tool can rewrite'
-    expect(classify(clean({ sentry: { status: 'needs-human', loaders: [], selfHosted: [], reasons: [reason] } }))).toEqual({
+    expect(classify(clean({ sentry: { status: 'needs-human', loaders: [], selfHosted: [], reasons: [reason], hints: [] } }))).toEqual({
       classification: 'needs-human',
       reasons: [`sentry bundle: ${reason}`],
     })

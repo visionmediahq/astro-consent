@@ -133,6 +133,23 @@ export interface SentryLoader {
    * the whitespace before each), or the `x.integrity = …` and `x.crossOrigin = …` lines.
    */
   cuts: { start: number; end: number; what: string }[]
+  /**
+   * An element with `async` or `defer` whose `Sentry.init` runs in an inline script at once (not on
+   * the bundle's onload, the window's load, or, for defer, DOMContentLoaded): the init runs before
+   * the bundle and error reporting stays off even with a DSN. Reported, not changed (#93 follow-up).
+   */
+  initBeforeBundle: boolean
+}
+
+/** A `<link rel="preconnect|dns-prefetch">` to a Sentry CDN host, cut with the loads (review of #126). */
+export interface SentryHint {
+  file: string
+  line: number
+  host: string
+  rel: string
+  /** The element, as whole lines when it has its lines to itself. */
+  start: number
+  end: number
 }
 
 export interface SentryInfo {
@@ -142,6 +159,8 @@ export interface SentryInfo {
   selfHosted: string[]
   /** Why the site is `needs-human`; empty otherwise. */
   reasons: string[]
+  /** Resource hints to the CDNs that go with the loads (status `wire`). */
+  hints: SentryHint[]
 }
 
 /**

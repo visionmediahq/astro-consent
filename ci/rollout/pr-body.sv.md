@@ -5,7 +5,7 @@
 - `src/data/privacy.json`: sajtens tjänster.{{/notice}}
 - "Cookie-inställningar" i sidfoten och på 404-sidan, så att besökaren kan ändra sitt val.{{#fonts}}
 - Typsnitten ({{families}}) laddas från sajten själv i stället för från Google Fonts, i en egen commit: besökarens webbläsare skickar inga anrop till Google när sidan visas. Filerna ligger i `public/fonts/` med licenserna bredvid, och `src/styles/fonts.css` beskriver dem.{{/fonts}}{{#sentry}}
-- Skriptet för felrapporteringen (Sentry, som skickar fel till vår GlitchTip när sajtens `PUBLIC_GLITCHTIP_DSN` är satt) laddas från sajten själv, `{{sentrySrc}}`, i en egen commit. Inget syns på sidan.{{/sentry}}{{#sentrycdn}} Förut hämtades det från Sentrys CDN i USA (`browser.sentry-cdn.com`) vid varje sidvisning, innan besökaren hunnit välja något.{{/sentrycdn}}{{#sentryjsdelivr}} Den gamla adressen (`cdn.jsdelivr.net`) svarade 404, så felrapporteringen har inte fungerat: den börjar fungera när sajtens DSN är satt.{{/sentryjsdelivr}}
+- Skriptet för felrapporteringen (Sentry, som skickar fel till vår GlitchTip när sajtens `PUBLIC_GLITCHTIP_DSN` är satt) laddas från sajten själv, `{{sentrySrc}}`, i en egen commit. Inget syns på sidan.{{/sentry}}{{#sentrycdn}} Förut hämtades det från Sentrys CDN i USA (`browser.sentry-cdn.com`) vid varje sidvisning, innan besökaren hunnit välja något.{{/sentrycdn}}{{#sentryjsdelivr}} Den gamla adressen (`cdn.jsdelivr.net`) svarade 404, så felrapporteringen har inte fungerat.{{/sentryjsdelivr}}{{#sentryinitlate}} Sajten startar felrapporteringen (`Sentry.init`) innan skriptet har laddats, så den fungerar inte heller nu; det rättas i en separat ändring.{{/sentryinitlate}}
 
 Filer:
 

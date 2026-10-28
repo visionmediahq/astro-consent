@@ -47,9 +47,10 @@ export interface BodyInput {
   fonts?: { families: string[] }
   /**
    * The branch self-hosts Sentry's bundle (#93): the `{{#sentry}}` blocks are kept, plus
-   * `{{#sentrycdn}}` / `{{#sentryjsdelivr}}` for the CDNs it replaced (report.sentry).
+   * `{{#sentrycdn}}` / `{{#sentryjsdelivr}}` for the CDNs it replaced (report.sentry), and
+   * `{{#sentryinitlate}}` when a layout runs `Sentry.init` before its async/defer bundle.
    */
-  sentry?: { cdns: SentryCdn[] }
+  sentry?: { cdns: SentryCdn[]; initBeforeBundle: boolean }
   /** astro-consent-update: the versions, the changelog entries in between, and `{{#reask}}` or `{{#noreask}}`. */
   update?: { from: string; to: string; reasks: boolean; changelog: { version: string; text: string }[] }
 }
@@ -92,7 +93,7 @@ export function renderBody(template: string, input: BodyInput): string {
     kind,
     ...(input.fonts ? ['fonts'] : []),
     ...(input.update ? [input.update.reasks ? 'reask' : 'noreask'] : []),
-    ...(input.sentry ? ['sentry', ...input.sentry.cdns.map((c) => (c === 'jsdelivr' ? 'sentryjsdelivr' : 'sentrycdn'))] : []),
+    ...(input.sentry ? ['sentry', ...input.sentry.cdns.map((c) => (c === 'jsdelivr' ? 'sentryjsdelivr' : 'sentrycdn')), ...(input.sentry.initBeforeBundle ? ['sentryinitlate'] : [])] : []),
   ])
   const values: Record<string, string> = {
     domain,
@@ -113,7 +114,7 @@ export function renderBody(template: string, input: BodyInput): string {
     changelog: (input.update?.changelog ?? []).map((e) => `#### ${e.version}\n\n${e.text}`).join('\n\n'),
   }
   const out = template
-    .replace(/\{\{#(consent|notice|fonts|reask|noreask|sentry|sentrycdn|sentryjsdelivr)\}\}([\s\S]*?)\{\{\/\1\}\}/g, (_, name: string, text: string) => (active.has(name) ? text : ''))
+    .replace(/\{\{#(consent|notice|fonts|reask|noreask|sentry|sentrycdn|sentryjsdelivr|sentryinitlate)\}\}([\s\S]*?)\{\{\/\1\}\}/g, (_, name: string, text: string) => (active.has(name) ? text : ''))
     .replace(/\{\{(\w+)\}\}/g, (m, name: string) => values[name] ?? m)
   const left = out.match(/\{\{[^}]*\}\}/)
   if (left) throw new Error(`unfilled placeholder ${left[0]} in the PR body template`)
@@ -275,7 +276,9 @@ export async function openPr(dir: string, opts: PrOptions): Promise<PrResult> {
     screenshots: names.map((n) => ({ file: n, url: `${opts.screenshotsBase.replace(/\/+$/, '')}/${n}` })),
     ...(fontsCss !== null ? { fonts: { families: familiesOf(fontsCss) } } : {}),
     // #93: the CDNs the commit replaced, as detect found them on main.
-    ...(changed.includes(SENTRY_FILE) ? { sentry: { cdns: [...new Set((report.sentry?.loaders ?? []).map((l) => l.cdn))].sort() } } : {}),
+    ...(changed.includes(SENTRY_FILE)
+      ? { sentry: { cdns: [...new Set((report.sentry?.loaders ?? []).map((l) => l.cdn))].sort(), initBeforeBundle: (report.sentry?.loaders ?? []).some((l) => l.initBeforeBundle) } }
+      : {}),
     ...(update ? { update } : {}),
   })
   const bodyFile = statePath(rollout, 'pr-body.md', branch)

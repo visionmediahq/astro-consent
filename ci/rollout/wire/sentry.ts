@@ -6,7 +6,8 @@
 // (lib/sentry.ts) and refused unless it hashes to the SRI Sentry publishes for it. The plan is:
 //   - public/js/sentry-<version>.min.js, the bytes Sentry serves;
 //   - each loader's URL replaced by /js/sentry-<version>.min.js, and its integrity and crossorigin
-//     (attributes, or the `x.integrity = …` / `x.crossOrigin = …` lines) cut: they were for the CDN.
+//     (attributes, or the `x.integrity = …` / `x.crossOrigin = …` lines) cut: they were for the CDN;
+//   - each preconnect or dns-prefetch link to the CDNs (`report.sentry.hints`) cut, as whole lines.
 // Every other attribute stays: defer, async, onload and the order of the scripts are what make
 // `Sentry.init` run after the bundle, and they work the same from the site's own origin.
 // The report must still match a fresh detect (its offsets are where the edits go).
@@ -51,12 +52,15 @@ export interface SentryInput {
   sentry?: SentryInfo
 }
 
-/** The text edits: each loader's URL to the local src, its CDN-only attributes or lines cut. */
+/** The text edits: each loader's URL to the local src, its CDN-only attributes or lines cut, each hint cut. */
 export function sentryEdits(info: SentryInfo): Edit[] {
-  return info.loaders.flatMap((l) => [
-    { file: l.file, start: l.src.start, end: l.src.end, text: SENTRY_SRC, target: `${TARGET} src (${l.file}:${l.line})` },
-    ...l.cuts.map((c) => ({ file: l.file, start: c.start, end: c.end, text: '', target: `${TARGET} ${c.what} (${l.file}:${l.line})` })),
-  ])
+  return [
+    ...info.loaders.flatMap((l) => [
+      { file: l.file, start: l.src.start, end: l.src.end, text: SENTRY_SRC, target: `${TARGET} src (${l.file}:${l.line})` },
+      ...l.cuts.map((c) => ({ file: l.file, start: c.start, end: c.end, text: '', target: `${TARGET} ${c.what} (${l.file}:${l.line})` })),
+    ]),
+    ...(info.hints ?? []).map((h) => ({ file: h.file, start: h.start, end: h.end, text: '', target: `${TARGET} ${h.rel} ${h.host} (${h.file}:${h.line})` })),
+  ]
 }
 
 /** The plan, or refusals. Nothing is written; see the header for what it holds. */
@@ -95,6 +99,10 @@ export async function planSentry(files: SiteFiles, report: SentryInput, opts: { 
     notes: [
       `sentry: ${info.loaders.length} load(s) of the bundle from ${from} → ${SENTRY_SRC} (${SENTRY_VERSION}), in ${[...new Set(info.loaders.map((l) => `${l.file}:${l.line}`))].join(', ')}`,
       `sentry: ${SENTRY_FILE}, ${bytes.length} bytes, ${SENTRY_SRI}`,
+      ...(info.hints.length ? [`sentry: ${info.hints.length} resource hint(s) to the CDN cut (${info.hints.map((h) => `${h.rel} ${h.host}, ${h.file}:${h.line}`).join('; ')})`] : []),
+      ...(info.loaders.some((l) => l.initBeforeBundle)
+        ? [`sentry: NOTE Sentry.init runs before the async/defer bundle in ${info.loaders.filter((l) => l.initBeforeBundle).map((l) => `${l.file}:${l.line}`).join(', ')}: error reporting stays off even with a DSN (left as it is, #93 follow-up)`]
+        : []),
     ],
   }
 }

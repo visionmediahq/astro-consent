@@ -477,7 +477,7 @@ describe('planFonts refuses, with nothing planned', () => {
   })
 })
 
-// ── on disk: run.ts fonts and wire ───────────────────────────────────────────────────────────
+// ── on disk: run.ts fonts and wire (each describe: 20 s, git clones time out under full-suite load) ──
 
 const dirs: string[] = []
 afterEach(() => {
@@ -524,7 +524,7 @@ const status = (dir: string) => git(dir, 'status', '--porcelain', '--untracked-f
 /** No open consent-banner PR on GitHub (the real lookup runs gh; tests never do). */
 const noPrs = async (): Promise<string[]> => []
 
-describe('run.ts fonts', () => {
+describe('run.ts fonts', { timeout: 20_000 }, () => {
   test('parseFontsArgs: a dir and an optional --dry-run', () => {
     expect(parseFontsArgs(['site'])).toEqual({ dir: 'site', dryRun: false })
     expect(parseFontsArgs(['--dry-run', 'site'])).toEqual({ dir: 'site', dryRun: true })
@@ -601,7 +601,7 @@ describe('run.ts fonts', () => {
   })
 })
 
-describe('run.ts wire: fonts as a second commit on consent-banner', () => {
+describe('run.ts wire: fonts as a second commit on consent-banner', { timeout: 20_000 }, () => {
   const PILOT_FONTS_URL = 'https://fonts.googleapis.com/css2?family=Montserrat:wght@100;200;300;400&family=Poppins:wght@300;400&display=swap'
   // site 1218869363's own response is not recorded; Figtree's stands in (the families do not matter here).
   const pilotNet = (over: Record<string, Answer | Error> = {}) => network(over, { [PILOT_FONTS_URL]: css2('figtree') })
@@ -674,7 +674,7 @@ describe('run.ts wire: fonts as a second commit on consent-banner', () => {
 
 // ── review of #75 ────────────────────────────────────────────────────────────────────────────
 
-describe('review of #75: stale reports, files changed on disk, recovery', () => {
+describe('review of #75: stale reports, files changed on disk, recovery', { timeout: 20_000 }, () => {
   const pilotUrl = 'https://fonts.googleapis.com/css2?family=Montserrat:wght@100;200;300;400&family=Poppins:wght@300;400&display=swap'
 
   test('a report whose offsets no longer fit the checkout is refused (run detect again), no request made; after detect it plans cleanly', async () => {
@@ -744,7 +744,7 @@ describe('review of #75: stale reports, files changed on disk, recovery', () => 
   })
 })
 
-describe('review of #75: run.ts fonts and consent-banner', () => {
+describe('review of #75: run.ts fonts and consent-banner', { timeout: 20_000 }, () => {
   test('a consent-banner branch on origin that main has (or none) is no obstacle', async () => {
     const dir = checkout(linkTree())
     runDetect(dir, ['site-1228881255.se'])
@@ -901,7 +901,7 @@ describe('review of #75: CSP, subsets per family, comments', () => {
   })
 })
 
-describe('PR 3: wire refused while fonts-selfhost is open (the other direction of #75)', () => {
+describe('PR 3: wire refused while fonts-selfhost is open (the other direction of #75)', { timeout: 20_000 }, () => {
   const pilotDir = (): string => checkout(treeOf(join(FIXTURES, 'site-1218869363', 'before')))
 
   test('refused (exit 3) while origin has a fonts-selfhost branch main does not have, or an open fonts-selfhost PR; nothing written', async () => {

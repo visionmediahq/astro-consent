@@ -569,20 +569,32 @@ npx tsx ci/rollout/run.ts help
     `needs-human` with reasons, and those are classification reasons too: another major or bundle
     (`bundle.tracing.min.js`, the Loader's `js.sentry-cdn.com`), an expression `src` or
     `integrity`, a URL in a const, a `fetch` or a non-`.astro` file, a file that names a CDN and
-    does not parse, a CDN load beside a local copy. A mention with a path after the host counts
-    wherever it is, except in HTML comments and in JS comments (frontmatter, scripts, `{/* … */}`);
-    a bare origin (a CSP's `https://browser.sentry-cdn.com`) does not. Sentry's own bundle files are
+    does not parse, a CDN load beside a local copy, a `<script src>` without `is:inline` (Astro would
+    process the local src). A mention with a path after the host counts wherever it is, except in
+    HTML comments and in JS comments (frontmatter, scripts, `{/* … */}`); a bare origin in text (a
+    CSP's `https://browser.sentry-cdn.com`) does not. Resource hints connect before consent too: a
+    `<link rel="preconnect">` or `rel="dns-prefetch"` to a Sentry CDN host goes with the loads
+    (`report.sentry.hints`; one client layout has one inside its GlitchTip block), and so does one to
+    `cdn.jsdelivr.net` when nothing but Sentry comes from jsDelivr (another has one outside the
+    block). Any other element whose attribute is a Sentry CDN URL (a preload, bare origin
+    included; a CSP `<meta>` excepted), or a hint with no CDN load beside it, is a reason.
+    `initBeforeBundle` marks a loader with `async` or `defer` whose `Sentry.init` runs in an inline
+    script at once: error reporting stays off there even with a DSN (11 clones, one of them live on
+    Sentry's CDN). wire notes it and leaves the order as it is; the PR body says so. Sentry's own bundle files are
     skipped. The two hosts are no longer agreed script hosts: the plain bundle is left to
     `report.sentry`, every other script from them is an `unregistered script host`. On the 229
     clones this changes no classification: 205 `wire` (183 jsDelivr and 18 Sentry CDN
     `<script src>`, 4 inline scripts), 3 `self-hosted`, 21 `none`.
+  - **Stored reports.** A `report.json` written before this (no `report.sentry`, or one without
+    `hints`) makes `wire` refuse ("run detect again") unless `--no-sentry`: batch scripts must
+    rerun `detect` before `wire`.
   - `wire` (unless `--no-sentry`) adds a last commit on `consent-banner` ("feat: Sentry-bundlen för
     felrapportering från sajten själv (self-hosted)"). It fetches
     `https://browser.sentry-cdn.com/8.55.2/bundle.min.js` once and refuses it unless it hashes to
     the SRI Sentry publishes for that file (`SENTRY_SRI` in `ci/rollout/lib/sentry.ts`, from
     getsentry/sentry-release-registry), writes it byte for byte to `public/js/sentry-8.55.2.min.js`,
-    points each load at `/js/sentry-8.55.2.min.js` and cuts its `integrity` and `crossorigin`
-    (attributes or lines). Every other attribute stays (`defer`, `async`, `onload`, `data-dsn`), so
+    points each load at `/js/sentry-8.55.2.min.js`, cuts its `integrity` and `crossorigin`
+    (attributes or lines) and cuts the hints, as whole lines. Every other attribute stays (`defer`, `async`, `onload`, `data-dsn`), so
     `Sentry.init` runs after the bundle as before. 8.55.2 is the newest 8.x: the sites load 8.55.0,
     8.55.2 or jsDelivr's floating `@8`. A refused plan (a failed or mismatching download, the file
     already there, a stale report, a report stored before Sentry detection) refuses the whole wire
@@ -591,8 +603,9 @@ npx tsx ci/rollout/run.ts help
     bundle, saying what it replaced (Sentry's US CDN before any choice, or jsDelivr's 404).
   - What the checks can see: `verify` builds without the DSN, so the block never renders locally.
     Step 2 reads the branch's source instead (`checks/sentry.ts`): with the bundle committed, it
-    must hash to the SRI and `detect` must find no CDN load left and `/js/sentry-8.55.2.min.js`
-    loaded; without it, a CDN load is noted, not failed (`--no-sentry`). Step 3 (and steps 4 and 9)
+    must hash to the SRI, `detect` must find no CDN load left and `/js/sentry-8.55.2.min.js`
+    loaded, and no file may name a Sentry CDN host at all (bare origin included) outside comments
+    and CSP lines; without it, a CDN load is noted, not failed (`--no-sentry`). Step 3 (and steps 4 and 9)
     count a request to either CDN as one before consent, as `live` does on the deployed site, where
     the DSN may be set: there it is a failure on every page that makes it. Locally both are stubbed
     with the registry. Not seen: whether the deployed bundle answers 200 (a 404 shows only as a

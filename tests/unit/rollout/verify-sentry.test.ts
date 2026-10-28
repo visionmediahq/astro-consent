@@ -46,6 +46,18 @@ describe('checkSentrySource', () => {
     expect(unused.lines).toContain(`sentry bundle: no <script> loads ${SENTRY_SRC}`)
   })
 
+  test('with the bundle, any other reference to a Sentry CDN host fails, bare origin included; comments and CSPs do not (review of #126)', () => {
+    const ok = (files: Record<string, string>) => checkSentrySource(memSite({ 'src/layouts/Base.astro': layout(SENTRY_SRC), ...files }), BUNDLE, sri384(BUNDLE))
+    const hint = ok({ 'src/layouts/Base.astro': `<html><head><link rel="preconnect" href="https://browser.sentry-cdn.com" /><script is:inline src="${SENTRY_SRC}"></script></head></html>\n` })
+    expect(hint.pass).toBe(false)
+    const constant = ok({ 'src/lib/errors.ts': "export const SDK = 'https://browser.sentry-cdn.com'\n" })
+    expect(constant.pass).toBe(false)
+    expect(constant.lines).toContain("  src/lib/errors.ts:1 still names browser.sentry-cdn.com: export const SDK = 'https://browser.sentry-cdn.com'")
+    expect(ok({ 'public/_headers': "/*\n  Content-Security-Policy: script-src 'self' https://browser.sentry-cdn.com\n" }).pass).toBe(true)
+    expect(ok({ 'src/lib/errors.ts': '// was https://browser.sentry-cdn.com\nexport const a = 1\n' }).pass).toBe(true)
+    expect(ok({ 'src/pages/index.astro': '<!-- copied from browser.sentry-cdn.com -->\n<p>x</p>\n' }).pass).toBe(true)
+  })
+
   test('no bundle on the branch: a CDN load is noted (wire --no-sentry), not failed', () => {
     const r = checkSentrySource(memSite({ 'src/layouts/Base.astro': layout(CDN) }), null)
     expect(r.pass).toBe(true)

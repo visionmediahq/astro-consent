@@ -115,6 +115,24 @@ describe('planSentry: the edits', () => {
     )
   })
 
+  test('a preconnect to the CDN in the block (site 1334143636) is cut with the load, its line and all', async () => {
+    const block = `<link rel="preconnect" href="https://browser.sentry-cdn.com" crossorigin="anonymous" />
+        <script is:inline defer src="https://browser.sentry-cdn.com/8.55.0/bundle.min.js" crossorigin="anonymous"></script>`
+    expect(await layoutAfter(block)).toBe(page('<script is:inline defer src="/js/sentry-8.55.2.min.js"></script>'))
+  })
+
+  test('a dns-prefetch to jsDelivr outside the block (a client site) is cut too', async () => {
+    const text = `${FM}<html>\n  <head>\n    <link rel="dns-prefetch" href="https://cdn.jsdelivr.net" />\n    <meta charset="utf-8" />\n    {glitchtipDsn && (\n      <>\n        ${STARTER}\n      </>\n    )}\n  </head>\n</html>\n`
+    const site = memSite({ 'src/layouts/Base.astro': text })
+    const plan = await planOf(site)
+    expect(plan.ok).toBe(true)
+    if (!plan.ok) return
+    const after = applyEdits(text, plan.edits)
+    expect(after).not.toContain('jsdelivr')
+    expect(after).toContain('  <head>\n    <meta charset="utf-8" />\n')
+    expect(plan.notes.join('\n')).toContain('1 resource hint(s) to the CDN cut')
+  })
+
   test('the plan holds the bundle at public/js/ and says what it did; detect afterwards sees a local copy', async () => {
     const site = withLayout(STARTER)
     const plan = await planOf(site)
@@ -123,7 +141,7 @@ describe('planSentry: the edits', () => {
     expect(plan.file).toEqual({ path: SENTRY_FILE, bytes: BUNDLE })
     expect(plan.notes[0]).toBe('sentry: 1 load(s) of the bundle from cdn.jsdelivr.net 8 → /js/sentry-8.55.2.min.js (8.55.2), in src/layouts/Base.astro:10')
     const after = memSite({ 'src/layouts/Base.astro': applyEdits(site.read('src/layouts/Base.astro'), plan.edits), [SENTRY_FILE]: new TextDecoder().decode(BUNDLE) })
-    expect(detectSentry(after)).toEqual({ status: 'self-hosted', loaders: [], selfHosted: [SENTRY_SRC], reasons: [] })
+    expect(detectSentry(after)).toEqual({ status: 'self-hosted', loaders: [], selfHosted: [SENTRY_SRC], reasons: [], hints: [] })
   })
 })
 
