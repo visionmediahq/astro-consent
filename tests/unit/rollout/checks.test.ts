@@ -6,7 +6,7 @@ import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { rememberCandidates, rememberOk, type RememberCounts } from '../../../ci/rollout/checks/consent-paths'
 import { diffRootStyles } from '../../../ci/rollout/checks/root-styles'
-import { type BgImage, contrastRows, coversBackground, formatContrast, gradientStops, measureContrast, pendingColours, type RawContrast } from '../../../ci/rollout/checks/contrast'
+import { type BgImage, contrastRows, coversBackground, formatContrast, gradientStops, measureContrast, pendingColours, type RawContrast, type RawVeil, veilColours } from '../../../ci/rollout/checks/contrast'
 import { compareEmbedHeights, type EmbedBox } from '../../../ci/rollout/checks/embed-size'
 import { extractLinks, listPages, MISSING_PREFIX } from '../../../ci/rollout/checks/pages'
 import { blockUmami, freshPage, isBlocked, isUmamiUrl, notRequested, umamiScriptSrcs } from '../../../ci/rollout/checks/requests'
@@ -379,6 +379,72 @@ describe('contrast', () => {
     const [row] = contrastRows([raw({ kind: 'placeholder', label: 'Exempel AB hämtas från Google Maps', fg: [218, 234, 245, 255], layers: [[248, 248, 248, 255]] })])
     expect(row).toMatchObject({ kind: 'placeholder', ok: false })
     expect(row!.ratio).toBeLessThan(1.5)
+  })
+
+  describe('faint positioned layers (#122: a client footer ruled with a currentColor line at opacity 0.018)', () => {
+    const LINE = 'rgb(247, 244, 243)'
+    const CLEAR = 'rgba(0, 0, 0, 0)'
+    const RULED = `repeating-linear-gradient(${LINE} 0px, ${LINE} 1px, ${CLEAR} 1px, ${CLEAR} 34px)`
+    const colours: Record<string, [number, number, number, number]> = { [LINE]: [247, 244, 243, 255], [CLEAR]: [0, 0, 0, 0], 'rgb(0, 0, 255)': [0, 0, 255, 255], 'rgba(0, 0, 255, 0.5)': [0, 0, 255, 128] }
+    const veil = (over: Partial<RawVeil>): RawVeil => ({ pseudo: '::before', colour: [0, 0, 0, 0], image: 'none', opacity: 0.2, under: false, ...over })
+    const mix = (a: number, top: number, below: number) => a * top + (1 - a) * below
+
+    it('veilColours: every stop and points between, over its background colour, alpha × opacity', () => {
+      const ruled = veilColours(veil({ image: RULED, opacity: 0.018 }), (s) => colours[s])
+      expect(Array.isArray(ruled)).toBe(true)
+      const cs = ruled as [number, number, number, number][]
+      expect(cs).toContainEqual([247, 244, 243, 255 * 0.018])
+      expect(cs.some((c) => c[3] === 0)).toBe(true)
+      expect(cs.every((c) => c[3] <= 255 * 0.018 + 1e-9)).toBe(true)
+      // Half-transparent blue over an opaque red background colour: purple, then faded.
+      const [purple] = veilColours(veil({ colour: [255, 0, 0, 255], image: 'linear-gradient(rgba(0, 0, 255, 0.5), rgba(0, 0, 255, 0.5))', opacity: 0.1 }), (s) => colours[s]) as [number, number, number, number][]
+      expect(purple![0]).toBeCloseTo(255 * (1 - 128 / 255), 6)
+      expect(purple![2]).toBeCloseTo(128, 6)
+      expect(purple![3]).toBeCloseTo(25.5, 6)
+      // A plain background colour.
+      expect(veilColours(veil({ colour: [255, 255, 255, 255] }), () => undefined)).toEqual([[255, 255, 255, 51]])
+    })
+
+    it('veilColours: a layer that is not a colour gradient is unknown; an unresolved stop is pending', () => {
+      expect(veilColours(veil({ image: `url("/texture.png"), ${RULED}` }), (s) => colours[s])).toBe('unknown')
+      expect(veilColours(veil({ image: 'linear-gradient(rgb(1, 2, 3), rgb(0, 0, 255))' }), (s) => colours[s])).toBeUndefined()
+      expect(pendingColours([raw({ veils: [veil({ image: 'linear-gradient(rgb(1, 2, 3), rgb(0, 0, 255))' })], colours })])).toEqual(['rgb(1, 2, 3)'])
+    })
+
+    it('a veil below the text (negative z-index) veils the background only: the worst point is on a line', () => {
+      const [row] = contrastRows([raw({ fg: [247, 244, 243, 255], layers: [[22, 17, 15, 255]], veils: [veil({ image: RULED, opacity: 0.018, under: true })], colours })])
+      const line = { r: mix(0.018, 247, 22), g: mix(0.018, 244, 17), b: mix(0.018, 243, 15) }
+      expect(row!.ratio).toBeCloseTo(wcagContrast({ r: 247, g: 244, b: 243 }, line), 6)
+      expect(row!.ratio).toBeCloseTo(16.5, 1)
+      expect(row).toMatchObject({ ok: true, note: 'faint ::before layer, worst point', fg: { r: 247, g: 244, b: 243 }, bg: { r: 26, g: 21, b: 19 } })
+      expect(row!.indeterminate).toBeUndefined()
+    })
+
+    it('a veil that may be over the text is tried over both: a 0.2 white veil over 5.3:1 grey fails', () => {
+      const grey = 0x6b
+      const plain = contrastRows([raw({ fg: [grey, grey, grey, 255], layers: [[255, 255, 255, 255]] })])[0]!
+      expect(plain.ratio).toBeGreaterThan(5)
+      const [row] = contrastRows([raw({ fg: [grey, grey, grey, 255], layers: [[255, 255, 255, 255]], veils: [veil({ colour: [255, 255, 255, 255] })] })])
+      const t = mix(0.2, 255, grey)
+      expect(row!.ratio).toBeCloseTo(wcagContrast({ r: t, g: t, b: t }, { r: 255, g: 255, b: 255 }), 6)
+      expect(row).toMatchObject({ ok: false, note: 'faint ::before layer, worst point' })
+      expect(row!.indeterminate).toBeUndefined()
+      // The same veil below the text: white over white changes nothing.
+      const [under] = contrastRows([raw({ fg: [grey, grey, grey, 255], layers: [[255, 255, 255, 255]], veils: [veil({ colour: [255, 255, 255, 255], under: true })] })])
+      expect(under!.ratio).toBeCloseTo(plain.ratio, 6)
+      expect(under).toMatchObject({ ok: true })
+    })
+
+    it('several veils compose; a veil over several gradients stays indeterminate', () => {
+      const white = veil({ colour: [255, 255, 255, 255], opacity: 0.1 })
+      const [two] = contrastRows([raw({ fg: [255, 255, 255, 255], layers: [[120, 120, 120, 255]], veils: [{ ...white, under: true }, { ...white, pseudo: '::after', under: true }] })])
+      const bg = mix(0.1, 255, mix(0.1, 255, 120))
+      expect(two!.ratio).toBeCloseTo(wcagContrast({ r: 255, g: 255, b: 255 }, { r: bg, g: bg, b: bg }), 6)
+      expect(two!.note).toBe('faint ::before and ::after layers, worst point')
+      const [several] = contrastRows([raw({ images: [img('linear-gradient(rgba(0, 0, 255, 0.5), rgba(0, 0, 255, 0.5)), linear-gradient(rgba(0, 0, 255, 0.5), rgba(0, 0, 255, 0.5))')], veils: [white], colours })])
+      expect(several!.indeterminate).toBe('effect on the text or its background: positioned ::before with a background')
+      expect(several!.ok).toBe(false)
+    })
   })
 
   describe('gradients of solid colours (a client footer is a linear-gradient, the text white/70)', () => {

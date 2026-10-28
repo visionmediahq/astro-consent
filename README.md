@@ -412,6 +412,18 @@ npx tsx ci/rollout/run.ts help
   hundredths of 4.5 on a grain site deserves a look at the screenshot. A higher z-index around the text is not taken as proof that it paints above a
   pseudo-element: a solid fixed overlay counts even under the z-99 banner. Scrolling elsewhere is
   already in both boxes; the pseudo-element's own element scrolled is indeterminate.
+- Faint colour layers are composited, not given up on (#122: a client footer's ruled texture, a
+  repeating `currentColor` line on a z-index -1 `::before` at opacity 0.018, measures 17.12:1 on the
+  plain background and 16.52:1 on a line). A positioned pseudo-element over the text that paints
+  only colours (its `background-color` and colour gradients; no `url()`, visible border, shadow,
+  outline, filter, backdrop-filter or blend mode, `content: ""`) at opacity 0.2 or less, not animated
+  in opacity, on the element with the row's innermost background or one inside it, is a veil: every
+  colour it can paint (its background colour, every gradient stop and points between them,
+  `currentColor` resolved), alpha × its opacity, is composited onto the measured background, and
+  onto the text as well unless a negative z-index in its element's own stacking context keeps it
+  below. The worst point counts, noted as `faint ::before layer, worst point`. Veils on one row
+  adding up past 0.2, a veil over several gradients, a negative z-index outside the element's own
+  stacking context, and anything above 0.2 or with a `url()` image stay indeterminate.
 - The contrast step scrolls each page through and back (as step 3 does) and waits for finite
   animations to finish: the starter's `[data-animate]` is `opacity: 0` until Motion's `inView` fades
   it in, and about 25 sites wrap an embed in one. An opacity animation still running on the text or

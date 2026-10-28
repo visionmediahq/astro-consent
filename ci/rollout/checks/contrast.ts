@@ -33,6 +33,16 @@
 // above it, mix-blend-mode, filter or backdrop-filter on the text or any ancestor, and a positioned
 // ::before/::after with a background on the way (it may sit over the text; its box is not checked).
 // Opacity on the text or a background-less wrapper is folded into the text colour instead.
+//
+// A faint positioned layer is composited instead (#122, a client footer's ruled texture: a repeating
+// currentColor line at opacity 0.018): a ::before/::after over the text that paints colours only (its
+// background colour and colour gradients; no url(), border, shadow, filter or blend) at opacity 0.2
+// or less, on the element with the row's innermost background or one inside it, is a veil. Each
+// colour it can paint (see veilColours), alpha × its opacity, is composited onto the measured
+// background, and onto the text too unless a negative z-index in its own stacking context keeps it
+// below; one that may be either is tried both ways, and not at all (its box may miss part of the
+// text). The worst counts at every background point the search tries. Veils on one row adding up past
+// 0.2, or a veil over several gradients, stay indeterminate.
 import type { Browser, Page } from '@playwright/test'
 import { luminance, type Rgb, wcagContrast } from '../lib/colour'
 import { freshPage, open } from './requests'
@@ -57,8 +67,25 @@ export interface RawContrast {
   effects?: string[]
   /** An opacity animation is still running on the text or an ancestor (a scroll-in fade). */
   animating?: boolean
+  /** Faint positioned ::before/::after layers over the text, composited instead of indeterminate (#122). */
+  veils?: RawVeil[]
   /** Stop and color-mix() strings as the page rasterised them; null when it is not a colour. Filled by measureContrast. */
   colours?: Record<string, Rgba | null>
+}
+
+/**
+ * A positioned pseudo over the text that paints colours only (a background colour, colour gradients)
+ * at opacity 0.2 or less, on an element with no background below it.
+ */
+export interface RawVeil {
+  pseudo: '::before' | '::after'
+  /** Its background-color as the canvas returns it. */
+  colour: Rgba
+  /** Its computed background-image ('none', or gradients), currentcolor replaced by its colour. */
+  image: string
+  opacity: number
+  /** A negative z-index in its element's own stacking context: painted below the text, it veils the background only. */
+  under: boolean
 }
 
 export interface BgImage {
@@ -120,8 +147,8 @@ const MEASURE = `(() => {
     return shapes.length > 0 && shapes.every((s) => /\\sfilter\\s*=/.test(s))
   }
   const shows = (c) => rgba(c)[3] > 0
-  // What a positioned pseudo paints: 'none', 'box' (inside its border box), or 'beyond' (a shadow
-  // or an outline, which reach outside it).
+  // What a positioned pseudo paints: 'none', 'box' (inside its border box), 'beyond' (a shadow or an
+  // outline, which reach outside it), 'grain' or 'veil' (faint colours inside its box).
   const paintOf = (p) => {
     // Tailwind's resting shadow (0 0 #0000) paints nothing: only a shadow with a visible colour counts.
     if (p.boxShadow && p.boxShadow !== 'none' && !(p.boxShadow.match(/rgba?\\([^)]*\\)|#[0-9a-f]+|[a-z]+\\([^)]*\\)/gi) || ['#000']).every((c) => !shows(c))) return 'beyond'
@@ -129,9 +156,16 @@ const MEASURE = `(() => {
     if (p.backdropFilter && p.backdropFilter !== 'none') return 'box'
     if (p.outlineStyle !== 'none' && px(p.outlineWidth) > 0 && shows(p.outlineColor)) return 'beyond'
     const border = ['Top', 'Right', 'Bottom', 'Left'].some((side) => px(p['border' + side + 'Width']) > 0 && !/none|hidden/.test(p['border' + side + 'Style']) && shows(p['border' + side + 'Color']))
-    if (shows(p.backgroundColor) || border) return 'box'
+    if (border) return 'box'
     const image = p.backgroundImage
-    if (!image || image === 'none') return 'none'
+    const none = !image || image === 'none'
+    // Faint colours only (#122, a client footer's ruled texture: a repeating currentColor line at
+    // opacity 0.018): a background colour and colour gradients, no url(), no blend, opacity 0.2 or
+    // less. Node composites each colour it can paint instead of giving up (see veilColours).
+    const faint = Number(p.opacity) <= 0.2 && p.mixBlendMode === 'normal' && p.backgroundBlendMode.split(',').every((v) => v.trim() === 'normal')
+    if (shows(p.backgroundColor)) return faint && (none || !/url\\(/i.test(image)) ? 'veil' : 'box'
+    if (none) return 'none'
+    if (faint && !/url\\(/i.test(image)) return 'veil'
     let grain = true
     const rest = image.replace(NOISE_URL, (_, payload) => { if (!filteredOnly(payload)) grain = false; return '' })
     if (rest.replace(/none|,|\\s/g, '') !== '') return 'box'
@@ -141,8 +175,9 @@ const MEASURE = `(() => {
   // when its containing block is known: e itself (positioned, not scrolled, and neither it nor an
   // ancestor scaled, rotated or zoomed) for absolute, the viewport for fixed (no ancestor that would
   // capture it); anything else counts. 'exempt': above the opaque layer with no z-index between,
-  // where a negative z-index paints below that layer's in-flow background.
-  const pseudoOver = (e, pseudo, text, exempt) => {
+  // where a negative z-index paints below that layer's in-flow background. 'below': a background has
+  // been seen below e; 'negInner': an element between e and the text has a negative z-index.
+  const pseudoOver = (e, pseudo, text, exempt, below, negInner) => {
     const p = getComputedStyle(e, pseudo)
     if (p.content === 'none' || p.content === 'normal' || !/absolute|fixed/.test(p.position)) return false
     // A pseudo switched off (a client site's modifier class) still computes position and background, but
@@ -150,18 +185,33 @@ const MEASURE = `(() => {
     if (p.display === 'none' || /hidden|collapse/.test(p.visibility)) return false
     if (Number(p.opacity) === 0 && !document.getAnimations().some((a) => a.effect && a.effect.target === e && a.effect.pseudoElement === pseudo)) return false
     if (exempt && parseInt(p.zIndex, 10) < 0) return false
-    const paint = paintOf(p)
+    let paint = paintOf(p)
     if (paint === 'none') return false
     if (paint === 'grain') { grainSum += Number(p.opacity); return grainSum > 0.2 }
-    if (paint === 'beyond' || moved(p) || zoomed(p) || p.offsetPath !== 'none' || p.direction === 'rtl') return true
+    const z = parseInt(p.zIndex, 10)
+    // A veil is placed on top of the background the row measures, so nothing may lie between: no
+    // background below e, no opacity animation that can lift it past 0.2, and a negative z-index only
+    // in e's own stacking context (below e's in-flow content: the text, unless that sits in a
+    // negative z-index of its own, then the veil may be over it).
+    if (paint === 'veil' && (below || document.getAnimations().some((a) => a.effect && a.effect.target === e && a.effect.pseudoElement === pseudo && a.effect.getKeyframes().some((k) => 'opacity' in k)) || (z < 0 && !stacking(e)))) paint = 'box'
+    if (paint === 'beyond') return true
+    const hit = boxOver(e, p, text)
+    if (paint === 'box' || hit !== true) return hit !== false
+    veilSum += Number(p.opacity)
+    veils.push({ pseudo, colour: rgba(p.backgroundColor), image: (p.backgroundImage || 'none').replace(/\\bcurrentcolor\\b/gi, p.color), opacity: Number(p.opacity), under: z < 0 && !negInner })
+    return veilSum > 0.2
+  }
+  // Whether p (a positioned pseudo of e) has its box over the text: 'unknown' when the box is not known.
+  const boxOver = (e, p, text) => {
+    if (moved(p) || zoomed(p) || p.offsetPath !== 'none' || p.direction === 'rtl') return 'unknown'
     let x0, y0
     if (p.position === 'absolute') {
       const s = getComputedStyle(e)
       // display: contents has no box (its rect is 0,0), whatever its position says.
-      if (s.position === 'static' || s.display === 'contents' || e.scrollTop || e.scrollLeft || (s.display === 'inline' && e.getClientRects().length > 1)) return true
+      if (s.position === 'static' || s.display === 'contents' || e.scrollTop || e.scrollLeft || (s.display === 'inline' && e.getClientRects().length > 1)) return 'unknown'
       for (let a = e; a; a = a.parentElement) {
         const t = getComputedStyle(a)
-        if (!flat(t.transform) || t.scale !== 'none' || t.rotate !== 'none' || zoomed(t) || t.offsetPath !== 'none') return true
+        if (!flat(t.transform) || t.scale !== 'none' || t.rotate !== 'none' || zoomed(t) || t.offsetPath !== 'none') return 'unknown'
       }
       const r = e.getBoundingClientRect()
       x0 = r.left + px(s.borderLeftWidth)
@@ -169,7 +219,7 @@ const MEASURE = `(() => {
     } else {
       for (let a = e; a; a = a.parentElement) {
         const s = getComputedStyle(a)
-        if (moved(s) || zoomed(s) || s.offsetPath !== 'none' || s.transformStyle === 'preserve-3d' || (s.filter && s.filter !== 'none') || s.perspective !== 'none' || (s.backdropFilter && s.backdropFilter !== 'none') || /paint|strict|content|layout/.test(s.contain) || (s.contentVisibility && s.contentVisibility !== 'visible') || /transform|translate|scale|rotate|offset|filter|perspective|contain/.test(s.willChange)) return true
+        if (moved(s) || zoomed(s) || s.offsetPath !== 'none' || s.transformStyle === 'preserve-3d' || (s.filter && s.filter !== 'none') || s.perspective !== 'none' || (s.backdropFilter && s.backdropFilter !== 'none') || /paint|strict|content|layout/.test(s.contain) || (s.contentVisibility && s.contentVisibility !== 'visible') || /transform|translate|scale|rotate|offset|filter|perspective|contain/.test(s.willChange)) return 'unknown'
       }
       x0 = 0
       y0 = 0
@@ -179,15 +229,24 @@ const MEASURE = `(() => {
     const top = y0 + px(p.top) + px(p.marginTop)
     const w = px(p.width) + extra(p.paddingLeft, p.paddingRight, p.borderLeftWidth, p.borderRightWidth)
     const h = px(p.height) + extra(p.paddingTop, p.paddingBottom, p.borderTopWidth, p.borderBottomWidth)
-    if (![left, top, w, h].every(Number.isFinite)) return true
+    if (![left, top, w, h].every(Number.isFinite)) return 'unknown'
     const ix = Math.min(left + w, text.right) - Math.max(left, text.left)
     // A fixed box is over the text whenever the text is scrolled to it: any height will do.
     const iy = p.position === 'fixed' ? h : Math.min(top + h, text.bottom) - Math.max(top, text.top)
     return ix > 0 && iy > 0
   }
+  // Genuine stacking contexts only; one this misses keeps a negative z-index veil indeterminate.
+  const stacking = (e) => {
+    const s = getComputedStyle(e)
+    return e === document.documentElement || s.isolation === 'isolate' || /fixed|sticky/.test(s.position) || (s.position !== 'static' && s.zIndex !== 'auto') || Number(s.opacity) < 1 || moved(s) || (s.filter && s.filter !== 'none') || s.mixBlendMode !== 'normal' || (s.backdropFilter && s.backdropFilter !== 'none') || /paint|strict|content|layout/.test(s.contain)
+  }
   let grainSum = 0
+  let veilSum = 0
+  let veils = []
   const layersOf = (el) => {
     grainSum = 0
+    veilSum = 0
+    veils = []
     const text = el.getBoundingClientRect()
     const layers = []
     const images = []
@@ -197,13 +256,15 @@ const MEASURE = `(() => {
     let below = false // a background has been seen below this element
     let reached = false // the first opaque background is behind us
     let zSeen = false // a z-index on the opaque element or between it and the current element
+    let negInner = false // a negative z-index on the text or between it and the current element
     for (let e = el; e; e = e.parentElement) {
       const style = getComputedStyle(e)
       const opacity = Number(style.opacity)
       if (opacityRunning(e)) animating = true
       if (style.mixBlendMode !== 'normal') effects.push('mix-blend-mode')
       if (!noFilter(style.filter)) effects.push('filter')
-      for (const pseudo of ['::before', '::after']) if (pseudoOver(e, pseudo, text, reached && !zSeen)) effects.push('positioned ' + pseudo + ' with a background')
+      for (const pseudo of ['::before', '::after']) if (pseudoOver(e, pseudo, text, reached && !zSeen, below, negInner)) effects.push('positioned ' + pseudo + ' with a background')
+      if (style.position !== 'static' && parseInt(style.zIndex, 10) < 0) negInner = true
       if (reached && style.zIndex !== 'auto') zSeen = true
       if (reached) {
         if (opacity < 1) effects.push('opacity')
@@ -228,7 +289,7 @@ const MEASURE = `(() => {
         zSeen = style.zIndex !== 'auto'
       }
     }
-    return { layers, images, fade, animating, effects: [...new Set(effects)] }
+    return { layers, images, fade, animating, effects: [...new Set(effects)], ...(veils.length ? { veils } : {}) }
   }
   const visible = (e) => e.offsetParent !== null && e.getBoundingClientRect().width > 0
   const row = (kind, e) => ({ kind, label: (e.textContent || '').trim().replace(/\\s+/g, ' ').slice(0, 40), fg: rgba(getComputedStyle(e).color), ...layersOf(e) })
@@ -451,6 +512,50 @@ const lerpSrgb = (a: Rgba, b: Rgba, t: number): Rgba => {
   return [ch(0), ch(1), ch(2), alpha]
 }
 
+/** Source-over of two colours with alpha (0..255), unrounded. */
+const overRgba = (top: Rgba, below: Rgba): Rgba => {
+  const [at, ab] = [top[3] / 255, below[3] / 255]
+  const a = at + ab * (1 - at)
+  const ch = (j: number) => (a === 0 ? 0 : (top[j]! * at + below[j]! * ab * (1 - at)) / a)
+  return [ch(0), ch(1), ch(2), a * 255]
+}
+
+const VEIL_STEPS = 8
+
+/**
+ * Every colour a faint layer can paint, with alpha × its opacity: each point of each gradient (every
+ * stop and 7 points between each pair: sRGB mixed here, any other method by the page) composited over
+ * the layers below it and its background colour. 'unknown' for a layer that is not a colour gradient;
+ * undefined while a colour is unresolved (every colour it needs is asked for all the same). At 0.2 or
+ * less a mix between the sampled points is a fraction of a level from them.
+ */
+export function veilColours(v: RawVeil, colour: (s: string) => Rgba | undefined): Rgba[] | 'unknown' | undefined {
+  let paints: Rgba[] = [v.colour]
+  let pending = false
+  for (const layer of splitTop(v.image, ',').reverse()) {
+    if (layer === 'none') continue
+    const g = gradientStops(layer)
+    if (!g) return 'unknown'
+    const stops = g.stops.map(colour)
+    if (stops.some((c) => c === undefined)) {
+      pending = true
+      continue
+    }
+    const cs = stops as Rgba[]
+    const points: Rgba[] = []
+    for (let i = 1; i < cs.length; i++)
+      for (let k = 0; k <= VEIL_STEPS; k++) {
+        const t = k / VEIL_STEPS
+        const c = !g.method || k === 0 || k === VEIL_STEPS ? lerpSrgb(cs[i - 1]!, cs[i]!, t) : colour(mixKey(g.method, g.stops[i - 1]!, g.stops[i]!, t))
+        if (c) points.push(c)
+        else pending = true
+      }
+    paints = points.flatMap((p) => paints.map((b) => overRgba(p, b)))
+    paints = [...new Map(paints.map((c) => [c.map((x) => x.toFixed(6)).join(), c])).values()]
+  }
+  return pending ? undefined : paints.map((c) => [c[0], c[1], c[2], c[3] * v.opacity] as Rgba)
+}
+
 /** Per channel, the lowest and highest value a background can take (unrounded). */
 type Box = { lo: Rgb; hi: Rgb }
 const CHANNELS = ['r', 'g', 'b'] as const
@@ -571,6 +676,45 @@ function evaluate(r: RawContrast, { margin = 1 }: ContrastOptions = {}): Evaluat
     return c ?? undefined
   }
   const fgBase: Rgba = [r.fg[0], r.fg[1], r.fg[2], r.fg[3] * (r.fade ?? 1)]
+  let unresolved = false
+  // Faint layers (#122): what each can paint; one that is not colours stays an effect, as before.
+  const veils: { v: RawVeil; cs: Rgba[] }[] = []
+  const veilEffects: string[] = []
+  for (const v of r.veils ?? []) {
+    const cs = veilColours(v, colour)
+    if (cs === 'unknown') veilEffects.push(`positioned ${v.pseudo} with a background`)
+    else if (cs === undefined) unresolved = true
+    else veils.push({ v, cs })
+  }
+  type Pick = { c: Rgba; under: boolean } | undefined
+  type Look = { bg: Rgb; fg: Rgb; ratio: number }
+  // Veils below the text over the background, the text, then veils over both.
+  const look = (bg: Rgb, picks: Pick[]): Look => {
+    let b = bg
+    for (const p of picks) if (p?.under) b = over(p.c, b)
+    let fg = over(fgBase, b)
+    for (const p of picks)
+      if (p && !p.under) {
+        b = over(p.c, b)
+        fg = over(p.c, fg)
+      }
+    return { bg: b, fg, ratio: wcagContrast(fg, b) }
+  }
+  // The worst colour of each veil in turn, given the ones before it (or none: it may miss the text).
+  const veiled = (bg: Rgb): Look => {
+    const picks: Pick[] = []
+    let worst = look(bg, picks)
+    for (const { v, cs } of veils) {
+      let pick: Pick
+      for (const c of cs)
+        for (const under of v.under ? [true] : [true, false]) {
+          const l = look(bg, [...picks, { c, under }])
+          if (l.ratio < worst.ratio) [worst, pick] = [l, { c, under }]
+        }
+      picks.push(pick)
+    }
+    return worst
+  }
   const es = entries(r)
   // Everything beneath the topmost opaque layer that covers the box is hidden.
   let start = es.length - 1
@@ -586,11 +730,10 @@ function evaluate(r: RawContrast, { margin = 1 }: ContrastOptions = {}): Evaluat
   for (const e of colours(gi < 0 ? shown : shown.slice(0, gi))) beneath = over(e.c, beneath)
   const above = gi < 0 ? [] : colours(shown.slice(gi + 1))
   const withAbove = (bg: Rgb) => above.reduce((b, e) => over(e.c, b), bg)
-  const ratioOn = (bg: Rgb) => wcagContrast(over(fgBase, bg), bg)
+  const ratioOn = (bg: Rgb) => veiled(bg).ratio
 
   type Worst = { bg: Rgb; ratio: number; stop: boolean }
   let worst: Worst = { bg: withAbove(beneath), ratio: ratioOn(withAbove(beneath)), stop: true }
-  let unresolved = false
   const g = gradients.length === 1 ? (gradients[0] as { kind: 'gradient' } & Gradient) : undefined
   if (g) {
     const stops = g.stops.map(colour)
@@ -637,7 +780,9 @@ function evaluate(r: RawContrast, { margin = 1 }: ContrastOptions = {}): Evaluat
     }
     if (!unresolved) worst = { ...boxWorst(fgBase, box), stop: true }
   }
-  const effects = r.effects ?? []
+  // A veil over several gradients is not folded into their bound: indeterminate, as before #122.
+  if (gradients.length > 1) for (const { v } of veils) veilEffects.push(`positioned ${v.pseudo} with a background`)
+  const effects = [...new Set([...(r.effects ?? []), ...veilEffects])]
   const indeterminate = r.animating
     ? 'animation not settled'
     : effects.length
@@ -657,13 +802,20 @@ function evaluate(r: RawContrast, { margin = 1 }: ContrastOptions = {}): Evaluat
   // Several gradients: the box is widened already (dither never leaves the stops' range); only the
   // text's own rounding is added.
   const softText = fgBase[3] < 255
+  // The text and background the worst point shows, veils included.
+  const shownAt = gradients.length > 1 ? { bg: worst.bg, fg: over(fgBase, worst.bg) } : veiled(worst.bg)
   let painted = worst.ratio
   if (!indeterminate && worst.ratio >= 4.5) {
     if (gradients.length > 1) {
       if (softText) painted = boxWorst(fgBase, box, margin).ratio
     } else {
       const layers = shown.filter((e) => e.kind === 'colour' && e.c[3] > 0 && e.c[3] < 255).length + (g ? 1 : 0)
-      if (layers || softText) {
+      if (veils.length) {
+        // Each veil is one more translucent layer the page rounds, on the background and on the text.
+        let around: Box = { lo: shownAt.bg, hi: shownAt.bg }
+        for (let i = 0; i < layers + veils.length; i++) around = widen(around, margin)
+        painted = boxWorst([shownAt.fg.r, shownAt.fg.g, shownAt.fg.b, 255], around, margin).ratio
+      } else if (layers || softText) {
         let around: Box = { lo: worst.bg, hi: worst.bg }
         for (let i = 0; i < layers; i++) around = widen(around, margin)
         painted = boxWorst(fgBase, around, softText ? margin : 0).ratio
@@ -680,6 +832,7 @@ function evaluate(r: RawContrast, { margin = 1 }: ContrastOptions = {}): Evaluat
           : gradients.length > 1
             ? `${gradients.length} gradients, bound over all stops${methods.size ? `; points between stops sampled in ${[...methods].join(', ')}` : ''}`
             : undefined,
+      veils.length && !veilEffects.length ? `faint ${[...new Set(veils.map(({ v }) => v.pseudo))].join(' and ')} layer${veils.length > 1 ? 's' : ''}, worst point` : undefined,
       marginal,
     ]
       .filter(Boolean)
@@ -689,8 +842,8 @@ function evaluate(r: RawContrast, { margin = 1 }: ContrastOptions = {}): Evaluat
     button: r.label,
     ratio: worst.ratio,
     ok: worst.ratio >= 4.5 && painted >= 4.5 && !indeterminate,
-    fg: round(over(fgBase, worst.bg)),
-    bg: round(worst.bg),
+    fg: round(shownAt.fg),
+    bg: round(shownAt.bg),
     ...(indeterminate ? { indeterminate } : {}),
     ...(note ? { note } : {}),
   }
