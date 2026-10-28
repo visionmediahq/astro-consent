@@ -241,6 +241,14 @@ const FIXTURES: Record<string, string> = {
   cutokx: page(`<style>html,body{height:100%}body{overflow-x:hidden}</style><div style="height:900px"></div>${cutPlaceholder('m')}`),
   // The button fits, but the row's "Visa alltid" and "Öppna" wrap below the box's edge.
   cutrow: page(`<style>.m{height:300px;overflow:hidden}</style><div class="m"><div data-consent-embed="google-maps"><p style="height:270px;margin:0">Google Maps</p><button data-load>Visa</button><br><label><input type="checkbox" data-remember> Visa alltid</label><br><a data-open href="${MAPS}">Öppna</a></div></div>`),
+  // #122 (a client site): a ruled texture, a repeating currentColor line on a z-index -1 ::before at
+  // opacity 0.018 in an isolated footer, is composited onto the background instead of giving up.
+  faintlines: page(`<style>.textured{position:relative;isolation:isolate;background:#16110f;color:#f7f4f3;padding:24px}.textured::before{content:'';position:absolute;inset:0;z-index:-1;pointer-events:none;background-image:repeating-linear-gradient(180deg,currentColor 0,currentColor 1px,transparent 1px,transparent 34px);opacity:.018}</style><footer class="textured"><div data-privacy-links><button data-consent-open style="color:inherit;background:none;border:0">Cookie-inställningar</button> <a href="/integritet" style="color:inherit">Integritetspolicy</a></div></footer>`),
+  // A 0.2 white veil over the text (no z-index) turns 5.3:1 grey into a fail; at 0.3 it is no longer
+  // faint, and a faint url() image is not colours: both stay indeterminate.
+  faintveil: page(`<style>${PF.replace('#000', '#fff')}footer::before{content:"";position:absolute;inset:0;background:#fff;opacity:.2}</style><footer><div data-privacy-links><a href="/integritet" style="color:#6b6b6b">Integritetspolicy</a></div></footer>`),
+  faintveil3: page(`<style>${PF.replace('#000', '#fff')}footer::before{content:"";position:absolute;inset:0;background:#fff;opacity:.3}</style><footer><div data-privacy-links><a href="/integritet" style="color:#6b6b6b">Integritetspolicy</a></div></footer>`),
+  fainturl: page(`<style>${PF}footer::before{content:"";position:absolute;inset:0;background-image:url("/texture.png");opacity:.1}</style><footer>${whiteLink}</footer>`),
   // #102 (a client site): Astro's experimental.csp hashes every <style> it emits and allows no
   // other, so an injected <style> is refused. The banner is styled by the one hashed block.
   csp: (() => {
@@ -486,6 +494,18 @@ try {
     {
       const rows = await links('/ctxfixed/')
       expect(rows.length === 1 && rows.every((r) => !r.ok && r.indeterminate === 'effect on the text or its background: positioned ::after with a background'), '/ctxfixed/ a white fixed overlay under a z-50 text wrapper without a background: indeterminate', rows)
+    }
+    {
+      const lines = await links('/faintlines/')
+      expect(lines.length === 2 && lines.every((r) => r.ok && !r.indeterminate && Math.abs(r.ratio - 16.5) < 0.1 && r.note === 'faint ::before layer, worst point'), '/faintlines/ a 0.018 currentColor line texture below the text is composited: about 16.5:1 on a line, not 17.12 (#122, a client footer)', lines)
+      const veil = await links('/faintveil/')
+      const t = 0.2 * 255 + 0.8 * 0x6b
+      const want = wcagContrast({ r: t, g: t, b: t }, { r: 255, g: 255, b: 255 })
+      expect(veil.length === 1 && veil.every((r) => !r.ok && !r.indeterminate && Math.abs(r.ratio - want) < 0.05 && r.note === 'faint ::before layer, worst point'), '/faintveil/ a 0.2 white veil over 5.3:1 grey text fails, determinately', { veil, want })
+      for (const [path, what] of [['/faintveil3/', 'the same veil at opacity 0.3'], ['/fainturl/', 'a url() image at opacity 0.1']] as const) {
+        const rows = await links(path)
+        expect(rows.length === 1 && rows.every((r) => !r.ok && r.indeterminate === 'effect on the text or its background: positioned ::before with a background'), `${path} ${what}: indeterminate`, rows)
+      }
     }
     const up = await links('/backdropup/')
     expect(up.length === 1 && up.every((r) => r.ok && !r.indeterminate), '/backdropup/ backdrop-filter above the opaque layer and filter: grayscale(0) do not count', up)
