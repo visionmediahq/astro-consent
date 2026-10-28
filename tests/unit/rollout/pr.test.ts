@@ -497,6 +497,37 @@ describe('openPr on consent-banner with the fonts commit', () => {
   })
 })
 
+// ── Sentry's bundle (#93) ────────────────────────────────────────────────────────────────────
+
+describe('the banner body with the Sentry commit', () => {
+  test('renderBody: the paragraph names what the commit replaced, and the step comes last', () => {
+    const jsd = renderBody(template, { kind: 'notice', services: [], verify: PASS, issues: [], domain: 'kund.se', sentry: { cdns: ['jsdelivr'] } })
+    expect(jsd).toContain('- Skriptet för felrapporteringen (Sentry, som skickar fel till vår GlitchTip när sajtens `PUBLIC_GLITCHTIP_DSN` är satt) laddas från sajten själv, `/js/sentry-8.55.2.min.js`, i en egen commit. Inget syns på sidan. Den gamla adressen (`cdn.jsdelivr.net`) svarade 404')
+    expect(jsd).not.toContain('Sentrys CDN i USA')
+    expect(jsd).toMatch(/^3\. Klicka "Cookie-inställningar"[^\n]*\n4\. I nätverksfliken: inga anrop till `browser\.sentry-cdn\.com`/m)
+    const cdn = renderBody(template, { kind: 'consent', services: ['google-maps'], verify: PASS, issues: [], domain: 'kund.se', fonts: { families: ['Figtree'] }, sentry: { cdns: ['sentry-cdn'] } })
+    expect(cdn).toContain('Förut hämtades det från Sentrys CDN i USA (`browser.sentry-cdn.com`)')
+    expect(cdn).not.toContain('svarade 404')
+    expect(cdn).toMatch(/^5\. Öppna webbläsarens nätverksflik[^\n]*\n6\. I nätverksfliken: inga anrop/m)
+  })
+
+  test('without the commit nothing about Sentry is in the body', () => {
+    expect(renderBody(template, { kind: 'notice', services: [], verify: PASS, issues: [], domain: 'kund.se' })).not.toMatch(/sentry/i)
+  })
+
+  test('openPr adds it when the branch changes the bundle file, with the CDNs from report.sentry', async () => {
+    const dir = siteDir()
+    const loader = { file: 'src/layouts/Base.astro', line: 9, cdn: 'jsdelivr', version: '8', url: 'x', kind: 'element', src: { start: 0, end: 1 }, cuts: [] }
+    writeFileSync(join(dir, '.rollout/report.json'), JSON.stringify(report({ classification: 'consent', sentry: { status: 'wire', loaders: [loader], selfHosted: [], reasons: [] } } as Partial<Report>)))
+    const f = fake({ 'git diff --name-only origin/main...HEAD': { code: 0, out: 'public/js/sentry-8.55.2.min.js\nsrc/layouts/Base.astro\nsrc/data/privacy.json\n' } })
+    await openPr(dir, opts(f))
+    const body = readFileSync(join(dir, '.rollout/pr-body.md'), 'utf8')
+    expect(body).toContain('laddas från sajten själv, `/js/sentry-8.55.2.min.js`')
+    expect(body).toContain('svarade 404')
+    expect(body).toContain('- `public/js/sentry-8.55.2.min.js`')
+  })
+})
+
 // ── astro-consent-update ─────────────────────────────────────────────────────────────────────
 
 const OLD = 'c258167ff9c28a92eab5f4b414e575701e9cebd3'

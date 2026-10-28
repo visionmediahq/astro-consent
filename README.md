@@ -587,7 +587,8 @@ npx tsx ci/rollout/run.ts help
     8.55.2 or jsDelivr's floating `@8`. A refused plan (a failed or mismatching download, the file
     already there, a stale report, a report stored before Sentry detection) refuses the whole wire
     (exit 3); `--no-sentry` wires without it. A CSP is not edited: every one seen allows `'self'`
-    for scripts.
+    for scripts. `pr` adds a paragraph and a test step to the banner body when the branch adds the
+    bundle, saying what it replaced (Sentry's US CDN before any choice, or jsDelivr's 404).
   - What the checks can see: `verify` builds without the DSN, so the block never renders locally.
     Step 2 reads the branch's source instead (`checks/sentry.ts`): with the bundle committed, it
     must hash to the SRI and `detect` must find no CDN load left and `/js/sentry-8.55.2.min.js`

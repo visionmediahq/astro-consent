@@ -106,7 +106,8 @@ Not part of the package (`files` is unchanged) and not a release.
   `crossorigin` cut. `detect` writes `report.sentry`; a load it cannot rewrite is a needs-human
   reason. browser.sentry-cdn.com and jsDelivr's `/npm/@sentry/` are no longer agreed script hosts.
   `verify` step 2 checks the committed bundle's hash and that no source still loads a CDN, and
-  steps 3, 4, 9 and `live` count requests to either CDN before consent.
+  steps 3, 4, 9 and `live` count requests to either CDN before consent. The banner PR body says
+  what the Sentry commit replaced.
 - `update <site dir>`: a third flow, `astro-consent-update`, moves a live site's lockfile to the
   latest release (only `package.json` and `package-lock.json`, one commit). It and the other two
   flows refuse each other's open PRs and unmerged branches (`others` in `FLOWS`); verify runs every
