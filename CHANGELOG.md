@@ -111,6 +111,10 @@ Not part of the package (`files` is unchanged) and not a release.
   loads, a `<script src>` without `is:inline` is refused, and an `async`/`defer` bundle whose
   `Sentry.init` runs first is noted (`initBeforeBundle`), not changed. A stored `report.json` from
   before needs `detect` again.
+- `sentry <site dir>`: a fourth flow, `sentry-selfhost`, self-hosts Sentry's bundle alone on a
+  site whose banner is live (the commit `wire` makes last), with its own PR body, state files and
+  verify steps (1, 2, 3, 5, 7, 9; 8 when main self-hosts the fonts). Every flow refuses the others'
+  open PRs and unmerged branches.
 - `update <site dir>`: a third flow, `astro-consent-update`, moves a live site's lockfile to the
   latest release (only `package.json` and `package-lock.json`, one commit). It and the other two
   flows refuse each other's open PRs and unmerged branches (`others` in `FLOWS`); verify runs every

@@ -6,6 +6,7 @@
 //   tsx ci/rollout/run.ts fonts  <site dir> [--dry-run]       Google Fonts alone, branch fonts-selfhost
 //   tsx ci/rollout/run.ts fonts-files <site dir> --url <css2 url> [--entry <css>] [--dry-run]   files only, no git
 //   tsx ci/rollout/run.ts update <site dir>              the lockfile on the latest release, branch astro-consent-update
+//   tsx ci/rollout/run.ts sentry <site dir> [--dry-run]       Sentry's bundle alone, branch sentry-selfhost
 //   tsx ci/rollout/run.ts verify <site dir>
 //   tsx ci/rollout/run.ts verify --demo <dist dir>   CI/self-test: a built demo, no git/npm/Docker
 //   tsx ci/rollout/run.ts pr     <site dir> --shots-dir <path> --shots-base <url> [--issue <url>]...
@@ -34,7 +35,7 @@ import { openPr, originRepo } from './pr'
 import { PKG, verify, verifyOutput } from './verify'
 import { main as mainFontsFiles } from './fonts-files'
 import { commitFonts, FONTS_BRANCH, type FontFetch, type FontsFile, fontsFiles, fontsTargetsTaken, planFonts } from './wire/fonts'
-import { commitSentry, planSentry, type SentryFile, sentryFiles } from './wire/sentry'
+import { commitSentry, planSentry, SENTRY_BRANCH, type SentryFile, sentryFiles } from './wire/sentry'
 import { applyWire, BRANCH, changedPaths, commitAllowed, keepOrphans, planFiles, planWire, refusalLines, startBranch } from './wire/index'
 import { compareVersions, consentVersionAt, installedOf, npmUpdate, reaskLine, RELEASE, UPDATE_BRANCH, updateCommitMessage, updateSpec } from './wire/update'
 
@@ -43,6 +44,7 @@ const WIRE_USAGE = 'usage: tsx ci/rollout/run.ts wire <site dir> [--dry-run] [--
 const FONTS_USAGE = 'usage: tsx ci/rollout/run.ts fonts <site dir> [--dry-run]'
 const FONTS_FILES_USAGE = 'usage: tsx ci/rollout/run.ts fonts-files <site dir> --url <css2 url> [--entry <css file>] [--dry-run]'
 const UPDATE_USAGE = 'usage: tsx ci/rollout/run.ts update <site dir>'
+const SENTRY_USAGE = 'usage: tsx ci/rollout/run.ts sentry <site dir> [--dry-run]'
 const VERIFY_USAGE = 'usage: tsx ci/rollout/run.ts verify <site dir> | verify --demo <dist dir>'
 const PR_USAGE =
   'usage: tsx ci/rollout/run.ts pr <site dir> --shots-dir <path in site-factory> --shots-base <github url of that folder> [--issue <url>]... [--domain <d>]'
@@ -54,6 +56,7 @@ export const USAGE = [
   FONTS_USAGE,
   FONTS_FILES_USAGE,
   UPDATE_USAGE,
+  SENTRY_USAGE,
   VERIFY_USAGE,
   PR_USAGE,
   LIVE_USAGE,
@@ -66,7 +69,7 @@ export const USAGE = [
   '  0  ok (live baseline: also the expected RED)',
   '  1  error, a failed verify step, or a live/merge STOP',
   '  2  usage: bad command or arguments',
-  '  3  wire, fonts, fonts-files, update: the plan was refused (dry run or not); nothing was written',
+  '  3  wire, fonts, fonts-files, update, sentry: the plan was refused (dry run or not); nothing was written',
   '  4  verify: its ports are taken (another verify, or a server a killed run left); nothing was run, rerun later',
 ].join('\n')
 /** Exit code of a refused wire plan (Ruling 32). */
@@ -342,7 +345,7 @@ async function flowConflicts(root: string, branch: FlowBranch, stage: string, op
     throw unknown(`git ls-remote --heads origin refs/heads/${branch}`, e)
   }
   const sha = listed.split('\n').map((l) => l.trim().split(/\s+/)).find(([, ref]) => ref === `refs/heads/${branch}`)?.[0]
-  const what = branch === BRANCH ? 'the banner' : branch === FONTS_BRANCH ? 'the fonts' : 'the update'
+  const what = branch === BRANCH ? 'the banner' : branch === FONTS_BRANCH ? 'the fonts' : branch === SENTRY_BRANCH ? 'the Sentry bundle' : 'the update'
   if (sha) {
     // Both tips as GitHub has them now: main may have moved since the clone's last fetch.
     try {
@@ -401,6 +404,49 @@ export async function runFonts(
   if (opts.dryRun) return { code: 0, output: `${lines.join('\n')}\n\n${diffOf(files, (p) => p.endsWith('.css'))}` }
   commitFonts(root, files, { branch: FONTS_BRANCH })
   lines.push(`committed on ${FONTS_BRANCH}`)
+  return { code: 0, output: `${lines.join('\n')}\n` }
+}
+
+export function parseSentryArgs(args: string[]): { dir: string; dryRun: boolean } {
+  let dir: string | null = null
+  let dryRun = false
+  for (const arg of args) {
+    if (arg === '--dry-run') dryRun = true
+    else if (arg.startsWith('-')) throw new Error(`unknown option ${arg}\n${SENTRY_USAGE}`)
+    else if (dir === null) dir = arg
+    else throw new Error(`one site dir only\n${SENTRY_USAGE}`)
+  }
+  if (dir === null) throw new Error(SENTRY_USAGE)
+  return { dir, dryRun }
+}
+
+/**
+ * sentry <site dir>: self-hosts Sentry's bundle on a site whose banner is already live (#93), on a
+ * new branch sentry-selfhost from origin/main with one commit (startBranch's checks). A dry run
+ * prints the diff and writes nothing. Exit code 3 when the plan is refused, or while another flow
+ * has an open PR or a branch on origin that main does not contain.
+ */
+export async function runSentry(
+  dir: string,
+  opts: { dryRun: boolean; bundle?: () => Promise<Uint8Array>; openPrs?: OpenPrs },
+): Promise<{ code: number; output: string }> {
+  const root = resolve(dir)
+  const report = readReport(root)
+  const site = diskSite(root)
+  const lines = [summary(report)]
+  const refused = (reasons: string[]) => {
+    lines.push(`sentry: refused, nothing ${opts.dryRun ? 'would be' : 'was'} written`, ...reasons.map((l) => `  ${l}`))
+    return { code: EXIT_REFUSED, output: `${lines.join('\n')}\n` }
+  }
+  const conflicts = await othersConflicts(root, SENTRY_BRANCH, 'sentry', opts.openPrs ?? openPrsOn)
+  if (conflicts.length) return refused(conflicts)
+  const sp = await planSentry(site, report, opts.bundle ? { bundle: opts.bundle } : {})
+  if (!sp.ok) return refused(refusalLines(sp))
+  const files = sentryFiles((path) => site.read(path), sp)
+  lines.push(...sp.notes, ...fileLines(files))
+  if (opts.dryRun) return { code: 0, output: `${lines.join('\n')}\n\n${diffOf(files)}` }
+  commitSentry(root, files, { branch: SENTRY_BRANCH })
+  lines.push(`committed on ${SENTRY_BRANCH}`)
   return { code: 0, output: `${lines.join('\n')}\n` }
 }
 
@@ -692,6 +738,24 @@ async function mainFonts(rest: string[]): Promise<number> {
   }
 }
 
+async function mainSentry(rest: string[]): Promise<number> {
+  let args: ReturnType<typeof parseSentryArgs>
+  try {
+    args = parseSentryArgs(rest)
+  } catch (e) {
+    console.error((e as Error).message)
+    return 2
+  }
+  try {
+    const { code, output } = await runSentry(args.dir, { dryRun: args.dryRun })
+    process.stdout.write(output)
+    return code
+  } catch (e) {
+    console.error((e as Error).message)
+    return 1
+  }
+}
+
 async function mainUpdate(rest: string[]): Promise<number> {
   let args: ReturnType<typeof parseUpdateArgs>
   try {
@@ -720,6 +784,7 @@ export async function main(argv: string[]): Promise<number> {
   if (command === 'fonts') return mainFonts(rest)
   if (command === 'fonts-files') return mainFontsFiles(rest)
   if (command === 'update') return mainUpdate(rest)
+  if (command === 'sentry') return mainSentry(rest)
   if (command === 'verify') return mainVerify(rest)
   if (command === 'pr') return mainPr(rest)
   if (command === 'live') return mainLive(rest)

@@ -406,8 +406,8 @@ function mergeExec(o: { moved?: boolean; head: { sha: string }; rebaseFails?: bo
       return { code: 0, out: JSON.stringify({ state: o.state ?? 'OPEN', headRefName: 'consent-banner' }) }
     if (line.startsWith('gh pr merge 7 ')) return { code: 0, out: '' }
     if (line === 'gh pr view 7 -R visionmediahq/site-1277834673 --json mergeCommit') return { code: 0, out: JSON.stringify({ mergeCommit: { oid: SHA } }) }
-    // No fonts-selfhost or astro-consent-update branch or PR on GitHub.
-    for (const other of ['fonts-selfhost', 'astro-consent-update']) {
+    // No fonts-selfhost, astro-consent-update or sentry-selfhost branch or PR on GitHub.
+    for (const other of ['fonts-selfhost', 'astro-consent-update', 'sentry-selfhost']) {
       if (line === `git ls-remote --heads origin refs/heads/${other}`) return { code: 0, out: '' }
       if (line === `gh pr list -R visionmediahq/site-1277834673 --head ${other} --state open --json url,title`) return { code: 0, out: '[]' }
     }

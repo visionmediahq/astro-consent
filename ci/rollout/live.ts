@@ -1,5 +1,5 @@
 // The live stage (spec C5): the checks of C3 steps 3, 4, 6 and 8 against the live domains. Live
-// sites are never stubbed: registry and Google Fonts requests are counted, never blocked, and
+// sites are never stubbed: registry, Sentry CDN (#93) and Google Fonts requests are counted, never blocked, and
 // nothing is clicked before they are counted. The clone's branch picks the flow (flows.ts), whose
 // state files it reads and writes.
 //
@@ -19,12 +19,13 @@
 //               (DOM included) on every page, no console error that is not in the baseline, the
 //               consent paths on pages with an embed, every contrast row ok; and when the merged
 //               main self-hosts the fonts, zero Google Fonts requests, every /fonts/*.woff2 200 and
-//               every face used loaded, at 360 and 1280 px. fonts-selfhost on a site without the
-//               banner on main checks the fonts and console errors only. A failing domain is
+//               every face used loaded, at 360 and 1280 px. fonts-selfhost (or sentry-selfhost) on
+//               a site without the banner on main checks the fonts and console errors only. A failing domain is
 //               checked again after 30 s; a second failure is a STOP. A pass deletes the clone's
 //               node_modules and dist (#23).
 //
-// The result goes to .rollout/live-<mode>.json (fonts-selfhost: each name with -fonts-selfhost).
+// The result goes to .rollout/live-<mode>.json (fonts-selfhost: each name with -fonts-selfhost;
+// sentry-selfhost likewise).
 import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import type { Browser } from '@playwright/test'
@@ -262,11 +263,14 @@ export async function live(
   const git = (...args: string[]) => deps.exec('git', args, root)
   let checks: LiveChecks | null = null
   const getChecks = async () => (checks ??= await deps.checks())
-  /** What main at `ref` asks of each domain: the banner unless fonts-selfhost has none; the fonts when main self-hosts them. */
+  /**
+   * What main at `ref` asks of each domain: the banner unless a self-hosting flow (fonts-selfhost,
+   * sentry-selfhost) finds none there; the fonts when main self-hosts them.
+   */
   const domainChecks = async (ref: string): Promise<DomainChecks> => {
     const css = await fontsCssAt(deps.exec, root, ref)
     let banner = true
-    if (branch === 'fonts-selfhost') {
+    if (flow.selfHosting) {
       const pkg = await git('show', `${ref}:package.json`)
       if (pkg.code !== 0) throw new Error(`git show ${ref}:package.json failed, so whether main has the banner is unknown:\n${tail(pkg.out)}`)
       banner = hasPackage(pkg.out)

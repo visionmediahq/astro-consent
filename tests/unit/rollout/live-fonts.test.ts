@@ -241,9 +241,11 @@ describe('merge on fonts-selfhost', () => {
       if (line === `git merge-base --is-ancestor ${'d'.repeat(40)} origin/main`) return { code: o.otherBranch === 'merged' ? 0 : 1, out: '' }
       if (line === 'gh pr list -R visionmediahq/site-1277834673 --head consent-banner --state open --json url,title')
         return { code: 0, out: JSON.stringify(o.otherPr ? [{ url: 'https://github.com/visionmediahq/site-1277834673/pull/3', title: 'Samtyckesbanner (astro-consent)' }] : []) }
-      // No astro-consent-update branch or PR on GitHub.
-      if (line === 'git ls-remote --heads origin refs/heads/astro-consent-update') return { code: 0, out: '' }
-      if (line === 'gh pr list -R visionmediahq/site-1277834673 --head astro-consent-update --state open --json url,title') return { code: 0, out: '[]' }
+      // No astro-consent-update or sentry-selfhost branch or PR on GitHub.
+      for (const other of ['astro-consent-update', 'sentry-selfhost']) {
+        if (line === `git ls-remote --heads origin refs/heads/${other}`) return { code: 0, out: '' }
+        if (line === `gh pr list -R visionmediahq/site-1277834673 --head ${other} --state open --json url,title`) return { code: 0, out: '[]' }
+      }
       return { code: 1, out: `unexpected: ${line}` }
     }
     return { exec, calls }
@@ -302,5 +304,35 @@ describe('merge on fonts-selfhost', () => {
     const h = mergeExec()
     expect(await merge(legacy, 7, { deps: deps(h.exec, []) })).toMatchObject({ status: 'stop', reason: '.rollout/live-baseline-fonts-selfhost.txt not found: run the live baseline before the merge' })
     expect([...g.calls, ...h.calls].some((c) => c.startsWith('gh pr merge'))).toBe(false)
+  })
+})
+
+// ── sentry-selfhost (#93) ────────────────────────────────────────────────────────────────────
+
+describe('live post-merge on sentry-selfhost', () => {
+  const state = () => siteDir({ 'apps-sentry-selfhost.json': JSON.stringify(APPS), 'live-baseline-sentry-selfhost.txt': '' })
+
+  test('main has the banner: the banner checks on every domain, its own state files', async () => {
+    const dir = state()
+    const c = checks()
+    const r = await live(dir, 'post-merge', SHA, { deps: liveDeps(c.checks, git({ branch: 'sentry-selfhost', fonts: false }).exec) })
+    expect(r.status).toBe('pass')
+    expect(r.lines).toContain('checks: banner')
+    expect(c.calls.map((x) => x.what)).toEqual(['requests', 'contrast'])
+    expect(existsSync(join(dir, '.rollout/live-post-merge-sentry-selfhost.json'))).toBe(true)
+  })
+
+  test("a request to Sentry's CDN before consent is a STOP", async () => {
+    const c = checks({ requests: (p) => p.map((x) => req(x, { blocked: ['https://browser.sentry-cdn.com/8.55.0/bundle.min.js'], ok: false })) })
+    const r = await live(state(), 'post-merge', SHA, { deps: liveDeps(c.checks, git({ branch: 'sentry-selfhost', fonts: false }).exec) })
+    expect(r.status).toBe('stop')
+  })
+
+  test('without the banner on main: no banner expected, console errors only', async () => {
+    const c = checks({ requests: (p) => p.map((x) => req(x, { banner: false, banners: 0, ok: false })) })
+    const r = await live(state(), 'post-merge', SHA, { deps: liveDeps(c.checks, git({ branch: 'sentry-selfhost', fonts: false, banner: false }).exec) })
+    expect(r.status).toBe('pass')
+    expect(c.calls[0]!.expectBanner!('/')).toBe(false)
+    expect(r.lines).toContain('checks: console errors only')
   })
 })

@@ -201,11 +201,11 @@ describe('run.ts update', { timeout: 20_000 }, () => {
     expect(output).toContain('EVERY VISITOR IS ASKED AGAIN: CONSENT_VERSION 1 → 2')
   })
 
-  test('asks GitHub about the other two flows; an open PR or an unmerged branch of either refuses (exit 3), nothing written', async () => {
+  test('asks GitHub about the other three flows; an open PR or an unmerged branch of any refuses (exit 3), nothing written', async () => {
     const asked: string[] = []
     const dir = live()
     expect((await runUpdate(dir, opts({ openPrs: async (_r, b) => (asked.push(b), []) }))).code).toBe(0)
-    expect(asked).toEqual(['consent-banner', 'fonts-selfhost'])
+    expect(asked).toEqual(['consent-banner', 'fonts-selfhost', 'sentry-selfhost'])
 
     const open = live()
     const refused = await runUpdate(open, opts({ openPrs: async (_r, b) => (b === 'fonts-selfhost' ? ['https://github.com/visionmediahq/site/pull/7'] : []) }))

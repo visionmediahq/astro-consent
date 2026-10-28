@@ -5,12 +5,14 @@
 // fonts-selfhost with the branch in each name: evidence-fonts-selfhost/, verify-fonts-selfhost.json).
 //
 //   1 lockfile    npm ci in both; package-lock diff against main within the allowlist, and
-//                 `npm ls astro vite @tailwindcss/vite` the same on both sides. fonts-selfhost:
-//                 package.json and package-lock.json exactly main's, and only the fonts' files changed
+//                 `npm ls astro vite @tailwindcss/vite` the same on both sides. fonts-selfhost and
+//                 sentry-selfhost: package.json and package-lock.json exactly main's, and only the
+//                 fonts' (or the Sentry bundle's) files changed
 //   2 build       npm run build on the branch; on consent-banner, every daisyUI part the banner
 //                 uses has a rule in the built CSS (#101; demo mode runs only this); with the tool's
 //                 Sentry bundle committed, it hashes to the recorded SRI and no source still loads
-//                 Sentry from a CDN (checks/sentry.ts; without it, a CDN load is noted) (#93)
+//                 Sentry from a CDN (checks/sentry.ts; without it, a CDN load is noted, and on
+//                 sentry-selfhost it is a failure) (#93)
 //   3 requests    main and branch previews over every built page: main RED (or noted green), the
 //                 branch shows the banner, requests nothing from the registry (or Sentry's CDNs,
 //                 #93) before consent and logs no console error main didn't; a registry request on
@@ -74,7 +76,8 @@ import { isUp, type Preview, previewLog, ssrEntry, startPreview } from './previe
 import { type Flow, FLOWS, flowOf, FONTS_MARKER, isToolFontsCss, statePath, STEPS, type StepName } from './flows'
 import type { Report, StepResult, VerifyResult } from './types'
 import type { ServiceSlug } from '../../src/services'
-import { CHROME_UA, FONTS_BRANCH, FONTS_CSS, FONTS_DIR, type FontFetch, httpFetch } from './wire/fonts'
+import { CHROME_UA, FONTS_CSS, FONTS_DIR, type FontFetch, httpFetch } from './wire/fonts'
+import { SENTRY_BRANCH } from './wire/sentry'
 import { compareVersions, installedOf, UPDATE_BRANCH } from './wire/update'
 import { type Face, parseCss2 } from './wire/fonts-css'
 
@@ -299,6 +302,12 @@ export function hasPackage(pkg: string): boolean {
   }
 }
 
+/** The paths the Sentry commit may change (sentry-selfhost step 1): the bundle and the files report.sentry found the loads in. */
+export function sentryPaths(report: Report): (path: string) => boolean {
+  const files = new Set<string>([SENTRY_FILE, ...(report.sentry?.loaders ?? []).map((l) => l.file)])
+  return (path) => files.has(path)
+}
+
 /** The paths the fonts commit may change (fonts-selfhost step 1), from the report detect wrote on main. */
 export function fontsPaths(report: Report): (path: string) => boolean {
   const files = new Set<string>([
@@ -443,9 +452,9 @@ async function runVerify(dir: string, report: Report, opts: VerifyOptions, deps:
   const fontsCss = demo || !existsSync(join(root, FONTS_CSS)) ? null : readFileSync(join(root, FONTS_CSS), 'utf8')
   const selfHosts = isToolFontsCss(fontsCss)
   const runs = (name: StepName): boolean => flow.steps.includes(name) || (name === 'fonts' && selfHosts)
-  // fonts-selfhost before the banner (a site without it on main): no banner is expected anywhere.
+  // A self-hosting flow before the banner (a site without it on main): no banner is expected anywhere.
   let bannerOnMain = true
-  if (!demo && BRANCH === FONTS_BRANCH) {
+  if (!demo && flow.selfHosting) {
     const pkg = await git('show', 'origin/main:package.json')
     if (pkg.code !== 0) {
       record(0, 'main', { pass: false, lines: ['git show origin/main:package.json failed, so whether main has the banner is unknown:', tail(pkg.out)] })
@@ -526,13 +535,14 @@ async function runVerify(dir: string, report: Report, opts: VerifyOptions, deps:
    * are the site's own, not the fonts commit's; they are noted and left out. Any other is still a
    * failure. With the banner on main (every other case) the results are returned as they are.
    */
+  const commitName = BRANCH === SENTRY_BRANCH ? 'the Sentry commit' : 'the fonts commit'
   const mainsOwn = (results: RequestResult[], lines: string[]): RequestResult[] => {
     if (bannerOnMain) return results
     return results.map((r) => {
       const own = mainBlocked.get(norm(r.path)) ?? new Set<string>()
       const blocked = r.blocked.filter((u) => !own.has(u))
       if (blocked.length === r.blocked.length) return r
-      lines.push(`${r.path}: ${r.blocked.length - blocked.length} registry request(s) main makes too (no banner on main): noted, not the fonts commit's`)
+      lines.push(`${r.path}: ${r.blocked.length - blocked.length} registry request(s) main makes too (no banner on main): noted, not ${commitName}'s`)
       return { ...r, blocked, ok: r.banner === expectBanner(r.path) && r.banners <= 1 && blocked.length === 0 && r.errors.length === 0 }
     })
   }
@@ -568,20 +578,22 @@ async function runVerify(dir: string, report: Report, opts: VerifyOptions, deps:
         if (ci.code !== 0) return { pass: false, lines: [`npm ci failed on ${side}:`, tail(ci.out)] }
       }
       const branchPkg = readFileSync(join(root, 'package.json'), 'utf8')
-      if (BRANCH === FONTS_BRANCH) {
-        // The fonts commit installs nothing: package.json and the lockfile stay main's, byte for
-        // byte, and only the files the fonts plan writes or edits change.
+      if (flow.selfHosting) {
+        // The fonts and Sentry commits install nothing: package.json and the lockfile stay main's,
+        // byte for byte, and only the files the plan writes or edits change.
+        const sentry = BRANCH === SENTRY_BRANCH
         const mainPkg = await git('show', 'origin/main:package.json')
         const samePkg = mainPkg.code === 0 && mainPkg.out === branchPkg
         const sameLock = readFileSync(join(mainDir!, 'package-lock.json'), 'utf8') === readFileSync(join(root, 'package-lock.json'), 'utf8')
         const diff = await git('diff', '--name-only', 'origin/main...HEAD')
-        const allowed = fontsPaths(report)
+        const allowed = sentry ? sentryPaths(report) : fontsPaths(report)
         const changed = diff.out.split('\n').filter(Boolean)
         const extra = changed.filter((p) => !allowed(p))
+        const own = sentry ? 'the Sentry bundle' : 'the fonts'
         lines.push(
-          `package.json, main → branch: ${samePkg ? 'same' : 'CHANGED (the fonts commit must not touch it)'}`,
-          `package-lock.json, main → branch: ${sameLock ? 'same' : 'CHANGED (the fonts commit must not touch it)'}`,
-          `changed files (${changed.length}): ${diff.code === 0 ? (extra.length ? 'NOT ONLY THE FONTS' : 'only the fonts') : 'git diff failed'}`,
+          `package.json, main → branch: ${samePkg ? 'same' : `CHANGED (${commitName} must not touch it)`}`,
+          `package-lock.json, main → branch: ${sameLock ? 'same' : `CHANGED (${commitName} must not touch it)`}`,
+          `changed files (${changed.length}): ${diff.code === 0 ? (extra.length ? `NOT ONLY ${own.toUpperCase()}` : `only ${own}`) : 'git diff failed'}`,
           ...extra.map((p) => `  UNKNOWN ${p}`),
         )
         const ls: Record<string, string[]> = {}
@@ -668,10 +680,15 @@ async function runVerify(dir: string, report: Report, opts: VerifyOptions, deps:
         const s = checkSentrySource(diskSite(root), tracked ? new Uint8Array(readFileSync(join(root, SENTRY_FILE))) : null)
         lines.push(...s.lines)
         sentryOk = s.pass
+        // The Sentry flow's one job: its bundle must be there.
+        if (BRANCH === SENTRY_BRANCH && !tracked) {
+          lines.push(`${SENTRY_FILE} is not committed on ${SENTRY_BRANCH}: run.ts sentry writes it`)
+          sentryOk = false
+        }
       }
       // #101: a daisyUI include/exclude list without card, toggle or badge built a half-styled banner
-      // that every later step passed. The fonts flow leaves a live banner as it is, so it is not asked.
-      if (flow.branch === FONTS_BRANCH) return { pass: sentryOk, lines }
+      // that every later step passed. The self-hosting flows leave a live banner as it is, so it is not asked.
+      if (flow.selfHosting) return { pass: sentryOk, lines }
       const missing = neededParts((await getChecks()).daisyuiParts(demo ? root : join(root, 'dist')), report.services.length > 0)
       lines.push(
         missing.length > 0
