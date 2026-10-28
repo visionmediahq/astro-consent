@@ -94,6 +94,12 @@ function fake(o: { mainPkg?: string; mainLock?: string; diff?: string } = {}) {
     checks: async () => checks,
     freeBytes: () => 100e9,
     isUp: async () => false,
+    // Its own lock dir (#87): the other verify tests run in parallel on the same default ports.
+    lockDir: (() => {
+      const d = mkdtempSync(join(tmpdir(), 'verify-update-lock-'))
+      dirs.push(d)
+      return d
+    })(),
     docker: async (_url, b, run) => (called.push(`docker ${b}`), { pass: await run('http://127.0.0.1:4397'), log: 'docker ok' }),
     toolVersion: () => ({ sha: '0123456789abcdef0123456789abcdef01234567', dirty: false }),
   }

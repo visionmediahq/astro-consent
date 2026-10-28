@@ -2,6 +2,7 @@
 // A script, not a vitest file:   npx tsx tests/unit/rollout/checks-fixtures.demo.ts
 // The pages are written to a temp dir and served on 127.0.0.1. Every registry URL in them is
 // either never requested or fulfilled by the stub (stub: true): nothing reaches Google or Meta.
+import { createHash } from 'node:crypto'
 import { createServer } from 'node:http'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -240,6 +241,13 @@ const FIXTURES: Record<string, string> = {
   cutokx: page(`<style>html,body{height:100%}body{overflow-x:hidden}</style><div style="height:900px"></div>${cutPlaceholder('m')}`),
   // The button fits, but the row's "Visa alltid" and "Öppna" wrap below the box's edge.
   cutrow: page(`<style>.m{height:300px;overflow:hidden}</style><div class="m"><div data-consent-embed="google-maps"><p style="height:270px;margin:0">Google Maps</p><button data-load>Visa</button><br><label><input type="checkbox" data-remember> Visa alltid</label><br><a data-open href="${MAPS}">Öppna</a></div></div>`),
+  // #102 (a client site): Astro's experimental.csp hashes every <style> it emits and allows no
+  // other, so an injected <style> is refused. The banner is styled by the one hashed block.
+  csp: (() => {
+    const css = '[data-consent-banner]{position:fixed;bottom:0;left:0;right:0;background:#fff;padding:8px}'
+    const hash = createHash('sha256').update(css).digest('base64')
+    return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="content-security-policy" content="style-src 'sha256-${hash}'"><style>${css}</style></head><body style="margin:0"><section data-consent-banner><button data-consent-action="none">Neka</button><button data-consent-action="all">Acceptera alla</button></section></body></html>`
+  })(),
 }
 
 const dir = mkdtempSync(join(tmpdir(), 'checks-fixtures-'))
@@ -398,6 +406,12 @@ try {
     const want = wcagContrast({ r: 0.7 * 255 + 0.3 * 0, g: 0.7 * 255 + 0.3 * 0x37, b: 0.7 * 255 + 0.3 * 0x5f }, { r: 0, g: 0x37, b: 0x5f })
     expect(faded.length === 2 && faded.every((r) => r.ok && !r.indeterminate && Math.abs(r.ratio - want) < 0.05), '/linksfade/ opacity-70 on the background-less links wrapper fades the text and is measured', { faded, want })
 
+    try {
+      const csp = (await checkContrast(browser, BASE, ['/csp/'], { stub: true })).filter((r) => r.kind === 'banner')
+      expect(csp.length === 2 && csp.every((r) => r.ok), '/csp/ a style-src CSP that refuses injected <style> still yields banner rows (#102)', csp)
+    } catch (e) {
+      expect(false, '/csp/ a style-src CSP that refuses injected <style> still yields banner rows (#102)', String(e).split('\n')[0])
+    }
     const anim = await checkContrast(browser, BASE, ['/animated/'], { stub: true })
     expect(
       anim.filter((r) => r.kind === 'placeholder').length === 4 && anim.filter((r) => r.kind === 'links').length === 1 && anim.every((r) => r.ok && !r.indeterminate),

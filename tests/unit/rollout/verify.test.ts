@@ -10,6 +10,7 @@ import type { ContrastRow } from '../../../ci/rollout/checks/contrast'
 import type { RequestResult } from '../../../ci/rollout/checks/requests'
 import type { FontsPage } from '../../../ci/rollout/checks/fonts'
 import { dockerCheck } from '../../../ci/rollout/docker'
+import { PortsBusy, portsLockFile, rolloutPorts } from '../../../ci/rollout/lib/ports'
 import { ssrEntry, startPreview } from '../../../ci/rollout/preview'
 import type { Report } from '../../../ci/rollout/types'
 import { type Checks, embedRoutes, type Exec, filterRoutes, formatVerify, MIN_FREE_GB, minFreeGb, ORIGIN, type VerifyDeps, verify, verifyOutput } from '../../../ci/rollout/verify'
@@ -151,6 +152,7 @@ function fake(
     checks: async () => checks,
     freeBytes: () => 100e9,
     isUp: async () => false,
+    lockDir: lockDir(),
     docker:
       opts.docker ??
       (async (_url, _branch, run) => {
@@ -159,6 +161,12 @@ function fake(
       }),
   }
   return { deps, calls, called }
+}
+
+function lockDir(): string {
+  const d = mkdtempSync(join(tmpdir(), 'verify-lock-'))
+  dirs.push(d)
+  return d
 }
 
 const evidence = (dir: string, file: string) => readFileSync(join(dir, '.rollout/evidence', file), 'utf8')
@@ -172,6 +180,40 @@ beforeEach(() => {
 afterEach(() => void vi.unstubAllEnvs())
 
 describe('verify', () => {
+  describe('ports (#87: a second verify failed late at step 3 with no hint)', () => {
+    test('another verify holds the ports: PortsBusy before any step, nothing pushed or built, its lock kept', async () => {
+      const dir = siteDir()
+      const f = fake()
+      const file = portsLockFile(f.deps.lockDir!, rolloutPorts())
+      writeFileSync(file, `${process.ppid}\n`)
+      await expect(verify(dir, report(), { deps: f.deps })).rejects.toThrow(PortsBusy)
+      expect(f.calls.some((c) => c.startsWith('npm') || c.startsWith('git push'))).toBe(false)
+      expect(existsSync(join(dir, '.rollout/verify.json'))).toBe(false)
+      expect(readFileSync(file, 'utf8').trim()).toBe(String(process.ppid))
+    })
+
+    test('a port already answers (a preview a killed run left): PortsBusy naming the port, before any step; the lock is released', async () => {
+      const dir = siteDir()
+      const f = fake()
+      f.deps.isUp = async (url) => url.includes(':4398/')
+      await expect(verify(dir, report(), { deps: f.deps })).rejects.toThrow(/port 4398 already answers.*lsof/s)
+      await expect(verify(dir, report(), { deps: f.deps })).rejects.toThrow(PortsBusy)
+      expect(f.calls.some((c) => c.startsWith('npm') || c.startsWith('git push'))).toBe(false)
+      expect(existsSync(portsLockFile(f.deps.lockDir!, rolloutPorts()))).toBe(false)
+    })
+
+    test('a run holds the lock while it runs and releases it at the end, pass or fail', async () => {
+      const f = fake()
+      const file = portsLockFile(f.deps.lockDir!, rolloutPorts())
+      let held = false
+      const preview = f.deps.preview!
+      f.deps.preview = async (d, port, ssr, entry) => ((held ||= existsSync(file)), preview(d, port, ssr, entry))
+      expect((await verify(siteDir(), report(), { deps: f.deps })).pass).toBe(true)
+      expect(held).toBe(true)
+      expect(existsSync(file)).toBe(false)
+    })
+  })
+
   describe('free disk (#23: Docker I/O errors at 2.5 GB free)', () => {
     test('under 15 GB free: stops before any step, says how much is free and what to delete', async () => {
       const dir = siteDir()
@@ -475,7 +517,8 @@ describe('verify', () => {
     test('a connection error while main still answers is not a dead preview: no restart, the step fails', async () => {
       const dir = siteDir()
       const f = fake({ checks: { requests: dying(REFUSED, 1) } })
-      f.deps.isUp = async () => true
+      // Up once main's preview runs; nothing answers before verify starts (#87).
+      f.deps.isUp = async () => f.calls.some((c) => c.startsWith('preview '))
       const result = await verify(dir, report(), { deps: f.deps })
       expect(result.steps.at(-1)).toMatchObject({ step: 3, pass: false })
       expect(mainStarts(f.calls)).toBe(1)

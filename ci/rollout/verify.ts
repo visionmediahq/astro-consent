@@ -33,6 +33,7 @@
 // Demo mode (`demo: true`, CI/self-test): `dir` is a built demo dist (demo/dist-consent); no git,
 // no npm, no Docker, no network. Steps 1, 2 and 9 are skipped and step 3 has no main side.
 import { existsSync, mkdirSync, readFileSync, realpathSync, rmSync, statfsSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import type { Browser } from '@playwright/test'
 import { type ClipResult, checkClip } from './checks/clip'
@@ -62,7 +63,7 @@ import { dockerCheck } from './docker'
 import { type Exec, exec as realExec, tail } from './lib/exec'
 import { builtCss, neededParts, type Part, partsMissingFromBuild } from './lib/daisyui'
 import { diffLock, diffPackageJson } from './lib/lockfile'
-import { rolloutPorts } from './lib/ports'
+import { lockPorts, type Ports, PortsBusy, rolloutPorts } from './lib/ports'
 import { toolLine, type ToolVersion, toolVersion } from './lib/tool-version'
 import { isUp, type Preview, previewLog, ssrEntry, startPreview } from './preview'
 import { type Flow, FLOWS, flowOf, FONTS_MARKER, isToolFontsCss, statePath, STEPS, type StepName } from './flows'
@@ -114,6 +115,8 @@ export interface VerifyDeps {
   fontFetch: FontFetch
   /** The tool's own commit, recorded in the result (lib/tool-version.ts). */
   toolVersion: () => ToolVersion
+  /** Where the per-base port lock lives (#87): the OS temp dir, so every verify on the machine sees it. */
+  lockDir: string
 }
 
 export interface VerifyOptions {
@@ -210,6 +213,7 @@ const realDeps = (): VerifyDeps => ({
   isUp,
   fontFetch: httpFetch,
   toolVersion: () => toolVersion(),
+  lockDir: tmpdir(),
 })
 
 const firstLine = (e: unknown): string => (e instanceof Error ? e.message : String(e)).split('\n')[0]!
@@ -307,16 +311,35 @@ const utf8 = (body: Uint8Array): string => new TextDecoder().decode(body)
 /**
  * Runs C3 on the checkout `dir` (on a branch of FLOWS) for `report`. Pushes the branch first
  * (step 9 clones from GitHub), then runs the flow's steps and stops at the first failure. Throws,
- * before any step, when ROLLOUT_PORT_BASE is not a port, when the disk has less free space than
+ * before any step, when ROLLOUT_PORT_BASE is not a port, PortsBusy when another verify holds its
+ * ports or one of them already answers (#87), when the disk has less free space than
  * `minFreeGb` (#23), when `dir` is not on a branch of FLOWS, or when a stray `<dir>-main` is not one of its worktrees.
  */
 export async function verify(dir: string, report: Report, opts: VerifyOptions = {}): Promise<VerifyResult> {
   const deps: VerifyDeps = { ...realDeps(), ...opts.deps }
+  const ports = rolloutPorts()
+  // #87: a second verify on these ports, or a server a killed run left on one, used to fail at step 3
+  // after the push and both builds, logged like the site's own failure. Stop before anything instead.
+  const release = lockPorts(deps.lockDir, ports)
+  try {
+    for (const port of [ports.docker, ports.main, ports.branch]) {
+      if ((await deps.isUp(`http://127.0.0.1:${port}/`)) || (await deps.isUp(`http://localhost:${port}/`))) {
+        throw new PortsBusy(
+          `port ${port} already answers before verify starts: a preview or container left by a killed run? Find it with lsof -nP -iTCP:${port} -sTCP:LISTEN and stop it, or set ROLLOUT_PORT_BASE to a base at least 3 away`,
+        )
+      }
+    }
+    return await runVerify(dir, report, opts, deps, ports)
+  } finally {
+    release()
+  }
+}
+
+async function runVerify(dir: string, report: Report, opts: VerifyOptions, deps: VerifyDeps, ports: Ports): Promise<VerifyResult> {
   const { exec } = deps
   const root = resolve(dir)
   const demo = opts.demo === true
   const out = opts.out ?? join(root, '.rollout')
-  const ports = rolloutPorts()
   // #23: Docker failed with I/O errors twice in the expansion at 2.5 GB free. Stop before touching
   // anything. The demo builds no site, and CI runners have less than 15 GB to spare.
   if (!demo) {

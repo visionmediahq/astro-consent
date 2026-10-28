@@ -22,6 +22,7 @@ import { createTwoFilesPatch, FILE_HEADERS_ONLY } from 'diff'
 import { detect } from './detect/index'
 import { diskSite } from './lib/site-files'
 import { exec } from './lib/exec'
+import { PortsBusy } from './lib/ports'
 import { toolLine, type ToolVersion, toolVersion } from './lib/tool-version'
 import { FLOWS, type FlowBranch, isFlowBranch, openPrsFrom, statePath } from './flows'
 import { diffLock, diffPackageJson } from './lib/lockfile'
@@ -65,9 +66,12 @@ export const USAGE = [
   '  1  error, a failed verify step, or a live/merge STOP',
   '  2  usage: bad command or arguments',
   '  3  wire, fonts, fonts-files, update: the plan was refused (dry run or not); nothing was written',
+  '  4  verify: its ports are taken (another verify, or a server a killed run left); nothing was run, rerun later',
 ].join('\n')
 /** Exit code of a refused wire plan (Ruling 32). */
 export const EXIT_REFUSED = 3
+/** Exit code of a verify that found its ports taken (#87): the machine, not the site. */
+export const EXIT_PORTS_BUSY = 4
 const DEMO_REPORT = join(import.meta.dirname, '../../tests/unit/rollout/fixtures/demo-report.json')
 
 export function parseDetectArgs(args: string[]): { dir: string; domains: string[] } {
@@ -496,7 +500,7 @@ async function mainVerify(rest: string[]): Promise<number> {
     return result.pass ? 0 : 1
   } catch (e) {
     console.error((e as Error).message)
-    return 1
+    return e instanceof PortsBusy ? EXIT_PORTS_BUSY : 1
   }
 }
 

@@ -126,6 +126,12 @@ function fake(o: { branch?: string; mainPkg?: string; mainLock?: string; diff?: 
     checks: async () => checks,
     freeBytes: () => 100e9,
     isUp: async () => false,
+    // Its own lock dir: the verify tests run in parallel with these on the same default ports.
+    lockDir: (() => {
+      const d = mkdtempSync(join(tmpdir(), 'verify-fonts-lock-'))
+      dirs.push(d)
+      return d
+    })(),
     docker: async (_url, b, run) => (called.push(`docker ${b}`), { pass: await run('http://127.0.0.1:4397'), log: 'docker ok' }),
     fontFetch: o.fontFetch ?? (async () => ({ status: 200, contentType: 'text/css', body: new TextEncoder().encode(CSS2) })),
     toolVersion: () => ({ sha: TOOL_SHA, dirty: false }),
