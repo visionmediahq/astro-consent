@@ -307,6 +307,13 @@ npx tsx ci/rollout/run.ts help
 
   `exclude: scrollbar` keeps daisyUI's `scrollbar-color` off `:root`, which restyles every
   scrollbar on Windows and Linux. `--root-bg` takes the variable behind the site's own page background.
+- A site that loads daisyUI with an `include:` list must name `button, card, toggle, badge, link`
+  (and `checkbox` when it has an embed), and an `exclude:` list must leave them out. Otherwise the
+  banner ships half-styled: no card padding, Neka and Acceptera alla touching, bare checkboxes for the
+  category switches (#101). `detect` makes such a site needs-human, and one with daisyUI installed but
+  no `@plugin "daisyui"` at all. `verify` step 2 looks for each part in the built CSS
+  (`ci/rollout/lib/daisyui.ts`). A site with its own `.card` (or `.badge`, …) rule needs the part
+  scoped to the banner instead, since daisyUI's would restyle the site's own cards.
 - For server output, `verify` finds pages by crawling links from `/` and the sitemap. A linked path
   that answers 2xx with anything but HTML (an endpoint serving a PDF without an extension) is a
   file, not a page. A broken link is still checked. Links under `/cdn-cgi/` are skipped: Cloudflare answers

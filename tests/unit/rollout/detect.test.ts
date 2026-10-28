@@ -420,6 +420,8 @@ function frame(over: Partial<IframeInfo>): IframeInfo {
   }
 }
 
+const CSS: Findings['css'] = { entry: 'src/styles/global.css', tailwindMajor: 4, daisyuiMajor: 5, primaries: [] }
+
 /** A site the batch can wire as notice. */
 function clean(over: Partial<Findings> = {}): Findings {
   return {
@@ -521,6 +523,27 @@ describe('classify', () => {
     ['GA present', { trackers: ['google-analytics'] }, 'tracker google-analytics: the batch wires notice and consent only'],
     ['tailwind 3', { css: { entry: 'src/styles/global.css', tailwindMajor: 3, daisyuiMajor: 5, primaries: [] } }, 'tailwind 3: @source needs Tailwind 4'],
     ['daisyui 4', { css: { entry: 'src/styles/global.css', tailwindMajor: 4, daisyuiMajor: 4, primaries: [] } }, 'daisyui 4: the components need daisyUI 5'],
+    // #101: site 1283944887 had daisyui installed and no @plugin, so no daisyUI CSS at all.
+    [
+      'daisyui installed, never loaded',
+      { css: { ...CSS, daisyui: { plugin: false, missing: [], prefix: '', ownClasses: [] } } },
+      'daisyui is installed but no CSS file loads it: add @plugin "daisyui" to src/styles/global.css',
+    ],
+    [
+      'daisyui include list without the banner parts',
+      { css: { ...CSS, daisyui: { plugin: true, missing: ['card', 'toggle', 'badge'], prefix: '', ownClasses: [] } } },
+      'daisyui include/exclude leaves out card, toggle, badge, which the banner uses: add them to the @plugin "daisyui" list',
+    ],
+    [
+      'daisyui include list without card, and the site has its own .card',
+      { css: { ...CSS, daisyui: { plugin: true, missing: ['card', 'checkbox'], prefix: '', ownClasses: ['card'] } } },
+      'daisyui include/exclude leaves out card, which the banner uses: add them to the @plugin "daisyui" list (the site styles .card itself, which daisyUI would restyle: scope it to the banner instead)',
+    ],
+    [
+      'daisyui prefix',
+      { css: { ...CSS, daisyui: { plugin: true, missing: [], prefix: 'd-', ownClasses: [] } } },
+      'daisyui prefix "d-": the banner uses unprefixed class names',
+    ],
     [
       'unknown tailwind and daisyui versions',
       { css: { entry: 'src/styles/global.css', tailwindMajor: null, daisyuiMajor: null, primaries: [] } },
@@ -576,6 +599,18 @@ describe('classify', () => {
       reasons: ['elfsight: src/pages/x.astro: two elfsight scripts'],
     })
     expect(classify(clean({ wired: ['elfsight'] }))).toEqual({ classification: 'consent', reasons: [] })
+  })
+
+  // #101: checkbox is the embed placeholder's ("Visa alltid"); the banner's switches are toggles.
+  test('daisyui without checkbox: fine on a notice site, a reason on a site with an embed', () => {
+    const css = { ...CSS, daisyui: { plugin: true, missing: ['checkbox' as const], prefix: '', ownClasses: ['checkbox'] } }
+    expect(classify(clean({ css }))).toEqual({ classification: 'notice', reasons: [] })
+    expect(classify(clean({ css, iframes: [frame({})] }))).toEqual({
+      classification: 'needs-human',
+      reasons: [
+        'daisyui include/exclude leaves out checkbox, which the banner uses: add them to the @plugin "daisyui" list (the site styles .checkbox itself, which daisyUI would restyle: scope it to the banner instead)',
+      ],
+    })
   })
 
   test('a Maps iframe next to a needs-human reason is needs-human', () => {

@@ -1,6 +1,7 @@
 import { copyFileSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, test } from 'vitest'
+import { builtCss, partsMissingFromBuild } from '../../ci/rollout/lib/daisyui'
 import { DEMO_DIR } from '../../scripts/demo-copy'
 import { buildDemo, cleanupBuilds, type BuildResult } from './helpers'
 
@@ -421,6 +422,22 @@ describe('banner and footer markup', () => {
 
 // site 1348189257 (#64): a site's @theme with its own --spacing-<size> scale. Tailwind 4 resolves
 // max-w-<size> through --spacing-<size> before --container-<size>, so max-w-2xl became 64px there.
+// #101: rollout verify step 2 looks for one daisyUI class per part in the built CSS. A real build
+// shows the markers are right: all there with the plain plugin, gone when an include list leaves
+// the part out.
+test('rollout markers: every daisyUI part the banner uses is in the demo build, and an include list drops them', TIMEOUT, () => {
+  const plain = buildDemo('consent')
+  expect(plain.code).toBe(0)
+  expect(partsMissingFromBuild(builtCss(join(plain.dir, 'dist')))).toEqual([])
+
+  const narrow = buildDemo('consent', (dir) => {
+    const path = join(dir, 'src/styles/global.css')
+    writeFileSync(path, readFileSync(path, 'utf8').replace('@plugin "daisyui";', '@plugin "daisyui" {\n  include: button, link;\n}'))
+  })
+  expect(narrow.code).toBe(0)
+  expect(partsMissingFromBuild(builtCss(join(narrow.dir, 'dist')))).toEqual(['card', 'toggle', 'badge', 'checkbox'])
+})
+
 describe('site theme tokens', () => {
   const SIZES = ['3xs', '2xs', 'xs', 'sm', 'md', 'lg', 'xl', '2xl', '3xl', '4xl', '5xl', '6xl', '7xl']
   const escapeRegExp = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')

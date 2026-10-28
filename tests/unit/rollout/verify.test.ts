@@ -137,6 +137,7 @@ function fake(
       called.add(`fonts ${base}`),
       paths.flatMap((path) => (o?.widths ?? [360, 1280]).map((width): FontsPage => ({ path, width, google: [], woff2: [], loaded: [], used: [], chars: {}, bodyFamily: 'Arial' })))
     ),
+    daisyuiParts: (distDir) => (called.add(`daisyuiParts ${distDir}`), []),
     close: async () => void called.add('close'),
     ...opts.checks,
   }
@@ -306,6 +307,36 @@ describe('verify', () => {
     expect(evidence(dir, '2-build.txt')).toContain('build broke')
     expect([...f.called].filter((c) => !c.startsWith('close'))).toEqual([])
     expect(f.calls.at(-1)).toBe(`git worktree remove --force ${dir}-main`)
+  })
+
+  // #101: an include list without card/toggle/badge built a half-styled banner, and verify passed it.
+  test('step 2 fails when the built CSS lacks a daisyUI part the banner uses', async () => {
+    const dir = siteDir()
+    const f = fake({ checks: { daisyuiParts: () => ['card', 'toggle'] } })
+    const result = await verify(dir, report(), { deps: f.deps })
+    expect(result.steps.map((s) => [s.step, s.pass])).toEqual([
+      [1, true],
+      [2, false],
+    ])
+    expect(evidence(dir, '2-build.txt')).toContain('daisyUI parts the banner uses, missing from the built CSS: card, toggle')
+  })
+
+  test('step 2: checkbox (the embed placeholder) is not needed on a site with no service', async () => {
+    const dir = siteDir()
+    const f = fake({ checks: { daisyuiParts: () => ['checkbox'] } })
+    const result = await verify(dir, report({ classification: 'notice', services: [] }), { deps: f.deps })
+    expect(result.steps[1]).toMatchObject({ step: 2, pass: true })
+    const consent = siteDir()
+    const g = fake({ checks: { daisyuiParts: () => ['checkbox'] } })
+    expect((await verify(consent, report(), { deps: g.deps })).steps[1]).toMatchObject({ step: 2, pass: false })
+  })
+
+  test('step 2 reads the branch dist and says every daisyUI part is there', async () => {
+    const dir = siteDir()
+    const f = fake()
+    await verify(dir, report(), { deps: f.deps })
+    expect(f.called).toContain(`daisyuiParts ${join(dir, 'dist')}`)
+    expect(evidence(dir, '2-build.txt')).toContain('daisyUI parts the banner uses: all in the built CSS')
   })
 
   test('stale screenshots from an earlier run are wiped when verify starts', async () => {
@@ -818,7 +849,7 @@ describe('verify', () => {
     expect(f.called.has('docker')).toBe(false)
     expect(result.steps.map((s) => [s.step, s.pass, s.skipped ?? false])).toEqual([
       [1, true, true],
-      [2, true, true],
+      [2, true, false],
       [3, true, false],
       [4, true, false],
       [5, true, false],

@@ -121,6 +121,18 @@ describe('detectCss', () => {
     expect(detectAstroMajor(site)).toBe(5)
   })
 
+  // #101: the daisyUI parts the banner uses, from the @plugin block in the entry or another src CSS file.
+  test('daisyui: the plugin block is read from the entry and src CSS', () => {
+    const bare = inline({ 'src/styles/global.css': '@import "tailwindcss";\n@plugin "daisyui";\n' })
+    expect(detectCss(bare).daisyui).toEqual({ plugin: true, missing: [], prefix: '', ownClasses: [] })
+    const split = inline({
+      'src/styles/global.css': '@import "tailwindcss";\n@import "./daisy.css";\n',
+      'src/styles/daisy.css': '@plugin "daisyui" {\n  include: button;\n}\n.card { padding: 2rem; }\n',
+    })
+    expect(detectCss(split).daisyui).toMatchObject({ plugin: true, missing: ['card', 'toggle', 'badge', 'link', 'checkbox'], ownClasses: ['card'] })
+    expect(detectCss(inline({ 'src/styles/global.css': '@import "tailwindcss";\n' })).daisyui!.plugin).toBe(false)
+  })
+
   test('primary inside a daisyui theme block', () => {
     const site = inline({
       'src/styles/global.css': '@import "tailwindcss";\n@plugin "daisyui/theme" {\n  name: "x";\n  --color-primary: #ff0000;\n}\n',

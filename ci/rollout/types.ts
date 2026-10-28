@@ -1,6 +1,7 @@
 // Shared shapes for the rollout tool: detect produces a Report, wire turns it into a WirePlan,
 // verify returns a VerifyResult, and the pool scan and selection work on PoolRow and Selection.
 import type { ServiceSlug } from '../../src/services'
+import type { DaisyuiPlugin } from './lib/daisyui'
 import type { ToolVersion } from './lib/tool-version'
 
 export type Classification = 'consent' | 'notice' | 'needs-human'
@@ -112,7 +113,14 @@ export interface Report {
   domains: string[]
   astro: { major: number; output: 'static' | 'server' }
   config: { path: string; hasIntegrations: boolean; hasTailwindVite: boolean; isDefineConfigObject: boolean }
-  css: { entry: string | null; tailwindMajor: number | null; daisyuiMajor: number | null; primaries: string[] }
+  css: {
+    entry: string | null
+    tailwindMajor: number | null
+    daisyuiMajor: number | null
+    primaries: string[]
+    /** The `@plugin "daisyui"` block (#101); absent in reports written before it was read. */
+    daisyui?: DaisyuiPlugin
+  }
   layouts: { file: string; pages: string[]; footerRef: { name: string; start: number } | null }[]
   footers: FooterInfo[]
   footerless: string[]

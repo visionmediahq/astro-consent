@@ -7,7 +7,8 @@
 //   1 lockfile    npm ci in both; package-lock diff against main within the allowlist, and
 //                 `npm ls astro vite @tailwindcss/vite` the same on both sides. fonts-selfhost:
 //                 package.json and package-lock.json exactly main's, and only the fonts' files changed
-//   2 build       npm run build on the branch
+//   2 build       npm run build on the branch; on consent-banner, every daisyUI part the banner
+//                 uses has a rule in the built CSS (#101; demo mode runs only this)
 //   3 requests    main and branch previews over every built page: main RED (or noted green), the
 //                 branch shows the banner, requests nothing from the registry before consent and
 //                 logs no console error main didn't; a registry request on a page detect didn't
@@ -59,6 +60,7 @@ import { shots } from './checks/shots'
 import { isRoute, routeOf } from './detect/structure'
 import { dockerCheck } from './docker'
 import { type Exec, exec as realExec, tail } from './lib/exec'
+import { builtCss, neededParts, type Part, partsMissingFromBuild } from './lib/daisyui'
 import { diffLock, diffPackageJson } from './lib/lockfile'
 import { rolloutPorts } from './lib/ports'
 import { toolLine, type ToolVersion, toolVersion } from './lib/tool-version'
@@ -92,6 +94,8 @@ export interface Checks {
   shots(base: string, paths: string[], outDir: string): Promise<string[]>
   /** Step 8: every path at `widths` (default 360 and 1280), Google Fonts blocked and counted. */
   fonts(base: string, paths: string[], opts?: { widths?: number[] }): Promise<FontsPage[]>
+  /** Step 2: the daisyUI parts the banner uses that have no rule in the CSS built into `distDir` (#101). */
+  daisyuiParts(distDir: string): Part[]
   close(): Promise<void>
 }
 
@@ -186,6 +190,7 @@ export function browserChecks(): Checks {
     contrast: async (base, paths) => checkContrast(await get(), base, paths, { stub: true }),
     shots: async (base, paths, outDir) => shots(await get(), base, paths, outDir, [360, 1280], { stub: true }),
     fonts: async (base, paths, opts) => checkFonts(await get(), base, paths, { stub: true, block: true, ...(opts?.widths ? { widths: opts.widths } : {}) }),
+    daisyuiParts: (distDir) => partsMissingFromBuild(builtCss(distDir)),
     async close() {
       if (browser) await (await browser).close()
     },
@@ -593,9 +598,23 @@ export async function verify(dir: string, report: Report, opts: VerifyOptions = 
     },
 
     async build() {
-      if (demo) return { pass: true, skipped: true, lines: ['skipped (demo)'] }
-      const res = await exec('npm', ['run', 'build'], root)
-      return { pass: res.code === 0, lines: ['npm ci: done in step 1', `npm run build exit ${res.code}`, tail(res.out)] }
+      const lines: string[] = []
+      if (demo) lines.push('npm run build: skipped (demo)')
+      else {
+        const res = await exec('npm', ['run', 'build'], root)
+        lines.push('npm ci: done in step 1', `npm run build exit ${res.code}`, tail(res.out))
+        if (res.code !== 0) return { pass: false, lines }
+      }
+      // #101: a daisyUI include/exclude list without card, toggle or badge built a half-styled banner
+      // that every later step passed. The fonts flow leaves a live banner as it is, so it is not asked.
+      if (flow.branch === FONTS_BRANCH) return { pass: true, lines }
+      const missing = neededParts((await getChecks()).daisyuiParts(demo ? root : join(root, 'dist')), report.services.length > 0)
+      lines.push(
+        missing.length > 0
+          ? `daisyUI parts the banner uses, missing from the built CSS: ${missing.join(', ')} (add them to the @plugin "daisyui" list)`
+          : 'daisyUI parts the banner uses: all in the built CSS',
+      )
+      return { pass: missing.length === 0, lines }
     },
 
     async requests() {

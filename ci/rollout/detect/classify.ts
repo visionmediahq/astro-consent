@@ -1,6 +1,7 @@
 // Classifies a site from what detect found: `notice`, `consent` or `needs-human` with one reason per
 // line. The wire stage converts only `notice` and `consent`, so every doubt is a reason: an unknown
 // counts as a problem, never as "probably fine".
+import { neededParts, PARTS } from '../lib/daisyui'
 import { servicesOf } from '../lib/report'
 import type { ServiceSlug } from '../../../src/services'
 import type { ScriptBuiltEmbed, ScriptHost } from './scripts'
@@ -74,6 +75,24 @@ export function classify(f: Findings): { classification: Classification; reasons
   if (f.astro.major !== 0 && !ASTRO_MAJORS.includes(f.astro.major)) add(`astro ${f.astro.major}: the package supports Astro 6 and 7`)
   if (f.css.tailwindMajor !== null && f.css.tailwindMajor < 4) add(`tailwind ${f.css.tailwindMajor}: @source needs Tailwind 4`)
   if (f.css.daisyuiMajor !== null && f.css.daisyuiMajor < 5) add(`daisyui ${f.css.daisyuiMajor}: the components need daisyUI 5`)
+  // #101: an include/exclude list without the parts the banner uses ships it half-styled, and no
+  // plugin at all (site 1283944887) ships a transparent banner with plain-text buttons.
+  const daisy = f.css.daisyui
+  if (daisy && f.css.daisyuiMajor !== null) {
+    if (!daisy.plugin) add(`daisyui is installed but no CSS file loads it: add @plugin "daisyui" to ${f.css.entry ?? 'the CSS entry'}`)
+    if (daisy.prefix) add(`daisyui prefix "${daisy.prefix}": the banner uses unprefixed class names`)
+    const missing = neededParts(daisy.missing, servicesOf(f, f.wired).length > 0)
+    if (missing.length > 0) {
+      const own = daisy.ownClasses
+        .filter((c) => missing.some((p) => PARTS[p].base === c))
+        .map((c) => `.${c}`)
+        .join(', ')
+      add(
+        `daisyui include/exclude leaves out ${missing.join(', ')}, which the banner uses: add them to the @plugin "daisyui" list` +
+          (own ? ` (the site styles ${own} itself, which daisyUI would restyle: scope it to the banner instead)` : ''),
+      )
+    }
+  }
 
   if (f.config.path === '') add('no astro.config file')
   else if (!f.config.hasIntegrations && !f.config.isDefineConfigObject) {

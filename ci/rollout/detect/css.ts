@@ -1,6 +1,8 @@
-// Detects the Tailwind CSS entry, the Tailwind/daisyUI majors and the site's primary colours.
+// Detects the Tailwind CSS entry, the Tailwind/daisyUI majors, the daisyUI plugin's options and the
+// site's primary colours.
 import type { Report } from '../types'
 import { elements, parseAstro } from '../lib/astro-ast'
+import { readDaisyuiPlugin } from '../lib/daisyui'
 import { majorOf } from '../lib/lockfile'
 import type { SiteFiles } from '../lib/site-files'
 
@@ -59,9 +61,10 @@ export function detectCss(files: SiteFiles): Report['css'] {
   const entry = cssFiles.find((p) => /@import\s+["']tailwindcss(?:\/[^"']*)?["']/.test(files.read(p))) ?? null
   const ordered = entry ? [entry, ...cssFiles.filter((p) => p !== entry && p.startsWith('src/'))] : cssFiles.filter((p) => p.startsWith('src/'))
 
+  const texts = ordered.map((p) => files.read(p))
   const seen = new Set<string>()
   const primaries: string[] = []
-  for (const css of [...ordered.map((p) => files.read(p)), ...layoutStyles(files)]) {
+  for (const css of [...texts, ...layoutStyles(files)]) {
     for (const colour of primariesIn(css)) {
       if (!seen.has(colour.toLowerCase())) {
         seen.add(colour.toLowerCase())
@@ -74,5 +77,6 @@ export function detectCss(files: SiteFiles): Report['css'] {
     tailwindMajor: lock ? majorOf(lock, 'tailwindcss') : null,
     daisyuiMajor: lock ? majorOf(lock, 'daisyui') : null,
     primaries,
+    daisyui: readDaisyuiPlugin(texts),
   }
 }
