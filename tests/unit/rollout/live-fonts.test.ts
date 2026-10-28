@@ -8,6 +8,7 @@ import type { FontsPage } from '../../../ci/rollout/checks/fonts'
 import type { RequestResult } from '../../../ci/rollout/checks/requests'
 import type { App, Deployment } from '../../../ci/rollout/coolify'
 import type { Exec } from '../../../ci/rollout/lib/exec'
+import { sri384 } from '../../../ci/rollout/wire/sentry'
 import { type LiveChecks, type LiveResult, live, type RecordedApps } from '../../../ci/rollout/live'
 import { merge } from '../../../ci/rollout/merge'
 import type { Report, VerifyResult } from '../../../ci/rollout/types'
@@ -36,7 +37,7 @@ function siteDir(state: Record<string, string> = {}): string {
 const APPS: RecordedApps = { head: MAIN, apps: [{ uuid: 'web', name: 'web', repo: 'site-1277834673', branch: 'main', fqdns: ['site-1277834673.se'], autoDeploy: true, lastDeployed: MAIN }] }
 
 /** git and gh: the branch, and main's fonts.css and package.json at `ref` (a commit or origin/main). */
-function git(o: { branch?: string; fonts?: boolean; banner?: boolean; pkgFails?: boolean } = {}) {
+function git(o: { branch?: string; fonts?: boolean; banner?: boolean; pkgFails?: boolean; bundle?: boolean } = {}) {
   const calls: string[] = []
   const exec: Exec = async (cmd, args) => {
     const line = [cmd, ...args].join(' ')
@@ -46,6 +47,7 @@ function git(o: { branch?: string; fonts?: boolean; banner?: boolean; pkgFails?:
     if (line === 'git rev-parse origin/main') return { code: 0, out: `${MAIN}\n` }
     if (line === 'git remote get-url origin') return { code: 0, out: 'git@github.com:visionmediahq/site-1277834673.git\n' }
     if (/^git show \S+:src\/styles\/fonts\.css$/.test(line)) return o.fonts === false ? { code: 128, out: 'fatal: path' } : { code: 0, out: FONTS_CSS }
+    if (/^git cat-file -e \S+:public\/js\/sentry-8\.55\.2\.min\.js$/.test(line)) return o.bundle ? { code: 0, out: '' } : { code: 128, out: 'fatal: path' }
     if (/^git show \S+:package\.json$/.test(line)) return o.pkgFails ? { code: 128, out: 'fatal: bad object' } : { code: 0, out: o.banner === false ? '{}' : BANNER_PKG }
     return { code: 1, out: `unexpected ${line}` }
   }
@@ -65,7 +67,7 @@ const fontsPage = (path: string, over: Partial<FontsPage> = {}): FontsPage => ({
   ...over,
 })
 
-function checks(o: { fonts?: (base: string, paths: string[]) => FontsPage[]; requests?: (p: string[]) => RequestResult[] } = {}) {
+function checks(o: { fonts?: (base: string, paths: string[]) => FontsPage[]; requests?: (p: string[]) => RequestResult[]; bundle?: { status: number; body: Uint8Array } } = {}) {
   const calls: { what: string; base: string; expectBanner?: (p: string) => boolean }[] = []
   const c: LiveChecks = {
     pages: async () => ['/', '/kontakt'],
@@ -74,6 +76,7 @@ function checks(o: { fonts?: (base: string, paths: string[]) => FontsPage[]; req
     consentPaths: async (base) => (calls.push({ what: 'consentPaths', base }), []),
     contrast: async (base, p) => (calls.push({ what: 'contrast', base }), p.map((path) => ({ path, kind: 'banner' as const, button: 'Neka', ratio: 7, ok: true, fg: { r: 0, g: 0, b: 0 }, bg: { r: 255, g: 255, b: 255 } }))),
     fonts: async (base, p) => (calls.push({ what: 'fonts', base }), o.fonts ? o.fonts(base, p) : p.map((x) => fontsPage(x))),
+    sentryBundle: async (url) => (calls.push({ what: 'sentryBundle', base: url }), o.bundle ?? { status: 404, body: new Uint8Array() }),
     close: async () => undefined,
   }
   return { checks: c, calls }
@@ -334,5 +337,36 @@ describe('live post-merge on sentry-selfhost', () => {
     expect(r.status).toBe('pass')
     expect(c.calls[0]!.expectBanner!('/')).toBe(false)
     expect(r.lines).toContain('checks: console errors only')
+  })
+})
+
+describe("live post-merge with Sentry's bundle on main (review of #127)", () => {
+  const BYTES = new TextEncoder().encode('/*! @sentry/browser stand-in */\n')
+  const state = (branch: string) => siteDir(branch === 'consent-banner' ? { 'apps.json': JSON.stringify(APPS), 'live-baseline.txt': '' } : { 'apps-sentry-selfhost.json': JSON.stringify(APPS), 'live-baseline-sentry-selfhost.txt': '' })
+  const run = (branch: string, bundle: { status: number; body: Uint8Array } | undefined, sri: string) => {
+    const c = checks(bundle ? { bundle } : {})
+    return { c, r: live(state(branch), 'post-merge', SHA, { deps: { ...liveDeps(c.checks, git({ branch, fonts: false, bundle: true }).exec), sentrySri: sri } }) }
+  }
+
+  test('each domain answers /js/sentry-8.55.2.min.js with 200 and the recorded SRI, on sentry-selfhost and on consent-banner', async () => {
+    for (const branch of ['sentry-selfhost', 'consent-banner']) {
+      const { c, r } = run(branch, { status: 200, body: BYTES }, sri384(BYTES))
+      const res = await r
+      expect(res.status, branch).toBe('pass')
+      expect(c.calls.find((x) => x.what === 'sentryBundle')!.base).toBe('https://site-1277834673.se/js/sentry-8.55.2.min.js')
+      expect(res.lines).toContain(`  sentry bundle: /js/sentry-8.55.2.min.js 200, ${sri384(BYTES)} ok`)
+    }
+  })
+
+  test('a 404 or other bytes is a STOP', async () => {
+    expect((await run('sentry-selfhost', { status: 404, body: new Uint8Array() }, sri384(BYTES)).r).status).toBe('stop')
+    expect((await run('sentry-selfhost', { status: 200, body: new TextEncoder().encode('x') }, sri384(BYTES)).r).status).toBe('stop')
+  })
+
+  test('main without the bundle: not asked', async () => {
+    const c = checks()
+    const r = await live(state('consent-banner'), 'post-merge', SHA, { deps: liveDeps(c.checks, git({ branch: 'consent-banner', fonts: false }).exec) })
+    expect(r.status).toBe('pass')
+    expect(c.calls.some((x) => x.what === 'sentryBundle')).toBe(false)
   })
 })

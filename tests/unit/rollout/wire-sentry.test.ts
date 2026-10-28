@@ -9,7 +9,7 @@ import { afterEach, describe, expect, test } from 'vitest'
 import { detectSentry } from '../../../ci/rollout/detect/sentry'
 import { SENTRY_CDN_FILE, SENTRY_FILE, SENTRY_SRC, SENTRY_SRI, SENTRY_VERSION } from '../../../ci/rollout/lib/sentry'
 import { diskSite, globToRegExp, type SiteFiles } from '../../../ci/rollout/lib/site-files'
-import { parseSentryArgs, parseWireArgs, runDetect, runSentry, runWire } from '../../../ci/rollout/run'
+import { parseSentryArgs, parseWireArgs, runDetect, runFonts, runSentry, runWire } from '../../../ci/rollout/run'
 import { applyEdits } from '../../../ci/rollout/wire/engine'
 import { FONTS_COMMIT_MESSAGE } from '../../../ci/rollout/wire/fonts'
 import { BRANCH, COMMIT_MESSAGE } from '../../../ci/rollout/wire/index'
@@ -436,5 +436,26 @@ describe('run.ts sentry: the bundle alone on sentry-selfhost', { timeout: 20_000
     expect(r.code).toBe(3)
     expect(asked).toContain(SENTRY_BRANCH)
     expect(r.output).toContain('open sentry-selfhost PR https://github.com/visionmediahq/site/pull/8')
+  })
+})
+
+describe('run.ts fonts with Sentry still on a CDN (review of #127)', { timeout: 20_000 }, () => {
+  test('refused (exit 3, nothing written, no request) while main loads Sentry from a CDN: run.ts sentry first', async () => {
+    const dir = checkout(treeOf(join(FIXTURES, 'site-1218869363', 'expected')))
+    runDetect(dir, ['site-1218869363.se'])
+    let asked = 0
+    const r = await runFonts(dir, {
+      dryRun: false,
+      fetch: async () => {
+        asked++
+        throw new Error('no network in tests')
+      },
+      openPrs: noPrs,
+    })
+    expect(r.code).toBe(3)
+    expect(r.output).toContain("fonts: refused, nothing was written\n  main still loads Sentry's bundle from a CDN (https://cdn.jsdelivr.net/npm/@sentry/browser@8/build/bundle.min.js, src/layouts/Base.astro:")
+    expect(r.output).toContain('run.ts sentry first')
+    expect(asked).toBe(0)
+    expect(git(dir, 'branch', '--show-current')).toBe('main')
   })
 })

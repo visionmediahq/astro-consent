@@ -99,6 +99,7 @@ function fakeChecks(answers: ((base: string, paths: string[]) => RequestResult[]
     consentPaths: async (base, p) => (calls.push({ what: 'consentPaths', base, paths: p }), p.map((x) => paths(x))),
     contrast: async (base, p) => (calls.push({ what: 'contrast', base, paths: p }), p.map((x) => row({ path: x }))),
     fonts: async (base, p) => (calls.push({ what: 'fonts', base, paths: p }), p.map((x): FontsPage => ({ path: x, width: 1280, google: [], woff2: [], loaded: [], used: [], chars: {}, bodyFamily: 'Arial' }))),
+    sentryBundle: async () => ({ status: 404, body: new Uint8Array() }),
     close: async () => undefined,
   }
   return { checks, calls }

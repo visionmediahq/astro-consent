@@ -8,7 +8,7 @@ import { checkSentrySource } from '../../../ci/rollout/checks/sentry'
 import { SENTRY_FILE, SENTRY_SRC, SENTRY_SRI } from '../../../ci/rollout/lib/sentry'
 import { globToRegExp, type SiteFiles } from '../../../ci/rollout/lib/site-files'
 import type { Report } from '../../../ci/rollout/types'
-import { type Checks, type Exec, type VerifyDeps, verify } from '../../../ci/rollout/verify'
+import { type Checks, type Exec, sentryPaths, type VerifyDeps, verify } from '../../../ci/rollout/verify'
 import { sri384 } from '../../../ci/rollout/wire/sentry'
 
 function memSite(files: Record<string, string>): SiteFiles {
@@ -140,9 +140,10 @@ const run = (dir: string, o: Opts = {}) => verify(dir, { ...DEMO_REPORT, astro: 
 const step2 = async (dir: string, o: Opts = {}) => (await run(dir, o)).steps.find((s) => s.step === 2)!
 const SENTRY_REPORT: Report['sentry'] = {
   status: 'wire',
-  loaders: [{ file: 'src/layouts/Base.astro', line: 1, cdn: 'jsdelivr', version: '8', url: CDN, kind: 'element', src: { start: 0, end: 1 }, cuts: [] }],
+  loaders: [{ file: 'src/layouts/Base.astro', line: 1, cdn: 'jsdelivr', version: '8', url: CDN, kind: 'element', src: { start: 0, end: 1 }, cuts: [], initBeforeBundle: false }],
   selfHosted: [],
   reasons: [],
+  hints: [],
 }
 
 describe('verify step 2 (build) with the Sentry check', () => {
@@ -182,4 +183,10 @@ describe('verify on sentry-selfhost', () => {
     expect(s.evidence).toContain(`${SENTRY_FILE} is not committed on sentry-selfhost: run.ts sentry writes it`)
     expect(s.evidence).not.toContain('daisyUI')
   })
+})
+
+test('sentryPaths: the bundle, and the files of the loads and of the hints', () => {
+  const allowed = sentryPaths({ ...DEMO_REPORT, sentry: { ...SENTRY_REPORT!, hints: [{ file: 'src/components/Head.astro', line: 3, host: 'cdn.jsdelivr.net', rel: 'dns-prefetch', start: 0, end: 1 }] } })
+  expect(['public/js/sentry-8.55.2.min.js', 'src/layouts/Base.astro', 'src/components/Head.astro'].every(allowed)).toBe(true)
+  expect(allowed('src/pages/index.astro')).toBe(false)
 })

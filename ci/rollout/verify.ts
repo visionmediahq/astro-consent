@@ -302,9 +302,9 @@ export function hasPackage(pkg: string): boolean {
   }
 }
 
-/** The paths the Sentry commit may change (sentry-selfhost step 1): the bundle and the files report.sentry found the loads in. */
+/** The paths the Sentry commit may change (sentry-selfhost step 1): the bundle and the files report.sentry found the loads and hints in. */
 export function sentryPaths(report: Report): (path: string) => boolean {
-  const files = new Set<string>([SENTRY_FILE, ...(report.sentry?.loaders ?? []).map((l) => l.file)])
+  const files = new Set<string>([SENTRY_FILE, ...(report.sentry?.loaders ?? []).map((l) => l.file), ...(report.sentry?.hints ?? []).map((h) => h.file)])
   return (path) => files.has(path)
 }
 

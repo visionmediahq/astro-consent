@@ -612,7 +612,13 @@ npx tsx ci/rollout/run.ts help
     unmerged branch). Its PR body (`pr-body.sentry.sv.md`) says in plain Swedish what the commit
     replaced and that nothing visible changes; `pr` refuses a branch without the bundle. `live`
     checks the banner when main has it, and console errors only when it does not, as on
-    `fonts-selfhost`.
+    `fonts-selfhost`. `live post-merge` (any flow) also GETs `/js/sentry-8.55.2.min.js` on every
+    domain when the merged main has the bundle, and requires 200 and the recorded SRI.
+  - **Order on live sites: `sentry` first.** Once the CDN hosts count before consent, a site whose
+    main still loads Sentry from a CDN would STOP at `live post-merge` of any other flow (five live
+    sites load it from Sentry's CDN; a jsDelivr load with a DSN set would too). So `update` and
+    `fonts` refuse (exit 3, nothing written) while the checkout of main still loads either CDN, and
+    say to run `run.ts sentry` first; merge that, then run them.
   - What the checks can see: `verify` builds without the DSN, so the block never renders locally.
     Step 2 reads the branch's source instead (`checks/sentry.ts`): with the bundle committed, it
     must hash to the SRI, `detect` must find no CDN load left and `/js/sentry-8.55.2.min.js`

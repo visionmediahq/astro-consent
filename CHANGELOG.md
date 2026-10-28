@@ -114,7 +114,9 @@ Not part of the package (`files` is unchanged) and not a release.
 - `sentry <site dir>`: a fourth flow, `sentry-selfhost`, self-hosts Sentry's bundle alone on a
   site whose banner is live (the commit `wire` makes last), with its own PR body, state files and
   verify steps (1, 2, 3, 5, 7, 9; 8 when main self-hosts the fonts). Every flow refuses the others'
-  open PRs and unmerged branches.
+  open PRs and unmerged branches. `update` and `fonts` refuse while main still loads Sentry from a
+  CDN (run `sentry` first), and `live post-merge` checks the deployed bundle (200 and the SRI) when
+  main has it.
 - `update <site dir>`: a third flow, `astro-consent-update`, moves a live site's lockfile to the
   latest release (only `package.json` and `package-lock.json`, one commit). It and the other two
   flows refuse each other's open PRs and unmerged branches (`others` in `FLOWS`); verify runs every

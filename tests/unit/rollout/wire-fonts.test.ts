@@ -679,9 +679,10 @@ describe('review of #75: stale reports, files changed on disk, recovery', { time
 
   test('a report whose offsets no longer fit the checkout is refused (run detect again), no request made; after detect it plans cleanly', async () => {
     // The repro: detect, wire the banner, that branch becomes main, fonts without re-detecting.
+    // Sentry is self-hosted in the same wire (a stand-in bundle), or fonts would wait for run.ts sentry.
     const dir = checkout(treeOf(join(FIXTURES, 'site-1218869363', 'before')))
     runDetect(dir, ['site-1218869363.se'])
-    expect((await runWire(dir, { sentry: false, dryRun: false, fonts: false, install: () => {}, openPrs: noPrs })).code).toBe(0)
+    expect((await runWire(dir, { sentryBundle: async () => new TextEncoder().encode('/*! @sentry/browser stand-in */\n'), dryRun: false, fonts: false, install: () => {}, openPrs: noPrs })).code).toBe(0)
     git(dir, 'push', '-q', 'origin', `${BRANCH}:main`)
     git(dir, 'fetch', '-q', 'origin')
     git(dir, 'switch', '-q', 'main')

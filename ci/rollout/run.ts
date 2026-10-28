@@ -21,6 +21,7 @@ import { basename, isAbsolute, join, resolve } from 'node:path'
 import { isEntryScript } from './lib/is-entry'
 import { createTwoFilesPatch, FILE_HEADERS_ONLY } from 'diff'
 import { detect } from './detect/index'
+import { detectSentry } from './detect/sentry'
 import { diskSite } from './lib/site-files'
 import { exec } from './lib/exec'
 import { PortsBusy } from './lib/ports'
@@ -378,6 +379,21 @@ async function othersConflicts(root: string, branch: FlowBranch, stage: string, 
 }
 
 /**
+ * Why a flow other than wire and sentry must wait (review of #127): main (the checkout, which those
+ * flows branch from) still loads Sentry's bundle from a CDN. live post-merge counts that request
+ * before consent and would stop the flow's merge, so run.ts sentry goes first. Empty when it does not.
+ */
+export function sentryStillOnCdn(root: string): string[] {
+  const info = detectSentry(diskSite(root))
+  if (info.status === 'wire') {
+    const where = [...info.loaders.map((l) => `${l.url}, ${l.file}:${l.line}`), ...info.hints.map((h) => `${h.rel} ${h.host}, ${h.file}:${h.line}`)]
+    return [`main still loads Sentry's bundle from a CDN (${where.join('; ')}): run.ts sentry first (live post-merge would stop on the request before consent)`]
+  }
+  if (info.status === 'needs-human') return [`main names a Sentry CDN in a way run.ts sentry cannot rewrite; fix it by hand first: ${info.reasons.join('; ')}`]
+  return []
+}
+
+/**
  * fonts <site dir>: self-hosts the Google Fonts of a site whose banner is already live, on a new
  * branch fonts-selfhost from origin/main with one commit. A dry run prints the diff and writes
  * nothing. Exit code 3 when the plan is refused, or while origin has a consent-banner branch main
@@ -397,6 +413,8 @@ export async function runFonts(
   }
   const conflicts = await othersConflicts(root, FONTS_BRANCH, 'fonts', opts.openPrs ?? openPrsOn)
   if (conflicts.length) return refused(conflicts)
+  const sentry = sentryStillOnCdn(root)
+  if (sentry.length) return refused(sentry)
   const fp = await planFonts(site, report, { ...(opts.fetch ? { fetch: opts.fetch } : {}), ...(opts.now ? { now: opts.now } : {}) })
   if (!fp.ok) return refused(refusalLines(fp))
   const files = fontsFiles((path) => site.read(path), fp)
@@ -492,6 +510,8 @@ export async function runUpdate(dir: string, opts: UpdateRunOptions = {}): Promi
   const git = (...args: string[]) => execFileSync('git', args, { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 256 * 1024 * 1024 })
   const conflicts = await othersConflicts(root, UPDATE_BRANCH, 'update', opts.openPrs ?? openPrsOn)
   if (conflicts.length) return refused(conflicts)
+  const sentry = sentryStillOnCdn(root)
+  if (sentry.length) return refused(sentry)
 
   const mainPkg = git('show', 'origin/main:package.json')
   const mainLock = git('show', 'origin/main:package-lock.json')
