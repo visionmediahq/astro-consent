@@ -679,9 +679,10 @@ describe('review of #75: stale reports, files changed on disk, recovery', { time
 
   test('a report whose offsets no longer fit the checkout is refused (run detect again), no request made; after detect it plans cleanly', async () => {
     // The repro: detect, wire the banner, that branch becomes main, fonts without re-detecting.
+    // Sentry is self-hosted in the same wire (a stand-in bundle), or fonts would wait for run.ts sentry.
     const dir = checkout(treeOf(join(FIXTURES, 'site-1218869363', 'before')))
     runDetect(dir, ['site-1218869363.se'])
-    expect((await runWire(dir, { sentry: false, dryRun: false, fonts: false, install: () => {}, openPrs: noPrs })).code).toBe(0)
+    expect((await runWire(dir, { sentryBundle: async () => new TextEncoder().encode('/*! @sentry/browser stand-in */\n'), dryRun: false, fonts: false, install: () => {}, openPrs: noPrs })).code).toBe(0)
     git(dir, 'push', '-q', 'origin', `${BRANCH}:main`)
     git(dir, 'fetch', '-q', 'origin')
     git(dir, 'switch', '-q', 'main')
@@ -919,7 +920,7 @@ describe('PR 3: wire refused while fonts-selfhost is open (the other direction o
     const branch = await runWire(dir, { sentry: false, dryRun: false, fonts: false, install: () => {}, openPrs: async (_r, b) => (asked.push(b), []) })
     expect(branch.code).toBe(3)
     expect(branch.output).toMatch(/origin has a fonts-selfhost branch \([0-9a-f]{7}\) that is not in origin\/main: .*merge or close the fonts first\. Then detect and wire again/)
-    expect(asked).toEqual(['fonts-selfhost', 'astro-consent-update'])
+    expect(asked).toEqual(['fonts-selfhost', 'astro-consent-update', 'sentry-selfhost'])
     expect(git(dir, 'branch', '--show-current')).toBe('main')
 
     git(dir, 'push', '-q', 'origin', '--delete', 'fonts-selfhost')
@@ -941,11 +942,11 @@ describe('PR 3: wire refused while fonts-selfhost is open (the other direction o
     expect((await runWire(dir, { sentry: false, dryRun: false, fonts: false, install: () => {}, openPrs: noPrs })).code).toBe(0)
   })
 
-  test('runFonts asks GitHub about the other two flows: consent-banner, then astro-consent-update', async () => {
+  test('runFonts asks GitHub about the other three flows: consent-banner, astro-consent-update, then sentry-selfhost', async () => {
     const dir = checkout(linkTree())
     runDetect(dir, ['site-1228881255.se'])
     const asked: string[] = []
     await runFonts(dir, { dryRun: true, fetch: network(), now: DATE, openPrs: async (_r, b) => (asked.push(b), []) })
-    expect(asked).toEqual(['consent-banner', 'astro-consent-update'])
+    expect(asked).toEqual(['consent-banner', 'astro-consent-update', 'sentry-selfhost'])
   })
 })

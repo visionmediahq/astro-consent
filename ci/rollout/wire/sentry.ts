@@ -24,6 +24,7 @@ import { applyEdits } from './engine'
 import { type FontFetch, httpFetch } from './fonts-host'
 import { commitAllowed, recovery, startBranch, writeFiles } from './index'
 
+export const SENTRY_BRANCH = 'sentry-selfhost'
 export const SENTRY_COMMIT_MESSAGE = 'feat: Sentry-bundlen för felrapportering från sajten själv (self-hosted)'
 const TARGET = 'sentry bundle'
 

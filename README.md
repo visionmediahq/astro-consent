@@ -233,6 +233,7 @@ npx tsx ci/rollout/run.ts wire   <site dir> [--dry-run] [--no-fonts] [--no-sentr
 npx tsx ci/rollout/run.ts fonts  <site dir> [--dry-run]   # Google Fonts alone, on branch fonts-selfhost
 npx tsx ci/rollout/run.ts fonts-files <site dir> --url <css/css2 url> [--entry <css file>] [--dry-run]   # files only, see below
 npx tsx ci/rollout/run.ts update <site dir>               # the lockfile on the latest release, branch astro-consent-update
+npx tsx ci/rollout/run.ts sentry <site dir> [--dry-run]   # Sentry's bundle alone, on branch sentry-selfhost
 npx tsx ci/rollout/run.ts verify <site dir>
 npx tsx ci/rollout/run.ts verify --demo <dist dir>      # a built demo, no git/npm/Docker
 npx tsx ci/rollout/run.ts pr     <site dir> --shots-dir <path> --shots-base <url> [--issue <url>]...
@@ -253,11 +254,13 @@ npx tsx ci/rollout/run.ts help
   (`FLOWS` in `ci/rollout/flows.ts`); any other branch is refused. `consent-banner` (from `wire`):
   the banner, plus the fonts commit unless `--no-fonts`. `fonts-selfhost` (from `fonts`): the
   Google Fonts commit alone, for a site whose banner is live. `astro-consent-update` (from
-  `update`): the site's lockfile on the latest release, for a site whose banner is live. Each flow
-  has its PR title and body (`pr-body.sv.md`, `pr-body.fonts.sv.md`, `pr-body.update.sv.md`) and its
-  verify steps. One flow at a time per site: `wire`, `fonts` and `update` each refuse while origin
-  has a branch of either other flow that main does not contain or an open PR from one, and `pr`
-  and `merge` refuse the same (`others` in `FLOWS`).
+  `update`): the site's lockfile on the latest release, for a site whose banner is live.
+  `sentry-selfhost` (from `sentry`): the Sentry bundle commit alone, for a site whose banner is
+  live. Each flow has its PR title and body (`pr-body.sv.md`, `pr-body.fonts.sv.md`,
+  `pr-body.update.sv.md`, `pr-body.sentry.sv.md`) and its verify steps. One flow at a time per
+  site: `wire`, `fonts`, `update` and `sentry` each refuse while origin has a branch of any other
+  flow that main does not contain or an open PR from one, and `pr` and `merge` refuse the same
+  (`others` in `FLOWS`).
 - **Updating a live site (`update`).** A site does not upgrade on its own: its `package.json`
   allows a semver range, but Docker runs `npm ci`, which installs the commit the lockfile pins.
   `update <site dir>` branches `astro-consent-update` from origin/main (the same checks as
@@ -280,8 +283,8 @@ npx tsx ci/rollout/run.ts help
 - **State** lives in `<site dir>/.rollout/`: `report.json`, and per flow `verify.json`,
   `pushed.txt`, `evidence/`, `shots/`, `pr-body.md`, `live-baseline.txt`,
   `live-baseline-hosts.json`, `apps.json` and `live-<mode>.json`. `consent-banner` uses exactly
-  these names (the operator's scripts read them); `fonts-selfhost` adds its branch to each
-  (`verify-fonts-selfhost.json`, `evidence-fonts-selfhost/`, …), so a fonts run never reads or
+  these names (the operator's scripts read them); every other flow adds its branch to each
+  (`verify-fonts-selfhost.json`, `evidence-sentry-selfhost/`, …), so a fonts run never reads or
   overwrites the banner's. `detect` adds `.rollout/` to the checkout's `.git/info/exclude`, so
   stages can be rerun one at a time and nothing of it is committed. `verify --demo` writes to a
   temp folder.
@@ -471,14 +474,16 @@ npx tsx ci/rollout/run.ts help
   `src/data/privacy.json` from `report.services`; an existing `privacy.json` that lacks one of them
   is refused. Pool rows without `services` are re-detected, and `select` strata are
   `consent`/`notice`.
-- **Verify on the two flows.** The steps keep their numbers in both flows: 1 lockfile, 2 build,
+- **Verify on the flows.** The steps keep their numbers in every flow: 1 lockfile, 2 build,
   3 requests, 4 consent-paths, 5 clip, 6 contrast, 7 screenshots, 8 fonts, 9 docker. On
   `fonts-selfhost`, 4 and 6 (banner only) are recorded as skipped; step 1 requires `package.json`
   and `package-lock.json` to be exactly main's and allows only the files the fonts commit writes or
   edits (`src/styles/fonts.css`, `public/fonts/**`, the CSS entry, and the files `report.fonts`
   found the loads and CSPs in). A site without the banner on main expects no banner, skips 5,
   and in step 3 notes the registry requests main makes on the same page instead of failing them
-  (they are the site's own; any other still fails).
+  (they are the site's own; any other still fails). `sentry-selfhost` works the same way with its
+  own files (`public/js/sentry-8.55.2.min.js` and the files `report.sentry` found the loads in),
+  also skips 8 unless main self-hosts the fonts, and fails step 2 without the committed bundle.
   Step 8 runs on `fonts-selfhost`, and on `consent-banner` whenever the branch has the tool's
   `src/styles/fonts.css` (else it is skipped):
   - no `fonts.googleapis.com` / `fonts.gstatic.com` anywhere in the built `dist/` outside CSS
@@ -601,6 +606,19 @@ npx tsx ci/rollout/run.ts help
     (exit 3); `--no-sentry` wires without it. A CSP is not edited: every one seen allows `'self'`
     for scripts. `pr` adds a paragraph and a test step to the banner body when the branch adds the
     bundle, saying what it replaced (Sentry's US CDN before any choice, or jsDelivr's 404).
+  - For a site whose banner is already live, `sentry <site dir> [--dry-run]` makes the same commit
+    alone on a new branch `sentry-selfhost` from origin/main (the same checks as `fonts`: a clean
+    checkout at origin/main, no such branch locally or on origin, no other flow's open PR or
+    unmerged branch). Its PR body (`pr-body.sentry.sv.md`) says in plain Swedish what the commit
+    replaced and that nothing visible changes; `pr` refuses a branch without the bundle. `live`
+    checks the banner when main has it, and console errors only when it does not, as on
+    `fonts-selfhost`. `live post-merge` (any flow) also GETs `/js/sentry-8.55.2.min.js` on every
+    domain when the merged main has the bundle, and requires 200 and the recorded SRI.
+  - **Order on live sites: `sentry` first.** Once the CDN hosts count before consent, a site whose
+    main still loads Sentry from a CDN would STOP at `live post-merge` of any other flow (five live
+    sites load it from Sentry's CDN; a jsDelivr load with a DSN set would too). So `update` and
+    `fonts` refuse (exit 3, nothing written) while the checkout of main still loads either CDN, and
+    say to run `run.ts sentry` first; merge that, then run them.
   - What the checks can see: `verify` builds without the DSN, so the block never renders locally.
     Step 2 reads the branch's source instead (`checks/sentry.ts`): with the bundle committed, it
     must hash to the SRI, `detect` must find no CDN load left and `/js/sentry-8.55.2.min.js`

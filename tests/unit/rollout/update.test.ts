@@ -201,11 +201,11 @@ describe('run.ts update', { timeout: 20_000 }, () => {
     expect(output).toContain('EVERY VISITOR IS ASKED AGAIN: CONSENT_VERSION 1 → 2')
   })
 
-  test('asks GitHub about the other two flows; an open PR or an unmerged branch of either refuses (exit 3), nothing written', async () => {
+  test('asks GitHub about the other three flows; an open PR or an unmerged branch of any refuses (exit 3), nothing written', async () => {
     const asked: string[] = []
     const dir = live()
     expect((await runUpdate(dir, opts({ openPrs: async (_r, b) => (asked.push(b), []) }))).code).toBe(0)
-    expect(asked).toEqual(['consent-banner', 'fonts-selfhost'])
+    expect(asked).toEqual(['consent-banner', 'fonts-selfhost', 'sentry-selfhost'])
 
     const open = live()
     const refused = await runUpdate(open, opts({ openPrs: async (_r, b) => (b === 'fonts-selfhost' ? ['https://github.com/visionmediahq/site/pull/7'] : []) }))
@@ -297,5 +297,20 @@ describe('run.ts update', { timeout: 20_000 }, () => {
     const taken = live()
     git(taken, 'branch', UPDATE_BRANCH)
     await expect(runUpdate(taken, opts())).rejects.toThrow(/astro-consent-update already exists locally/)
+  })
+})
+
+describe('run.ts update with Sentry still on a CDN (review of #127)', { timeout: 20_000 }, () => {
+  const layout = '<html><head><script is:inline src="https://browser.sentry-cdn.com/8.55.0/bundle.min.js"></script></head><body /></html>\n'
+  test('refused (exit 3, nothing written) while main loads Sentry from a CDN: run.ts sentry first', async () => {
+    const dir = checkout({ 'package.json': pkgJson('^1.1.2'), 'package-lock.json': lockJson('^1.1.2', '1.1.2', OLD_SHA), 'src/layouts/Base.astro': layout })
+    let installed = false
+    const r = await runUpdate(dir, opts({ install: () => void (installed = true) }))
+    expect(r.code).toBe(3)
+    expect(r.output).toContain('update: refused, nothing was written')
+    expect(r.output).toContain("main still loads Sentry's bundle from a CDN (https://browser.sentry-cdn.com/8.55.0/bundle.min.js, src/layouts/Base.astro:1): run.ts sentry first")
+    expect(installed).toBe(false)
+    expect(git(dir, 'branch', '--show-current')).toBe('main')
+    expect(status(dir)).toBe('')
   })
 })

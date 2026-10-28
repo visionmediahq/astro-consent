@@ -5,6 +5,8 @@
 //   fonts-selfhost        fonts: the Google Fonts commit alone, for a site whose banner is already live
 //   astro-consent-update  update: the lockfile on the latest astro-consent release, for a site whose
 //                         banner is already live
+//   sentry-selfhost       sentry: Sentry's bundle self-hosted alone (#93), for a site whose banner is
+//                         already live
 //
 // verify, pr, merge and live read the clone's current branch and refuse one that is not here.
 // consent-banner keeps the state names it always had in .rollout/ (`verify.json`, `pushed.txt`,
@@ -14,13 +16,14 @@ import { join } from 'node:path'
 import { type Exec, tail } from './lib/exec'
 import { FONTS_BRANCH, FONTS_CSS } from './wire/fonts'
 import { BRANCH } from './wire/index'
+import { SENTRY_BRANCH } from './wire/sentry'
 import { UPDATE_BRANCH } from './wire/update'
 
 /** verify's steps, in order; the number of a step is its place here (1-based) in every flow. */
 export const STEPS = ['lockfile', 'build', 'requests', 'consent-paths', 'clip', 'contrast', 'screenshots', 'fonts', 'docker'] as const
 export type StepName = (typeof STEPS)[number]
 
-export type FlowBranch = typeof BRANCH | typeof FONTS_BRANCH | typeof UPDATE_BRANCH
+export type FlowBranch = typeof BRANCH | typeof FONTS_BRANCH | typeof UPDATE_BRANCH | typeof SENTRY_BRANCH
 
 export interface Flow {
   branch: FlowBranch
@@ -38,6 +41,12 @@ export interface Flow {
   skipWhy: string
   /** The other flows: an unmerged branch or an open PR of any of them on GitHub refuses this one (they would conflict). */
   others: readonly FlowBranch[]
+  /**
+   * A self-hosting flow (fonts-selfhost, sentry-selfhost): it installs nothing, so verify step 1
+   * requires main's package.json and lockfile and only the flow's own files changed; it may run on a
+   * site whose main has no banner yet; and it leaves a live banner as it is (no daisyUI check).
+   */
+  selfHosting: boolean
 }
 
 export const FLOWS: Record<FlowBranch, Flow> = {
@@ -49,7 +58,8 @@ export const FLOWS: Record<FlowBranch, Flow> = {
     template: join(import.meta.dirname, 'pr-body.sv.md'),
     steps: ['lockfile', 'build', 'requests', 'consent-paths', 'clip', 'contrast', 'screenshots', 'docker'],
     skipWhy: 'no self-hosted fonts on the branch (no src/styles/fonts.css from this tool)',
-    others: [FONTS_BRANCH, UPDATE_BRANCH],
+    others: [FONTS_BRANCH, UPDATE_BRANCH, SENTRY_BRANCH],
+    selfHosting: false,
   },
   'fonts-selfhost': {
     branch: FONTS_BRANCH,
@@ -58,7 +68,8 @@ export const FLOWS: Record<FlowBranch, Flow> = {
     template: join(import.meta.dirname, 'pr-body.fonts.sv.md'),
     steps: ['lockfile', 'build', 'requests', 'clip', 'screenshots', 'fonts', 'docker'],
     skipWhy: 'banner-only check: not run on fonts-selfhost (the banner is already live)',
-    others: [BRANCH, UPDATE_BRANCH],
+    others: [BRANCH, UPDATE_BRANCH, SENTRY_BRANCH],
+    selfHosting: true,
   },
   'astro-consent-update': {
     branch: UPDATE_BRANCH,
@@ -69,7 +80,20 @@ export const FLOWS: Record<FlowBranch, Flow> = {
     // The banner, its texts and its styles change with the package: every banner step runs.
     steps: ['lockfile', 'build', 'requests', 'consent-paths', 'clip', 'contrast', 'screenshots', 'docker'],
     skipWhy: 'no self-hosted fonts on the branch (no src/styles/fonts.css from this tool)',
-    others: [BRANCH, FONTS_BRANCH],
+    others: [BRANCH, FONTS_BRANCH, SENTRY_BRANCH],
+    selfHosting: false,
+  },
+  'sentry-selfhost': {
+    branch: SENTRY_BRANCH,
+    title: 'Felrapporteringens skript från sajten själv',
+    ownTitles: ['Felrapporteringens skript från sajten själv'],
+    template: join(import.meta.dirname, 'pr-body.sentry.sv.md'),
+    // Nothing visible changes: the requests (no CDN, no new console error), the layout and the image.
+    // Step 2 checks the committed bundle and the source (checks/sentry.ts); fonts run when main self-hosts them.
+    steps: ['lockfile', 'build', 'requests', 'clip', 'screenshots', 'docker'],
+    skipWhy: 'not run on sentry-selfhost (the banner is already live and the bundle changes nothing visible)',
+    others: [BRANCH, FONTS_BRANCH, UPDATE_BRANCH],
+    selfHosting: true,
   },
 }
 

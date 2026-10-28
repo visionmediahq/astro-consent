@@ -1,5 +1,5 @@
 // The live stage (spec C5): the checks of C3 steps 3, 4, 6 and 8 against the live domains. Live
-// sites are never stubbed: registry and Google Fonts requests are counted, never blocked, and
+// sites are never stubbed: registry, Sentry CDN (#93) and Google Fonts requests are counted, never blocked, and
 // nothing is clicked before they are counted. The clone's branch picks the flow (flows.ts), whose
 // state files it reads and writes.
 //
@@ -19,12 +19,14 @@
 //               (DOM included) on every page, no console error that is not in the baseline, the
 //               consent paths on pages with an embed, every contrast row ok; and when the merged
 //               main self-hosts the fonts, zero Google Fonts requests, every /fonts/*.woff2 200 and
-//               every face used loaded, at 360 and 1280 px. fonts-selfhost on a site without the
-//               banner on main checks the fonts and console errors only. A failing domain is
+//               every face used loaded, at 360 and 1280 px; when it self-hosts Sentry's bundle (#93),
+//               /js/sentry-<version>.min.js answers 200 with the recorded SRI. fonts-selfhost (or sentry-selfhost) on
+//               a site without the banner on main checks the fonts and console errors only. A failing domain is
 //               checked again after 30 s; a second failure is a STOP. A pass deletes the clone's
 //               node_modules and dist (#23).
 //
-// The result goes to .rollout/live-<mode>.json (fonts-selfhost: each name with -fonts-selfhost).
+// The result goes to .rollout/live-<mode>.json (fonts-selfhost: each name with -fonts-selfhost;
+// sentry-selfhost likewise).
 import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import type { Browser } from '@playwright/test'
@@ -35,6 +37,9 @@ import { fontsCheckPaths, isCmsAdminRoute, listPages } from './checks/pages'
 import { checkRequests, formatRequests, type RequestResult } from './checks/requests'
 import { type App, appsFor, type Deployment, type DeployStatus, followsMain, listApps, listDeployments, waitDeployed } from './coolify'
 import { currentFlow, fontsCssAt, statePath } from './flows'
+import { SENTRY_FILE, SENTRY_SRC, SENTRY_SRI } from './lib/sentry'
+import { httpFetch } from './wire/fonts-host'
+import { sri384 } from './wire/sentry'
 import { type Exec, exec as realExec, tail } from './lib/exec'
 import { originRepo } from './pr'
 import { normaliseReport } from './lib/report'
@@ -81,6 +86,8 @@ export interface LiveChecks {
   contrast(base: string, paths: string[]): Promise<ContrastRow[]>
   /** Every path at 360 and 1280 px, Google Fonts counted (not blocked). */
   fonts(base: string, paths: string[]): Promise<FontsPage[]>
+  /** GET of the self-hosted Sentry bundle on the live site (#93). */
+  sentryBundle(url: string): Promise<{ status: number; body: Uint8Array }>
   close(): Promise<void>
 }
 
@@ -95,6 +102,8 @@ export interface LiveDeps {
   deployments: (uuid: string) => Promise<Deployment[]>
   /** The tool's own commit, recorded in the result (lib/tool-version.ts). */
   toolVersion: () => ToolVersion
+  /** The hash the deployed Sentry bundle must have: SENTRY_SRI unless a test gives its own. */
+  sentrySri: string
 }
 
 /** The real checks: one Chromium, launched on first use, `stub: false` everywhere. */
@@ -109,6 +118,10 @@ export function liveChecks(): LiveChecks {
     consentPaths: async (base, paths) => checkConsentPaths(await get(), base, paths, { stub: false }),
     contrast: async (base, paths) => checkContrast(await get(), base, paths, { stub: false }),
     fonts: async (base, paths) => checkFonts(await get(), base, paths, { stub: false, block: false }),
+    sentryBundle: async (url) => {
+      const res = await httpFetch(url, {})
+      return { status: res.status, body: res.body }
+    },
     async close() {
       if (browser) await (await browser).close()
     },
@@ -123,6 +136,7 @@ const realDeps = (): LiveDeps => ({
   listApps: () => listApps(),
   deployments: (uuid) => listDeployments(uuid),
   toolVersion: () => toolVersion(),
+  sentrySri: SENTRY_SRI,
 })
 
 /** CMS admin shells (Ruling 26) never show the banner. */
@@ -182,6 +196,8 @@ interface DomainChecks {
   banner: boolean
   /** The faces of main's fonts.css, when main self-hosts them. */
   fonts: DeclaredFace[] | null
+  /** The SRI the deployed Sentry bundle must hash to, when main self-hosts it (#93); else null. */
+  sentry: string | null
 }
 
 /** Step 8's browser part on every visitor page: no Google Fonts request, woff2 200, faces used loaded. */
@@ -226,6 +242,14 @@ async function checkDomain(c: LiveChecks, host: string, baseline: Set<string>, w
       lines.push(...f.lines)
       pass &&= f.pass
     }
+    if (what.sentry) {
+      // verify cannot see this: the bundle Coolify serves, which a layout with a DSN loads.
+      const res = await c.sentryBundle(`${base}${SENTRY_SRC}`)
+      const sri = res.status === 200 ? sri384(res.body) : null
+      const ok = sri === what.sentry
+      lines.push(`  sentry bundle: ${SENTRY_SRC} ${res.status}${sri ? `, ${sri}${ok ? ' ok' : `, NOT the recorded ${what.sentry}`}` : ''}`)
+      pass &&= ok
+    }
     return { pass, lines }
   } catch (e) {
     return { pass: false, lines: [...lines, `  check threw: ${(e as Error).message}`] }
@@ -262,16 +286,21 @@ export async function live(
   const git = (...args: string[]) => deps.exec('git', args, root)
   let checks: LiveChecks | null = null
   const getChecks = async () => (checks ??= await deps.checks())
-  /** What main at `ref` asks of each domain: the banner unless fonts-selfhost has none; the fonts when main self-hosts them. */
+  /**
+   * What main at `ref` asks of each domain: the banner unless a self-hosting flow (fonts-selfhost,
+   * sentry-selfhost) finds none there; the fonts when main self-hosts them.
+   */
   const domainChecks = async (ref: string): Promise<DomainChecks> => {
     const css = await fontsCssAt(deps.exec, root, ref)
     let banner = true
-    if (branch === 'fonts-selfhost') {
+    if (flow.selfHosting) {
       const pkg = await git('show', `${ref}:package.json`)
       if (pkg.code !== 0) throw new Error(`git show ${ref}:package.json failed, so whether main has the banner is unknown:\n${tail(pkg.out)}`)
       banner = hasPackage(pkg.out)
     }
-    return { banner, fonts: css === null ? null : parseFontsCss(css) }
+    // #93: main self-hosts Sentry's bundle (wire's last commit, or sentry-selfhost).
+    const bundle = await git('cat-file', '-e', `${ref}:${SENTRY_FILE}`)
+    return { banner, fonts: css === null ? null : parseFontsCss(css), sentry: bundle.code === 0 ? deps.sentrySri : null }
   }
 
   try {

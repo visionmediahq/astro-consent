@@ -9,11 +9,11 @@ import { afterEach, describe, expect, test } from 'vitest'
 import { detectSentry } from '../../../ci/rollout/detect/sentry'
 import { SENTRY_CDN_FILE, SENTRY_FILE, SENTRY_SRC, SENTRY_SRI, SENTRY_VERSION } from '../../../ci/rollout/lib/sentry'
 import { diskSite, globToRegExp, type SiteFiles } from '../../../ci/rollout/lib/site-files'
-import { parseWireArgs, runDetect, runWire } from '../../../ci/rollout/run'
+import { parseSentryArgs, parseWireArgs, runDetect, runFonts, runSentry, runWire } from '../../../ci/rollout/run'
 import { applyEdits } from '../../../ci/rollout/wire/engine'
 import { FONTS_COMMIT_MESSAGE } from '../../../ci/rollout/wire/fonts'
 import { BRANCH, COMMIT_MESSAGE } from '../../../ci/rollout/wire/index'
-import { commitSentry, fetchSentryBundle, planSentry, SENTRY_COMMIT_MESSAGE, sentryFiles, sri384 } from '../../../ci/rollout/wire/sentry'
+import { commitSentry, fetchSentryBundle, planSentry, SENTRY_BRANCH, SENTRY_COMMIT_MESSAGE, sentryFiles, sri384 } from '../../../ci/rollout/wire/sentry'
 
 const FIXTURES = join(import.meta.dirname, 'fixtures')
 const BUNDLE = new TextEncoder().encode(`/*! @sentry/browser ${SENTRY_VERSION} (test) */\nvar Sentry={};\n`)
@@ -348,5 +348,114 @@ describe('commitSentry', { timeout: 20_000 }, () => {
     writeFileSync(join(dir, 'src/layouts/Base.astro'), 'changed\n')
     expect(() => commitSentry(dir, files, { branch: 'x' })).toThrow(/src\/layouts\/Base\.astro changed since it was planned, nothing written/)
     expect(existsSync(join(dir, SENTRY_FILE))).toBe(false)
+  })
+})
+
+// ── PR 2: the standalone flow ──────────────────────────────────────────────────────────────
+
+/** Site 1218869363 after the banner merged: main has the package wiring (expected/), Sentry still on jsDelivr. */
+const liveDir = (): string => checkout(treeOf(join(FIXTURES, 'site-1218869363', 'expected')))
+
+describe('run.ts sentry: the bundle alone on sentry-selfhost', { timeout: 20_000 }, () => {
+  test('parseSentryArgs: a dir and an optional --dry-run', () => {
+    expect(parseSentryArgs(['site'])).toEqual({ dir: 'site', dryRun: false })
+    expect(parseSentryArgs(['--dry-run', 'site'])).toEqual({ dir: 'site', dryRun: true })
+    expect(() => parseSentryArgs([])).toThrow(/usage/)
+    expect(() => parseSentryArgs(['site', '--force'])).toThrow(/--force/)
+    expect(() => parseSentryArgs(['a', 'b'])).toThrow(/one site dir/)
+  })
+
+  test('one commit on sentry-selfhost from origin/main: the layout and the bundle, nothing else', async () => {
+    const dir = liveDir()
+    runDetect(dir, ['site-1218869363.se'])
+    const { code, output } = await runSentry(dir, { dryRun: false, bundle, openPrs: noPrs })
+    expect(code, output).toBe(0)
+    expect(output).toContain(`committed on ${SENTRY_BRANCH}`)
+    expect(git(dir, 'branch', '--show-current')).toBe(SENTRY_BRANCH)
+    expect(git(dir, 'rev-parse', 'HEAD~1')).toBe(git(dir, 'rev-parse', 'origin/main'))
+    expect(git(dir, 'log', '-1', '--format=%s')).toBe(SENTRY_COMMIT_MESSAGE)
+    expect(git(dir, 'diff', '--name-only', 'HEAD~1', 'HEAD').split('\n').sort()).toEqual([SENTRY_FILE, 'src/layouts/Base.astro'])
+    expect(readFileSync(join(dir, 'src/layouts/Base.astro'), 'utf8')).toContain(`src="${SENTRY_SRC}"`)
+    expect(status(dir)).toBe('')
+  })
+
+  test('--dry-run prints the diff and writes nothing', async () => {
+    const dir = liveDir()
+    runDetect(dir, ['site-1218869363.se'])
+    const { code, output } = await runSentry(dir, { dryRun: true, bundle, openPrs: noPrs })
+    expect(code).toBe(0)
+    expect(output).toContain(`+          src="${SENTRY_SRC}"`)
+    expect(status(dir)).toBe('')
+    expect(git(dir, 'branch', '--show-current')).toBe('main')
+  })
+
+  test('a refused plan, or nothing to self-host: exit 3, nothing written', async () => {
+    const dir = liveDir()
+    runDetect(dir, ['site-1218869363.se'])
+    const failed = await runSentry(dir, {
+      dryRun: false,
+      bundle: async () => {
+        throw new Error('offline')
+      },
+      openPrs: noPrs,
+    })
+    expect(failed.code).toBe(3)
+    expect(failed.output).toContain('sentry: refused, nothing was written')
+    expect(git(dir, 'branch', '--show-current')).toBe('main')
+    const none = checkout(new Map([['src/layouts/Base.astro', '<html><head></head><body /></html>\n']]))
+    runDetect(none, ['x.se'])
+    const r = await runSentry(none, { dryRun: true, bundle, openPrs: noPrs })
+    expect(r.code).toBe(3)
+    expect(r.output).toContain('no Sentry CDN load to self-host (status none)')
+  })
+
+  test('refused (exit 3) while another flow has an open PR or an unmerged branch; it asks about all three', async () => {
+    const dir = liveDir()
+    runDetect(dir, ['site-1218869363.se'])
+    const asked: string[] = []
+    const r = await runSentry(dir, { dryRun: false, bundle, openPrs: async (_r, b) => (asked.push(b), b === 'fonts-selfhost' ? ['https://github.com/visionmediahq/site/pull/7'] : []) })
+    expect(r.code).toBe(3)
+    expect(asked).toEqual(['consent-banner', 'fonts-selfhost', 'astro-consent-update'])
+    expect(r.output).toContain('open fonts-selfhost PR https://github.com/visionmediahq/site/pull/7: merge or close it first, then detect and sentry again')
+    git(dir, 'switch', '-q', '-c', 'consent-banner')
+    writeFileSync(join(dir, 'x.txt'), 'x')
+    git(dir, 'add', 'x.txt')
+    git(dir, 'commit', '-q', '-m', 'x')
+    git(dir, 'push', '-q', 'origin', 'consent-banner')
+    git(dir, 'switch', '-q', 'main')
+    const b = await runSentry(dir, { dryRun: false, bundle, openPrs: noPrs })
+    expect(b.code).toBe(3)
+    expect(b.output).toMatch(/origin has a consent-banner branch \([0-9a-f]{7}\) that is not in origin\/main: .*merge or close the banner first\. Then detect and sentry again/)
+  })
+
+  test('wire refuses while a sentry-selfhost PR is open, and asks about it', async () => {
+    const dir = checkout(treeOf(join(FIXTURES, 'site-1218869363', 'before')))
+    runDetect(dir, ['site-1218869363.se'])
+    const asked: string[] = []
+    const r = await runWire(dir, { dryRun: false, fonts: false, sentryBundle: bundle, install: () => {}, openPrs: async (_r, b) => (asked.push(b), b === SENTRY_BRANCH ? ['https://github.com/visionmediahq/site/pull/8'] : []) })
+    expect(r.code).toBe(3)
+    expect(asked).toContain(SENTRY_BRANCH)
+    expect(r.output).toContain('open sentry-selfhost PR https://github.com/visionmediahq/site/pull/8')
+  })
+})
+
+describe('run.ts fonts with Sentry still on a CDN (review of #127)', { timeout: 20_000 }, () => {
+  test('refused (exit 3, nothing written, no request) while main loads Sentry from a CDN: run.ts sentry first', async () => {
+    const dir = checkout(treeOf(join(FIXTURES, 'site-1218869363', 'expected')))
+    runDetect(dir, ['site-1218869363.se'])
+    let asked = 0
+    const r = await runFonts(dir, {
+      dryRun: false,
+      fetch: async () => {
+        asked++
+        throw new Error('no network in tests')
+      },
+      openPrs: noPrs,
+    })
+    expect(r.code).toBe(3)
+    expect(r.output).toContain("fonts: refused, nothing was written\n  main still loads Sentry's bundle from a CDN (https://cdn.jsdelivr.net/npm/@sentry/browser@8/build/bundle.min.js, src/layouts/Base.astro:")
+    expect(r.output).toContain('run.ts sentry first')
+    expect(asked).toBe(0)
+    expect(git(dir, 'branch', '--show-current')).toBe('main')
   })
 })

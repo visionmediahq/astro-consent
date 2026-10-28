@@ -2,7 +2,8 @@
 // a Swedish body. consent-banner: built from the branch's src/data/privacy.json (which template
 // block: Ruling 40), plus a fonts paragraph when the branch self-hosts the Google Fonts, and one
 // for Sentry's bundle when it self-hosts that (#93).
-// fonts-selfhost: from the families in the branch's src/styles/fonts.css. astro-consent-update: the
+// fonts-selfhost: from the families in the branch's src/styles/fonts.css. sentry-selfhost: from the
+// CDNs report.sentry found (#93). astro-consent-update: the
 // versions from main's and the branch's lockfiles, the CHANGELOG.md entries in between, and whether
 // every visitor is asked again (CONSENT_VERSION). Each takes the Report,
 // the flow's verify result (step names and results, never evidence text), the changed file names
@@ -15,13 +16,14 @@ import { parseFontsCss } from './checks/fonts'
 import { currentFlow, FLOWS, fontsCssAt, openPrsFrom, statePath, unmergedBranch } from './flows'
 import { type Exec, exec as realExec, tail } from './lib/exec'
 import { normaliseReport } from './lib/report'
-import { SENTRY_FILE, SENTRY_SRC, type SentryCdn } from './lib/sentry'
+import { SENTRY_FILE, SENTRY_SRC, SENTRY_VERSION, type SentryCdn } from './lib/sentry'
 import { toolNote } from './lib/tool-version'
 import { SERVICES, type ServiceSlug } from '../../src/services'
 import sv from '../../src/text/sv.json'
 import type { Report, VerifyResult } from './types'
 import { ORIGIN, VERIFY_FILE, verify as realVerify } from './verify'
 import { FONTS_BRANCH, FONTS_CSS } from './wire/fonts'
+import { SENTRY_BRANCH } from './wire/sentry'
 import { CHANGELOG_PATH, changelogBetween, consentVersionAt, reaskLine, UPDATE_BRANCH, updateSummary } from './wire/update'
 
 /** The consent-banner PR's title. No version (#51): the range wire installs moves with each release. */
@@ -32,9 +34,10 @@ export const FONTS_TEMPLATE_PATH = FLOWS['fonts-selfhost'].template
 export interface BodyInput {
   /**
    * Which template block: `consent` or `notice` from the branch's privacy.json (`templateKind`),
-   * not the classification; `fonts` for the fonts-selfhost template, `update` for astro-consent-update's.
+   * not the classification; `fonts` for the fonts-selfhost template, `update` for astro-consent-update's,
+   * `sentry` for sentry-selfhost's.
    */
-  kind: 'consent' | 'notice' | 'fonts' | 'update'
+  kind: 'consent' | 'notice' | 'fonts' | 'update' | 'sentry'
   /** The services of the consent block, in registry order; empty otherwise. */
   services: ServiceSlug[]
   verify: VerifyResult
@@ -103,6 +106,8 @@ export function renderBody(template: string, input: BodyInput): string {
     fontsStep: fontsStep(kind, services),
     sentryStep: sentryStep(kind, services, input.fonts !== undefined),
     sentrySrc: SENTRY_SRC,
+    sentryFile: SENTRY_FILE,
+    sentryVersion: SENTRY_VERSION,
     families: list(input.fonts?.families ?? []),
     files: (input.files?.length ? input.files : ['(se diffen)']).map((f) => `- \`${f}\``).join('\n'),
     tool: toolNote(verify.tool),
@@ -254,6 +259,9 @@ export async function openPr(dir: string, opts: PrOptions): Promise<PrResult> {
     // The body says whether every visitor is asked again: never a guess.
     if (reasks === null) throw new Error(reaskLine(mainLock, branchLock, versionAt))
     update = { from, to, reasks, changelog: changelogBetween(opts.changelog ?? readFileSync(CHANGELOG_PATH, 'utf8'), from, to) }
+  } else if (branch === SENTRY_BRANCH) {
+    kind = 'sentry'
+    if (!changed.includes(SENTRY_FILE)) throw new Error(`${SENTRY_FILE} is not on the branch: run.ts sentry first`)
   } else if (branch !== FONTS_BRANCH) {
     const privacy = await git('show', 'HEAD:src/data/privacy.json')
     if (privacy.code !== 0) throw new Error(`src/data/privacy.json is not on the branch: wire the site first\n${tail(privacy.out)}`)

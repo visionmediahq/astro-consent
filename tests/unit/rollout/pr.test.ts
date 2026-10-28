@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, test } from 'vitest'
 import type { ServiceSlug } from '../../../src/services'
+import { FLOWS } from '../../../ci/rollout/flows'
 import { openPr, originRepo, renderBody, templateKind, TEMPLATE_PATH, TITLE } from '../../../ci/rollout/pr'
 import type { Report, VerifyResult } from '../../../ci/rollout/types'
 
@@ -533,6 +534,71 @@ describe('the banner body with the Sentry commit', () => {
     expect(body).toContain('laddas från sajten själv, `/js/sentry-8.55.2.min.js`')
     expect(body).toContain('svarade 404')
     expect(body).toContain('- `public/js/sentry-8.55.2.min.js`')
+  })
+})
+
+describe('openPr on sentry-selfhost', () => {
+  const SENTRY_GOLDEN = join(import.meta.dirname, 'fixtures/pr-body/sentry-selfhost.md.txt')
+  const SENTRY_PASS: VerifyResult = {
+    ...PASS,
+    steps: ['lockfile', 'build', 'requests', 'consent-paths', 'clip', 'contrast', 'screenshots', 'fonts', 'docker'].map((name, i) => ({
+      step: i + 1,
+      name,
+      pass: true,
+      evidence: 'SECRET-EVIDENCE-TEXT',
+      ...(['consent-paths', 'contrast', 'fonts'].includes(name) ? { skipped: true } : {}),
+    })),
+  }
+  const sentryDir = (): string => {
+    const dir = siteDir()
+    const loader = (cdn: string) => ({ file: 'src/layouts/Base.astro', line: 9, cdn, version: '8.55.0', url: 'x', kind: 'element', src: { start: 0, end: 1 }, cuts: [], initBeforeBundle: false })
+    writeFileSync(
+      join(dir, '.rollout/report.json'),
+      JSON.stringify(report({ classification: 'consent', sentry: { status: 'wire', loaders: [loader('sentry-cdn')], selfHosted: [], reasons: [], hints: [] } } as Partial<Report>)),
+    )
+    writeFileSync(join(dir, '.rollout/verify-sentry-selfhost.json'), JSON.stringify(SENTRY_PASS))
+    mkdirSync(join(dir, '.rollout/shots-sentry-selfhost'))
+    writeFileSync(join(dir, '.rollout/shots-sentry-selfhost/home-1280-open.png'), 'png')
+    return dir
+  }
+  const sentryFake = (more: Record<string, Answer> = {}) =>
+    fake({
+      'git rev-parse --abbrev-ref HEAD': { code: 0, out: 'sentry-selfhost\n' },
+      'git diff --name-only origin/main...HEAD': { code: 0, out: 'public/js/sentry-8.55.2.min.js\nsrc/layouts/Base.astro\n' },
+      ...more,
+    })
+
+  test('its title, -H sentry-selfhost, its own verify file and body; the body matches the golden file', async () => {
+    const dir = sentryDir()
+    const f = sentryFake()
+    const r = await openPr(dir, opts(f, { verify: async () => { throw new Error('the stored verify is for HEAD: no rerun') } }))
+    expect(r.url).toBe('https://github.com/visionmediahq/kund/pull/9')
+    const create = f.calls.find((c) => c.startsWith('gh pr create'))!
+    expect(create).toContain('-H sentry-selfhost')
+    expect(create).toContain('-t Felrapporteringens skript från sajten själv')
+    for (const other of ['consent-banner', 'fonts-selfhost', 'astro-consent-update']) expect(f.calls).toContain(`gh pr list -R visionmediahq/kund --head ${other} --state open --json url,title`)
+    const body = readFileSync(join(dir, '.rollout/pr-body-sentry-selfhost.md'), 'utf8')
+    if (process.env['UPDATE_GOLDEN']) writeFileSync(SENTRY_GOLDEN, body)
+    expect(body).toBe(readFileSync(SENTRY_GOLDEN, 'utf8'))
+    expect(body).toContain('Sentrys CDN i USA')
+    expect(body).not.toContain('svarade 404')
+    expect(body).not.toContain('SECRET-EVIDENCE-TEXT')
+  })
+
+  test('the template: jsDelivr claims nothing about the DSN; an init before the bundle is said plainly (review of #127)', () => {
+    const tpl = readFileSync(FLOWS['sentry-selfhost'].template, 'utf8')
+    const body = (initBeforeBundle: boolean) => renderBody(tpl, { kind: 'sentry', services: [], verify: PASS, issues: [], domain: 'kund.se', sentry: { cdns: ['jsdelivr'], initBeforeBundle } })
+    expect(body(false)).toContain('- Den gamla adressen (`cdn.jsdelivr.net`) svarade 404, så felrapporteringen har inte fungerat.\n')
+    expect(body(false)).not.toContain('börjar fungera')
+    expect(body(true)).toContain('- Sajten startar felrapporteringen (`Sentry.init`) innan skriptet har laddats, så den fungerar inte heller nu; det rättas i en separat ändring.')
+  })
+
+  test('refused without the bundle on the branch, or while another flow has an open PR', async () => {
+    await expect(openPr(sentryDir(), opts(sentryFake({ 'git diff --name-only origin/main...HEAD': { code: 0, out: 'src/layouts/Base.astro\n' } })))).rejects.toThrow(
+      'public/js/sentry-8.55.2.min.js is not on the branch: run.ts sentry first',
+    )
+    const f = sentryFake({ 'gh pr list -R visionmediahq/kund --head consent-banner': { code: 0, out: JSON.stringify([{ url: 'https://github.com/visionmediahq/kund/pull/3', title: TITLE }]) } })
+    await expect(openPr(sentryDir(), opts(f))).rejects.toThrow('an open consent-banner PR (https://github.com/visionmediahq/kund/pull/3) would conflict with sentry-selfhost')
   })
 })
 

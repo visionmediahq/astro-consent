@@ -17,7 +17,7 @@ export function checkSentrySource(files: SiteFiles, bundle: Uint8Array | null, s
   const unsure = info.reasons.map((r) => `  ${r}`)
   if (bundle === null) {
     if (info.status === 'wire' || info.status === 'needs-human') {
-      return { pass: true, lines: [`sentry bundle: not self-hosted on this branch (no ${SENTRY_FILE}), still from a CDN (noted: wire --no-sentry leaves it):`, ...loads, ...unsure] }
+      return { pass: true, lines: [`sentry bundle: not self-hosted on this branch (no ${SENTRY_FILE}), still from a CDN (noted: wire --no-sentry leaves it; run.ts sentry self-hosts it on its own branch):`, ...loads, ...unsure] }
     }
     return { pass: true, lines: [`sentry bundle: ${info.status}${info.selfHosted.length ? ` (${info.selfHosted.join(', ')})` : ''}, nothing to check`] }
   }

@@ -1,0 +1,40 @@
+## Vad ändras
+
+- Skriptet för felrapporteringen (Sentry, som skickar fel till vår GlitchTip när sajtens `PUBLIC_GLITCHTIP_DSN` är satt) hämtas nu från sajten själv: `/js/sentry-8.55.2.min.js`. Inget syns på sidan och inget annat ändras.
+- Förut hämtades det från Sentrys CDN i USA (`browser.sentry-cdn.com`) vid varje sidvisning, innan besökaren hunnit välja något. Det anropet försvinner.
+- `public/js/sentry-8.55.2.min.js`: Sentrys egen fil, version 8.55.2, kontrollerad mot den kontrollsumma Sentry publicerar för den.
+
+Filer:
+
+- `public/js/sentry-8.55.2.min.js`
+- `src/layouts/Base.astro`
+
+## Så testar du
+
+1. Öppna https://kund.se i ett privat fönster med webbläsarens nätverksflik öppen.
+2. Filtrera på `sentry`: inga anrop till `browser.sentry-cdn.com` eller `cdn.jsdelivr.net`. Där felrapporteringen är påslagen hämtas `/js/sentry-8.55.2.min.js` från sajten själv och svarar 200.
+3. Sajten ser ut och fungerar som förut.
+
+## Kontroller
+
+Kontrollerat lokalt med `ci/rollout` (astro-consent @ 0123456):
+
+- ok: 1. lockfile
+- ok: 2. build
+- ok: 3. requests
+- hoppades över: 4. consent-paths
+- ok: 5. clip
+- hoppades över: 6. contrast
+- ok: 7. screenshots
+- hoppades över: 8. fonts
+- ok: 9. docker
+
+Skärmbilder (360/1280 px):
+
+- [home-1280-open.png](https://github.com/visionmediahq/site-factory/blob/main/docs/rollout/2026-10-06-astro-consent/kund/home-1280-open.png)
+
+**Mergas efter verifiering och livekontroll.**
+
+## Relaterade ärenden
+
+Inga

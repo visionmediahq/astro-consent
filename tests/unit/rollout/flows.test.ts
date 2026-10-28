@@ -18,6 +18,7 @@ import {
 import type { Exec } from '../../../ci/rollout/lib/exec'
 import { FONTS_BRANCH } from '../../../ci/rollout/wire/fonts'
 import { BRANCH } from '../../../ci/rollout/wire/index'
+import { SENTRY_BRANCH } from '../../../ci/rollout/wire/sentry'
 import { UPDATE_BRANCH } from '../../../ci/rollout/wire/update'
 
 const dirs: string[] = []
@@ -33,11 +34,15 @@ const rolloutDir = (): string => {
 const answer = (map: Record<string, { code: number; out: string }>): Exec => async (cmd, args) => map[[cmd, ...args].join(' ')] ?? { code: 1, out: 'unexpected' }
 
 describe('FLOWS', () => {
-  test('one flow per branch: consent-banner, fonts-selfhost and astro-consent-update, each refusing the other two', () => {
-    expect(Object.keys(FLOWS)).toEqual([BRANCH, FONTS_BRANCH, UPDATE_BRANCH])
-    expect(FLOWS['consent-banner']).toMatchObject({ branch: 'consent-banner', others: ['fonts-selfhost', 'astro-consent-update'], title: 'Samtyckesbanner (astro-consent)' })
-    expect(FLOWS['fonts-selfhost']).toMatchObject({ branch: 'fonts-selfhost', others: ['consent-banner', 'astro-consent-update'], title: 'Google Fonts från sajten själv' })
-    expect(FLOWS['astro-consent-update']).toMatchObject({ branch: 'astro-consent-update', others: ['consent-banner', 'fonts-selfhost'], title: 'Uppdatera astro-consent' })
+  test('one flow per branch: consent-banner, fonts-selfhost, astro-consent-update and sentry-selfhost, each refusing the others', () => {
+    expect(Object.keys(FLOWS)).toEqual([BRANCH, FONTS_BRANCH, UPDATE_BRANCH, SENTRY_BRANCH])
+    expect(FLOWS['consent-banner']).toMatchObject({ branch: 'consent-banner', others: ['fonts-selfhost', 'astro-consent-update', 'sentry-selfhost'], title: 'Samtyckesbanner (astro-consent)' })
+    expect(FLOWS['fonts-selfhost']).toMatchObject({ branch: 'fonts-selfhost', others: ['consent-banner', 'astro-consent-update', 'sentry-selfhost'], title: 'Google Fonts från sajten själv' })
+    expect(FLOWS['astro-consent-update']).toMatchObject({ branch: 'astro-consent-update', others: ['consent-banner', 'fonts-selfhost', 'sentry-selfhost'], title: 'Uppdatera astro-consent' })
+    expect(FLOWS['sentry-selfhost']).toMatchObject({ branch: 'sentry-selfhost', others: ['consent-banner', 'fonts-selfhost', 'astro-consent-update'], title: 'Felrapporteringens skript från sajten själv' })
+    expect(FLOWS['sentry-selfhost'].template).toMatch(/pr-body\.sentry\.sv\.md$/)
+    // The self-hosting flows install nothing and may run before the banner is live.
+    expect(Object.values(FLOWS).filter((f) => f.selfHosting).map((f) => f.branch)).toEqual(['fonts-selfhost', 'sentry-selfhost'])
     for (const flow of Object.values(FLOWS)) expect(new Set([flow.branch, ...flow.others])).toEqual(new Set(Object.keys(FLOWS)))
     expect(FLOWS['consent-banner'].ownTitles).toContain('Samtyckesbanner (astro-consent 1.0)')
     expect(FLOWS['consent-banner'].template).toMatch(/pr-body\.sv\.md$/)
@@ -49,6 +54,8 @@ describe('FLOWS', () => {
     expect(STEPS).toEqual(['lockfile', 'build', 'requests', 'consent-paths', 'clip', 'contrast', 'screenshots', 'fonts', 'docker'])
     expect(STEPS.filter((s) => !FLOWS['consent-banner'].steps.includes(s))).toEqual(['fonts'])
     expect(STEPS.filter((s) => !FLOWS['fonts-selfhost'].steps.includes(s))).toEqual(['consent-paths', 'contrast'])
+    // Sentry's bundle changes nothing visible: the banner-only steps and the fonts are skipped (fonts run when main self-hosts them).
+    expect(STEPS.filter((s) => !FLOWS['sentry-selfhost'].steps.includes(s))).toEqual(['consent-paths', 'contrast', 'fonts'])
     // The banner changes with the package: every banner step, fonts when the branch self-hosts them.
     expect(FLOWS['astro-consent-update'].steps).toEqual(FLOWS['consent-banner'].steps)
     for (const flow of Object.values(FLOWS)) expect(flow.steps).toEqual(STEPS.filter((s) => flow.steps.includes(s)))
@@ -61,7 +68,8 @@ describe('branch detection', () => {
     expect(isFlowBranch('consent-banner')).toBe(true)
     expect(isFlowBranch('feature/consent-banner')).toBe(false)
     expect(flowOf('astro-consent-update', 'pr', '/x').branch).toBe('astro-consent-update')
-    expect(() => flowOf('main', 'pr', '/x')).toThrow('pr runs on branch consent-banner or fonts-selfhost or astro-consent-update; /x is on main')
+    expect(() => flowOf('main', 'pr', '/x')).toThrow('pr runs on branch consent-banner or fonts-selfhost or astro-consent-update or sentry-selfhost; /x is on main')
+    expect(flowOf('sentry-selfhost', 'verify', '/x').branch).toBe('sentry-selfhost')
     expect(() => flowOf('', 'merge', '/x')).toThrow(/is on \(unknown\)/)
   })
 
@@ -90,6 +98,8 @@ describe('state files', () => {
     expect(stateName('live-baseline-hosts.json', 'fonts-selfhost')).toBe('live-baseline-hosts-fonts-selfhost.json')
     expect(stateName('evidence', 'fonts-selfhost')).toBe('evidence-fonts-selfhost')
     expect(statePath('/s/.rollout', 'apps.json', 'fonts-selfhost')).toBe('/s/.rollout/apps-fonts-selfhost.json')
+    expect(stateName('verify.json', 'sentry-selfhost')).toBe('verify-sentry-selfhost.json')
+    expect(stateName('evidence', 'sentry-selfhost')).toBe('evidence-sentry-selfhost')
   })
 })
 
