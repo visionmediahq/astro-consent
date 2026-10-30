@@ -1,6 +1,7 @@
 // Screenshots for the PR (spec C3 step 7), ported from the pilot kit's shots.ts and shot404.ts.
 // Per path and width: -open (banner), -settings (consent mode), -closed, -footer (PrivacyLinks),
-// and on pages with embeds -placeholder-<n> for every embed and -map for the first one loaded.
+// and on pages with embeds -placeholder-<n> for every embed shown at that width and -map for the
+// first of them loaded.
 // Pass the 404 path from listPages() among `paths` to get the 404 shot.
 import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
@@ -50,15 +51,18 @@ export async function shots(
           await page.waitForTimeout(300)
           await shot('footer')
         }
+        // A site may hide an embed at some widths (a map from sm up, a link on phones): scrolling to
+        // a hidden one waits forever, so only the embeds shown at this width are shot.
         const embeds = page.locator('[data-consent-embed]')
-        const count = await embeds.count()
-        for (let i = 0; i < count; i++) {
+        const shown: number[] = []
+        for (let i = 0; i < (await embeds.count()); i++) if (await embeds.nth(i).isVisible()) shown.push(i)
+        for (const i of shown) {
           await embeds.nth(i).scrollIntoViewIfNeeded()
           await page.waitForTimeout(300)
           await shot(`placeholder-${i + 1}`)
         }
-        if (count) {
-          const first = embeds.first()
+        if (shown.length) {
+          const first = embeds.nth(shown[0]!)
           await first.scrollIntoViewIfNeeded()
           await first.locator('[data-load]').click()
           await page.waitForTimeout(opts.stub ?? true ? 500 : 3000)

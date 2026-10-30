@@ -13,6 +13,7 @@ import { checkConsentPaths } from '../../../ci/rollout/checks/consent-paths'
 import { checkContrast } from '../../../ci/rollout/checks/contrast'
 import { checkEmbedBoxes, compareEmbedHeights } from '../../../ci/rollout/checks/embed-size'
 import { checkRequests } from '../../../ci/rollout/checks/requests'
+import { shots } from '../../../ci/rollout/checks/shots'
 import { wcagContrast } from '../../../ci/rollout/lib/colour'
 
 const MAPS = 'https://www.google.com/maps/embed?pb=fixture'
@@ -254,6 +255,11 @@ const FIXTURES: Record<string, string> = {
   faintveil: page(`<style>${PF.replace('#000', '#fff')}footer::before{content:"";position:absolute;inset:0;background:#fff;opacity:.2}</style><footer><div data-privacy-links><a href="/integritet" style="color:#6b6b6b">Integritetspolicy</a></div></footer>`),
   faintveil3: page(`<style>${PF.replace('#000', '#fff')}footer::before{content:"";position:absolute;inset:0;background:#fff;opacity:.3}</style><footer><div data-privacy-links><a href="/integritet" style="color:#6b6b6b">Integritetspolicy</a></div></footer>`),
   fainturl: page(`<style>${PF}footer::before{content:"";position:absolute;inset:0;background-image:url("/texture.png");opacity:.1}</style><footer>${whiteLink}</footer>`),
+  // A client site shows its map from sm up; phones get an "open in Google Maps" link instead.
+  mobilehidden: page(`<style>@media (max-width: 639px) { .map { display: none } }</style>${banner()}
+  <div class="map"><div data-consent-embed="google-maps"><button data-load>Visa</button></div></div>
+  <main style="height:1200px">Kontakt</main>
+  <footer><div data-privacy-links><a href="/integritet">Integritetspolicy</a></div></footer>`),
   // #102 (a client site): Astro's experimental.csp hashes every <style> it emits and allows no
   // other, so an injected <style> is refused. The banner is styled by the one hashed block.
   csp: (() => {
@@ -535,6 +541,16 @@ try {
     expect(main.length === 2 && wrap.rows.length === 2 && !wrap.rows.find((r) => r.width === 1280)!.ok, '/ratiowrap/ an in-flow wrapper in a padding-ratio box is shorter than main at 1280px (#46, a client site)', { main, wrap })
     const fill = compareEmbedHeights(main, as(await boxes('/ratiofill/')))
     expect(fill.rows.length === 2 && fill.rows.every((r) => r.ok), '/ratiofill/ control: absolute inset-0 fills the box as main did', fill)
+  }
+  {
+    const out = join(dir, 'shots-mobilehidden')
+    const files = await shots(browser, BASE, ['/mobilehidden/'], out, [360, 1280], { stub: true }).catch((e: unknown) => String(e))
+    const names = Array.isArray(files) ? files.map((f) => f.slice(out.length + 1)) : files
+    expect(
+      Array.isArray(names) && !names.some((n) => n.includes('-360-placeholder') || n.includes('-360-map')) && names.includes('mobilehidden-1280-placeholder-1.png') && names.includes('mobilehidden-1280-map.png'),
+      '/mobilehidden/ an embed hidden at 360px gets no placeholder or map shot there, and both at 1280px',
+      names,
+    )
   }
 } finally {
   await browser.close()

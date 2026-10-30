@@ -1,4 +1,4 @@
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { dockerCheck, imageTag } from '../../../ci/rollout/docker'
 import type { Exec } from '../../../ci/rollout/lib/exec'
@@ -45,6 +45,36 @@ describe('dockerCheck', () => {
     expect(result.pass).toBe(true)
     const build = calls.find((c) => c[0] === 'docker' && c[1] === 'build')!
     expect(build.slice(0, 4)).toEqual(['docker', 'build', '--build-arg', 'SITE_URL=https://site-1270076313.se'])
+  })
+
+  test('declares each build arg after every FROM, as Coolify does, so a Dockerfile without ARG gets SITE_URL', async () => {
+    let built = ''
+    const exec: Exec = async (cmd, args) => {
+      if (cmd === 'git' && args[0] === 'clone') {
+        mkdirSync(args.at(-1)!, { recursive: true })
+        writeFileSync(`${args.at(-1)!}/Dockerfile`, 'FROM node:22 AS builder\nRUN npm run build\n\nFROM node:22\nEXPOSE 3000\n')
+      }
+      if (cmd === 'docker' && args[0] === 'build') built = readFileSync(`${args.at(-1)!}/Dockerfile`, 'utf8')
+      return { code: 0, out: cmd === 'docker' && args[0] === 'run' ? 'abc123\n' : '' }
+    }
+    const result = await dockerCheck('https://github.com/visionmediahq/site-1392807757.git', 'consent-banner', async () => true, { exec, waitUp: async () => true }, { SITE_URL: 'https://site-1392807757.se' })
+    expect(result.pass).toBe(true)
+    expect(built).toBe('FROM node:22 AS builder\nARG SITE_URL\nRUN npm run build\n\nFROM node:22\nARG SITE_URL\nEXPOSE 3000\n')
+    expect(result.log).toContain('ARG SITE_URL added after each FROM')
+  })
+
+  test('leaves the Dockerfile alone without build args', async () => {
+    let built = ''
+    const exec: Exec = async (cmd, args) => {
+      if (cmd === 'git' && args[0] === 'clone') {
+        mkdirSync(args.at(-1)!, { recursive: true })
+        writeFileSync(`${args.at(-1)!}/Dockerfile`, 'FROM node:22\nEXPOSE 3000\n')
+      }
+      if (cmd === 'docker' && args[0] === 'build') built = readFileSync(`${args.at(-1)!}/Dockerfile`, 'utf8')
+      return { code: 0, out: cmd === 'docker' && args[0] === 'run' ? 'abc123\n' : '' }
+    }
+    await dockerCheck('https://github.com/visionmediahq/site-1392807757.git', 'consent-banner', async () => true, { exec, waitUp: async () => true })
+    expect(built).toBe('FROM node:22\nEXPOSE 3000\n')
   })
 
   test('uses one lowercase image tag for build, run and removal (ExampleCamp)', async () => {
