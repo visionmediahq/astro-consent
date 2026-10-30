@@ -77,7 +77,7 @@ interface Fake {
   requestOpts: { base: string; expectBanner?: (p: string) => boolean }[]
 }
 
-function fake(o: { branch?: string; mainPkg?: string; mainLock?: string; diff?: string; exec?: Record<string, { code: number; out: string }>; checks?: Partial<Checks>; fontFetch?: FontFetch } = {}): Fake {
+function fake(o: { branch?: string; mainPkg?: string; mainLock?: string; diff?: string; exec?: Record<string, { code: number; out: string; stdout?: string }>; checks?: Partial<Checks>; fontFetch?: FontFetch } = {}): Fake {
   const branch = o.branch ?? 'fonts-selfhost'
   const calls: string[] = []
   const called: string[] = []
@@ -188,6 +188,14 @@ describe('verify on fonts-selfhost', () => {
     expect(evidence(dir, 'fonts-selfhost', '1-lockfile.txt')).toMatch(/package\.json, main → branch: same[\s\S]*package-lock\.json, main → branch: same[\s\S]*changed files \(5\): only the fonts/)
     expect(evidence(dir, 'fonts-selfhost', '8-fonts.txt')).toMatch(/src\/styles\/fonts\.css: \d+ faces, Figtree[\s\S]*dist\/: no Google Fonts host[\s\S]*\/ 360px: ok[\s\S]*every character shown is in a kept face/)
     expect(evidence(dir, 'fonts-selfhost', '9-docker.txt')).toMatch(/step 8 requests against the container \(1280 px\)/)
+  })
+
+  test('step 1: npm ls exiting 1 (ELSPROBLEMS) with its log line on stderr still compares the JSON on stdout (#128)', async () => {
+    const json = JSON.stringify({ ...JSON.parse(NPM_LS), error: { code: 'ELSPROBLEMS', summary: 'invalid: astro@7.3.5', detail: '' } })
+    const dir = siteDir()
+    const r = await verify(dir, report(), { deps: fake({ exec: { 'npm ls': { code: 1, out: `${json}\nnpm error A complete log\n`, stdout: json } } }).deps })
+    expect(r.steps[0]).toMatchObject({ step: 1, pass: true })
+    expect(evidence(dir, 'fonts-selfhost', '1-lockfile.txt')).toMatch(/npm ls on main: exit 1, ELSPROBLEMS: invalid: astro@7\.3\.5/)
   })
 
   test('step 1: package.json or the lockfile changed, or a file the fonts plan does not touch: FAIL', async () => {

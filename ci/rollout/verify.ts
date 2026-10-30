@@ -65,7 +65,7 @@ import { checkSentrySource } from './checks/sentry'
 import { shots } from './checks/shots'
 import { isRoute, routeOf } from './detect/structure'
 import { dockerCheck } from './docker'
-import { type Exec, exec as realExec, tail } from './lib/exec'
+import { type Exec, type ExecResult, exec as realExec, tail } from './lib/exec'
 import { builtCss, neededParts, type Part, partsMissingFromBuild } from './lib/daisyui'
 import { diffLock, diffPackageJson } from './lib/lockfile'
 import { lockPorts, type Ports, PortsBusy, rolloutPorts } from './lib/ports'
@@ -272,6 +272,19 @@ export function filterRoutes(report: Report): Map<string, ServiceSlug> {
 }
 
 /** `name@version` for astro, vite and @tailwindcss/vite anywhere in `npm ls --json` output. */
+/**
+ * `npm ls --json` read from stdout (#128): npm exits 1 on a peer-range problem (ELSPROBLEMS) and
+ * prints a log line on stderr, while the JSON on stdout stays complete. Throws when it is not JSON.
+ * `note` says why npm exited non-zero, for the evidence.
+ */
+export function readNpmLs(res: ExecResult): { versions: string[]; note: string | null } {
+  const json = res.stdout ?? res.out
+  const versions = lsVersions(json)
+  if (res.code === 0) return { versions, note: null }
+  const error = (JSON.parse(json) as { error?: { code?: string; summary?: string } }).error
+  return { versions, note: `exit ${res.code}${error?.code ? `, ${error.code}: ${(error.summary ?? '').split('\n')[0]}` : ''}` }
+}
+
 export function lsVersions(json: string): string[] {
   const names = new Set(['astro', 'vite', '@tailwindcss/vite'])
   const out = new Set<string>()
@@ -599,7 +612,9 @@ async function runVerify(dir: string, report: Report, opts: VerifyOptions, deps:
         const ls: Record<string, string[]> = {}
         for (const [side, cwd] of [['main', mainDir!], ['branch', root]] as const) {
           try {
-            ls[side] = lsVersions((await exec('npm', NPM_LS, cwd)).out)
+            const { versions, note } = readNpmLs(await exec('npm', NPM_LS, cwd))
+            ls[side] = versions
+            if (note) lines.push(`npm ls on ${side}: ${note}`)
           } catch {
             return { pass: false, lines: [...lines, `npm ls on ${side} gave no JSON`] }
           }
@@ -654,7 +669,9 @@ async function runVerify(dir: string, report: Report, opts: VerifyOptions, deps:
       for (const [side, cwd] of [['main', mainDir!], ['branch', root]] as const) {
         const res = await exec('npm', NPM_LS, cwd)
         try {
-          ls[side] = lsVersions(res.out)
+          const { versions, note } = readNpmLs(res)
+          ls[side] = versions
+          if (note) lines.push(`npm ls on ${side}: ${note}`)
         } catch {
           return { pass: false, lines: [...lines, `npm ls on ${side} gave no JSON (exit ${res.code}):`, tail(res.out)] }
         }
