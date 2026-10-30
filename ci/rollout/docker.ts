@@ -1,7 +1,7 @@
 // Verify step 9 (spec C3.8), ported from the pilot kit's dk.sh: the pushed branch cloned clean the
 // way Coolify gets it, the site's own Dockerfile built (no git in the image) and run with PORT set,
 // the checks run against the container, then the container, image, build cache and clone deleted.
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { type Exec, exec as realExec, tail } from './lib/exec'
@@ -73,7 +73,14 @@ export async function dockerCheck(
     log.push(`cloned ${repoUrl}#${branch}; EXPOSE ${port}`)
     built = true
     const args = Object.entries(buildArgs).flatMap(([k, v]) => ['--build-arg', `${k}=${v}`])
-    if (args.length) log.push(`build args: ${Object.keys(buildArgs).join(', ')}`)
+    if (args.length) {
+      log.push(`build args: ${Object.keys(buildArgs).join(', ')}`)
+      // A build arg reaches only a stage that declares it. Coolify adds an ARG for each build
+      // variable after every FROM, so a Dockerfile without `ARG SITE_URL` still builds there.
+      const decl = Object.keys(buildArgs).map((k) => `ARG ${k}`).join('\n')
+      writeFileSync(dockerfile, readFileSync(dockerfile, 'utf8').replace(/^(\s*FROM\s.*)$/gim, `$1\n${decl}`))
+      log.push(`${Object.keys(buildArgs).map((k) => `ARG ${k}`).join(', ')} added after each FROM (as Coolify does)`)
+    }
     const build = await exec('docker', ['build', ...args, '-t', image, clone])
     log.push(`docker build exit ${build.code}`)
     if (build.code !== 0) return { pass: false, log: `${log.join('\n')}\n${tail(build.out, 30)}` }
