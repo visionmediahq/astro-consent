@@ -675,6 +675,20 @@ describe('verify', () => {
     ])
   })
 
+  test('step 1: npm ls exiting 1 with ELSPROBLEMS on both sides compares the JSON on stdout and passes (#128)', async () => {
+    const dir = siteDir()
+    const base = fake()
+    const json = JSON.stringify({ ...JSON.parse(npmLs('7.3.5')), error: { code: 'ELSPROBLEMS', summary: 'invalid: astro@7.3.5 /x/node_modules/astro', detail: '' } })
+    const exec: Exec = async (cmd, args, cwd) =>
+      [cmd, ...args].join(' ').startsWith('npm ls')
+        ? { code: 1, out: `${json}\nnpm error A complete log of this run can be found in: /x.log\n`, stdout: `${json}\n` }
+        : base.deps.exec!(cmd, args, cwd)
+    const result = await verify(dir, report(), { deps: { ...base.deps, exec } })
+    expect(result.steps[0]).toMatchObject({ step: 1, pass: true })
+    expect(result.steps[0]!.evidence).toMatch(/npm ls astro vite @tailwindcss\/vite: same/)
+    expect(result.steps[0]!.evidence).toMatch(/npm ls on main: exit 1, ELSPROBLEMS: invalid: astro@7\.3\.5/)
+  })
+
   test('step 3: main already showing a banner is recorded as "main already green", not a failure', async () => {
     const dir = siteDir()
     const f = fake({

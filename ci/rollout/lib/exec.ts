@@ -6,6 +6,8 @@ export interface ExecResult {
   code: number
   /** stdout and stderr, interleaved as they arrived. */
   out: string
+  /** stdout alone, for output that is parsed (npm ls --json prints its log line on stderr). Fakes may leave it out. */
+  stdout?: string
 }
 
 export type Exec = (cmd: string, args: string[], cwd?: string) => Promise<ExecResult>
@@ -14,10 +16,11 @@ export const exec: Exec = (cmd, args, cwd) =>
   new Promise((resolve) => {
     const child = spawn(cmd, args, { cwd, stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, ASTRO_TELEMETRY_DISABLED: '1' } })
     let out = ''
-    child.stdout.on('data', (d: Buffer) => (out += d.toString()))
+    let stdout = ''
+    child.stdout.on('data', (d: Buffer) => ((out += d.toString()), (stdout += d.toString())))
     child.stderr.on('data', (d: Buffer) => (out += d.toString()))
-    child.on('error', (e) => resolve({ code: 127, out: `${out}${String(e)}\n` }))
-    child.on('close', (code) => resolve({ code: code ?? 1, out }))
+    child.on('error', (e) => resolve({ code: 127, out: `${out}${String(e)}\n`, stdout }))
+    child.on('close', (code) => resolve({ code: code ?? 1, out, stdout }))
   })
 
 /** The last `n` lines of a command's output, for the evidence. */
