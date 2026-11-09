@@ -5,16 +5,24 @@
 import { readFileSync } from 'node:fs'
 import { expect, test, vi } from 'vitest'
 
-vi.mock('zod', async () => ({ ...(await import('zod-floor')), FLOOR: true }))
+// Every builder config.ts takes from `z` is recorded: proof that its schema is built by the floor copy.
+const floor = vi.hoisted(() => ({ used: new Set<string>() }))
+vi.mock('zod', async () => {
+  const m = await import('zod-floor')
+  const z = new Proxy(m.z, { get: (t, k, r) => (floor.used.add(String(k)), Reflect.get(t, k, r)) })
+  return { ...m, z, FLOOR: true }
+})
 
 const { ConfigError, parsePrivacyConfig } = await import('../../src/config')
 
 const json = (path: string): Record<string, any> => JSON.parse(readFileSync(new URL(path, import.meta.url), 'utf8'))
 
 test('the floor copy is the version package.json names, and config.ts gets it', async () => {
-  const floor = String(json('../../package.json').dependencies.zod).replace(/^\^/, '')
-  expect(json('../../node_modules/zod-floor/package.json').version).toBe(floor)
+  const range = String(json('../../package.json').dependencies.zod).replace(/^\^/, '')
+  expect(json('../../node_modules/zod-floor/package.json').version).toBe(range)
   expect((await import('zod')) as unknown as { FLOOR?: boolean }).toHaveProperty('FLOOR', true)
+  // config.ts built its schema on import, with the floor copy's builders.
+  for (const builder of ['strictObject', 'array', 'enum', 'url']) expect(floor.used, builder).toContain(builder)
 })
 
 test('the schema accepts a full config and rejects bad values on the floor zod', () => {
@@ -34,4 +42,7 @@ test('the schema accepts a full config and rejects bad values on the floor zod',
   expect(field({ services: [], policy_url: 'javascript:alert(1)' })).toBe('policy_url')
   expect(field({ services: [], log_endpoint: 'http://log.example' })).toBe('log_endpoint')
   expect(field({ services: [], has_banner: true })).toBe('has_banner')
+  // Review of #144: 4.3.6's z.url alone accepts these; config.ts refuses them on every version.
+  expect(field({ services: [], policy_url: 'https:/kund.se/integritet' })).toBe('policy_url')
+  expect(field({ services: [], log_endpoint: 'https:log.kund.se' })).toBe('log_endpoint')
 })
