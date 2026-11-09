@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+- Fix: on a phone (below `sm`) the notice banner is a bar flush with the bottom edge instead of a
+  floating card: no side or bottom inset, no shadow, no radius, a top border only, tighter padding
+  and room for `env(safe-area-inset-bottom)`. On the demo it covers 177px of a 390×844 screen
+  instead of 210px (the card plus its 16px gap). The card hid content under a client site's hero
+  (#131). "OK" stays full width (#116). The consent banner and every width from `sm` up are
+  unchanged.
+- No wording change: `CONSENT_VERSION` is unchanged and no visitor is asked again. A shorter
+  notice text on phones (#131's larger saving) is still open.
+
 ## 1.1.5
 
 - Fix: on a phone (below `sm`) the banner's actions are full width (`max-sm:w-full`), and stack.
