@@ -111,7 +111,8 @@ export interface Checks {
 
 export interface VerifyDeps {
   exec: Exec
-  preview: (dir: string, port: number, ssr: boolean, entry?: string) => Promise<Preview>
+  /** `env`: SITE_URL as Coolify sets it at runtime (#90 §6); `astro preview` loads the config too. */
+  preview: (dir: string, port: number, ssr: boolean, entry?: string, env?: Record<string, string>) => Promise<Preview>
   checks: () => Promise<Checks>
   /** `buildArgs`: what Coolify passes as build variables (SITE_URL from the site's first domain). */
   docker: (repoUrl: string, branch: string, run: (url: string) => Promise<boolean>, buildArgs?: Record<string, string>) => Promise<{ pass: boolean; log: string }>
@@ -512,7 +513,7 @@ async function runVerify(dir: string, report: Report, opts: VerifyOptions, deps:
    */
   const entryOf = (dir: string) => (ssr ? ssrEntry(dir).entry : undefined)
   const mainPreview = async (step: string, lines: string[]) => {
-    let p = await deps.preview(mainDir!, ports.main, ssr, entryOf(mainDir!))
+    let p = await deps.preview(mainDir!, ports.main, ssr, entryOf(mainDir!), siteUrl)
     previews.push(p)
     let restarted = false
     return {
@@ -533,7 +534,7 @@ async function runVerify(dir: string, report: Report, opts: VerifyOptions, deps:
             // no log (tests, or it was never written)
           }
           try {
-            p = await deps.preview(mainDir!, ports.main, ssr, entryOf(mainDir!))
+            p = await deps.preview(mainDir!, ports.main, ssr, entryOf(mainDir!), siteUrl)
           } catch (again) {
             throw new Error(`main's preview stopped answering (${message}) and did not restart: ${firstLine(again)}`, { cause: again })
           }
@@ -599,7 +600,7 @@ async function runVerify(dir: string, report: Report, opts: VerifyOptions, deps:
       if (demo) return { pass: true, skipped: true, lines: ['skipped (demo)'] }
       const lines: string[] = []
       for (const [side, cwd] of [['main', mainDir!], ['branch', root]] as const) {
-        const ci = await exec('npm', ['ci', '--no-audit', '--no-fund'], cwd)
+        const ci = await exec('npm', ['ci', '--no-audit', '--no-fund'], cwd, siteUrl)
         if (ci.code !== 0) return { pass: false, lines: [`npm ci failed on ${side}:`, tail(ci.out)] }
       }
       const branchPkg = readFileSync(join(root, 'package.json'), 'utf8')
@@ -740,7 +741,7 @@ async function runVerify(dir: string, report: Report, opts: VerifyOptions, deps:
         const say = (e: ReturnType<typeof ssrEntry>) => `${e.entry} (${e.from === 'start' ? 'the start script' : 'default'})`
         lines.push(b.entry === m.entry ? `SSR entry: ${say(b)}` : `SSR entry: branch ${say(b)}, main ${say(m)}`)
       }
-      branch = await deps.preview(root, ports.branch, ssr, demo ? 'server/entry.mjs' : entryOf(root))
+      branch = await deps.preview(root, ports.branch, ssr, demo ? 'server/entry.mjs' : entryOf(root), siteUrl)
       previews.push(branch)
       const c = await getChecks()
       paths = await c.pages(branch.url, { distDir: demo ? root : join(root, 'dist'), ssr })
@@ -917,7 +918,7 @@ async function runVerify(dir: string, report: Report, opts: VerifyOptions, deps:
           pass &&= judged.length > 0 && judged.every((j) => j.ok)
         }
         return pass
-      }, report.domains[0] ? { SITE_URL: `https://${report.domains[0]}` } : {})
+      }, siteUrl)
       return { pass: result.pass, lines: [...lines, result.log] }
     },
   }

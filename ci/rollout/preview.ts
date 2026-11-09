@@ -91,7 +91,7 @@ export function ssrEntry(dir: string): { entry: string; from: 'start' | 'default
  * that already answers, so a stale server is never checked by mistake. Throws with the log's tail
  * when the server does not come up within 60 s.
  */
-export async function startPreview(dir: string, port: number, ssr: boolean, entry = DEFAULT_SSR_ENTRY): Promise<Preview> {
+export async function startPreview(dir: string, port: number, ssr: boolean, entry = DEFAULT_SSR_ENTRY, env: Record<string, string> = {}): Promise<Preview> {
   const url = ssr ? `http://127.0.0.1:${port}` : `http://localhost:${port}`
   if ((await isUp(`http://127.0.0.1:${port}/`)) || (await isUp(`http://localhost:${port}/`))) {
     throw new Error(`port ${port} is already in use: stop whatever serves it first`)
@@ -103,7 +103,7 @@ export async function startPreview(dir: string, port: number, ssr: boolean, entr
     cwd: dir,
     detached: true,
     stdio: ['ignore', fd, fd],
-    env: { ...process.env, HOST: '127.0.0.1', PORT: String(port), ASTRO_TELEMETRY_DISABLED: '1' },
+    env: { ...process.env, ...env, HOST: '127.0.0.1', PORT: String(port), ASTRO_TELEMETRY_DISABLED: '1' },
   })
   closeSync(fd)
   child.unref()
