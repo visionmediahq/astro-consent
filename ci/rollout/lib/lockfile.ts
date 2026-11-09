@@ -28,7 +28,7 @@ export const ALLOWLIST: readonly AllowRule[] = [
     name: 'zod',
     changes: ['version'],
     major: 4,
-    why: 'astro-consent depends on zod ^4.6.5, so npm lifts an older zod 4 to satisfy both',
+    why: 'astro-consent depends on zod ^4.3.6 (the Astro 6 floor, #17); a site still below it, or a raised floor, lifts an older zod 4 to satisfy both',
   },
   {
     name: 'lightningcss',

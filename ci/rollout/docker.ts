@@ -91,7 +91,9 @@ export async function dockerCheck(
     const build = await exec('docker', ['build', ...args, '-t', image, clone])
     log.push(`docker build exit ${build.code}`)
     if (build.code !== 0) return { pass: false, log: `${log.join('\n')}\n${tail(build.out, 30)}` }
-    const started = await exec('docker', ['run', '-d', '--rm', '-p', `${hostPort}:${port}`, '-e', 'HOST=0.0.0.0', '-e', `PORT=${port}`, image])
+    // Coolify sets the build variables at runtime too (#90 §6): an SSR server may read SITE_URL per request.
+    const runtime = Object.entries(buildArgs).flatMap(([k, v]) => ['-e', `${k}=${v}`])
+    const started = await exec('docker', ['run', '-d', '--rm', '-p', `${hostPort}:${port}`, '-e', 'HOST=0.0.0.0', '-e', `PORT=${port}`, ...runtime, image])
     if (started.code !== 0) return { pass: false, log: `${log.join('\n')}\ndocker run failed:\n${tail(started.out)}` }
     container = started.out.trim().split('\n').at(-1) ?? null
     const url = `http://127.0.0.1:${hostPort}`

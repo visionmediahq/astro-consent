@@ -41,6 +41,12 @@ describe('parsePrivacyConfig', () => {
     expect(fieldOf({ services: [], policy_url: 'integritet' })).toBe('policy_url')
   })
 
+  // Review of #144: zod 4.3.6's z.url accepts these where 4.6.5 rejects them; config.ts says it itself.
+  test('parsePrivacyConfig rejects a policy_url or log_endpoint without // after the scheme', () => {
+    for (const url of ['https:/kund.se/integritet', 'https:kund.se', 'http:/kund.se']) expect(fieldOf({ services: [], policy_url: url }), url).toBe('policy_url')
+    for (const url of ['https:/log.kund.se', 'https:log.kund.se']) expect(fieldOf({ services: [], log_endpoint: url }), url).toBe('log_endpoint')
+  })
+
   test('parsePrivacyConfig rejects a javascript: policy_url', () => {
     expect(fieldOf({ services: [], policy_url: 'javascript:alert(1)' })).toBe('policy_url')
   })

@@ -32,7 +32,7 @@
     "astro": "^6.0.0 || ^7.0.0"
   },
   "dependencies": {
-    "zod": "^4.6.5"
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@astrojs/compiler-rs": "^0.5.1",
@@ -48,6 +48,7 @@
     "tailwindcss": "^4.2.2",
     "tsx": "^4",
     "typescript": "^5",
-    "vitest": "^4.1.11"
+    "vitest": "^4.1.11",
+    "zod-floor": "npm:zod@4.3.6"
   }
 }

@@ -10,11 +10,12 @@ export interface ExecResult {
   stdout?: string
 }
 
-export type Exec = (cmd: string, args: string[], cwd?: string) => Promise<ExecResult>
+/** `env`: extra variables on top of the process environment (verify's builds get SITE_URL, #90). */
+export type Exec = (cmd: string, args: string[], cwd?: string, env?: Record<string, string>) => Promise<ExecResult>
 
-export const exec: Exec = (cmd, args, cwd) =>
+export const exec: Exec = (cmd, args, cwd, env) =>
   new Promise((resolve) => {
-    const child = spawn(cmd, args, { cwd, stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, ASTRO_TELEMETRY_DISABLED: '1' } })
+    const child = spawn(cmd, args, { cwd, stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, ASTRO_TELEMETRY_DISABLED: '1', ...env } })
     let out = ''
     let stdout = ''
     child.stdout.on('data', (d: Buffer) => ((out += d.toString()), (stdout += d.toString())))
