@@ -17,6 +17,66 @@ import {
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 
 test.describe('notice mode', () => {
+  // #131: the floating card covered a quarter of a phone's first screen (358×202 at 390×844).
+  test('on a phone the notice is a bar flush with the bottom edge: no inset, no shadow, lower than the card', async ({ page, context }) => {
+    await stub(context)
+    await page.setViewportSize({ width: 390, height: 844 })
+    await page.goto(NOTICE)
+    await expect(banner(page)).toBeVisible()
+    const box = (await banner(page).boundingBox())!
+    expect(box.x).toBe(0)
+    expect(box.width).toBe(390)
+    expect(box.y + box.height).toBe(844)
+    expect(box.height).toBeLessThan(190)
+    const ok = (await action(page, 'notice_ok').boundingBox())!
+    expect(ok.width).toBeGreaterThan(390 - 2 * 16 - 1)
+  })
+
+  // #131: the shorter body (two short sentences) takes the bar from 177px to about 140-160px.
+  test('on a phone the notice text keeps the bar at most 160px tall', async ({ page, context }) => {
+    await stub(context)
+    for (const width of [360, 390]) {
+      await page.setViewportSize({ width, height: 844 })
+      await page.goto(NOTICE)
+      await expect(banner(page)).toBeVisible()
+      expect((await banner(page).boundingBox())!.height, `${width}px`).toBeLessThanOrEqual(160)
+    }
+  })
+
+  test('on a phone the notice bar has no shadow, radius or side borders', async ({ page, context }) => {
+    await stub(context)
+    await page.setViewportSize({ width: 390, height: 844 })
+    await page.goto(NOTICE)
+    await expect(banner(page)).toBeVisible()
+    const style = await banner(page).evaluate((el) => {
+      const s = getComputedStyle(el)
+      // Tailwind 4's shadow-none leaves transparent zero-size layers: no layer may paint.
+      const shadow = s.boxShadow === 'none' || s.boxShadow.split(/,(?![^(]*\))/).every((l) => /^\s*rgba\(0, 0, 0, 0\) 0px 0px 0px 0px\s*$/.test(l))
+      return { shadow, radius: s.borderTopLeftRadius, top: s.borderTopWidth, bottom: s.borderBottomWidth, left: s.borderLeftWidth }
+    })
+    expect(style).toEqual({ shadow: true, radius: '0px', top: '1px', bottom: '0px', left: '0px' })
+  })
+
+  test('from sm up the notice stays the floating card', async ({ page, context }) => {
+    await stub(context)
+    await page.setViewportSize({ width: 1280, height: 800 })
+    await page.goto(NOTICE)
+    await expect(banner(page)).toBeVisible()
+    const box = (await banner(page).boundingBox())!
+    expect(800 - (box.y + box.height)).toBe(16)
+    expect(await banner(page).evaluate((el) => getComputedStyle(el).boxShadow)).toMatch(/rgba\(0, 0, 0, 0\.\d+\) 0px \d+px/)
+  })
+
+  test('the consent banner keeps the floating card on a phone', async ({ page, context }) => {
+    await stub(context)
+    await page.setViewportSize({ width: 390, height: 844 })
+    await page.goto('/')
+    await expect(banner(page)).toBeVisible()
+    const box = (await banner(page).boundingBox())!
+    expect(box.x).toBe(16)
+    expect(844 - (box.y + box.height)).toBe(16)
+  })
+
   test('shows only OK', async ({ page, context }) => {
     await stub(context)
     await page.goto(NOTICE)

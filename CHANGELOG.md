@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+- Fix: on a phone (below `sm`) the notice banner is a bar flush with the bottom edge instead of a
+  floating card: no side or bottom inset, no shadow, no radius, a top border only, tighter padding
+  and room for `env(safe-area-inset-bottom)`. On the demo it covers 177px of a 390×844 screen
+  instead of 210px (the card plus its 16px gap). The card hid content under a client site's hero
+  (#131). "OK" stays full width (#116). The consent banner and every width from `sm` up are
+  unchanged.
+- Shorter notice text, on every width: "Vi mäter besök anonymt med Umami, utan cookies och utan
+  personuppgifter. Ditt val sparas i webbläsaren." (was two longer sentences, four lines on a
+  phone). With the bar layout the notice is 137px at 390px and 157px at 360px, down from 210px.
+  The notice text is not part of the consent terms: `CONSENT_VERSION` is unchanged and no visitor
+  is asked again.
+
 ## 1.1.5
 
 - Fix: on a phone (below `sm`) the banner's actions are full width (`max-sm:w-full`), and stack.
