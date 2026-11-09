@@ -241,6 +241,42 @@ describe('verify', () => {
     })
   })
 
+  describe('#90 §6: SITE_URL from the first domain, wherever Coolify sets it', () => {
+    const watch = (f: Fake) => {
+      const inner = f.deps.exec!
+      const npm: { line: string; env?: Record<string, string> }[] = []
+      f.deps.exec = async (cmd, args, cwd, env) => {
+        if (cmd === 'npm') npm.push({ line: args.join(' '), env })
+        return inner(cmd, args, cwd, env)
+      }
+      const previews: (Record<string, string> | undefined)[] = []
+      const innerPreview = f.deps.preview!
+      f.deps.preview = async (dir, port, ssr, entry, env) => (previews.push(env), innerPreview(dir, port, ssr, entry, env))
+      return { npm, previews }
+    }
+
+    test('both installs, both builds and both previews get it (an astro.config that throws without it)', async () => {
+      const f = fake()
+      const seen = watch(f)
+      await verify(siteDir(), report(), { deps: f.deps })
+      const want = { SITE_URL: `https://${report().domains[0]}` }
+      const of = (prefix: string) => seen.npm.filter((c) => c.line.startsWith(prefix))
+      expect(of('ci').length).toBe(2)
+      expect(of('run build').length).toBe(2)
+      for (const c of [...of('ci'), ...of('run build')]) expect(c.env, c.line).toEqual(want)
+      expect(seen.previews.length).toBeGreaterThanOrEqual(2)
+      for (const e of seen.previews) expect(e).toEqual(want)
+    })
+
+    test('a report without domains passes nothing', async () => {
+      const f = fake()
+      const seen = watch(f)
+      await verify(siteDir(), report({ domains: [] }), { deps: f.deps })
+      for (const c of seen.npm.filter((c) => /^(ci|run build)/.test(c.line))) expect(c.env ?? {}, c.line).toEqual({})
+      for (const e of seen.previews) expect(e ?? {}).toEqual({})
+    })
+  })
+
   describe('free disk (#23: Docker I/O errors at 2.5 GB free)', () => {
     test('under 15 GB free: stops before any step, says how much is free and what to delete', async () => {
       const dir = siteDir()
@@ -1166,6 +1202,12 @@ describe('dockerCheck', () => {
     return { exec, calls, clone: () => clone }
   }
 
+  test('#90 §6: the build variables are also set in the running container (Coolify sets them at runtime too)', async () => {
+    const d = dockerFake()
+    await dockerCheck('git@github.com:visionmediahq/site.git', 'consent-banner', async () => true, { exec: d.exec, waitUp: async () => true }, { SITE_URL: 'https://kund.se' })
+    expect(d.calls).toContain('docker run -d --rm -p 4397:4321 -e HOST=0.0.0.0 -e PORT=4321 -e SITE_URL=https://kund.se rollout-site')
+  })
+
   test('clone, build, run with PORT from EXPOSE, check, then stop, rmi, prune and delete the clone', async () => {
     const d = dockerFake()
     const result = await dockerCheck('git@github.com:visionmediahq/site.git', 'consent-banner', async (url) => url === 'http://127.0.0.1:4397', {
@@ -1223,13 +1265,13 @@ describe('startPreview', () => {
     mkdirSync(join(dir, 'dist/server'), { recursive: true })
     writeFileSync(
       join(dir, 'dist/server/entry.mjs'),
-      "import { createServer } from 'node:http'\ncreateServer((q, s) => s.end('hej ' + process.env.HOST)).listen(Number(process.env.PORT), process.env.HOST)\n",
+      "import { createServer } from 'node:http'\ncreateServer((q, s) => s.end('hej ' + process.env.HOST + ' ' + process.env.SITE_URL)).listen(Number(process.env.PORT), process.env.HOST)\n",
     )
     const port = 4380 + Math.floor(Math.random() * 10)
-    const preview = await startPreview(dir, port, true)
+    const preview = await startPreview(dir, port, true, undefined, { SITE_URL: 'https://kund.se' })
     try {
       expect(preview.url).toBe(`http://127.0.0.1:${port}`)
-      expect(await (await fetch(preview.url)).text()).toBe('hej 127.0.0.1')
+      expect(await (await fetch(preview.url)).text()).toBe('hej 127.0.0.1 https://kund.se')
     } finally {
       await preview.stop()
     }

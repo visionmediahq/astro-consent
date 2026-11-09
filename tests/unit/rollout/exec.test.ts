@@ -10,4 +10,9 @@ describe('exec', () => {
     expect(res.out).toContain('{"a":1}')
     expect(res.out).toContain('npm error A complete log')
   })
+
+  test('env: extra variables reach the child on top of the process environment (#90 §6)', async () => {
+    const res = await exec(process.execPath, ['-e', "process.stdout.write(process.env.SITE_URL + ' ' + typeof process.env.PATH)"], undefined, { SITE_URL: 'https://kund.se' })
+    expect(res.stdout).toBe('https://kund.se string')
+  })
 })
