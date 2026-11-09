@@ -10,6 +10,8 @@ import { chromium, expect, test } from '@playwright/test'
 import { checkClip } from '../../ci/rollout/checks/clip'
 
 const SITE_VARIABLE = '<style>:root{--border:#e6e3dd}</style>'
+// Review of #140: size tokens set to colours shrink the switches to 2px and checkboxes to 8px, border intact.
+const SIZE_VARIABLES = '<style>:root{--size-selector:#e6e3dd;--size-field:#eee}</style>'
 
 function proxy(demo: string, inject: string): Server {
   return createServer(async (req, res) => {
@@ -29,12 +31,14 @@ const listen = async (s: Server): Promise<string> => {
 }
 let plain = ''
 let broken = ''
+let shrunk = ''
 
 test.beforeAll(async ({}, info) => {
   // The consent demo the config serves (baseURL).
   const demo = String(info.project.use.baseURL)
   plain = await listen(proxy(demo, ''))
   broken = await listen(proxy(demo, SITE_VARIABLE))
+  shrunk = await listen(proxy(demo, SIZE_VARIABLES))
 })
 test.afterAll(() => servers.forEach((s) => s.close()))
 
@@ -53,6 +57,11 @@ test('step 5 reports the banner and placeholder controls that a site variable le
     expect(kinds(bad)).toEqual(['badge', 'checkbox', 'toggle'])
     expect(bad.length).toBeGreaterThan(0)
     expect(bad.every((r) => r.bare && r.clipped && r.border === '0px none'), 'with --border set to a colour, every control lost its border').toBe(true)
+
+    // The size tokens: border kept, but the switches and checkboxes shrink to a sliver.
+    const small = (await checkClip(browser, shrunk, ['/karta'], [360], { stub: true })).filter((r) => r.kind === 'control' && !r.button.startsWith('badge'))
+    expect(small.length).toBeGreaterThan(0)
+    expect(small.every((r) => r.tiny && r.clipped && !r.bare), 'with --size-* set to colours, every switch and checkbox is too small').toBe(true)
   } finally {
     await browser.close()
   }

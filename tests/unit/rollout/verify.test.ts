@@ -449,13 +449,14 @@ describe('verify', () => {
   test('step 5: a banner control with no border fails and names the likely cause (#115)', async () => {
     const dir = siteDir()
     const button: ClipResult = { path: '/', width: 360, kind: 'button', button: 'Neka', w: 80, boxW: 300, over: false, out: false, covered: false, cut: false, clipped: false }
-    const row = (button: string, border: string, bare: boolean): ClipResult => ({ path: '/', width: 360, kind: 'control', button, w: bare ? 5 : 33, boxW: 0, over: false, out: false, covered: false, cut: false, border, bare, clipped: bare })
-    const f = fake({ checks: { clip: async () => [button, row('toggle external', '0px none', true), row('badge Alltid på', '1px solid', false)] } })
+    const row = (button: string, border: string, bare: boolean, tiny = false): ClipResult => ({ path: '/', width: 360, kind: 'control', button, w: bare || tiny ? 5 : 33, h: 20, boxW: 0, over: false, out: false, covered: false, cut: false, border, bare, tiny, clipped: bare || tiny })
+    const f = fake({ checks: { clip: async () => [button, row('toggle external', '0px none', true), row('toggle statistics', '1px solid', false, true), row('badge Alltid på', '1px solid', false)] } })
     const result = await verify(dir, report(), { deps: f.deps })
     expect(result.steps.at(-1)).toMatchObject({ step: 5, pass: false })
     const text = evidence(dir, '5-clip.txt')
-    expect(text).toContain('/ 360px control "toggle external" border 0px none NO BORDER (a site variable named like a daisyUI token, e.g. --border? #115)')
-    expect(text).toContain('/ 360px control "badge Alltid på" border 1px solid ok')
+    expect(text).toContain('/ 360px control "toggle external" 5×20px border 0px none NO BORDER (a site rule, or a variable named like a daisyUI token such as --border, #115)')
+    expect(text).toContain('/ 360px control "toggle statistics" 5×20px border 1px solid TOO SMALL (a variable named like a daisyUI size token, e.g. --size-selector or --size-field? #115)')
+    expect(text).toContain('/ 360px control "badge Alltid på" 33×20px border 1px solid ok')
   })
 
   describe("main's preview stops answering mid-step (#20)", () => {
