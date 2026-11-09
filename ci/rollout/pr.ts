@@ -40,6 +40,8 @@ export interface BodyInput {
   kind: 'consent' | 'notice' | 'fonts' | 'update' | 'sentry'
   /** The services of the consent block, in registry order; empty otherwise. */
   services: ServiceSlug[]
+  /** privacy.json has a policy_url, so the banner renders "Läs mer": keeps the `{{#policy}}` blocks (#113). */
+  policy?: boolean
   verify: VerifyResult
   /** Issue URLs. */
   issues: string[]
@@ -88,12 +90,13 @@ function sentryStep(kind: BodyInput['kind'], services: ServiceSlug[], fonts: boo
   return `${n}. I nätverksfliken: inga anrop till \`browser.sentry-cdn.com\` eller \`cdn.jsdelivr.net\`. Där felrapporteringen är påslagen hämtas \`${SENTRY_SRC}\` från sajten själv och svarar 200.`
 }
 
-/** Fills `{{name}}` values and `{{#consent}}`, `{{#notice}}`, `{{#fonts}}`, `{{#sentry}}` … `{{/…}}` blocks. */
+/** Fills `{{name}}` values and `{{#consent}}`, `{{#notice}}`, `{{#policy}}`, `{{#fonts}}`, `{{#sentry}}` … `{{/…}}` blocks. */
 export function renderBody(template: string, input: BodyInput): string {
   const { kind, services, verify, issues, domain } = input
   if (!verify.pass) throw new Error('verify did not pass: no PR body')
   const active = new Set<string>([
     kind,
+    ...(input.policy ? ['policy'] : []),
     ...(input.fonts ? ['fonts'] : []),
     ...(input.update ? [input.update.reasks ? 'reask' : 'noreask'] : []),
     ...(input.sentry ? ['sentry', ...input.sentry.cdns.map((c) => (c === 'jsdelivr' ? 'sentryjsdelivr' : 'sentrycdn')), ...(input.sentry.initBeforeBundle ? ['sentryinitlate'] : [])] : []),
@@ -118,9 +121,14 @@ export function renderBody(template: string, input: BodyInput): string {
     toVersion: input.update?.to ?? '',
     changelog: (input.update?.changelog ?? []).map((e) => `#### ${e.version}\n\n${e.text}`).join('\n\n'),
   }
-  const out = template
-    .replace(/\{\{#(consent|notice|fonts|reask|noreask|sentry|sentrycdn|sentryjsdelivr|sentryinitlate)\}\}([\s\S]*?)\{\{\/\1\}\}/g, (_, name: string, text: string) => (active.has(name) ? text : ''))
-    .replace(/\{\{(\w+)\}\}/g, (m, name: string) => values[name] ?? m)
+  // Repeated until stable: a block may sit inside another ({{#policy}} inside {{#notice}}, #113).
+  const BLOCK = /\{\{#(consent|notice|policy|fonts|reask|noreask|sentry|sentrycdn|sentryjsdelivr|sentryinitlate)\}\}([\s\S]*?)\{\{\/\1\}\}/g
+  let blocks = template
+  for (let prev = ''; prev !== blocks; ) {
+    prev = blocks
+    blocks = blocks.replace(BLOCK, (_, name: string, text: string) => (active.has(name) ? text : ''))
+  }
+  const out = blocks.replace(/\{\{(\w+)\}\}/g, (m, name: string) => values[name] ?? m)
   const left = out.match(/\{\{[^}]*\}\}/)
   if (left) throw new Error(`unfilled placeholder ${left[0]} in the PR body template`)
   return out
@@ -153,7 +161,7 @@ export interface PrResult {
  * services (registry order) when it lists any, else `notice`. A hand-wired needs-human site gets
  * its PR this way. A slug the registry does not know is refused.
  */
-export function templateKind(privacyJson: string): { kind: 'consent' | 'notice'; services: ServiceSlug[] } {
+export function templateKind(privacyJson: string): { kind: 'consent' | 'notice'; services: ServiceSlug[]; policy: boolean } {
   let json: unknown
   try {
     json = JSON.parse(privacyJson)
@@ -165,7 +173,9 @@ export function templateKind(privacyJson: string): { kind: 'consent' | 'notice';
   const slugs = Array.isArray(listed) ? listed : []
   for (const slug of slugs) if (typeof slug !== 'string' || !Object.hasOwn(SERVICES, slug)) throw new Error(`unknown service ${String(slug)} in privacy.json`)
   const services = (Object.keys(SERVICES) as ServiceSlug[]).filter((slug) => slugs.includes(slug))
-  return { kind: services.length ? 'consent' : 'notice', services }
+  // #113: the banner renders "Läs mer" only for a policy_url (ConsentBanner.astro).
+  const policyUrl = (json as { policy_url?: unknown }).policy_url
+  return { kind: services.length ? 'consent' : 'notice', services, policy: typeof policyUrl === 'string' && policyUrl !== '' }
 }
 
 /** 'visionmediahq/<repo>' from the origin URL; throws for any other remote. */
@@ -245,6 +255,7 @@ export async function openPr(dir: string, opts: PrOptions): Promise<PrResult> {
   if (branch === FONTS_BRANCH && fontsCss === null) throw new Error(`${FONTS_CSS} from this tool is not on the branch: run.ts fonts first`)
   let kind: BodyInput['kind'] = 'fonts'
   let services: ServiceSlug[] = []
+  let policy = false
   let update: BodyInput['update']
   if (branch === UPDATE_BRANCH) {
     kind = 'update'
@@ -265,7 +276,7 @@ export async function openPr(dir: string, opts: PrOptions): Promise<PrResult> {
   } else if (branch !== FONTS_BRANCH) {
     const privacy = await git('show', 'HEAD:src/data/privacy.json')
     if (privacy.code !== 0) throw new Error(`src/data/privacy.json is not on the branch: wire the site first\n${tail(privacy.out)}`)
-    ;({ kind, services } = templateKind(privacy.out))
+    ;({ kind, services, policy } = templateKind(privacy.out))
   }
 
   const open = (await openPrsFrom(exec, root, repo, branch))[0]
@@ -277,6 +288,7 @@ export async function openPr(dir: string, opts: PrOptions): Promise<PrResult> {
   const body = renderBody(readFileSync(flow.template, 'utf8'), {
     kind,
     services,
+    policy,
     verify: result,
     issues: opts.issues ?? [],
     domain: opts.domain ?? report.domains[0] ?? report.site,

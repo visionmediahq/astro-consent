@@ -318,6 +318,17 @@ describe('openPr', () => {
     expect(readFileSync(join(dir, '.rollout/pr-body.md'), 'utf8')).not.toContain('Visa Google Maps')
   })
 
+  test('#113: the notice body mentions "Läs mer" only when the branch privacy.json has a policy_url (the banner renders the link only then)', async () => {
+    const without = siteDir()
+    await openPr(without, opts(fake({ 'git show HEAD:src/data/privacy.json': { code: 0, out: '{"services":[],"policy_url":null}' } })))
+    const bodyWithout = readFileSync(join(without, '.rollout/pr-body.md'), 'utf8')
+    expect(bodyWithout).toContain('Besökaren kan klicka "OK".')
+    expect(bodyWithout).not.toContain('Läs mer')
+    const withPolicy = siteDir()
+    await openPr(withPolicy, opts(fake({ 'git show HEAD:src/data/privacy.json': { code: 0, out: '{"services":[],"policy_url":"https://kund.se/integritetspolicy"}' } })))
+    expect(readFileSync(join(withPolicy, '.rollout/pr-body.md'), 'utf8')).toContain('Besökaren kan klicka "OK" eller "Läs mer".')
+  })
+
   test('finding 4: no privacy.json on the branch, or one that is not JSON: refused', async () => {
     for (const answer of [{ code: 128, out: "fatal: path 'src/data/privacy.json' does not exist in 'HEAD'" }, { code: 0, out: '{ services' }]) {
       const f = fake({ 'git show HEAD:src/data/privacy.json': answer })
@@ -335,10 +346,13 @@ describe('openPr', () => {
   })
 
   test('templateKind: services listed → consent with them in registry order, none → notice', () => {
-    expect(templateKind('{"services":["google-maps"]}')).toEqual({ kind: 'consent', services: ['google-maps'] })
-    expect(templateKind('{"services":["elfsight","google-maps"]}')).toEqual({ kind: 'consent', services: ['google-maps', 'elfsight'] })
-    expect(templateKind('{"services":[]}')).toEqual({ kind: 'notice', services: [] })
-    expect(templateKind('{}')).toEqual({ kind: 'notice', services: [] })
+    expect(templateKind('{"services":["google-maps"]}')).toEqual({ kind: 'consent', services: ['google-maps'], policy: false })
+    expect(templateKind('{"services":["elfsight","google-maps"]}')).toEqual({ kind: 'consent', services: ['google-maps', 'elfsight'], policy: false })
+    expect(templateKind('{"services":[]}')).toEqual({ kind: 'notice', services: [], policy: false })
+    expect(templateKind('{}')).toEqual({ kind: 'notice', services: [], policy: false })
+    expect(templateKind('{"policy_url":"https://kund.se/p"}')).toEqual({ kind: 'notice', services: [], policy: true })
+    expect(templateKind('{"policy_url":null}')).toMatchObject({ policy: false })
+    expect(templateKind('{"policy_url":""}')).toMatchObject({ policy: false })
     expect(() => templateKind('{"services":["google-maps","youtube"]}')).toThrow('unknown service youtube in privacy.json')
     expect(() => templateKind('[]')).toThrow(/privacy\.json/)
   })
