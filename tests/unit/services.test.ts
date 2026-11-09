@@ -76,6 +76,10 @@ test('srcMatchesService refuses another host, a look-alike host, a host-less src
     expect(srcMatchesService(url, 'google-maps'), url).toBe(false)
 })
 
+test('every service links to its vendor\'s privacy policy over https (#89)', () => {
+  for (const [slug, s] of Object.entries(SERVICES)) expect(s.privacy_url, slug).toMatch(/^https:\/\/[^/]+\//)
+})
+
 test('matchesRegistry classifies known URLs', () => {
   expect(matchesRegistry('https://www.google.com/maps/embed?pb=1')).toBe('google-maps')
   expect(matchesRegistry('https://maps.google.com/maps?q=x&output=embed')).toBe('google-maps')

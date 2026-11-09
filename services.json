@@ -18,7 +18,8 @@
         "maps.gstatic.com",
         "places.googleapis.com"
       ],
-      "description_sv": "Kartor från Google."
+      "description_sv": "Kartor från Google.",
+      "privacy_url": "https://policies.google.com/privacy"
     },
     "google-calendar": {
       "name": "Google Kalender",
@@ -27,7 +28,8 @@
       "match": [
         "calendar.google.com"
       ],
-      "description_sv": "Kalendrar från Google."
+      "description_sv": "Kalendrar från Google.",
+      "privacy_url": "https://policies.google.com/privacy"
     },
     "google-analytics": {
       "name": "Google Analytics",
@@ -38,7 +40,8 @@
         "google-analytics.com",
         "analytics.google.com"
       ],
-      "description_sv": "Besöksstatistik från Google."
+      "description_sv": "Besöksstatistik från Google.",
+      "privacy_url": "https://policies.google.com/privacy"
     },
     "google-ads": {
       "name": "Google Ads",
@@ -49,7 +52,8 @@
         "doubleclick.net",
         "googlesyndication.com"
       ],
-      "description_sv": "Annonsmätning från Google."
+      "description_sv": "Annonsmätning från Google.",
+      "privacy_url": "https://policies.google.com/privacy"
     },
     "meta-pixel": {
       "name": "Meta-pixel",
@@ -59,7 +63,8 @@
         "connect.facebook.net",
         "facebook.com/tr"
       ],
-      "description_sv": "Annonsmätning från Meta (Facebook, Instagram)."
+      "description_sv": "Annonsmätning från Meta (Facebook, Instagram).",
+      "privacy_url": "https://www.facebook.com/privacy/policy/"
     },
     "elfsight": {
       "name": "Elfsight",
@@ -69,7 +74,8 @@
         "elfsightcdn.com",
         "elfsight.com"
       ],
-      "description_sv": "Flöden från sociala medier, till exempel Instagram, via Elfsight."
+      "description_sv": "Flöden från sociala medier, till exempel Instagram, via Elfsight.",
+      "privacy_url": "https://elfsight.com/privacy-policy/"
     }
   }
 }

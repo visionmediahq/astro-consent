@@ -1,0 +1,58 @@
+---
+// The site's cookie and privacy text (#89), rendered from privacy.json and the service registry so it
+// always names what this site actually loads. Put it on the site's own page (/cookies, or inside an
+// existing /integritetspolicy). Headings are h2: the host page owns the h1. The settings button
+// reopens the banner like PrivacyLinks does (client.ts listens for any [data-consent-open]).
+import config from 'virtual:astro-consent/config'
+import { SERVICES } from '../services'
+import { MAX_AGE_MS, STORAGE_KEY } from '../store'
+import sv from '../text/sv.json'
+
+interface Props {
+  class?: string
+}
+
+const fill = (text: string, vars: Record<string, string>): string =>
+  text.replace(/\{(\w+)\}/g, (match, key: string) => vars[key] ?? match)
+const months = String(Math.round(MAX_AGE_MS / (365 * 24 * 3600 * 1000)) * 12)
+const p = sv.policy
+---
+
+<section data-consent-policy class:list={['flex flex-col gap-3', Astro.props.class]}>
+  <h2>{p.storedTitle}</h2>
+  <p>
+    {fill(p.stored, { key: STORAGE_KEY, months })}
+    {config.logEndpoint && <> {p.logged}</>}
+  </p>
+
+  <h2>{p.statsTitle}</h2>
+  <p>{p.stats}</p>
+
+  {
+    config.services.length > 0 && (
+      <>
+        <h2>{p.servicesTitle}</h2>
+        <p>{p.servicesIntro}</p>
+        <ul class="flex list-disc flex-col gap-2 pl-5">
+          {config.services.map((slug) => {
+            const s = SERVICES[slug]
+            return (
+              <li data-consent-policy-service={slug}>
+                <strong>{s.name}</strong> ({s.vendor}). {s.description_sv} {fill(p.category, { label: sv.categories[s.category].label })}{' '}
+                <a class="link" href={s.privacy_url} rel="noopener noreferrer">
+                  {fill(p.vendorPolicy, { vendor: s.vendor })}
+                </a>
+              </li>
+            )
+          })}
+        </ul>
+      </>
+    )
+  }
+
+  <h2>{p.changeTitle}</h2>
+  <p>{p.change}</p>
+  <p>
+    <button type="button" class="btn btn-sm" data-consent-open>{sv.links.settings}</button>
+  </p>
+</section>

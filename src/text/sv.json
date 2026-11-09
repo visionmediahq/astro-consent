@@ -46,5 +46,18 @@
   "links": {
     "settings": "Cookie-inställningar",
     "policy": "Integritetspolicy"
+  },
+  "policy": {
+    "storedTitle": "Vad som sparas i din webbläsare",
+    "stored": "När du svarar i rutan om cookies sparas ditt val i din webbläsare under namnet {key}: vad du valde, när, och vilken version av texten du svarade på. Det behövs för att webbplatsen ska komma ihåg ditt val. Valet gäller i {months} månader, sedan får du frågan igen.",
+    "logged": "Ditt val skickas också till oss tillsammans med ett slumpat id, så att vi kan visa vilket samtycke som gavs.",
+    "statsTitle": "Besöksstatistik",
+    "stats": "Vi mäter besök med Umami, utan cookies och utan att spara personuppgifter. Vi ser till exempel hur många som besöker en sida, men inte vem du är.",
+    "servicesTitle": "Tjänster från andra företag",
+    "servicesIntro": "Webbplatsen använder tjänster från andra företag. De laddas först när du godkänner dem, i rutan om cookies eller med knappen ”Visa” vid innehållet. När en tjänst laddas skickas din IP-adress till företaget, och företaget kan sätta egna cookies. Uppgifterna kan föras över till länder utanför EU, till exempel USA.",
+    "category": "Kategori: {label}.",
+    "vendorPolicy": "Integritetspolicy hos {vendor}",
+    "changeTitle": "Ändra ditt val",
+    "change": "Du kan ändra eller ta tillbaka ditt val när som helst. Ändringen gäller från och med nu."
   }
 }

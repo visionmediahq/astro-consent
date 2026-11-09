@@ -286,6 +286,39 @@ test('ConsentEmbed with a src of another host renders a message, no payload, and
   expect(html.querySelector('#right template[data-payload]')).not.toBeNull()
 })
 
+// #89 (draft): a policy text rendered from privacy.json and the registry, for a site's /cookies page.
+const POLICY_IMPORT = "import ConsentPolicy from '@visionmediahq/astro-consent/components/ConsentPolicy.astro'"
+const policyPage = ['---', POLICY_IMPORT, 'export const prerender = true', '---', '<html><head><title>t</title></head><body><main><h1>Cookies</h1><ConsentPolicy /></main></body></html>'].join('\n')
+
+test('ConsentPolicy lists what is stored, Umami, every listed service with vendor, category and policy link, and a settings button', TIMEOUT, () => {
+  const build = buildDemo('consent', (dir) => writeFileSync(join(dir, 'src/pages/cookies.astro'), policyPage))
+  expect(build.code).toBe(0)
+  const html = build.html('cookies/index.html')
+  const policy = html.querySelector('[data-consent-policy]')!
+  expect(policy).not.toBeNull()
+  const text = policy.textContent.replace(/\s+/g, ' ')
+  expect(text).toContain('vm_consent')
+  expect(text).toContain('12 månader')
+  expect(text).toContain('Umami')
+  const privacy = JSON.parse(readFileSync(join(build.dir, 'src/data/privacy.json'), 'utf8')) as { services: string[] }
+  const rows = policy.querySelectorAll('[data-consent-policy-service]')
+  expect(rows.map((r) => r.getAttribute('data-consent-policy-service'))).toEqual(privacy.services)
+  for (const row of rows) {
+    expect(row.querySelector('a[href^="https://"]')).not.toBeNull()
+    expect(row.textContent).toMatch(/Ireland Ltd|Elfsight, SL/)
+  }
+  expect(policy.querySelector('button[data-consent-open]')).not.toBeNull()
+})
+
+test('ConsentPolicy in notice mode has no third-party section', TIMEOUT, () => {
+  const build = buildDemo('notice', (dir) => writeFileSync(join(dir, 'src/pages/cookies.astro'), policyPage))
+  expect(build.code).toBe(0)
+  const policy = build.html('cookies/index.html').querySelector('[data-consent-policy]')!
+  expect(policy.querySelectorAll('[data-consent-policy-service]').length).toBe(0)
+  expect(policy.textContent).toContain('Umami')
+  expect(policy.querySelector('button[data-consent-open]')).not.toBeNull()
+})
+
 const WIDGET_SCRIPT = 'https://elfsightcdn.com/platform.js'
 const WIDGET_IMPORT = "import ConsentWidget from '@visionmediahq/astro-consent/components/ConsentWidget.astro'"
 
