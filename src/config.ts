@@ -24,8 +24,18 @@ const schema = z.strictObject({
   services: z
     .array(z.enum(SERVICE_SLUGS as [ServiceSlug, ...ServiceSlug[]]))
     .refine((list) => new Set(list).size === list.length, 'duplicate service'),
-  policy_url: z.url({ protocol: /^https?$/ }).nullable().optional(),
-  log_endpoint: z.url({ protocol: /^https$/ }).nullable().optional(),
+  // `//` after the scheme is checked here, not left to z.url: zod 4.3.6 (the floor, #17) accepts
+  // `https:/kund.se` and `https:kund.se`, which 4.6 rejects.
+  policy_url: z
+    .url({ protocol: /^https?$/ })
+    .refine((url) => /^https?:\/\/[^/]/i.test(url), 'must start with http:// or https://')
+    .nullable()
+    .optional(),
+  log_endpoint: z
+    .url({ protocol: /^https$/ })
+    .refine((url) => /^https:\/\/[^/]/i.test(url), 'must start with https://')
+    .nullable()
+    .optional(),
 })
 
 export function parsePrivacyConfig(raw: unknown): PrivacyConfig {

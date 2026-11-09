@@ -10,6 +10,12 @@
   passes.
 - New string `embed.unavailable`. It is not part of the consent terms: `CONSENT_VERSION` is
   unchanged and no visitor is asked again.
+- The package's zod range is `^4.3.6` (was `^4.6.5`), the floor Astro 6 itself depends on (#17).
+  Installing or updating the package no longer lifts a site's zod as well, so its lockfile diff
+  holds only the package. A unit test runs the `privacy.json` schema against exactly zod 4.3.6.
+- `privacy.json`: `policy_url` must start with `http://` or `https://`, and `log_endpoint` with
+  `https://`, checked by the package itself. zod 4.3.6 alone accepts `https:/kund.se`. A mistyped
+  URL like that now fails the build on every zod version instead of shipping a broken link.
 
 ## 1.1.6
 
