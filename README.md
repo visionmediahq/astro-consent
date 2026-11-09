@@ -448,6 +448,9 @@ npx tsx ci/rollout/run.ts help
   three ports answers yet. Either one taken stops it before the push and the builds with exit code 4,
   naming the other process or the port, so a batch can log it as the machine's problem and rerun
   (#87).
+- Every flow with a Docker step asks `docker info` before the push. Docker Desktop does not start on
+  its own after a reboot, and step 9 used to find that out after both builds. A failed `docker info`
+  stops verify before any step with exit code 4, like taken ports (#124).
 - If main's local preview stops answering mid-step (a dropped connection, and nothing answers on
   its port), `verify` restarts it once and checks main again. The step output, the verify file
   (`restarts`) and the summary say so. A second drop, any other error, or a crash of the branch's

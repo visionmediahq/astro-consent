@@ -24,6 +24,7 @@ import { detect } from './detect/index'
 import { detectSentry } from './detect/sentry'
 import { diskSite } from './lib/site-files'
 import { exec } from './lib/exec'
+import { DockerDown } from './docker'
 import { PortsBusy } from './lib/ports'
 import { toolLine, type ToolVersion, toolVersion } from './lib/tool-version'
 import { FLOWS, type FlowBranch, isFlowBranch, openPrsFrom, statePath } from './flows'
@@ -71,7 +72,7 @@ export const USAGE = [
   '  1  error, a failed verify step, or a live/merge STOP',
   '  2  usage: bad command or arguments',
   '  3  wire, fonts, fonts-files, update, sentry: the plan was refused (dry run or not); nothing was written',
-  '  4  verify: its ports are taken (another verify, or a server a killed run left); nothing was run, rerun later',
+  '  4  verify: its ports are taken (another verify, or a server a killed run left) or Docker is not running; nothing was run, rerun later',
 ].join('\n')
 /** Exit code of a refused wire plan (Ruling 32). */
 export const EXIT_REFUSED = 3
@@ -608,9 +609,12 @@ async function mainVerify(rest: string[]): Promise<number> {
     return result.pass ? 0 : 1
   } catch (e) {
     console.error((e as Error).message)
-    return e instanceof PortsBusy ? EXIT_PORTS_BUSY : 1
+    return verifyExitCode(e)
   }
 }
+
+/** A machine problem (ports taken, #87; Docker down, #124) is EXIT_PORTS_BUSY: rerun later. Anything else is 1. */
+export const verifyExitCode = (e: unknown): number => (e instanceof PortsBusy || e instanceof DockerDown ? EXIT_PORTS_BUSY : 1)
 
 export function parsePrArgs(args: string[]): {
   dir: string

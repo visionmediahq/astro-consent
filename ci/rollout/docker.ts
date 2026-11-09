@@ -43,6 +43,13 @@ export function exposedPort(dockerfile: string): number {
  * `buildArgs` are what Coolify passes as build variables (SITE_URL): a Dockerfile that turns an
  * ARG into ENV otherwise builds with an empty string.
  */
+/** Docker does not answer `docker info`: the machine, not the site (#124). Verify throws it before any step. */
+export class DockerDown extends Error {}
+
+/** The message for a failed `docker info`, shared by verify's up-front check and step 9. */
+export const dockerDownMessage = (out: string): string =>
+  `Docker is not running (docker info failed): start Docker Desktop and rerun verify.\n${tail(out, 5)}`
+
 export async function dockerCheck(
   repoUrl: string,
   branch: string,
@@ -56,7 +63,7 @@ export async function dockerCheck(
   const log: string[] = []
   const info = await exec('docker', ['info'])
   if (info.code !== 0) {
-    return { pass: false, log: `Docker is not running (docker info failed): start Docker Desktop and rerun verify.\n${tail(info.out, 5)}` }
+    return { pass: false, log: dockerDownMessage(info.out) }
   }
   const repo = repoName(repoUrl)
   const image = imageTag(repo)

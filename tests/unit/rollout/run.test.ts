@@ -3,7 +3,9 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 import { afterEach, describe, expect, test, vi } from 'vitest'
-import { main, parseDetectArgs, parseLiveArgs, parseMergeArgs, parseVerifyArgs, runDetect, runWire, summary, USAGE } from '../../../ci/rollout/run'
+import { DockerDown } from '../../../ci/rollout/docker'
+import { PortsBusy } from '../../../ci/rollout/lib/ports'
+import { EXIT_PORTS_BUSY, main, parseDetectArgs, parseLiveArgs, parseMergeArgs, parseVerifyArgs, runDetect, runWire, summary, USAGE, verifyExitCode } from '../../../ci/rollout/run'
 import type { FontsInfo, Report } from '../../../ci/rollout/types'
 
 const dirs: string[] = []
@@ -94,6 +96,15 @@ describe('parseVerifyArgs', () => {
     expect(() => parseVerifyArgs(['--demo'])).toThrow(/usage/)
     expect(() => parseVerifyArgs(['a', 'b'])).toThrow(/one/)
     expect(() => parseVerifyArgs(['a', '--fast'])).toThrow(/--fast/)
+  })
+})
+
+describe('verifyExitCode: a machine problem is 4 (rerun later), anything else 1', () => {
+  test('ports taken (#87) and Docker down (#124) are 4; other errors are 1', () => {
+    expect(verifyExitCode(new PortsBusy('x'))).toBe(EXIT_PORTS_BUSY)
+    expect(verifyExitCode(new DockerDown('x'))).toBe(EXIT_PORTS_BUSY)
+    expect(verifyExitCode(new Error('x'))).toBe(1)
+    expect(EXIT_PORTS_BUSY).toBe(4)
   })
 })
 
