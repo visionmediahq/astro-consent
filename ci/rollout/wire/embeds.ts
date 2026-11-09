@@ -600,7 +600,8 @@ function sizedBox(node: AstroNode, ancestors: AstroNode[], rules: CssRule[], tex
   if (written === null) return new Error('iframe class is an expression')
   const varied = written.find((c) => c.includes(':') && FILTER_UTILITY.test(c.slice(c.lastIndexOf(':') + 1)))
   if (varied) return new Error(`iframe has a filter class with a variant (${varied})`)
-  const classes = written.map((c) => (FILTER_UTILITY.test(c) ? `[&_iframe]:${c}` : c))
+  // #104: `size-full` is `w-full h-full` in one class (Tailwind 4); read and carry it as those two.
+  const classes = written.flatMap((c) => (c === 'size-full' ? ['w-full', 'h-full'] : [FILTER_UTILITY.test(c) ? `[&_iframe]:${c}` : c]))
   const placed = placement(node, ancestors, rules, classes)
   if (placed instanceof Error) return placed
   if (placed.get('position') === 'absolute') return absoluteBox(node, parent, rules, classes, placed, text)
