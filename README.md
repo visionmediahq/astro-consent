@@ -461,6 +461,8 @@ npx tsx ci/rollout/run.ts help
   hand once, then rerun verify.
 - `verify` step 9 builds the site's Dockerfile with `--build-arg SITE_URL=https://<first domain>`,
   as Coolify passes it: a Dockerfile with `ENV SITE_URL=$SITE_URL` otherwise builds with an empty one.
+  Step 2's two `npm run build` runs (branch and main) get `SITE_URL=https://<first domain>` in their
+  environment too: an `astro.config` that throws without it failed step 2 on two sites (#90 §6).
 - `live baseline` covers `report.domains` and every host of the Coolify apps that follow `main`,
   and records them in `live-baseline-hosts.json`. If `merge` stops because an app that follows
   `main` serves a host the baseline did not record (an app started following `main` since), rerun

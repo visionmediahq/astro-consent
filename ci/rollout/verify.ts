@@ -379,6 +379,8 @@ async function runVerify(dir: string, report: Report, opts: VerifyOptions, deps:
     }
   }
   const git = (...args: string[]) => exec('git', args, root)
+  // #90 §6: Coolify builds with SITE_URL set; an astro.config that throws without it failed step 2.
+  const siteUrl: Record<string, string> = report.domains[0] ? { SITE_URL: `https://${report.domains[0]}` } : {}
   const flow: Flow = demo ? FLOWS['consent-banner'] : flowOf((await git('rev-parse', '--abbrev-ref', 'HEAD')).out.trim(), 'verify', root)
   const BRANCH = flow.branch
   // #124: a stopped Docker (it does not start on its own after a reboot) used to show only at step 9,
@@ -695,7 +697,7 @@ async function runVerify(dir: string, report: Report, opts: VerifyOptions, deps:
       const lines: string[] = []
       if (demo) lines.push('npm run build: skipped (demo)')
       else {
-        const res = await exec('npm', ['run', 'build'], root)
+        const res = await exec('npm', ['run', 'build'], root, siteUrl)
         lines.push('npm ci: done in step 1', `npm run build exit ${res.code}`, tail(res.out))
         if (res.code !== 0) return { pass: false, lines }
       }
@@ -729,7 +731,7 @@ async function runVerify(dir: string, report: Report, opts: VerifyOptions, deps:
       const lines: string[] = []
       let mainResults: RequestResult[] = []
       if (!demo) {
-        const res = await exec('npm', ['run', 'build'], mainDir!)
+        const res = await exec('npm', ['run', 'build'], mainDir!, siteUrl)
         if (res.code !== 0) return { pass: false, lines: ['npm run build failed on main:', tail(res.out)] }
       }
       if (ssr && !demo) {

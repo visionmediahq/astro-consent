@@ -241,6 +241,20 @@ describe('verify', () => {
     })
   })
 
+  test('#90 §6: both builds get SITE_URL from the first domain, as Coolify sets it (an astro.config that throws without it)', async () => {
+    const f = fake()
+    const inner = f.deps.exec!
+    const builds: { cwd?: string; env?: Record<string, string> }[] = []
+    f.deps.exec = async (cmd, args, cwd, env) => {
+      if (cmd === 'npm' && args.join(' ') === 'run build') builds.push({ cwd, env })
+      return inner(cmd, args, cwd, env)
+    }
+    const dir = siteDir()
+    await verify(dir, report(), { deps: f.deps })
+    expect(builds.length).toBe(2)
+    for (const b of builds) expect(b.env).toEqual({ SITE_URL: `https://${report().domains[0]}` })
+  })
+
   describe('free disk (#23: Docker I/O errors at 2.5 GB free)', () => {
     test('under 15 GB free: stops before any step, says how much is free and what to delete', async () => {
       const dir = siteDir()
