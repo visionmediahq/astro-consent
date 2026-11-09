@@ -73,6 +73,23 @@ export function matchesRegistry(url: string): ServiceSlug | null {
   return null
 }
 
+/**
+ * Whether an embed URL belongs to `slug` (#107), judged from its host: one of the service's `match`
+ * patterns must start the host-and-path, or follow a dot in the host (`www.` + `google.com/maps`).
+ * A substring anywhere (a query, another host's path) does not count, nor does a URL without a host.
+ */
+export function srcMatchesService(src: string, slug: ServiceSlug): boolean {
+  let url: URL
+  try {
+    url = new URL(src.startsWith('//') ? `https:${src}` : src)
+  } catch {
+    return false
+  }
+  if (url.protocol !== 'https:' && url.protocol !== 'http:') return false
+  const where = `${url.hostname}${url.pathname}`.toLowerCase()
+  return SERVICES[slug].match.some((pattern) => where.startsWith(pattern) || where.includes(`.${pattern}`))
+}
+
 export interface ServicesJson {
   generated_from: 'src/services.ts'
   categories: Category[]

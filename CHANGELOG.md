@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+- Fix: `ConsentEmbed` checks that `src` belongs to its service, by host (#107). A `src` on another
+  host (a CMS field holding another site's URL) used to load that site under the service's name
+  after consent. It now renders "{title} kan inte visas." instead: no iframe, no "Visa", no link,
+  nothing loaded. The build or server log names the page, service and host. Every map URL found on
+  client sites (`www.google.com/maps/embed`, `www.google.com/maps`, `maps.google.com/maps`)
+  passes.
+- New string `embed.unavailable`. It is not part of the consent terms: `CONSENT_VERSION` is
+  unchanged and no visitor is asked again.
+
 ## 1.1.6
 
 - Fix: on a phone (below `sm`) the notice banner is a bar flush with the bottom edge instead of a
