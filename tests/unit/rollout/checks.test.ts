@@ -366,6 +366,18 @@ describe('contrast', () => {
     expect(row!.bg).toEqual({ r: 255, g: 255, b: 255 })
   })
 
+  it('#106: a banner row whose banner has no opaque background of its own is indeterminate, whatever the ratio', () => {
+    // Site 1283944887: no DaisyUI CSS, a transparent card over the hero, black text on the body's white: 21:1.
+    const [clear] = contrastRows([raw({ kind: 'banner', fg: [0, 0, 0, 255], layers: [[255, 255, 255, 255]], banner: { colour: [0, 0, 0, 0], image: false } })])
+    expect(clear!.ok).toBe(false)
+    expect(clear!.indeterminate).toBe('the banner has no opaque background of its own: what is behind it shows through')
+    // Translucent is not opaque either (bg-base-100/90).
+    expect(contrastRows([raw({ kind: 'banner', fg: [0, 0, 0, 255], layers: [[255, 255, 255, 255]], banner: { colour: [255, 255, 255, 230], image: false } })])[0]!.ok).toBe(false)
+    // An opaque card, or one with a background image (handled as an image row), is not this case.
+    expect(contrastRows([raw({ kind: 'banner', fg: [0, 0, 0, 255], layers: [[255, 255, 255, 255]], banner: { colour: [255, 255, 255, 255], image: false } })])[0]!).toMatchObject({ ok: true })
+    expect(contrastRows([raw({ kind: 'banner', fg: [0, 0, 0, 255], layers: [[255, 255, 255, 255]], banner: { colour: [0, 0, 0, 0], image: true } })])[0]!.indeterminate).toBeUndefined()
+  })
+
   it("DaisyUI's button noise texture is decoration, not a background image", () => {
     const noise = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'%3E%3Cfilter id='a'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='1.34' numOctaves='4' stitchTiles='stitch'%3E%3C/feTurbulence%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23a)' opacity='0.2'%3E%3C/rect%3E%3C/svg%3E")`
     expect(coversBackground(`none, ${noise}`)).toBe(false)

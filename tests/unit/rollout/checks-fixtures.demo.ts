@@ -91,6 +91,8 @@ const FIXTURES: Record<string, string> = {
   // Banner controls and look-alikes.
   ok: page(banner()),
   transparent: page(banner('position:fixed;bottom:0;left:0;right:0;opacity:0')),
+  // #106 (site 1283944887): no background on the card; Neka keeps an opaque button of its own (btn-primary).
+  clearcard: page(`<div style="height:2000px;background:#fff"></div><section data-consent-banner style="position:fixed;bottom:0;left:0;right:0;padding:8px"><button data-consent-action="none" style="background:#00375f;color:#fff;border:0">Neka</button><button data-consent-action="all">Acceptera alla</button></section>`),
   covered: page(`${banner()}<div style="position:fixed;inset:0;z-index:10;background:#fff"></div>`),
   offscreen: page(banner('position:fixed;top:-500px;left:0;right:0;background:#fff')),
   two: page(banner() + banner()),
@@ -436,6 +438,14 @@ try {
     const want = wcagContrast({ r: 0.7 * 255 + 0.3 * 0, g: 0.7 * 255 + 0.3 * 0x37, b: 0.7 * 255 + 0.3 * 0x5f }, { r: 0, g: 0x37, b: 0x5f })
     expect(faded.length === 2 && faded.every((r) => r.ok && !r.indeterminate && Math.abs(r.ratio - want) < 0.05), '/linksfade/ opacity-70 on the background-less links wrapper fades the text and is measured', { faded, want })
 
+    {
+      const clear = (await checkContrast(browser, BASE, ['/clearcard/'], { stub: true })).filter((r) => r.kind === 'banner')
+      expect(
+        clear.length === 2 && clear.every((r) => !r.ok && r.indeterminate === 'the banner has no opaque background of its own: what is behind it shows through'),
+        '/clearcard/ a banner without a background of its own fails both rows, even over white and with an opaque button (#106)',
+        clear,
+      )
+    }
     try {
       const csp = (await checkContrast(browser, BASE, ['/csp/'], { stub: true })).filter((r) => r.kind === 'banner')
       expect(csp.length === 2 && csp.every((r) => r.ok), '/csp/ a style-src CSP that refuses injected <style> still yields banner rows (#102)', csp)

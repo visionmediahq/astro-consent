@@ -69,6 +69,11 @@ export interface RawContrast {
   animating?: boolean
   /** Faint positioned ::before/::after layers over the text, composited instead of indeterminate (#122). */
   veils?: RawVeil[]
+  /**
+   * Banner rows: the [data-consent-banner] element's own background (#106). A banner without an opaque
+   * one shows whatever is behind it, which the ancestor walk cannot see (the body's white, a button's own colour).
+   */
+  banner?: { colour: Rgba; image: boolean }
   /** Stop and color-mix() strings as the page rasterised them; null when it is not a colour. Filled by measureContrast. */
   colours?: Record<string, Rgba | null>
 }
@@ -292,7 +297,11 @@ const MEASURE = `(() => {
     return { layers, images, fade, animating, effects: [...new Set(effects)], ...(veils.length ? { veils } : {}) }
   }
   const visible = (e) => e.offsetParent !== null && e.getBoundingClientRect().width > 0
-  const row = (kind, e) => ({ kind, label: (e.textContent || '').trim().replace(/\\s+/g, ' ').slice(0, 40), fg: rgba(getComputedStyle(e).color), ...layersOf(e) })
+  const own = (e) => {
+    const s = getComputedStyle(e.closest('[data-consent-banner]'))
+    return { colour: rgba(s.backgroundColor), image: !!s.backgroundImage && s.backgroundImage !== 'none' }
+  }
+  const row = (kind, e) => ({ kind, label: (e.textContent || '').trim().replace(/\\s+/g, ' ').slice(0, 40), fg: rgba(getComputedStyle(e).color), ...layersOf(e), ...(kind === 'banner' ? { banner: own(e) } : {}) })
   return [
     ...[...document.querySelectorAll('[data-consent-banner] button')].filter(visible).map((e) => row('banner', e)),
     ...[...document.querySelectorAll('[data-privacy-links] button, [data-privacy-links] a')].filter(visible).map((e) => row('links', e)),
@@ -785,6 +794,8 @@ function evaluate(r: RawContrast, { margin = 1 }: ContrastOptions = {}): Evaluat
   const effects = [...new Set([...(r.effects ?? []), ...veilEffects])]
   const indeterminate = r.animating
     ? 'animation not settled'
+    : r.banner && r.banner.colour[3] !== 255 && !r.banner.image
+    ? 'the banner has no opaque background of its own: what is behind it shows through'
     : effects.length
     ? `effect on the text or its background: ${effects.join(', ')}`
     : unknown
