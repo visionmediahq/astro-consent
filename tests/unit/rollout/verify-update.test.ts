@@ -125,7 +125,7 @@ describe('verify on astro-consent-update', () => {
       [8, 'fonts', 'skipped'],
       [9, 'docker', 'pass'],
     ])
-    expect(f.calls.filter((c) => c.startsWith('git push'))).toEqual([`git push --force-with-lease origin ${BRANCH}`])
+    expect(f.calls.filter((c) => c.startsWith('git push'))).toEqual([`git push --force-with-lease=${BRANCH}:${SHA} origin ${BRANCH}`])
     expect(f.called).toContain(`docker ${BRANCH}`)
     expect(f.called).toContain('consentPaths')
     expect(f.called).toContain('contrast')

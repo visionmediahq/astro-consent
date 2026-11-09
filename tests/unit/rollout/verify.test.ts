@@ -279,7 +279,7 @@ describe('verify', () => {
     expect(result.steps.map((s) => [s.step, s.name, s.pass, s.skipped ?? false])).toEqual(STEP_NAMES.map((name, i) => [i + 1, name, true, name === 'fonts']))
     expect(result.pass).toBe(true)
     const pushes = f.calls.filter((c) => c.startsWith('git push'))
-    expect(pushes).toEqual(['git push --force-with-lease origin consent-banner'])
+    expect(pushes).toEqual([`git push --force-with-lease=consent-banner:${SHA} origin consent-banner`])
     expect(f.calls.indexOf(pushes[0]!)).toBeLessThan(f.calls.findIndex((c) => c.startsWith('npm')))
     expect(f.calls).toContain(`git worktree add --detach ${dir}-main origin/main`)
     expect(f.calls.at(-1)).toBe(`git worktree remove --force ${dir}-main`)
@@ -965,12 +965,26 @@ describe('verify: final review fixes', () => {
     const ours = 'b'.repeat(40)
     const first = fake({ exec: { 'git ls-remote --heads origin refs/heads/consent-banner': { code: 0, out: '' }, 'git rev-parse HEAD': { code: 0, out: `${ours}\n` } } })
     await verify(dir, report(), { deps: first.deps })
-    expect(first.calls).toContain('git push --force-with-lease origin consent-banner')
+    expect(first.calls).toContain('git push --force-with-lease=consent-banner: origin consent-banner')
     rmSync(`${dir}-main`, { recursive: true, force: true })
     const again = fake({ exec: { 'git ls-remote --heads origin refs/heads/consent-banner': { code: 0, out: `${ours}\trefs/heads/consent-banner\n` } } })
     const result = await verify(dir, report(), { deps: again.deps })
-    expect(again.calls).toContain('git push --force-with-lease origin consent-banner')
+    expect(again.calls).toContain(`git push --force-with-lease=consent-banner:${ours} origin consent-banner`)
     expect(result.steps[0]).toMatchObject({ step: 1, pass: true })
+  })
+
+  describe('#123: the lease is what ls-remote answered, not the local tracking ref', () => {
+    test('branch deleted on GitHub (a stale origin/consent-banner may remain locally): the push requires it to be absent', async () => {
+      const f = fake({ exec: { 'git ls-remote --heads origin refs/heads/consent-banner': { code: 0, out: '' } } })
+      await verify(siteDir(), report(), { deps: f.deps })
+      expect(f.calls.filter((c) => c.startsWith('git push'))).toEqual(['git push --force-with-lease=consent-banner: origin consent-banner'])
+    })
+
+    test('branch on GitHub at the sha this tool pushed: the push leases exactly that sha', async () => {
+      const f = fake()
+      await verify(siteDir(), report(), { deps: f.deps })
+      expect(f.calls.filter((c) => c.startsWith('git push'))).toEqual([`git push --force-with-lease=consent-banner:${SHA} origin consent-banner`])
+    })
   })
 
   test('finding 2: ls-remote failing refuses the push', async () => {
@@ -984,7 +998,7 @@ describe('verify: final review fixes', () => {
     const f = fake({ exec: { 'git ls-remote --heads origin': { code: 0, out: `${'b'.repeat(40)}\trefs/heads/feature/consent-banner\n` } } })
     const result = await verify(siteDir(), report(), { deps: f.deps })
     expect(f.calls).toContain('git ls-remote --heads origin refs/heads/consent-banner')
-    expect(f.calls).toContain('git push --force-with-lease origin consent-banner')
+    expect(f.calls).toContain('git push --force-with-lease=consent-banner: origin consent-banner')
     expect(result.steps[0]).toMatchObject({ step: 1, pass: true })
   })
 
