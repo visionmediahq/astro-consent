@@ -657,6 +657,21 @@ describe('detect', () => {
     expect(tracked.trackers).toContain('google-analytics')
   })
 
+  test('#38: a NUL byte in a non-binary file does not hide a tracker from the text sweep', () => {
+    const gtag = '<script async src="https://www.googletagmanager.com/gtag/js?id=G-X"></script>\n'
+    const r = detect(withFiles(pilot('site-1286040212'), { 'public/x.html': `a\u0000b${gtag}` }), 'x', ['x.se'])
+    expect(r.trackers).toContain('google-analytics')
+    expect(r.classification).toBe('needs-human')
+  })
+
+  test('#38: office documents under public/ are binary, not read as text (they hold NUL bytes and were only skipped by them)', () => {
+    const gtag = 'https://www.googletagmanager.com/gtag/js?id=G-X'
+    for (const file of ['public/dokument/a.docx', 'public/dokument/b.doc', 'public/uploads/c.xlsx']) {
+      const r = detect(withFiles(pilot('site-1286040212'), { [file]: `PK\u0003\u0004\u0000${gtag}` }), 'x', ['x.se'])
+      expect(r.trackers).toEqual([])
+    }
+  })
+
   const FEED_PAGE =
     "---\nimport Base from '../layouts/Base.astro'\n---\n<Base title=\"Flöde\">\n  <section>\n    <!-- Elfsight Instagram Feed | Flöde -->\n" +
     '    <script src="https://elfsightcdn.com/platform.js" async></script>\n' +

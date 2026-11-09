@@ -489,4 +489,14 @@ describe('detectIframes: fails closed (review round 1)', () => {
       { file: 'src/content/hitta.md', ...tag(md), srcKind: 'unresolved', src: null, host: 'www.google.com', service: 'google-maps', title: null, classes: null, height: null, style: null },
     ])
   })
+
+  test('#38: a NUL byte in a non-binary file does not hide an iframe (a UTF-16 or stray-NUL .html under public/)', () => {
+    const html = `a\u0000b<iframe src="${MAP}"></iframe>\n`
+    const r = detectIframes(inline({ 'public/x.html': html }), [])
+    expect(r.iframes).toEqual([expect.objectContaining({ file: 'public/x.html', srcKind: 'unresolved', host: 'www.google.com', service: 'google-maps' })])
+  })
+
+  test('#38: office documents are not swept for iframes', () => {
+    expect(detectIframes(inline({ 'public/dokument/a.docx': `PK\u0000<iframe src="${MAP}">`, 'public/b.xlsx': `\u0000<iframe src="${MAP}">` }), []).iframes).toEqual([])
+  })
 })

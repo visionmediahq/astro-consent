@@ -39,7 +39,9 @@ export type DetectedScripts = Pick<Report, 'trackers' | 'banners' | 'recaptcha' 
 
 const PACKAGE = '@visionmediahq/astro-consent'
 
-export const BINARY = /\.(?:png|jpe?g|gif|webp|avif|ico|bmp|tiff?|svg|woff2?|ttf|otf|eot|pdf|mp[34]|webm|ogg|wav|mov|zip|gz)$/i
+// #38: office documents, archives and other media too: once a NUL byte no longer skips a file, these
+// are what would be read as text (Word/Excel files under public/dokument on client sites).
+export const BINARY = /\.(?:png|jpe?g|gif|webp|avif|ico|bmp|tiff?|heic|psd|svg|woff2?|ttf|otf|eot|pdf|docx?|xlsx?|pptx?|od[tsp]|mp[34]|m4a|aac|flac|webm|ogg|wav|mov|avi|mkv|zip|gz|rar|7z|tar|wasm|exe|dmg|bin)$/i
 
 /**
  * Maps patterns that ordinary links match too: a "Hitta hit" link, JSON-LD `hasMap`, an embed
@@ -390,8 +392,9 @@ export function detectScripts(files: SiteFiles): DetectedScripts {
 
   const textFiles = [...new Set([...files.list('src/**'), ...files.list('public/**')])].filter((f) => !BINARY.test(f)).sort()
   for (const file of textFiles) {
+    // #38: no NUL-byte skip. BINARY already leaves out binary files, and the regexes work on text
+    // with a NUL in it (a UTF-16 .html, a stray byte): skipping it could hide a tracker.
     const text = files.read(file)
-    if (text.includes('\u0000')) continue
 
     for (const slug of trackersInText(text)) trackers.add(slug)
     for (const [re, name] of BANNERS) if (re.test(text)) addBanner(name)
