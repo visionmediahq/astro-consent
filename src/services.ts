@@ -74,20 +74,31 @@ export function matchesRegistry(url: string): ServiceSlug | null {
 }
 
 /**
- * Whether an embed URL belongs to `slug` (#107), judged from its host: one of the service's `match`
- * patterns must start the host-and-path, or follow a dot in the host (`www.` + `google.com/maps`).
- * A substring anywhere (a query, another host's path) does not count, nor does a URL without a host.
+ * Whether an embed URL belongs to `slug` (#107), judged by its host. Each `match` pattern is a host
+ * (`calendar.google.com`), a host and a path prefix (`google.com/maps`), or a host ending in a dot
+ * (`maps.google.`: that name under a country or `.com` top-level domain). The URL's hostname must be
+ * the pattern's host or a subdomain of it, and its path must start with the pattern's path. Nothing
+ * in the path or the query counts, nor does a URL without an http(s) host.
  */
 export function srcMatchesService(src: string, slug: ServiceSlug): boolean {
   let url: URL
   try {
-    url = new URL(src.startsWith('//') ? `https:${src}` : src)
+    url = new URL(src.trim().startsWith('//') ? `https:${src.trim()}` : src.trim())
   } catch {
     return false
   }
   if (url.protocol !== 'https:' && url.protocol !== 'http:') return false
-  const where = `${url.hostname}${url.pathname}`.toLowerCase()
-  return SERVICES[slug].match.some((pattern) => where.startsWith(pattern) || where.includes(`.${pattern}`))
+  const host = url.hostname.toLowerCase().replace(/\.$/, '')
+  const path = url.pathname.toLowerCase()
+  return SERVICES[slug].match.some((pattern) => {
+    const slash = pattern.indexOf('/')
+    const patternHost = slash < 0 ? pattern : pattern.slice(0, slash)
+    const patternPath = slash < 0 ? '' : pattern.slice(slash)
+    const hostOk = patternHost.endsWith('.')
+      ? new RegExp(`^${patternHost.replace(/\./g, '\\.')}(?:com|[a-z]{2}|co\\.[a-z]{2}|com\\.[a-z]{2})$`).test(host)
+      : host === patternHost || host.endsWith(`.${patternHost}`)
+    return hostOk && path.startsWith(patternPath)
+  })
 }
 
 export interface ServicesJson {

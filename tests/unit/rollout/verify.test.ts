@@ -789,9 +789,12 @@ describe('verify', () => {
   })
 
   test('step 4: a consent site with no embed on any built page fails', async () => {
+    const dir = siteDir()
     const f = fake({ checks: { embedPages: async () => [] } })
-    const result = await verify(siteDir(), report(), { deps: f.deps })
+    const result = await verify(dir, report(), { deps: f.deps })
     expect(result.steps.at(-1)).toMatchObject({ step: 4, pass: false })
+    // Review of #141: an embed whose src is not the service's renders a message, not an embed.
+    expect(evidence(dir, '4-consent-paths.txt')).toMatch(/but the built page has no embed \(or it shows ".*kan inte visas\." because its src is not the service's: see the build log, #107\)/)
   })
 
   test('step 6 (Ruling 20): an indeterminate PrivacyLinks row fails', async () => {

@@ -776,7 +776,7 @@ async function runVerify(dir: string, report: Report, opts: VerifyOptions, deps:
       const lines = [`pages with an embed: ${mapPages.join(' ') || '(none)'}`]
       const withEmbed = new Set(mapPages.map(norm))
       const lost = [...known].filter((r) => !withEmbed.has(r))
-      lines.push(...lost.map((r) => `detect found an embed on ${r}, but the built page has no embed`))
+      lines.push(...lost.map((r) => `detect found an embed on ${r}, but the built page has no embed (or it shows "… kan inte visas." because its src is not the service's: see the build log, #107)`))
       if (mapPages.length === 0) {
         const pass = report.classification !== 'consent' && lost.length === 0
         return { pass, lines: [...lines, pass ? 'no embed pages: nothing to check' : 'a consent site with no embed on any built page'] }

@@ -37,9 +37,18 @@ test('srcMatchesService accepts the embed URLs client sites use', () => {
     '//www.google.com/maps/embed?pb=1',
     'https://maps.google.se/maps?q=x&output=embed',
     'HTTPS://WWW.GOOGLE.COM/maps/embed?pb=1',
+    'https://www.google.com./maps/embed?pb=1',
+    'https://maps.googleapis.com/maps/embed/v1/place?q=x',
   ])
     expect(srcMatchesService(url, 'google-maps'), url).toBe(true)
   expect(srcMatchesService('https://calendar.google.com/calendar/embed?src=x', 'google-calendar')).toBe(true)
+})
+
+test('srcMatchesService refuses look-alikes of the calendar and widget hosts too', () => {
+  expect(srcMatchesService('https://evil.io/.calendar.google.com', 'google-calendar')).toBe(false)
+  expect(srcMatchesService('https://calendar.google.com.evil.io/', 'google-calendar')).toBe(false)
+  expect(srcMatchesService('https://evil.io/.elfsight.com', 'elfsight')).toBe(false)
+  expect(srcMatchesService('https://apps.elfsight.com/p/x', 'elfsight')).toBe(true)
 })
 
 test('srcMatchesService refuses another host, a look-alike host, a host-less src, and another service', () => {
@@ -50,6 +59,14 @@ test('srcMatchesService refuses another host, a look-alike host, a host-less src
     'https://evilgoogle.com/maps/embed',
     'https://www.google.com.evil.io/maps/embed',
     'https://www.google.com/search?q=maps',
+    // Review of #141: a pattern after a dot in the path, or a look-alike host around it.
+    'https://evil.example/a.google.com/maps',
+    'https://evil.example/x.maps.googleapis.com',
+    'https://evil.io/.maps.gstatic.com',
+    'https://maps.google.evil.io/x',
+    'https://x.maps.google.attacker.com/',
+    'https://www.google.com.evil.io/x.google.com/maps',
+    'https://maps.google.com.evil.io/maps',
     'https://calendar.google.com/calendar/embed?src=x',
     '/karta.html',
     'javascript:alert(1)',
