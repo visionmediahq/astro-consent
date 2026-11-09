@@ -9,7 +9,7 @@ import type { ConsentPathResult } from '../../../ci/rollout/checks/consent-paths
 import type { ContrastRow } from '../../../ci/rollout/checks/contrast'
 import type { RequestResult } from '../../../ci/rollout/checks/requests'
 import type { FontsPage } from '../../../ci/rollout/checks/fonts'
-import { dockerCheck } from '../../../ci/rollout/docker'
+import { DockerDown, dockerCheck } from '../../../ci/rollout/docker'
 import { PortsBusy, portsLockFile, rolloutPorts } from '../../../ci/rollout/lib/ports'
 import { ssrEntry, startPreview } from '../../../ci/rollout/preview'
 import type { Report } from '../../../ci/rollout/types'
@@ -211,6 +211,33 @@ describe('verify', () => {
       expect((await verify(siteDir(), report(), { deps: f.deps })).pass).toBe(true)
       expect(held).toBe(true)
       expect(existsSync(file)).toBe(false)
+    })
+  })
+
+  describe('Docker up front (#124: noticed only at step 9, after the push and both builds)', () => {
+    test('docker info fails: DockerDown before any step, nothing pushed or built, no verify.json', async () => {
+      const dir = siteDir()
+      const f = fake({ exec: { 'docker info': { code: 1, out: 'Cannot connect to the Docker daemon' } } })
+      await expect(verify(dir, report(), { deps: f.deps })).rejects.toThrow(DockerDown)
+      await expect(verify(siteDir(), report(), { deps: f.deps })).rejects.toThrow(/Docker is not running \(docker info failed\): start Docker Desktop.*Cannot connect/s)
+      expect(f.calls.some((c) => c.startsWith('npm') || c.startsWith('git push'))).toBe(false)
+      expect(existsSync(join(dir, '.rollout/verify.json'))).toBe(false)
+    })
+
+    test('docker info is asked before the push', async () => {
+      const f = fake()
+      expect((await verify(siteDir(), report(), { deps: f.deps })).pass).toBe(true)
+      const info = f.calls.indexOf('docker info')
+      expect(info).toBeGreaterThanOrEqual(0)
+      expect(info).toBeLessThan(f.calls.findIndex((c) => c.startsWith('git push')))
+    })
+
+    test('the demo (no docker step) never asks Docker', async () => {
+      const f = fake({ exec: { 'docker info': { code: 1, out: 'down' } } })
+      const out = mkdtempSync(join(tmpdir(), 'verify-demo-'))
+      dirs.push(out)
+      await verify('/demo/dist-consent', DEMO_REPORT, { deps: f.deps, demo: true, out })
+      expect(f.calls).not.toContain('docker info')
     })
   })
 

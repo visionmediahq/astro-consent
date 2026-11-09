@@ -64,7 +64,7 @@ import { checkRequests, formatRequests, isSentryEntry, type RequestResult } from
 import { checkSentrySource } from './checks/sentry'
 import { shots } from './checks/shots'
 import { isRoute, routeOf } from './detect/structure'
-import { dockerCheck } from './docker'
+import { DockerDown, dockerCheck, dockerDownMessage } from './docker'
 import { type Exec, type ExecResult, exec as realExec, tail } from './lib/exec'
 import { builtCss, neededParts, type Part, partsMissingFromBuild } from './lib/daisyui'
 import { diffLock, diffPackageJson } from './lib/lockfile'
@@ -381,6 +381,12 @@ async function runVerify(dir: string, report: Report, opts: VerifyOptions, deps:
   const git = (...args: string[]) => exec('git', args, root)
   const flow: Flow = demo ? FLOWS['consent-banner'] : flowOf((await git('rev-parse', '--abbrev-ref', 'HEAD')).out.trim(), 'verify', root)
   const BRANCH = flow.branch
+  // #124: a stopped Docker (it does not start on its own after a reboot) used to show only at step 9,
+  // after the push, two npm ci and two builds. Ask before any of that.
+  if (!demo && flow.steps.includes('docker')) {
+    const info = await exec('docker', ['info'])
+    if (info.code !== 0) throw new DockerDown(dockerDownMessage(info.out))
+  }
   const evidenceDir = statePath(out, 'evidence', BRANCH)
   const shotsDir = statePath(out, 'shots', BRANCH)
   // Evidence and screenshots from an earlier run must not pass for this one's.
