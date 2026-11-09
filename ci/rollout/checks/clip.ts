@@ -7,9 +7,12 @@ import { freshPage, gotoPage } from './requests'
 export interface ClipResult {
   path: string
   width: number
-  /** 'button': one banner or embed button. 'page': the page itself (horizontal scroll). */
-  kind: 'button' | 'page'
-  /** The button's text, or '(page)'. */
+  /**
+   * 'button': one banner or embed button. 'page': the page itself (horizontal scroll). 'control': a
+   * daisyUI switch, badge or checkbox in the banner (settings view) or a placeholder (#115).
+   */
+  kind: 'button' | 'page' | 'control'
+  /** The button's text, '(page)', or for a control its kind and label ('toggle Externt innehåll'). */
   button: string
   /** Button width and its container's width, rounded px (page: scrollWidth and innerWidth). */
   w: number
@@ -31,6 +34,22 @@ export interface ClipResult {
    * counted: the visitor can scroll to the button.
    */
   cut: boolean
+  /** Control rows: the computed top border, e.g. '1px solid'. */
+  border?: string
+  /** Control rows: the rendered height, rounded px (`w` is the width). */
+  h?: number
+  /**
+   * Control rows: no border at all (width 0 or style none). daisyUI draws every switch, badge and
+   * checkbox with `var(--border)`; a site variable of that name with a colour in it (#115) makes
+   * those rules invalid, and the controls lose their border and size.
+   */
+  bare?: boolean
+  /**
+   * Control rows: a switch or checkbox shrunk to a sliver (review of #140: `--size-selector` /
+   * `--size-field` set to colours keep the border but make a switch 2px wide). A switch must be
+   * at least 1.4 times as wide as tall and 12px tall; a checkbox at least 12px each way.
+   */
+  tiny?: boolean
   clipped: boolean
 }
 
@@ -88,9 +107,47 @@ const MEASURE = `(() => {
   return rows
 })()`
 
+// #115: every visible daisyUI control matching `sel`, with its border.
+const BANNER_CONTROLS = '[data-consent-banner] .toggle, [data-consent-banner] .badge, [data-consent-banner] .checkbox'
+// Only what daisyUI styles (`.checkbox`): a bare native checkbox has no CSS border by design, and a
+// site without daisyUI is step 2's finding (#101).
+const PLACEHOLDER_CONTROLS = '[data-consent-embed]:not([data-active]) [data-remember].checkbox'
+const controls = (sel: string): string => `(() => {
+  const rows = []
+  for (const el of document.querySelectorAll(${JSON.stringify(sel)})) {
+    const r = el.getBoundingClientRect()
+    // Hidden (display: none, a hidden service row) is skipped; a collapsed one is measured.
+    if (!el.offsetParent) continue
+    const s = getComputedStyle(el)
+    const kind = el.classList.contains('toggle') ? 'toggle' : el.classList.contains('badge') ? 'badge' : 'checkbox'
+    // A stable name: the category or service the control belongs to (the badge: its own text).
+    const owner = el.closest('[data-consent-service], [data-consent-category], [data-consent-embed]')
+    const label = kind === 'badge'
+      ? (el.textContent || '').trim().split(/\\s+/).join(' ')
+      : owner ? (owner.getAttribute('data-consent-service') || owner.getAttribute('data-consent-category') || owner.getAttribute('data-consent-embed')) : ''
+    const width = parseFloat(s.borderTopWidth) || 0
+    rows.push({
+      kind: 'control',
+      button: (kind + ' ' + label).trim().slice(0, 60),
+      w: Math.round(r.width),
+      boxW: 0,
+      over: false,
+      out: false,
+      covered: false,
+      cut: false,
+      h: Math.round(r.height),
+      border: s.borderTopWidth + ' ' + s.borderTopStyle,
+      bare: width === 0 || s.borderTopStyle === 'none' || s.borderTopStyle === 'hidden',
+      tiny: kind === 'toggle' ? r.height < 12 || r.width < r.height * 1.4 : kind === 'checkbox' ? r.width < 12 || r.height < 12 : false,
+    })
+  }
+  return rows
+})()`
+
 /**
- * Every path at every width, one fresh page each: a 'page' row (horizontal scroll) and a row for
- * every visible banner and embed button.
+ * Every path at every width, one fresh page each: a 'page' row (horizontal scroll), a row for
+ * every visible banner and embed button, and a 'control' row for every visible daisyUI control in
+ * the placeholders and, after opening it, the banner's settings view (#115).
  */
 export async function checkClip(
   browser: Browser,
@@ -108,6 +165,22 @@ export async function checkClip(
         await page.waitForTimeout(300)
         const rows = (await page.evaluate(MEASURE)) as Omit<ClipResult, 'path' | 'width' | 'clipped'>[]
         for (const r of rows) results.push({ path, width, ...r, clipped: r.over || r.out || r.covered || r.cut })
+        // #115: the placeholders' controls in this view, then the settings view's (consent mode).
+        type Control = Omit<ClipResult, 'path' | 'width' | 'clipped'>
+        const found = (await page.evaluate(controls(PLACEHOLDER_CONTROLS))) as Control[]
+        const settings = page.locator('[data-consent-banner] [data-consent-action="settings"]')
+        if (await settings.isVisible().catch(() => false)) {
+          // The button's own click, not Playwright's: a covered button (a site's call bar, reported
+          // above as covered) would make a real click wait 30 s and throw (review of #140).
+          await settings.evaluate((b) => (b as HTMLElement).click())
+          await page.waitForTimeout(200)
+          const inBanner = (await page.evaluate(controls(BANNER_CONTROLS))) as Control[]
+          found.push(...inBanner)
+          // The settings view always has a switch per category: none means it did not open or render.
+          if (!inBanner.some((c) => c.button.startsWith('toggle')))
+            found.push({ kind: 'control', button: 'toggle (none in the settings view)', w: 0, h: 0, boxW: 0, over: false, out: false, covered: false, cut: false, border: '-', bare: true })
+        }
+        for (const r of found) results.push({ path, width, ...r, clipped: r.bare === true || r.tiny === true })
       } finally {
         await context.close()
       }
