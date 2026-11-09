@@ -1027,6 +1027,15 @@ describe('wireEmbeds', () => {
     ).toContain('<div class="grid h-full"><ConsentEmbed')
   })
 
+  test('#104: size-full fills its parent like h-full w-full (site 1369692805: the 16:9 default was clipped in a 30rem box)', () => {
+    expect(
+      embed(`<div class="h-[30rem] overflow-hidden">\n  <iframe class="size-full border-0" src="https://www.google.com/maps/embed?pb=!1" title="Karta"></iframe>\n</div>\n`),
+    ).toContain('  <div class="grid h-full w-full border-0"><ConsentEmbed service="google-maps" src="https://www.google.com/maps/embed?pb=!1" title="Karta" aspect="auto" /></div>\n')
+    expect(refused(`<section class="relative">\n  <iframe class="size-full" src="https://www.google.com/maps/embed?pb=!1" title="Karta"></iframe>\n</section>\n`)).toEqual([
+      'map fills a parent of unknown height',
+    ])
+  })
+
   // A percentage height against a parent with only a min-height resolves to auto: `grid h-full`
   // alone shrinks to the placeholder (120px where the site had 500px), so the min-height goes on
   // the wrapper (site 1217803084, site 1246505973, site 1231784589 and site 1217008669 were wired by hand like this).
