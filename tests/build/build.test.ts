@@ -258,6 +258,34 @@ test('ConsentEmbed renders no style attribute for aspect="auto", and the ratio o
   expect(html.querySelector('#default')!.getAttribute('style')).toBe('aspect-ratio: 16 / 9')
 })
 
+// #107: a src that does not belong to the service (a CMS field holding another site's URL) loads
+// nothing: no iframe, no Visa, no open link; a short message instead, and a warning in the build log.
+test('ConsentEmbed with a src of another host renders a message, no payload, and warns; the build passes', TIMEOUT, () => {
+  const build = buildDemo('consent', (dir) =>
+    writeFileSync(
+      join(dir, 'src/pages/fel-adress.astro'),
+      page(
+        ['export const prerender = true', "const fromCms = 'https://example.org/karta'"],
+        [
+          '<ConsentEmbed id="wrong" service="google-maps" src={fromCms} title="Hitta hit" />',
+          '<ConsentEmbed id="right" service="google-maps" src="https://www.google.com/maps/embed?pb=r" title="r" />',
+        ].join('\n'),
+      ),
+    ),
+  )
+  expect(build.code).toBe(0)
+  const html = build.html('fel-adress/index.html')
+  const wrong = html.querySelector('#wrong')!
+  expect(wrong.hasAttribute('data-consent-embed')).toBe(false)
+  expect(wrong.querySelector('template, iframe, [data-load], [data-open], [data-remember]')).toBeNull()
+  expect(wrong.textContent).toContain('Hitta hit kan inte visas.')
+  expect(html.toString()).not.toContain('example.org')
+  expect(build.output).toMatch(/fel-adress.*google-maps.*example\.org|example\.org.*google-maps.*fel-adress/s)
+  // The right one is untouched.
+  expect(html.querySelector('#right')!.getAttribute('data-consent-embed')).toBe('google-maps')
+  expect(html.querySelector('#right template[data-payload]')).not.toBeNull()
+})
+
 const WIDGET_SCRIPT = 'https://elfsightcdn.com/platform.js'
 const WIDGET_IMPORT = "import ConsentWidget from '@visionmediahq/astro-consent/components/ConsentWidget.astro'"
 

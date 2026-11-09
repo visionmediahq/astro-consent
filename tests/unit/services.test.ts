@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { expect, test } from 'vitest'
-import { CATEGORIES, SERVICES, generateServicesJson, isCategory, matchesRegistry } from '../../src/services'
+import { CATEGORIES, SERVICES, generateServicesJson, isCategory, matchesRegistry, srcMatchesService } from '../../src/services'
 
 test('CATEGORIES is necessary, external, statistics, marketing in that order', () => {
   expect([...CATEGORIES]).toEqual(['necessary', 'external', 'statistics', 'marketing'])
@@ -26,6 +26,54 @@ test('no match pattern is a bare google.com, www.google.com, googleapis.com, gst
 test('isCategory is true for the four categories and false for service slugs', () => {
   for (const category of CATEGORIES) expect(isCategory(category)).toBe(true)
   for (const slug of Object.keys(SERVICES)) expect(isCategory(slug)).toBe(false)
+})
+
+// #107: an embed's src must belong to its service, judged by the host, not by a substring.
+test('srcMatchesService accepts the embed URLs client sites use', () => {
+  for (const url of [
+    'https://www.google.com/maps/embed?pb=!1m18',
+    'https://maps.google.com/maps?q=Storgatan%201&output=embed',
+    'https://www.google.com/maps?q=x&output=embed',
+    '//www.google.com/maps/embed?pb=1',
+    'https://maps.google.se/maps?q=x&output=embed',
+    'HTTPS://WWW.GOOGLE.COM/maps/embed?pb=1',
+    'https://www.google.com./maps/embed?pb=1',
+    'https://maps.googleapis.com/maps/embed/v1/place?q=x',
+  ])
+    expect(srcMatchesService(url, 'google-maps'), url).toBe(true)
+  expect(srcMatchesService('https://calendar.google.com/calendar/embed?src=x', 'google-calendar')).toBe(true)
+})
+
+test('srcMatchesService refuses look-alikes of the calendar and widget hosts too', () => {
+  expect(srcMatchesService('https://evil.io/.calendar.google.com', 'google-calendar')).toBe(false)
+  expect(srcMatchesService('https://calendar.google.com.evil.io/', 'google-calendar')).toBe(false)
+  expect(srcMatchesService('https://evil.io/.elfsight.com', 'elfsight')).toBe(false)
+  expect(srcMatchesService('https://apps.elfsight.com/p/x', 'elfsight')).toBe(true)
+})
+
+test('srcMatchesService refuses another host, a look-alike host, a host-less src, and another service', () => {
+  for (const url of [
+    'https://example.org/map',
+    'https://evil.example/?u=https://www.google.com/maps/embed',
+    'https://evil.example/google.com/maps',
+    'https://evilgoogle.com/maps/embed',
+    'https://www.google.com.evil.io/maps/embed',
+    'https://www.google.com/search?q=maps',
+    // Review of #141: a pattern after a dot in the path, or a look-alike host around it.
+    'https://evil.example/a.google.com/maps',
+    'https://evil.example/x.maps.googleapis.com',
+    'https://evil.io/.maps.gstatic.com',
+    'https://maps.google.evil.io/x',
+    'https://x.maps.google.attacker.com/',
+    'https://www.google.com.evil.io/x.google.com/maps',
+    'https://maps.google.com.evil.io/maps',
+    'https://calendar.google.com/calendar/embed?src=x',
+    '/karta.html',
+    'javascript:alert(1)',
+    'inte en adress',
+    '',
+  ])
+    expect(srcMatchesService(url, 'google-maps'), url).toBe(false)
 })
 
 test('matchesRegistry classifies known URLs', () => {

@@ -6,7 +6,8 @@ import '../styles/contrast.css'
 import config from 'virtual:astro-consent/config'
 import { deEmbed } from '../embed-url'
 import { scanError } from '../scan'
-import { type ServiceSlug } from '../services'
+import { type ServiceSlug, srcMatchesService } from '../services'
+import sv from '../text/sv.json'
 import EmbedPlaceholder from './EmbedPlaceholder.astro'
 
 interface Props {
@@ -28,11 +29,27 @@ if (!config.services.includes(service)) {
   throw new Error(scanError(Astro.url.pathname, service, config.services))
 }
 
+// #107: a src that is not the service's (a CMS field holding another site's URL) would load that
+// site under the service's name after consent. Render a message instead, and say so in the log.
+const belongs = srcMatchesService(src, service)
+if (!belongs) {
+  let host = '(no host)'
+  try {
+    host = new URL(src.startsWith('//') ? `https:${src}` : src).host || host
+  } catch {}
+  console.warn(`[astro-consent] ${Astro.url.pathname}: ConsentEmbed service="${service}" has a src on ${host}, which is not ${service}'s; it renders a message instead of the embed`)
+}
+
 // No per-instance id exists (`id` is optional), so the info element gets a random suffix.
 const infoId = `${id ?? 'consent-embed-' + crypto.randomUUID().slice(0, 8)}-info`
 const openHref = href ?? deEmbed(src)
 ---
 
+{!belongs ? (
+  <div id={id} class="flex items-center rounded-box bg-base-200 p-4 text-base text-base-content sm:text-sm">
+    <p>{sv.embed.unavailable.replace('{title}', title)}</p>
+  </div>
+) : (
 <div
   id={id}
   data-consent-embed={service}
@@ -58,3 +75,4 @@ const openHref = href ?? deEmbed(src)
     )
   }
 </div>
+)}

@@ -112,6 +112,33 @@ try {
   }
   rmSync(badPage)
 
+  // #107: an embed whose src is another site's renders a message instead of the embed, and the build
+  // passes. The right embed next to it keeps a closed <template> and a live "Visa" (Astro 6, above).
+  const srcPage = join(dir, 'src/pages/fel-adress.astro')
+  writeFileSync(
+    srcPage,
+    [
+      '---',
+      "import ConsentEmbed from '@visionmediahq/astro-consent/components/ConsentEmbed.astro'",
+      'export const prerender = true',
+      "const fromCms = 'https://example.org/karta'",
+      '---',
+      '<html><head><title>t</title></head><body>',
+      '<ConsentEmbed id="wrong" service="google-maps" src={fromCms} title="Hitta hit" />',
+      '<ConsentEmbed id="right" service="google-maps" src="https://www.google.com/maps/embed?pb=r" title="r" />',
+      '</body></html>',
+    ].join('\n'),
+  )
+  run('npx', ['astro', 'build'], dir)
+  const fel = readFileSync(join(dir, 'dist/client/fel-adress/index.html'), 'utf8')
+  assert(fel.includes('Hitta hit kan inte visas.'), 'fel-adress: the embed with another host\'s src does not show its message')
+  assert(!fel.includes('example.org'), 'fel-adress: the other host\'s URL is in the page')
+  const felPayloads = [...fel.matchAll(/<template data-payload[^>]*>([\s\S]*?)<\/template>/g)]
+  assert(felPayloads.length === 1, `fel-adress has ${felPayloads.length} data-payload templates, expected the right embed's only`)
+  assert((fel.replace(/<template[\s\S]*?<\/template>/g, '').match(/data-load/g)?.length ?? 0) === 1, 'fel-adress: the right embed has no live "Visa"')
+  rmSync(srcPage)
+  console.log('✓ an embed with another host\'s src renders a message (#107)')
+
   console.log(`✓ pack-install astro@${astroVersion} @astrojs/node@${adapterVersion}`)
 } catch (error) {
   console.error(`✗ ${(error as Error).message}`)

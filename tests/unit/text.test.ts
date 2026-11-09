@@ -23,7 +23,7 @@ const KEYS = [
   'categories.external.label', 'categories.external.description',
   'categories.statistics.label', 'categories.statistics.description',
   'categories.marketing.label', 'categories.marketing.description',
-  'embed.show', 'embed.remember', 'embed.info', 'embed.open',
+  'embed.show', 'embed.remember', 'embed.info', 'embed.open', 'embed.unavailable',
   'links.settings', 'links.policy',
 ]
 
