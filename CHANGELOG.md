@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.1.6
 
 - Fix: on a phone (below `sm`) the notice banner is a bar flush with the bottom edge instead of a
   floating card: no side or bottom inset, no shadow, no radius, a top border only, tighter padding
