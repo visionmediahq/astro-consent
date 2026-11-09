@@ -329,7 +329,8 @@ const urlsIn = (text: string): string[] => text.match(/(?:https?:)?\/\/[^\s"'<>`
 const LAZY = ['srcdoc', 'data-src', 'data-lazy-src']
 
 /** Where the text sweep looks for iframes the .astro parser does not cover. */
-const SWEEP_SKIP = /\.(?:astro|png|jpe?g|gif|webp|avif|ico|bmp|tiff?|woff2?|ttf|otf|eot|pdf|mp[34]|webm|ogg|wav|mov|zip|gz)$/i
+// Binary formats as in detect/scripts.ts BINARY (#38), except svg, which can hold an iframe in a foreignObject.
+const SWEEP_SKIP = /\.(?:astro|png|jpe?g|gif|webp|avif|ico|bmp|tiff?|heic|psd|woff2?|ttf|otf|eot|pdf|docx?|xlsx?|pptx?|od[tsp]|mp[34]|m4a|aac|flac|webm|ogg|wav|mov|avi|mkv|zip|gz|rar|7z|tar|wasm|exe|dmg|bin)$/i
 
 /** A quoted value as written, an expression as `{…}`, a bare attribute as '', or null. */
 function rawAttr(node: AstroNode, name: string): string | null {
@@ -585,7 +586,7 @@ export function detectIframes(files: SiteFiles, ownDomains: string[]): DetectedI
     } catch {
       continue
     }
-    if (text.includes('\u0000')) continue
+    // #38: no NUL-byte skip (SWEEP_SKIP leaves out binary files); a NUL could hide an iframe.
     for (const m of text.matchAll(/<iframe\b/gi)) {
       const start = m.index
       const close = text.indexOf('>', start)
