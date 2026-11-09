@@ -446,6 +446,18 @@ describe('verify', () => {
     expect(evidence(dir, '5-clip.txt')).toContain('/kontakt/ 360px button "Visa Google Maps" 150px in 326px CLIPPED (cut off by an overflow:hidden ancestor)')
   })
 
+  test('step 5: a banner control with no border fails and names the likely cause (#115)', async () => {
+    const dir = siteDir()
+    const button: ClipResult = { path: '/', width: 360, kind: 'button', button: 'Neka', w: 80, boxW: 300, over: false, out: false, covered: false, cut: false, clipped: false }
+    const row = (button: string, border: string, bare: boolean): ClipResult => ({ path: '/', width: 360, kind: 'control', button, w: bare ? 5 : 33, boxW: 0, over: false, out: false, covered: false, cut: false, border, bare, clipped: bare })
+    const f = fake({ checks: { clip: async () => [button, row('toggle external', '0px none', true), row('badge Alltid på', '1px solid', false)] } })
+    const result = await verify(dir, report(), { deps: f.deps })
+    expect(result.steps.at(-1)).toMatchObject({ step: 5, pass: false })
+    const text = evidence(dir, '5-clip.txt')
+    expect(text).toContain('/ 360px control "toggle external" border 0px none NO BORDER (a site variable named like a daisyUI token, e.g. --border? #115)')
+    expect(text).toContain('/ 360px control "badge Alltid på" border 1px solid ok')
+  })
+
   describe("main's preview stops answering mid-step (#20)", () => {
     const REFUSED = 'page.goto: net::ERR_CONNECTION_REFUSED at http://127.0.0.1:4398/'
     const mainStarts = (calls: string[]) => calls.filter((c) => c.startsWith('preview') && c.endsWith(' 4398')).length

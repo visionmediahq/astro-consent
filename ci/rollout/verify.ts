@@ -19,7 +19,8 @@
 //                 a page detect didn't know is a detect miss
 //   4 consent-paths  Visa / Visa alltid / Neka on every page with an embed
 //   5 clip        no banner or embed button clipped or cut off by an overflow:hidden ancestor, no
-//                 banner button covered, no page wider than
+//                 banner button covered, every daisyUI switch, badge and checkbox in the banner's
+//                 settings view and the placeholders with a border (#115), no page wider than
 //                 on main, at 320/360/375/1280 px; no embed placeholder more than 10 % shorter than
 //                 the iframe of its service it replaced on main, at 360/1280 px (#46)
 //   6 contrast    every banner button, PrivacyLinks row and embed placeholder text ≥ 4.5:1 and
@@ -817,6 +818,10 @@ async function runVerify(dir: string, report: Report, opts: VerifyOptions, deps:
         if (onMain !== undefined && onMain >= r.w) r.clipped = false
         const why = `${r.over ? ' (text overflows)' : ''}${r.out ? ' (sticks out)' : ''}${r.covered ? ' (covered by another element)' : ''}${r.cut ? ' (cut off by an overflow:hidden ancestor)' : ''}`
         const main = onMain === undefined ? '' : r.clipped ? ` (main ${onMain}px)` : ` (main ${onMain}px too: not the banner)`
+        if (r.kind === 'control') {
+          lines.push(`${r.path} ${r.width}px control "${r.button}" border ${r.border} ${r.bare ? 'NO BORDER (a site variable named like a daisyUI token, e.g. --border? #115)' : 'ok'}`)
+          continue
+        }
         lines.push(`${r.path} ${r.width}px ${r.kind} "${r.button}" ${r.w}px in ${r.boxW}px ${r.clipped ? `CLIPPED${why}` : 'ok'}${main}`)
       }
       const measured = rows.some((r) => r.kind === 'button')
