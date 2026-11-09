@@ -170,7 +170,7 @@ describe('verify on fonts-selfhost', () => {
       [9, 'docker', 'pass'],
     ])
     expect(r.pass).toBe(true)
-    expect(f.calls.filter((c) => c.startsWith('git push'))).toEqual(['git push --force-with-lease origin fonts-selfhost'])
+    expect(f.calls.filter((c) => c.startsWith('git push'))).toEqual([`git push --force-with-lease=fonts-selfhost:${SHA} origin fonts-selfhost`])
     expect(f.calls).toContain('git ls-remote --heads origin refs/heads/fonts-selfhost')
     expect(f.called).not.toContain('consentPaths')
     expect(f.called).not.toContain('contrast')
@@ -327,7 +327,7 @@ describe('step 8 on consent-banner', () => {
     writeFileSync(join(dir, '.rollout/pushed.txt'), `${ours}\n`)
     const f = fake({ branch: 'consent-banner', exec: { 'git ls-remote --heads origin refs/heads/consent-banner': { code: 0, out: `${ours}\trefs/heads/consent-banner\n` } } })
     const r = await verify(dir, report(), { deps: f.deps })
-    expect(f.calls).toContain('git push --force-with-lease origin consent-banner')
+    expect(f.calls).toContain(`git push --force-with-lease=consent-banner:${ours} origin consent-banner`)
     expect(r.steps[0]).toMatchObject({ step: 1 })
     expect(readFileSync(join(dir, '.rollout/pushed.txt'), 'utf8')).toBe(`${SHA}\n`)
   })

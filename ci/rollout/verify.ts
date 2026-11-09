@@ -452,9 +452,13 @@ async function runVerify(dir: string, report: Report, opts: VerifyOptions, deps:
       })
       return finish()
     }
-    const push = await git('push', '--force-with-lease', 'origin', BRANCH)
+    // #123: lease on what ls-remote just answered ('' = must not exist). A bare --force-with-lease
+    // compares with the local origin/<branch>, which a plain fetch keeps after the branch was merged
+    // and deleted on GitHub, and the push then fails with "stale info".
+    const lease = `--force-with-lease=${BRANCH}:${remoteSha}`
+    const push = await git('push', lease, 'origin', BRANCH)
     if (push.code !== 0) {
-      record(0, 'push', { pass: false, lines: [`git push --force-with-lease origin ${BRANCH} failed:`, tail(push.out)] })
+      record(0, 'push', { pass: false, lines: [`git push ${lease} origin ${BRANCH} failed:`, tail(push.out)] })
       return finish()
     }
     sha = (await git('rev-parse', 'HEAD')).out.trim() || null
