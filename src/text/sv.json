@@ -2,7 +2,7 @@
   "region": "Cookie-inställningar",
   "notice": {
     "title": "Så mäter vi besök",
-    "body": "Den här webbplatsen mäter besök anonymt med Umami, utan cookies och utan att spara personuppgifter. Vi sparar ditt val från den här rutan i din webbläsare.",
+    "body": "Vi mäter besök anonymt med Umami, utan cookies och utan personuppgifter. Ditt val sparas i webbläsaren.",
     "ok": "OK",
     "more": "Läs mer"
   },

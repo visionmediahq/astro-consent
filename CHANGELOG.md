@@ -8,8 +8,11 @@
   instead of 210px (the card plus its 16px gap). The card hid content under a client site's hero
   (#131). "OK" stays full width (#116). The consent banner and every width from `sm` up are
   unchanged.
-- No wording change: `CONSENT_VERSION` is unchanged and no visitor is asked again. A shorter
-  notice text on phones (#131's larger saving) is still open.
+- Shorter notice text, on every width: "Vi mäter besök anonymt med Umami, utan cookies och utan
+  personuppgifter. Ditt val sparas i webbläsaren." (was two longer sentences, four lines on a
+  phone). With the bar layout the notice is 137px at 390px and 157px at 360px, down from 210px.
+  The notice text is not part of the consent terms: `CONSENT_VERSION` is unchanged and no visitor
+  is asked again.
 
 ## 1.1.5
 

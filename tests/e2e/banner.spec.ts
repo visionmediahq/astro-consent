@@ -28,6 +28,26 @@ test.describe('notice mode', () => {
     expect(box.width).toBe(390)
     expect(box.y + box.height).toBe(844)
     expect(box.height).toBeLessThan(190)
+    const ok = (await action(page, 'notice_ok').boundingBox())!
+    expect(ok.width).toBeGreaterThan(390 - 2 * 16 - 1)
+  })
+
+  // #131: the shorter body (two short sentences) takes the bar from 177px to about 140-160px.
+  test('on a phone the notice text keeps the bar at most 160px tall', async ({ page, context }) => {
+    await stub(context)
+    for (const width of [360, 390]) {
+      await page.setViewportSize({ width, height: 844 })
+      await page.goto(NOTICE)
+      await expect(banner(page)).toBeVisible()
+      expect((await banner(page).boundingBox())!.height, `${width}px`).toBeLessThanOrEqual(160)
+    }
+  })
+
+  test('on a phone the notice bar has no shadow, radius or side borders', async ({ page, context }) => {
+    await stub(context)
+    await page.setViewportSize({ width: 390, height: 844 })
+    await page.goto(NOTICE)
+    await expect(banner(page)).toBeVisible()
     const style = await banner(page).evaluate((el) => {
       const s = getComputedStyle(el)
       // Tailwind 4's shadow-none leaves transparent zero-size layers: no layer may paint.
@@ -35,8 +55,6 @@ test.describe('notice mode', () => {
       return { shadow, radius: s.borderTopLeftRadius, top: s.borderTopWidth, bottom: s.borderBottomWidth, left: s.borderLeftWidth }
     })
     expect(style).toEqual({ shadow: true, radius: '0px', top: '1px', bottom: '0px', left: '0px' })
-    const ok = (await action(page, 'notice_ok').boundingBox())!
-    expect(ok.width).toBeGreaterThan(390 - 2 * 16 - 1)
   })
 
   test('from sm up the notice stays the floating card', async ({ page, context }) => {
