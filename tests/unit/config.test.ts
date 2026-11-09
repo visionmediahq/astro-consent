@@ -47,6 +47,20 @@ describe('parsePrivacyConfig', () => {
     for (const url of ['https:/log.kund.se', 'https:log.kund.se']) expect(fieldOf({ services: [], log_endpoint: url }), url).toBe('log_endpoint')
   })
 
+  // #89: who is responsible (GDPR art. 13.1 a), for ConsentPolicy.
+  test('parsePrivacyConfig accepts a controller with name and email, org_number optional', () => {
+    const controller = { name: 'Kund AB', email: 'info@kund.se', org_number: '556677-8899' }
+    expect(parsePrivacyConfig({ services: [], controller })).toEqual({ services: [], controller })
+    expect(parsePrivacyConfig({ services: [], controller: { name: 'Kund AB', email: 'info@kund.se' } }).controller).toEqual({ name: 'Kund AB', email: 'info@kund.se' })
+  })
+
+  test('parsePrivacyConfig rejects a controller without a name or a valid email, or with unknown keys', () => {
+    for (const controller of [{ email: 'info@kund.se' }, { name: 'Kund AB' }, { name: 'Kund AB', email: 'inte-en-adress' }, { name: '', email: 'info@kund.se' }])
+      expect(fieldOf({ services: [], controller }), JSON.stringify(controller)).toBe('controller')
+    // An unknown key inside it is named with its place.
+    expect(fieldOf({ services: [], controller: { name: 'Kund AB', email: 'info@kund.se', phone: '1' } })).toBe('controller.phone')
+  })
+
   test('parsePrivacyConfig rejects a javascript: policy_url', () => {
     expect(fieldOf({ services: [], policy_url: 'javascript:alert(1)' })).toBe('policy_url')
   })

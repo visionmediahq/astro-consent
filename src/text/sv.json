@@ -48,16 +48,23 @@
     "policy": "Integritetspolicy"
   },
   "policy": {
+    "controllerTitle": "Vem som ansvarar",
+    "controller": "{name} ansvarar för de personuppgifter som behandlas på den här webbplatsen. Du når oss på {email}.",
     "storedTitle": "Vad som sparas i din webbläsare",
-    "stored": "När du svarar i rutan om cookies sparas ditt val i din webbläsare under namnet {key}: vad du valde, när, och vilken version av texten du svarade på. Det behövs för att webbplatsen ska komma ihåg ditt val. Valet gäller i {months} månader, sedan får du frågan igen.",
-    "logged": "Ditt val skickas också till oss tillsammans med ett slumpat id, så att vi kan visa vilket samtycke som gavs.",
+    "stored": "När du svarar i rutan om cookies sparas ditt val i din webbläsare under namnet {key}: vad du valde, när, och vilken version av texten du svarade på. Det är nödvändigt för att webbplatsen ska kunna följa ditt val och kräver därför inget samtycke. Valet gäller i {months} månader, sedan får du frågan igen.",
+    "logged": "Ditt val skickas också till oss, med ett slumpat id men utan ditt namn. Vi sparar det så länge vi behöver kunna visa att du har samtyckt, eftersom vi är skyldiga att kunna visa det.",
     "statsTitle": "Besöksstatistik",
-    "stats": "Vi mäter besök med Umami, utan cookies och utan att spara personuppgifter. Vi ser till exempel hur många som besöker en sida, men inte vem du är.",
+    "stats": "Vi mäter besök med Umami, utan cookies och utan att spara personuppgifter. Vi ser till exempel hur många som besöker en sida, men inte vem du är. Din IP-adress används bara i stunden och sparas inte. Den rättsliga grunden är berättigat intresse: att förstå hur webbplatsen används.",
     "servicesTitle": "Tjänster från andra företag",
-    "servicesIntro": "Webbplatsen använder tjänster från andra företag. De laddas först när du godkänner dem, i rutan om cookies eller med knappen ”Visa” vid innehållet. När en tjänst laddas skickas din IP-adress till företaget, och företaget kan sätta egna cookies. Uppgifterna kan föras över till länder utanför EU, till exempel USA.",
+    "servicesIntro": "Webbplatsen använder tjänster från andra företag. De laddas bara om du samtycker, i rutan om cookies eller med knappen ”Visa” vid innehållet, och ditt samtycke är den rättsliga grunden. När en tjänst laddas skickas din IP-adress till företaget, och företaget kan sätta egna cookies. Vi och företaget ansvarar gemensamt för att uppgifterna skickas dit. Vad företaget sedan gör med dem ansvarar företaget självt för, enligt sin integritetspolicy. Uppgifterna kan föras över till länder utanför EU, till exempel USA.",
     "category": "Kategori: {label}.",
     "vendorPolicy": "Integritetspolicy hos {vendor}",
+    "rightsTitle": "Dina rättigheter",
+    "rights": "Du har rätt att få veta vilka personuppgifter vi har om dig och att begära att de rättas eller raderas, att behandlingen begränsas eller att invända mot den. Du kan när som helst ta tillbaka ett samtycke. Det påverkar inte det som redan har skett.",
+    "rightsContact": "Hör av dig till oss på {email} om du vill använda dina rättigheter.",
+    "rightsContactNoEmail": "Hör av dig till oss om du vill använda dina rättigheter.",
+    "complaint": "Om du tycker att vi behandlar dina personuppgifter fel kan du klaga hos Integritetsskyddsmyndigheten (IMY).",
     "changeTitle": "Ändra ditt val",
-    "change": "Du kan ändra eller ta tillbaka ditt val när som helst. Ändringen gäller från och med nu."
+    "change": "Du kan ändra eller ta tillbaka ditt val här. Ändringen gäller från och med nu."
   }
 }

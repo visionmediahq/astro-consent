@@ -310,6 +310,36 @@ test('ConsentPolicy lists what is stored, Umami, every listed service with vendo
   expect(policy.querySelector('button[data-consent-open]')).not.toBeNull()
 })
 
+// #89 (GDPR art. 13): who is responsible and how to reach them, the legal basis, retention, rights.
+test('ConsentPolicy with a controller names it, its contact, the legal bases, rights and IMY', TIMEOUT, () => {
+  const build = buildDemo('consent', (dir) => {
+    const privacy = JSON.parse(readFileSync(join(dir, 'src/data/privacy.json'), 'utf8')) as Record<string, unknown>
+    writePrivacy(dir, { ...privacy, controller: { name: 'Exempel AB', email: 'info@exempel.se', org_number: '556677-8899' } })
+    writeFileSync(join(dir, 'src/pages/cookies.astro'), policyPage)
+  })
+  expect(build.code).toBe(0)
+  expect(build.output).not.toMatch(/ConsentPolicy.*controller/)
+  const policy = build.html('cookies/index.html').querySelector('[data-consent-policy]')!
+  const text = policy.textContent.replace(/\s+/g, ' ')
+  expect(text).toContain('Exempel AB (556677-8899)')
+  expect(policy.querySelector('a[href="mailto:info@exempel.se"]')).not.toBeNull()
+  expect(text).toMatch(/samtycke/i)
+  expect(text).toMatch(/berättigat intresse/i)
+  expect(text).toContain('Integritetsskyddsmyndigheten')
+  expect(policy.querySelector('a[href="https://www.imy.se/"]')).not.toBeNull()
+  expect(policy.querySelector('[data-consent-policy-rights]')).not.toBeNull()
+})
+
+test('ConsentPolicy without a controller renders, has no controller section, and warns in the build log', TIMEOUT, () => {
+  const build = buildDemo('consent', (dir) => writeFileSync(join(dir, 'src/pages/cookies.astro'), policyPage))
+  expect(build.code).toBe(0)
+  expect(build.output).toMatch(/ConsentPolicy.*controller/)
+  const policy = build.html('cookies/index.html').querySelector('[data-consent-policy]')!
+  expect(policy.querySelector('[data-consent-policy-controller]')).toBeNull()
+  expect(policy.querySelector('[data-consent-policy-rights]')).not.toBeNull()
+  expect(policy.querySelector('a[href^="mailto:"]')).toBeNull()
+})
+
 test('ConsentPolicy in notice mode has no third-party section', TIMEOUT, () => {
   const build = buildDemo('notice', (dir) => writeFileSync(join(dir, 'src/pages/cookies.astro'), policyPage))
   expect(build.code).toBe(0)

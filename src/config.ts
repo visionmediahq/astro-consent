@@ -36,16 +36,25 @@ const schema = z.strictObject({
     .refine((url) => /^https:\/\/[^/]/i.test(url), 'must start with https://')
     .nullable()
     .optional(),
+  // #89: who is responsible and how to reach them, for ConsentPolicy (GDPR art. 13.1 a).
+  controller: z
+    .strictObject({
+      name: z.string().trim().min(1),
+      email: z.email(),
+      org_number: z.string().trim().min(1).optional(),
+    })
+    .nullable()
+    .optional(),
 })
 
 export function parsePrivacyConfig(raw: unknown): PrivacyConfig {
   const result = schema.safeParse(raw)
   if (!result.success) {
     const issue = result.error.issues[0]!
-    // zod 4 reports an unknown key in `keys`, with an empty path.
+    // zod 4 reports an unknown key in `keys`, with the path of the object holding it.
     const field =
       issue.code === 'unrecognized_keys'
-        ? issue.keys[0]!
+        ? [...issue.path.map(String), issue.keys[0]!].join('.')
         : issue.path.length > 0
           ? String(issue.path[0])
           : 'privacy.json'
@@ -54,6 +63,7 @@ export function parsePrivacyConfig(raw: unknown): PrivacyConfig {
   const config: PrivacyConfig = { services: result.data.services }
   if (result.data.policy_url) config.policy_url = result.data.policy_url
   if (result.data.log_endpoint) config.log_endpoint = result.data.log_endpoint
+  if (result.data.controller) config.controller = result.data.controller
   return config
 }
 
@@ -74,6 +84,7 @@ export function toConsentConfig(privacy: PrivacyConfig, site: string | undefined
     consentVersion: consentVersion(privacy.services),
     policyUrl: privacy.policy_url ?? null,
     logEndpoint: privacy.log_endpoint ?? null,
+    controller: privacy.controller ?? null,
     site: site ? new URL(site).hostname : null,
   }
 }
