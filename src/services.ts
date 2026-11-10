@@ -11,6 +11,8 @@ export interface Service {
   /** Lower-case substrings of a request URL (host, or host + path) that identify the service. */
   match: string[]
   description_sv: string
+  /** The vendor's privacy policy, linked from ConsentPolicy (#89). Not part of the consent terms. */
+  privacy_url: string
 }
 
 export const SERVICES: Record<ServiceSlug, Service> = {
@@ -20,6 +22,7 @@ export const SERVICES: Record<ServiceSlug, Service> = {
     category: 'external',
     match: ['google.com/maps', 'maps.google.', 'maps.googleapis.com', 'maps.gstatic.com', 'places.googleapis.com'],
     description_sv: 'Kartor från Google.',
+    privacy_url: 'https://policies.google.com/privacy',
   },
   'google-calendar': {
     // Registry name is Swedish (shown in the banner and placeholder); the slug stays English.
@@ -28,6 +31,7 @@ export const SERVICES: Record<ServiceSlug, Service> = {
     category: 'external',
     match: ['calendar.google.com'],
     description_sv: 'Kalendrar från Google.',
+    privacy_url: 'https://policies.google.com/privacy',
   },
   'google-analytics': {
     name: 'Google Analytics',
@@ -35,6 +39,7 @@ export const SERVICES: Record<ServiceSlug, Service> = {
     category: 'statistics',
     match: ['googletagmanager.com', 'google-analytics.com', 'analytics.google.com'],
     description_sv: 'Besöksstatistik från Google.',
+    privacy_url: 'https://policies.google.com/privacy',
   },
   'google-ads': {
     name: 'Google Ads',
@@ -42,6 +47,7 @@ export const SERVICES: Record<ServiceSlug, Service> = {
     category: 'marketing',
     match: ['googleadservices.com', 'doubleclick.net', 'googlesyndication.com'],
     description_sv: 'Annonsmätning från Google.',
+    privacy_url: 'https://policies.google.com/privacy',
   },
   'meta-pixel': {
     name: 'Meta-pixel',
@@ -49,6 +55,7 @@ export const SERVICES: Record<ServiceSlug, Service> = {
     category: 'marketing',
     match: ['connect.facebook.net', 'facebook.com/tr'],
     description_sv: 'Annonsmätning från Meta (Facebook, Instagram).',
+    privacy_url: 'https://www.facebook.com/privacy/policy/',
   },
   elfsight: {
     name: 'Elfsight',
@@ -56,6 +63,7 @@ export const SERVICES: Record<ServiceSlug, Service> = {
     category: 'external',
     match: ['elfsightcdn.com', 'elfsight.com'],
     description_sv: 'Flöden från sociala medier, till exempel Instagram, via Elfsight.',
+    privacy_url: 'https://elfsight.com/privacy-policy/',
   },
 }
 

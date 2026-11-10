@@ -3,10 +3,13 @@ import { relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { AstroIntegration } from 'astro'
 import { findEmbedServices, isInDir, scanError } from './scan'
-import { ConfigError, parsePrivacyConfig, toConsentConfig, type ConsentConfig, type PrivacyConfig } from './config'
+import { ConfigError, parsePrivacyConfig, toConsentConfig, toPolicyConfig, type ConsentConfig, type PrivacyConfig } from './config'
 
 const VIRTUAL_ID = 'virtual:astro-consent/config'
 const RESOLVED_ID = '\0' + VIRTUAL_ID
+// ConsentPolicy's controller and processor, in a module of their own so client.ts never bundles them.
+const POLICY_ID = 'virtual:astro-consent/policy'
+const RESOLVED_POLICY_ID = '\0' + POLICY_ID
 
 /**
  * Reads the site's src/data/privacy.json, validates it, and serves it to server components and
@@ -38,6 +41,7 @@ export default function consent(): AstroIntegration {
         }
 
         const consentConfig: ConsentConfig = toConsentConfig(privacy, config.site)
+        const policyConfig = toPolicyConfig(privacy)
         if (consentConfig.logEndpoint && (!consentConfig.site || consentConfig.site === 'example.com')) {
           throw new Error(
             '[astro-consent] log_endpoint is set but Astro `site` is unset or https://example.com — set SITE_URL',
@@ -73,10 +77,12 @@ export default function consent(): AstroIntegration {
               {
                 name: 'astro-consent:config',
                 resolveId(id: string) {
-                  return id === VIRTUAL_ID ? RESOLVED_ID : undefined
+                  if (id === VIRTUAL_ID) return RESOLVED_ID
+                  return id === POLICY_ID ? RESOLVED_POLICY_ID : undefined
                 },
                 load(id: string) {
-                  return id === RESOLVED_ID ? `export default ${JSON.stringify(consentConfig)}` : undefined
+                  if (id === RESOLVED_ID) return `export default ${JSON.stringify(consentConfig)}`
+                  return id === RESOLVED_POLICY_ID ? `export default ${JSON.stringify(policyConfig)}` : undefined
                 },
               },
             ],

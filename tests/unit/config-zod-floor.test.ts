@@ -28,6 +28,9 @@ test('the floor copy is the version package.json names, and config.ts gets it', 
 test('the schema accepts a full config and rejects bad values on the floor zod', () => {
   const raw = { services: ['google-maps'], policy_url: 'https://kund.se/integritet', log_endpoint: 'https://log.kund.se/consent' }
   expect(parsePrivacyConfig(raw)).toEqual(raw)
+  // #89 (review of #145): the policy fields parse on the floor too.
+  const policy = { services: [], controller: { name: 'Kund AB', email: 'info@kund.se', org_number: '556677-8899', address: 'Storgatan 1' }, processor: 'Vision Media' }
+  expect(parsePrivacyConfig(policy)).toEqual(policy)
   expect(parsePrivacyConfig({ services: [], policy_url: null })).toEqual({ services: [] })
   const field = (value: unknown): string => {
     try {
@@ -42,6 +45,8 @@ test('the schema accepts a full config and rejects bad values on the floor zod',
   expect(field({ services: [], policy_url: 'javascript:alert(1)' })).toBe('policy_url')
   expect(field({ services: [], log_endpoint: 'http://log.example' })).toBe('log_endpoint')
   expect(field({ services: [], has_banner: true })).toBe('has_banner')
+  expect(field({ services: [], controller: { name: 'Kund AB', email: 'inte-en-adress' } })).toBe('controller.email')
+  expect(field({ services: [], controller: { name: 'Kund AB', email: 'info@kund.se', org_number: '1' } })).toBe('controller.org_number')
   // Review of #144: 4.3.6's z.url alone accepts these; config.ts refuses them on every version.
   expect(field({ services: [], policy_url: 'https:/kund.se/integritet' })).toBe('policy_url')
   expect(field({ services: [], log_endpoint: 'https:log.kund.se' })).toBe('log_endpoint')
