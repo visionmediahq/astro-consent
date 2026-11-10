@@ -74,8 +74,11 @@ repo tool and is not part of the installed package.)
 | `services` | yes | Registry slugs the site uses: `google-maps`, `google-calendar` (ConsentEmbed), `elfsight` (ConsentWidget), `google-analytics`, `google-ads`, `meta-pixel`. An empty list gives notice mode. |
 | `policy_url` | no | Absolute http(s) URL of the site's privacy policy. Without it there is no "Läs mer" / "Integritetspolicy" link. |
 | `log_endpoint` | no | Absolute https URL. When set, every choice is sent there with `navigator.sendBeacon`. Requires Astro's `site` to be set to the real domain. |
+| `controller` | no | Who is responsible for the site's personal data, for `<ConsentPolicy />`: `{ "name", "email", "org_number"?, "address"? }`. `org_number` is 10 digits, dash optional. Never sent to the browser runtime. |
+| `processor` | no | Who runs hosting and statistics for the controller, named by `<ConsentPolicy />` as its processor. |
 
-Unknown keys, unknown slugs and invalid URLs fail the build with a message naming the field.
+Unknown keys, unknown slugs and invalid values fail the build with a message naming the field
+(`controller.email`, not just `controller`).
 
 ## Components
 
@@ -138,6 +141,18 @@ import ConsentWidget from '@visionmediahq/astro-consent/components/ConsentWidget
 
 A "Cookie-inställningar" button that reopens the banner, and an "Integritetspolicy" link when
 `policy_url` is set. Pass the text colour through `class`.
+
+### `<ConsentPolicy class="…" />` (draft, #89)
+
+The cookie and privacy text for a site's own page, rendered from `privacy.json` and the registry:
+who is responsible (`controller`, `processor`), what is stored in the browser and, with
+`log_endpoint`, sent to the log, Umami, each listed service with its vendor and privacy policy,
+transfers outside the EU, the visitor's rights, IMY, and a button that reopens the banner.
+
+It is a section, not a whole privacy policy: it does not cover a contact form, error reports or
+server logs. It says the site measures visits with Umami, as the banner does; use it only on sites
+that do. Headings are `h2`, so put it under the page's `h1`. Without `controller` it still renders
+and warns in the build log. The wording is a draft until legal review.
 
 ## Script API
 

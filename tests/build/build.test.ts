@@ -1,4 +1,4 @@
-import { copyFileSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { copyFileSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, test } from 'vitest'
 import { builtCss, partsMissingFromBuild } from '../../ci/rollout/lib/daisyui'
@@ -289,6 +289,8 @@ test('ConsentEmbed with a src of another host renders a message, no payload, and
 // #89 (draft): a policy text rendered from privacy.json and the registry, for a site's /cookies page.
 const POLICY_IMPORT = "import ConsentPolicy from '@visionmediahq/astro-consent/components/ConsentPolicy.astro'"
 const policyPage = ['---', POLICY_IMPORT, 'export const prerender = true', '---', '<html><head><title>t</title></head><body><main><h1>Cookies</h1><ConsentPolicy /></main></body></html>'].join('\n')
+const CONTROLLER = { name: 'Exempel AB', email: 'info@exempel.se', org_number: '556677-8899', address: 'Storgatan 1, 652 24 Karlstad' }
+const policyText = (el: { textContent: string }): string => el.textContent.replace(/\s+/g, ' ')
 
 test('ConsentPolicy lists what is stored, Umami, every listed service with vendor, category and policy link, and a settings button', TIMEOUT, () => {
   const build = buildDemo('consent', (dir) => writeFileSync(join(dir, 'src/pages/cookies.astro'), policyPage))
@@ -296,7 +298,7 @@ test('ConsentPolicy lists what is stored, Umami, every listed service with vendo
   const html = build.html('cookies/index.html')
   const policy = html.querySelector('[data-consent-policy]')!
   expect(policy).not.toBeNull()
-  const text = policy.textContent.replace(/\s+/g, ' ')
+  const text = policyText(policy)
   expect(text).toContain('vm_consent')
   expect(text).toContain('12 månader')
   expect(text).toContain('Umami')
@@ -307,27 +309,64 @@ test('ConsentPolicy lists what is stored, Umami, every listed service with vendo
     expect(row.querySelector('a[href^="https://"]')).not.toBeNull()
     expect(row.textContent).toMatch(/Ireland Ltd|Elfsight, SL/)
   }
+  // GDPR art. 13.1 f: transfers outside the EU name the safeguard and where to find it.
+  expect(text).toMatch(/utanför EU/)
+  expect(text).toMatch(/standardavtalsklausuler/)
   expect(policy.querySelector('button[data-consent-open]')).not.toBeNull()
+  // Review of #145: headings are styled, not left at body size by Tailwind's preflight.
+  for (const h2 of policy.querySelectorAll('h2')) expect(h2.getAttribute('class'), h2.textContent).toMatch(/\bfont-semibold\b/)
+})
+
+// Review of #145: the consent log is described only when the site has one (the demo consent config does).
+test('ConsentPolicy describes the consent log and its legal basis only with a log_endpoint', TIMEOUT, () => {
+  const withLog = buildDemo('consent', (dir) => writeFileSync(join(dir, 'src/pages/cookies.astro'), policyPage))
+  expect(withLog.code).toBe(0)
+  const text = policyText(withLog.html('cookies/index.html').querySelector('[data-consent-policy]')!)
+  expect(text).toMatch(/skickas också till oss/)
+  expect(text).toMatch(/artikel 7\.1/)
+  const withoutLog = buildDemo('consent', (dir) => {
+    const privacy = JSON.parse(readFileSync(join(dir, 'src/data/privacy.json'), 'utf8')) as Record<string, unknown>
+    delete privacy.log_endpoint
+    writePrivacy(dir, privacy)
+    writeFileSync(join(dir, 'src/pages/cookies.astro'), policyPage)
+  })
+  expect(withoutLog.code).toBe(0)
+  expect(policyText(withoutLog.html('cookies/index.html').querySelector('[data-consent-policy]')!)).not.toMatch(/skickas också till oss/)
 })
 
 // #89 (GDPR art. 13): who is responsible and how to reach them, the legal basis, retention, rights.
-test('ConsentPolicy with a controller names it, its contact, the legal bases, rights and IMY', TIMEOUT, () => {
+test('ConsentPolicy with a controller and processor names them, the contact, the legal bases, rights and IMY', TIMEOUT, () => {
   const build = buildDemo('consent', (dir) => {
     const privacy = JSON.parse(readFileSync(join(dir, 'src/data/privacy.json'), 'utf8')) as Record<string, unknown>
-    writePrivacy(dir, { ...privacy, controller: { name: 'Exempel AB', email: 'info@exempel.se', org_number: '556677-8899' } })
+    writePrivacy(dir, { ...privacy, controller: CONTROLLER, processor: 'Exempel Webb AB' })
     writeFileSync(join(dir, 'src/pages/cookies.astro'), policyPage)
   })
   expect(build.code).toBe(0)
   expect(build.output).not.toMatch(/ConsentPolicy.*controller/)
   const policy = build.html('cookies/index.html').querySelector('[data-consent-policy]')!
-  const text = policy.textContent.replace(/\s+/g, ' ')
-  expect(text).toContain('Exempel AB (556677-8899)')
-  expect(policy.querySelector('a[href="mailto:info@exempel.se"]')).not.toBeNull()
+  const text = policyText(policy)
+  expect(text).toContain('Exempel AB (org.nr 556677-8899)')
+  expect(text).toContain('Storgatan 1, 652 24 Karlstad')
+  // Art. 13.1 e: the processor is a recipient.
+  expect(text).toMatch(/Exempel Webb AB .*för vår räkning/)
+  expect(policy.querySelector('[data-consent-policy-controller] a[href="mailto:info@exempel.se"]')).not.toBeNull()
   expect(text).toMatch(/samtycke/i)
   expect(text).toMatch(/berättigat intresse/i)
+  // Art. 21.4: the right to object to Umami is in its own paragraph, with the contact.
+  expect(policy.querySelector('[data-consent-policy-stats] a[href="mailto:info@exempel.se"]')).not.toBeNull()
+  expect(text).toMatch(/dataportabilitet/)
   expect(text).toContain('Integritetsskyddsmyndigheten')
   expect(policy.querySelector('a[href="https://www.imy.se/"]')).not.toBeNull()
-  expect(policy.querySelector('[data-consent-policy-rights]')).not.toBeNull()
+  expect(policy.querySelector('[data-consent-policy-rights] a[href="mailto:info@exempel.se"]')).not.toBeNull()
+  // Review of #145: the controller is for this page only, not in the JavaScript every page loads.
+  const page = build.html('cookies/index.html')
+  const scripts = page.querySelectorAll('script').map((el) => {
+    const src = el.getAttribute('src')
+    return src ? readFileSync(join(build.dir, 'dist/client', src), 'utf8') : el.textContent
+  })
+  scripts.push(...readdirSync(join(build.dir, 'dist/client/_astro')).filter((f) => f.endsWith('.js')).map((f) => readFileSync(join(build.dir, 'dist/client/_astro', f), 'utf8')))
+  expect(scripts.join('\n')).toContain('vm_consent')
+  expect(scripts.join('\n')).not.toMatch(/info@exempel\.se|Exempel Webb AB|556677-8899/)
 })
 
 test('ConsentPolicy without a controller renders, has no controller section, and warns in the build log', TIMEOUT, () => {
@@ -338,14 +377,17 @@ test('ConsentPolicy without a controller renders, has no controller section, and
   expect(policy.querySelector('[data-consent-policy-controller]')).toBeNull()
   expect(policy.querySelector('[data-consent-policy-rights]')).not.toBeNull()
   expect(policy.querySelector('a[href^="mailto:"]')).toBeNull()
+  expect(policyText(policy)).not.toMatch(/för vår räkning/)
 })
 
-test('ConsentPolicy in notice mode has no third-party section', TIMEOUT, () => {
+test('ConsentPolicy in notice mode has no third-party section and no consent log', TIMEOUT, () => {
   const build = buildDemo('notice', (dir) => writeFileSync(join(dir, 'src/pages/cookies.astro'), policyPage))
   expect(build.code).toBe(0)
   const policy = build.html('cookies/index.html').querySelector('[data-consent-policy]')!
   expect(policy.querySelectorAll('[data-consent-policy-service]').length).toBe(0)
-  expect(policy.textContent).toContain('Umami')
+  const text = policyText(policy)
+  expect(text).toContain('Umami')
+  expect(text).not.toMatch(/skickas också till oss|utanför EU/)
   expect(policy.querySelector('button[data-consent-open]')).not.toBeNull()
 })
 

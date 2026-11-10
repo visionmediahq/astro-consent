@@ -25,10 +25,11 @@ const KEYS = [
   'categories.marketing.label', 'categories.marketing.description',
   'embed.show', 'embed.remember', 'embed.info', 'embed.open', 'embed.unavailable',
   'links.settings', 'links.policy',
-  'policy.controllerTitle', 'policy.controller', 'policy.storedTitle', 'policy.stored', 'policy.logged',
-  'policy.statsTitle', 'policy.stats', 'policy.servicesTitle', 'policy.servicesIntro', 'policy.category',
-  'policy.vendorPolicy', 'policy.rightsTitle', 'policy.rights', 'policy.rightsContact',
-  'policy.rightsContactNoEmail', 'policy.complaint', 'policy.changeTitle', 'policy.change',
+  'policy.controllerTitle', 'policy.controllerName', 'policy.controller', 'policy.address', 'policy.processor',
+  'policy.storedTitle', 'policy.stored', 'policy.logged', 'policy.statsTitle', 'policy.stats', 'policy.statsObject',
+  'policy.statsObjectNoEmail', 'policy.servicesTitle', 'policy.servicesIntro', 'policy.transfers', 'policy.category',
+  'policy.vendorPolicy', 'policy.rightsTitle', 'policy.rights', 'policy.rightsContact', 'policy.rightsContactNoEmail',
+  'policy.complaint', 'policy.complaintLink', 'policy.changeTitle', 'policy.change',
 ]
 
 test('sv.json has every key the components and runtime use', () => {

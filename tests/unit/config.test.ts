@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { ConfigError, consentVersion, parsePrivacyConfig, toConsentConfig } from '../../src/config'
+import { ConfigError, consentVersion, parsePrivacyConfig, toConsentConfig, toPolicyConfig } from '../../src/config'
 
 function fieldOf(raw: unknown): string {
   try {
@@ -54,11 +54,34 @@ describe('parsePrivacyConfig', () => {
     expect(parsePrivacyConfig({ services: [], controller: { name: 'Kund AB', email: 'info@kund.se' } }).controller).toEqual({ name: 'Kund AB', email: 'info@kund.se' })
   })
 
-  test('parsePrivacyConfig rejects a controller without a name or a valid email, or with unknown keys', () => {
-    for (const controller of [{ email: 'info@kund.se' }, { name: 'Kund AB' }, { name: 'Kund AB', email: 'inte-en-adress' }, { name: '', email: 'info@kund.se' }])
-      expect(fieldOf({ services: [], controller }), JSON.stringify(controller)).toBe('controller')
+  test('parsePrivacyConfig accepts a controller address, and null for controller and processor', () => {
+    const controller = { name: 'Kund AB', email: 'info@kund.se', address: 'Storgatan 1, 652 24 Karlstad' }
+    expect(parsePrivacyConfig({ services: [], controller }).controller).toEqual(controller)
+    expect(parsePrivacyConfig({ services: [], controller: null, processor: null })).toEqual({ services: [] })
+  })
+
+  // Review of #145: the field is named down to the key, so the technician knows which one is wrong.
+  test('parsePrivacyConfig rejects a controller without a name or a valid email, naming the field', () => {
+    expect(fieldOf({ services: [], controller: { email: 'info@kund.se' } })).toBe('controller.name')
+    expect(fieldOf({ services: [], controller: { name: '', email: 'info@kund.se' } })).toBe('controller.name')
+    expect(fieldOf({ services: [], controller: { name: 'Kund AB' } })).toBe('controller.email')
+    expect(fieldOf({ services: [], controller: { name: 'Kund AB', email: 'inte-en-adress' } })).toBe('controller.email')
+    expect(fieldOf({ services: [], controller: 'Kund AB' })).toBe('controller')
     // An unknown key inside it is named with its place.
     expect(fieldOf({ services: [], controller: { name: 'Kund AB', email: 'info@kund.se', phone: '1' } })).toBe('controller.phone')
+  })
+
+  test('parsePrivacyConfig accepts a Swedish org_number with or without the dash, and rejects other shapes', () => {
+    for (const org_number of ['556677-8899', '5566778899'])
+      expect(parsePrivacyConfig({ services: [], controller: { name: 'Kund AB', email: 'info@kund.se', org_number } }).controller?.org_number).toBe(org_number)
+    for (const org_number of ['55667788-99', '556677-889', 'SE556677889901'])
+      expect(fieldOf({ services: [], controller: { name: 'Kund AB', email: 'info@kund.se', org_number } }), org_number).toBe('controller.org_number')
+  })
+
+  // GDPR art. 13.1 e: the processor that runs hosting and statistics for the controller.
+  test('parsePrivacyConfig accepts a processor name and rejects an empty one', () => {
+    expect(parsePrivacyConfig({ services: [], processor: 'Vision Media' })).toEqual({ services: [], processor: 'Vision Media' })
+    expect(fieldOf({ services: [], processor: ' ' })).toBe('processor')
   })
 
   test('parsePrivacyConfig rejects a javascript: policy_url', () => {
@@ -104,6 +127,14 @@ describe('toConsentConfig', () => {
     const config = toConsentConfig({ services: [] }, 'https://kund.se')
     expect(config.policyUrl).toBeNull()
     expect(config.logEndpoint).toBeNull()
+  })
+
+  // Review of #145: the controller is for the policy page; the browser runtime has no use for it.
+  test('toConsentConfig leaves controller and processor out; toPolicyConfig carries them, null when unset', () => {
+    const privacy = { services: [], controller: { name: 'Kund AB', email: 'info@kund.se' }, processor: 'Vision Media' }
+    expect(JSON.stringify(toConsentConfig(privacy, 'https://kund.se'))).not.toMatch(/Kund AB|info@kund|Vision Media/)
+    expect(toPolicyConfig(privacy)).toEqual({ controller: privacy.controller, processor: 'Vision Media' })
+    expect(toPolicyConfig({ services: [] })).toEqual({ controller: null, processor: null })
   })
 
   test('toConsentConfig reduces site to its hostname', () => {

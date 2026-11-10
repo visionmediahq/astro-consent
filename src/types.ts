@@ -9,12 +9,15 @@ export interface PrivacyConfig {
   log_endpoint?: string
   /** Who is responsible for the site's personal data (GDPR art. 13.1 a), shown by ConsentPolicy (#89). */
   controller?: Controller
+  /** Who runs hosting and statistics for the controller (GDPR art. 13.1 e), shown by ConsentPolicy. */
+  processor?: string
 }
 
 export interface Controller {
   name: string
   email: string
   org_number?: string
+  address?: string
 }
 
 /** What the virtual module `virtual:astro-consent/config` exports. */
@@ -24,8 +27,14 @@ export interface ConsentConfig {
   consentVersion: string
   policyUrl: string | null
   logEndpoint: string | null
-  /** From privacy.json's `controller`; null when the site has none (ConsentPolicy warns, #89). */
-  controller: Controller | null
   /** Hostname of the Astro `site`, e.g. "kund.se". */
   site: string | null
+}
+
+/** What `virtual:astro-consent/policy` exports: ConsentPolicy's own config, never imported by the
+ *  browser runtime. */
+export interface PolicyConfig {
+  /** From privacy.json's `controller`; null when the site has none (ConsentPolicy warns, #89). */
+  controller: Controller | null
+  processor: string | null
 }

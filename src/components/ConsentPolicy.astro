@@ -4,11 +4,17 @@
 // existing /integritetspolicy). Headings are h2: the host page owns the h1. The settings button
 // reopens the banner like PrivacyLinks does (client.ts listens for any [data-consent-open]).
 //
+// It is a section, not a whole privacy policy: it covers cookies, Umami and embedded services, not
+// a site's contact form or server logs. It says the site measures visits with Umami, as the banner
+// does on every site; use it only on sites that do.
+//
 // What it covers, and why (GDPR art. 13, LEK 9 kap. 28 §): who is responsible and how to reach them
-// (privacy.json `controller`), what is stored or sent and on what legal basis, how long, recipients
-// (the vendors) and transfers outside the EU, the visitor's rights and the right to complain to IMY,
-// and how to withdraw consent.
+// (privacy.json `controller`), who processes for them (`processor`), what is stored or sent and on
+// what legal basis, how long, recipients (the vendors) and transfers outside the EU, the visitor's
+// rights and the right to complain to IMY, and how to withdraw consent.
 import config from 'virtual:astro-consent/config'
+import policy from 'virtual:astro-consent/policy'
+import { fill, monthsOf, splitAt } from '../policy'
 import { SERVICES } from '../services'
 import { MAX_AGE_MS, STORAGE_KEY } from '../store'
 import sv from '../text/sv.json'
@@ -17,54 +23,67 @@ interface Props {
   class?: string
 }
 
-const fill = (text: string, vars: Record<string, string>): string =>
-  text.replace(/\{(\w+)\}/g, (match, key: string) => vars[key] ?? match)
-/** `text` split around `{email}`, so the address can be a link. */
-const aroundEmail = (text: string, vars: Record<string, string>): [string, string] => {
-  const [before = '', after = ''] = fill(text, vars).split('{email}')
-  return [before, after]
-}
-const months = String(Math.round(MAX_AGE_MS / (365 * 24 * 3600 * 1000)) * 12)
 const p = sv.policy
-const controller = config.controller
-const name = controller ? (controller.org_number ? `${controller.name} (${controller.org_number})` : controller.name) : ''
+const { controller, processor } = policy
+const name = controller ? (controller.org_number ? fill(p.controllerName, { name: controller.name, org_number: controller.org_number }) : controller.name) : ''
+const h2 = 'text-lg font-semibold'
 
 // GDPR art. 13.1 a asks for the controller's identity and contact: say so where the technician looks.
-if (!controller) {
+// Only when the page is built (or in dev): an on-demand page would log it on every request.
+if (!controller && (Astro.isPrerendered || import.meta.env.DEV)) {
   console.warn(`[astro-consent] ${Astro.url.pathname}: ConsentPolicy has no controller in privacy.json; add "controller": { "name", "email" } so the page says who is responsible`)
 }
-const [controllerBefore, controllerAfter] = aroundEmail(p.controller, { name })
-const [rightsBefore, rightsAfter] = aroundEmail(p.rightsContact, {})
+const [controllerBefore, controllerAfter] = splitAt(p.controller, 'email', { name })
+const [objectBefore, objectAfter] = splitAt(p.statsObject, 'email', {})
+const [rightsBefore, rightsAfter] = splitAt(p.rightsContact, 'email', {})
 ---
 
 <section data-consent-policy class:list={['flex flex-col gap-3', Astro.props.class]}>
   {
     controller && (
       <div data-consent-policy-controller class="flex flex-col gap-3">
-        <h2>{p.controllerTitle}</h2>
+        <h2 class={h2}>{p.controllerTitle}</h2>
         <p>
           {controllerBefore}
           <a class="link" href={`mailto:${controller.email}`}>{controller.email}</a>
           {controllerAfter}
+          {controller.address && <> {fill(p.address, { address: controller.address })}</>}
         </p>
+        {processor && <p>{fill(p.processor, { processor })}</p>}
       </div>
     )
   }
 
-  <h2>{p.storedTitle}</h2>
+  <h2 class={h2}>{p.storedTitle}</h2>
   <p>
-    {fill(p.stored, { key: STORAGE_KEY, months })}
+    {fill(p.stored, { key: STORAGE_KEY, months: String(monthsOf(MAX_AGE_MS)) })}
     {config.logEndpoint && <> {p.logged}</>}
   </p>
 
-  <h2>{p.statsTitle}</h2>
-  <p>{p.stats}</p>
+  <div data-consent-policy-stats class="flex flex-col gap-3">
+    <h2 class={h2}>{p.statsTitle}</h2>
+    <p>{p.stats}</p>
+    <p>
+      {
+        controller ? (
+          <>
+            {objectBefore}
+            <a class="link" href={`mailto:${controller.email}`}>{controller.email}</a>
+            {objectAfter}
+          </>
+        ) : (
+          p.statsObjectNoEmail
+        )
+      }
+    </p>
+  </div>
 
   {
     config.services.length > 0 && (
       <>
-        <h2>{p.servicesTitle}</h2>
+        <h2 class={h2}>{p.servicesTitle}</h2>
         <p>{p.servicesIntro}</p>
+        <p>{p.transfers}</p>
         <ul class="flex list-disc flex-col gap-2 pl-5">
           {config.services.map((slug) => {
             const s = SERVICES[slug]
@@ -83,7 +102,7 @@ const [rightsBefore, rightsAfter] = aroundEmail(p.rightsContact, {})
   }
 
   <div data-consent-policy-rights class="flex flex-col gap-3">
-    <h2>{p.rightsTitle}</h2>
+    <h2 class={h2}>{p.rightsTitle}</h2>
     <p>{p.rights}</p>
     <p>
       {
@@ -99,11 +118,11 @@ const [rightsBefore, rightsAfter] = aroundEmail(p.rightsContact, {})
       }
     </p>
     <p>
-      {p.complaint} <a class="link" href="https://www.imy.se/" rel="noopener noreferrer">imy.se</a>
+      {p.complaint} <a class="link" href="https://www.imy.se/" rel="noopener noreferrer">{p.complaintLink}</a>
     </p>
   </div>
 
-  <h2>{p.changeTitle}</h2>
+  <h2 class={h2}>{p.changeTitle}</h2>
   <p>{p.change}</p>
   <p>
     <button type="button" class="btn btn-sm" data-consent-open>{sv.links.settings}</button>
