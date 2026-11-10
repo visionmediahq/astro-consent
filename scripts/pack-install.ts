@@ -2,7 +2,7 @@
 // the demo with a given Astro version → build → assert the banner and its CSS are there → build
 // once more per form of <script> in a <ConsentWidget> slot and assert that build fails (#27).
 // Usage: npm run test:pack -- <astro version> <@astrojs/node version>
-import { execFileSync, spawnSync } from 'node:child_process'
+import { execFileSync, spawn, spawnSync } from 'node:child_process'
 import { existsSync, lstatSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { REPO_ROOT, copyDemo } from './demo-copy'
@@ -41,6 +41,67 @@ function widgetPage(slot: string): string {
     `<ConsentWidget service="elfsight" script="https://elfsightcdn.com/platform.js" title="x"><div class="elfsight-app-x" data-elfsight-app-lazy></div>${slot}</ConsentWidget>`,
     '</body></html>',
   ].join('\n')
+}
+
+/**
+ * `astro dev` from a real node_modules: load the demo's home page and every module its scripts
+ * import, as a browser would. That makes Vite pre-bundle the package's client script, which fails
+ * with "Could not resolve virtual:astro-consent/config" unless the integration excludes the package
+ * from optimizeDeps. The repo's own tests never see this: the demo links the package, and Vite
+ * doesn't pre-bundle linked packages.
+ */
+async function assertDevServerLoads(cwd: string): Promise<void> {
+  const port = 4391
+  const server = spawn('npx', ['astro', 'dev', '--port', String(port)], {
+    cwd,
+    env: { ...process.env, ASTRO_TELEMETRY_DISABLED: '1', FORCE_COLOR: '0' },
+    detached: true,
+  })
+  let output = ''
+  server.stdout.on('data', (chunk) => (output += chunk))
+  server.stderr.on('data', (chunk) => (output += chunk))
+  const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+  try {
+    // Astro moves to the next port when this one is taken; read the one it printed.
+    let origin = ''
+    for (let i = 0; i < 60 && !origin; i++) {
+      await wait(500)
+      origin = output.match(/http:\/\/localhost:\d+/)?.[0] ?? ''
+    }
+    assert(origin, `astro dev printed no local URL:\n${output}`)
+    let html = ''
+    for (let i = 0; i < 30 && !html; i++) {
+      html = await fetch(`${origin}/`).then((res) => (res.ok ? res.text() : ''), () => '')
+      if (!html) await wait(500)
+    }
+    assert(html.includes('data-consent-banner'), `dev server did not serve the banner:\n${output}`)
+
+    // Walk the page's module graph: scripts, then the absolute imports Vite rewrote them to.
+    const seen = new Set<string>()
+    let queue = [...html.matchAll(/<script[^>]+src="(\/[^"]+)"/g)].map((match) => match[1]!)
+    while (queue.length > 0) {
+      const next: string[] = []
+      for (const path of queue) {
+        if (seen.has(path)) continue
+        seen.add(path)
+        const code = await fetch(origin + path).then((res) => res.text(), () => '')
+        for (const match of code.matchAll(/(?:from|import)\s*["'](\/[^"']+)["']/g)) next.push(match[1]!)
+      }
+      queue = next
+    }
+    // The optimizer runs after the first requests; give it time to report.
+    await wait(5000)
+    assert(seen.size > 0, 'the dev page loaded no module scripts')
+    assert(!/Could not resolve|error while updating dependencies/.test(output), `astro dev failed to pre-bundle a dependency:\n${output}`)
+  } finally {
+    // Astro 7's CLI starts the server as a separate process outside npx's process group, so stop
+    // everything running from this copy's node_modules, then let it exit before the copy is removed.
+    try {
+      if (server.pid) process.kill(-server.pid)
+    } catch {}
+    spawnSync('pkill', ['-f', join(cwd, 'node_modules/astro')])
+    await wait(1000)
+  }
 }
 
 try {
@@ -88,6 +149,9 @@ try {
   const assetDir = join(dir, 'dist/client/_astro')
   const allCss = readdirSync(assetDir).filter((file) => file.endsWith('.css')).map((file) => readFileSync(join(assetDir, file), 'utf8')).join('\n')
   assert(allCss.includes('card-actions'), 'built CSS has no card-actions — Tailwind did not scan the package in node_modules')
+
+  await assertDevServerLoads(dir)
+  console.log('✓ astro dev loads the page and its scripts without a pre-bundling error')
 
   assert(existsSync(join(installed, 'src')) && existsSync(join(installed, 'services.json')), 'installed package lacks src/ or services.json')
   for (const extra of ['tests', 'demo', 'ci', 'scripts']) {

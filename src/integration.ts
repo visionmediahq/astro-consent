@@ -50,6 +50,10 @@ export default function consent(): AstroIntegration {
 
         updateConfig({
           vite: {
+            // The client script imports the virtual config, which only this plugin can serve.
+            // esbuild pre-bundling it in `astro dev` fails with "Could not resolve
+            // virtual:astro-consent/config", so Vite must serve the package as source.
+            optimizeDeps: { exclude: ['@visionmediahq/astro-consent'] },
             plugins: [
               {
                 // Astro compiles .astro files before plugins added here run, so `transform` sees
