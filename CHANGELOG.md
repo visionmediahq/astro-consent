@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Fix: `astro dev` on a site failed with "Could not resolve virtual:astro-consent/config" as soon
+  as a browser loaded a page. Vite tried to pre-bundle the client script with esbuild, which can't
+  see the integration's virtual module. The integration now excludes the package from
+  `optimizeDeps`, so sites need no workaround (remove a site-level exclude once updated). Builds
+  were never affected. `test:pack` now starts `astro dev` from the installed tarball, loads the
+  page's scripts and fails on a pre-bundling error; the demo links the package, so the build tests
+  could not see it.
+
 - Fix: `ConsentEmbed` checks that `src` belongs to its service, by host (#107). A `src` on another
   host (a CMS field holding another site's URL) used to load that site under the service's name
   after consent. It now renders "{title} kan inte visas." instead: no iframe, no "Visa", no link,
