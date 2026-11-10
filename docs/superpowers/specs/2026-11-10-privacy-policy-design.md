@@ -65,7 +65,9 @@ site refused (fail closed) or taken from the owner.
 | Backups | Period unknown. Text uses the criterion "tills nästa säkerhetskopia ersätter den" until the number is read from Coolify's database backup settings and the Hetzner console (the Coolify read token needs renewing first). |
 | Client's inbox | Retention is the client's; the text uses a criterion the client confirms in their PR, default "så länge ärendet pågår och därefter som annan e-post". Never a number the package invents. |
 | Processor agreement | None exists today. Legal drafts a standard PUB-avtal naming Hetzner and Resend as sub-processors. The text must not claim one exists. |
-| Banner | The notice banner's "utan personuppgifter" (Umami) changes in the same release, so `CONSENT_VERSION` rises once and every visitor is asked once more. |
+| Banner | The notice banner's "utan personuppgifter" (Umami) changes in the same release, so `CONSENT_VERSION` rises once and every visitor is asked once more. The sentence renders only when Umami is configured (the same condition as the policy's section 7). |
+| Org number | Optional everywhere. Art. 13.1 a asks for the controller's identity and contact, not the registration number. Name, e-mail and address are required for the full policy and are prefilled by wire from site-factory's `business.json`; the PR asks the client to confirm them and to add the org.nr if they want it shown. |
+| Release | One release: the banner change and the new components together. The policy page follows per site; until then "Läs mer" is missing on those sites exactly as today. |
 | reCAPTCHA | Disclosed in the policy while a site is on it (Google receives IP, device and behaviour data, sets a `_GRECAPTCHA` cookie on google.com, transfer to the US); the paragraph disappears when the site switches to ALTCHA. |
 
 ## Where each fact comes from
@@ -73,8 +75,11 @@ site refused (fail closed) or taken from the owner.
 Three kinds, three mechanisms. Nothing is typed that can be detected.
 
 1. **Client facts** in `src/data/privacy.json`:
-   - `controller: { name, org_number, email, address }`. For the full policy all four are
-     required; for the cookie text alone `org_number` and `address` stay optional (as #145).
+   - `controller: { name, email, address, org_number? }`. For the full policy name, e-mail and
+     address are required; for the cookie text alone `address` stays optional too (as #145).
+     `org_number` is optional everywhere and printed when given. Wire prefills name, e-mail and
+     address from site-factory's `business.json` (which has no org.nr) and the PR asks the client
+     to confirm them.
    - `inbox_retention` (string, Swedish, a criterion): optional with the default above; wire puts
      it in the PR for the client to confirm.
    - `policy: "generated" | "own"`. `own` (the default when absent) renders only the cookie text
@@ -148,14 +153,15 @@ Sections, in order; (C) = in the cookie text too, (P) = policy only. Every secti
 legitimate-interest basis names the interest and has its objection sentence, with the contact
 address, in that section (art. 21.4: shown separately), not only under Umami.
 
-1. (C) **Personuppgiftsansvarig**: name, org.nr, address, e-mail. (P) Then VM Group AB
-   (559094-7841) "driftar webbplatsen, e-postutskicket, besöksstatistiken och
+1. (C) **Personuppgiftsansvarig**: name, org.nr when given, address, e-mail. (P) Then VM Group
+   AB (559094-7841) "driftar webbplatsen, e-postutskicket, besöksstatistiken och
    felrapporteringen på uppdrag av oss" and uses Hetzner Online GmbH (Finland) for hosting and
    Resend for e-mail. A factual description of the role; no "enligt avtal", no "vi har ingått
    PUB-avtal".
 2. (P) **Kontaktformuläret**: what is sent (the fields you fill in; name, e-mail and message are
-   needed to send, otherwise call or e-mail), where it goes (through Resend to our e-mail, from
-   `noreply@visionmedia.io`), that the site stores nothing, Resend 30 days in the USA under the
+   needed to send, otherwise call or e-mail), where it goes (through Resend to our e-mail; the
+   sender address is not named, it is a per-site runtime setting and art. 13 does not need
+   it), that the site stores nothing, Resend 30 days in the USA under the
    EU standard contractual clauses (link to Resend's DPA, how to get a copy), our inbox: the
    client's criterion. Basis: art. 6.1 b when you ask for an offer or service, 6.1 f (answering
    your message) otherwise. Recipients: VM Group AB, Resend (Plus Five Five, Inc., via AWS), our
@@ -178,7 +184,9 @@ address, in that section (art. 21.4: shown separately), not only under Umami.
    (basis: art. 6.1 c, the duty to show consent under art. 7.1; legal decides between 6.1 c and
    citing 7.1 alone).
 7. (C) **Besöksstatistik** (only when Umami is configured): the monthly id, no IP stored,
-   raw data "tills vidare" and unlinkable after the month, monthly reports with totals only.
+   raw data "tills vidare" and unlinkable after the month, monthly reports with totals only,
+   and that VM Group AB runs the statistics on the site owner's behalf (the cookie text on the
+   56 own-policy sites would otherwise never name the recipient of the Umami data; art. 13.1 e).
    Basis 6.1 f, objection sentence.
 8. (C) **Tjänster från andra företag** (consent mode only): as #145, without the joint
    controllership sentence; transfers with the safeguard and how to get a copy. Fashion ID still
@@ -188,8 +196,15 @@ address, in that section (art. 21.4: shown separately), not only under Umami.
 10. (C) **Ändra ditt val**: the button.
 
 The banner's `notice.body` changes to match section 7 (one `CONSENT_VERSION` bump in the same
-release). The Umami description is one string that the banner, the cookie text and the policy
-all include.
+release; `notice.body` is not in the consent-terms hash today, so the test will not force the
+bump: CLAUDE.md's rule does). The Umami description is one string that the banner, the cookie
+text and the policy all include.
+
+**The banner's Umami sentence is conditional** on the same two build variables as section 7.
+Today it renders on every notice-mode site. A notice-mode site with no Umami and no services
+has nothing to tell the visitor and renders no banner at all (nothing is stored either, so no
+re-ask is needed on such a site). Affected: `ConsentBanner.astro`, `client.ts`'s notice path,
+the e2e consent-path tests, the demo's notice build (which must set the variables), and verify.
 
 ## Versioning and sign-off
 
@@ -211,10 +226,11 @@ all include.
   the hashes above catch any wording change.
 - **Against reality:** a post-merge live check compares the page with the site: Umami script tag
   present ⇔ section 7 present; `/api/form-config` provider ⇔ the spam sentence; the Sentry tag ⇔
-  section 5. Verify (step 2 builds with only `SITE_URL`, so every verify run shows no Umami, no
-  GlitchTip and reCAPTCHA) gets representative build variables for the policy page, or at least
-  a note in its report that the policy page's env-dependent sections are not what production
-  shows; the live check is the real proof.
+  section 5. Verify's step 2 builds with only `SITE_URL` today; it sets dummy values for
+  `UMAMI_SCRIPT_URL` and `UMAMI_WEBSITE_ID` (every production build has them), so the banner and
+  the policy page under verify match production. GlitchTip and the spam provider stay as the
+  verify build sees them, with a note in the report that those sections are env-dependent; the
+  live check is the real proof.
 - **Across platforms:** vision-privacy's templates are separate and no test spans the repos. One
   legal-approved fact sheet both repos cite, and a note in each pointing to it. Out of scope to
   build here; recorded so it is not forgotten.
@@ -229,11 +245,18 @@ all include.
   site's shared layout, copying the layout invocation (title, description, canonical props) from
   the site's simplest existing page. If no single shared layout exists or the invocation cannot
   be copied, the site is needs-human, as wire/layout.ts already does.
+- One release carries the banner change and the components. Live sites get it through the
+  `update` flow and are re-asked once; the policy page comes afterwards.
 - Sequence per site: the package release with this design must be in the lockfile first
-  (`update` flow), then the `policy-page` flow with its own PR body and verify steps.
-- The first policy PR per site is merged by the owner, not by the "merge reviewed+verified PRs
-  without asking" rule: it puts the client's org.nr, address and a legal text on their site, and
-  `controller` and `inbox_retention` need the client's confirmation. The PR body asks for both.
+  (`update` flow, or the banner `wire` PR for the ~96 not-yet-wired sites), then the
+  `policy-page` flow with its own PR body and verify steps. The policy page is never part of
+  the banner PR: the banner PR is reviewed for its own behaviour and merges under the existing
+  rule, and the policy PR needs the client's facts.
+- The first full-policy PR per site is merged by the owner, not by the "merge reviewed+verified
+  PRs without asking" rule: it puts the client's address, org.nr and a legal text on their site,
+  and `controller` and `inbox_retention` need the client's confirmation. The PR body asks for
+  both. The cookie-text-only page on the 56 own-policy sites carries no client facts beyond
+  what the banner already has, so the existing merge rule covers it.
 - site-factory adds the page and `controller` from the brief for new sites, so the 210 stop
   growing (site-factory #238 flags a missing policy as MUST).
 - Which 56 "have their own" is detect's `policyPage` ranking. Their own policies still omit
@@ -268,5 +291,24 @@ all include.
 - The dependency denylist's exact contents.
 - Test layout, as long as every behaviour above has a failing test first.
 - The wire part's layout-copying heuristic and its refusal messages.
-- Whether `controller` can be prefilled from site-factory's `business.json` (unverified whether
-  it holds org.nr and address).
+- A site with the contact route but without the spam-guard dependency, or the reverse: refuse
+  `generated` with a message naming both, since the design cannot say what such a form does.
+
+## Decisions after the builder check (2026-11-10)
+
+Answered by the owner:
+
+- Org number optional everywhere; name, e-mail and address prefilled from `business.json`.
+- The banner's Umami sentence follows the two Umami build variables; verify sets dummy values.
+- One release for the banner change and the components.
+
+My calls, for the owner to check while reading:
+
+- The policy page is always its own flow after the banner is live, never part of the banner PR.
+  The cookie-only page on the own-policy sites merges under the existing rule.
+- The cookie text names VM Group AB as running the statistics on the site owner's behalf (it was
+  a policy-only sentence; the own-policy sites would otherwise never name that recipient).
+- The sender address `noreply@visionmedia.io` leaves the text: it is a per-site runtime setting
+  (`CONTACT_FROM`, with two historical defaults) and art. 13 does not ask for it.
+- `notice.body` stays outside the consent-terms hash; the `CONSENT_VERSION` bump is made by
+  hand under CLAUDE.md's rule.
