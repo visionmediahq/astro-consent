@@ -76,10 +76,12 @@ Three kinds, three mechanisms. Nothing is typed that can be detected.
 
 1. **Client facts** in `src/data/privacy.json`:
    - `controller: { name, email, address, org_number? }`. For the full policy name, e-mail and
-     address are required; for the cookie text alone `address` stays optional too (as #145).
-     `org_number` is optional everywhere and printed when given. Wire prefills name, e-mail and
-     address from site-factory's `business.json` (which has no org.nr) and the PR asks the client
-     to confirm them.
+     address are required; for the cookie text alone `address` stays optional. `org_number` is
+     optional everywhere and printed when given. A page rendering `<ConsentPolicy />` or
+     `<PrivacyPolicy />` without the required fields fails the build with a message naming them
+     (#145's console.warn and the "NoEmail" string variants go away). Wire prefills name, e-mail
+     and address from site-factory's `business.json` (which has no org.nr) and the PR asks the
+     client to confirm them.
    - `inbox_retention` (string, Swedish, a criterion): optional with the default above; wire puts
      it in the PR for the client to confirm.
    - `policy: "generated" | "own"`. `own` (the default when absent) renders only the cookie text
@@ -100,9 +102,11 @@ Three kinds, three mechanisms. Nothing is typed that can be detected.
      `src/pages/api/contact.ts` exists (both from the integration, via `package.json` and
      `astro:routes:resolved`). The provider is `process.env.SPAM_PROVIDER`, read at request time
      in the component, with spam-guard's exact default (`recaptcha` when unset) and its dev
-     fallback to `import.meta.env`; a unit test pins the default against spam-guard's source.
-     astro-consent does not import spam-guard: a second mandatory git dependency for every site
-     is not acceptable, and CLAUDE.md's import rules apply.
+     fallback to `import.meta.env`. The default is a literal `'recaptcha'` with a comment naming
+     spam-guard's source line; the post-merge live check (below) is the proof that the sentence
+     matches `/api/form-config`. astro-consent does not import spam-guard, not even as a
+     devDependency: a second mandatory git dependency for every site is not acceptable, and
+     CLAUDE.md's import rules apply.
    - `SPAM_BLOCK`: optional and runtime; the sentence says the site "kan" keep a list.
    - The consent log: as #145, only with `log_endpoint`.
 
@@ -113,13 +117,15 @@ from structured sources, never from template text (the embed scan's "never fail 
 code" rule in CLAUDE.md is about the embed scan, whose miss is harmless; here a miss publishes a
 false legal statement, so the rule is the opposite, and the doc says so):
 
-- `astro:routes:resolved`: every endpoint must be one of the starter's (`api/contact`,
-  `api/form-config`, `api/altcha-challenge`, `llms.txt`). Any other endpoint, or any page under
-  `/api`, fails the build.
+- `astro:routes:resolved`, routes with `origin: 'project'` only (Astro's own `internal` routes,
+  the image endpoint, server islands and actions, are present on every site): every endpoint
+  must be one of the starter's (`api/contact`, `api/form-config`, `api/altcha-challenge`,
+  `llms.txt`). Any other project endpoint, or any page under `/api`, fails the build.
 - `package.json` dependencies: a denylist of packages that mean other processing (stripe,
   klarna, swish, mailchimp, sendgrid, shopify, and the like; the list lives in one file with a
   test).
-- `output: 'static'`: refused (every page would be prerendered).
+- No check on `output`: `static` with an adapter allows on-demand pages in Astro 5+, and the
+  `Astro.isPrerendered` throw below covers the case that matters.
 - A prerendered policy page: `<PrivacyPolicy />` throws on `Astro.isPrerendered`, which fails
   `astro build` with the file name and shows the error on the page in dev. `<ConsentPolicy />`
   keeps working prerendered (it needs no request-time facts) but drops the "warn only when
@@ -136,7 +142,8 @@ Forms posting to other hosts and Google Fonts not yet self-hosted stay in the ro
   `<PrivacyPolicy />` in the site's layout. The cookie sections are inside it, under an anchor
   (`#cookies`). `policy_url` becomes the path `/integritetspolicy`.
 - **Sites with their own policy (56):** wire writes `src/pages/cookies.astro` rendering
-  `<ConsentPolicy />`; `policy_url` stays as it is.
+  `<ConsentPolicy />`; `policy_url` stays as it is. If the target file already exists (detect's
+  `policyPage` ranking matches `cookie*` pages too), wire refuses and the site is needs-human.
 - **Two links in config.** Today the banner's "Läs mer" and PrivacyLinks' "Integritetspolicy"
   share `policy_url`. Add `cookie_url`: the banner's "Läs mer" prefers it (LEK 9:28 wants the
   purpose text one click from the banner); the footer link uses `policy_url`. Both may be a site
@@ -180,9 +187,12 @@ address, in that section (art. 21.4: shown separately), not only under Umami.
 5. (P) **Felrapportering** (only when `PUBLIC_GLITCHTIP_DSN` is set): what a report holds (page,
    browser, the error, may include the IP), 90 days, VM Group AB's GlitchTip. Basis 6.1 f,
    interest: finding faults.
-6. (C) **Vad som sparas i din webbläsare**: as #145, plus the consent log with `log_endpoint`
-   (basis: art. 6.1 c, the duty to show consent under art. 7.1; legal decides between 6.1 c and
-   citing 7.1 alone).
+6. (C) **Vad som sparas i din webbläsare**: as #145, plus the consent log with `log_endpoint`.
+   In consent mode the basis is art. 6.1 c, the duty to show consent under art. 7.1 (legal
+   decides between 6.1 c and citing 7.1 alone). In notice mode no consent exists (the stored
+   choice is `notice_ok`), so the sentence is a second string saying the acknowledgement is
+   logged, basis 6.1 f, interest: showing the notice was given; its wording joins the legal
+   questions. #145's consent-only sentence must not render in notice mode.
 7. (C) **Besöksstatistik** (only when Umami is configured): the monthly id, no IP stored,
    raw data "tills vidare" and unlinkable after the month, monthly reports with totals only,
    and that VM Group AB runs the statistics on the site owner's behalf (the cookie text on the
@@ -203,8 +213,11 @@ text and the policy all include.
 **The banner's Umami sentence is conditional** on the same two build variables as section 7.
 Today it renders on every notice-mode site. A notice-mode site with no Umami and no services
 has nothing to tell the visitor and renders no banner at all (nothing is stored either, so no
-re-ask is needed on such a site). Affected: `ConsentBanner.astro`, `client.ts`'s notice path,
-the e2e consent-path tests, the demo's notice build (which must set the variables), and verify.
+re-ask is needed on such a site). On such a site the same condition hides what depends on the
+banner: section 6 (nothing is stored), section 10's button and PrivacyLinks' settings button
+(`[data-consent-open]` does nothing without a banner). Affected: `ConsentBanner.astro`,
+`PrivacyLinks.astro`, `client.ts`'s notice path, the e2e consent-path tests, the demo's notice
+build (which must set the variables), and verify.
 
 ## Versioning and sign-off
 
@@ -252,11 +265,10 @@ the e2e consent-path tests, the demo's notice build (which must set the variable
   `policy-page` flow with its own PR body and verify steps. The policy page is never part of
   the banner PR: the banner PR is reviewed for its own behaviour and merges under the existing
   rule, and the policy PR needs the client's facts.
-- The first full-policy PR per site is merged by the owner, not by the "merge reviewed+verified
-  PRs without asking" rule: it puts the client's address, org.nr and a legal text on their site,
-  and `controller` and `inbox_retention` need the client's confirmation. The PR body asks for
-  both. The cookie-text-only page on the 56 own-policy sites carries no client facts beyond
-  what the banner already has, so the existing merge rule covers it.
+- Every policy PR, the full policy and the cookie-only page alike, is merged by the owner, not
+  by the "merge reviewed+verified PRs without asking" rule: both print the client's name,
+  address and e-mail (the banner shows none of these today), and `controller` and, for the full
+  policy, `inbox_retention` need the client's confirmation. The PR body asks for it.
 - site-factory adds the page and `controller` from the brief for new sites, so the 210 stop
   growing (site-factory #238 flags a missing policy as MUST).
 - Which 56 "have their own" is detect's `policyPage` ranking. Their own policies still omit
@@ -302,10 +314,23 @@ Answered by the owner:
 - The banner's Umami sentence follows the two Umami build variables; verify sets dummy values.
 - One release for the banner change and the components.
 
+Answered by the owner after the second review (2026-11-10):
+
+- Every policy PR is owner-merged, the cookie-only page included; name and e-mail are required
+  for the cookie text and a missing one fails the build.
+
 My calls, for the owner to check while reading:
 
 - The policy page is always its own flow after the banner is live, never part of the banner PR.
-  The cookie-only page on the own-policy sites merges under the existing rule.
+- The route check applies to the site's own routes only (Astro's internal routes are on every
+  site); the `output` check is dropped as redundant with the prerender throw.
+- The spam provider default is a literal with a comment, not a test against spam-guard's source;
+  the live check is the proof.
+- On a notice site that renders no banner, the stored-choice section, the change button and the
+  PrivacyLinks settings button are hidden under the same condition.
+- The consent-log sentence has a notice-mode variant (acknowledgement logged, basis 6.1 f) whose
+  wording goes to legal; the consent-mode sentence never renders in notice mode.
+- Wire refuses the cookie page when the target file already exists.
 - The cookie text names VM Group AB as running the statistics on the site owner's behalf (it was
   a policy-only sentence; the own-policy sites would otherwise never name that recipient).
 - The sender address `noreply@visionmedia.io` leaves the text: it is a per-site runtime setting
