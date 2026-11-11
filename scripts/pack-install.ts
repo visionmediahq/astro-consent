@@ -46,6 +46,9 @@ function widgetPage(slot: string): string {
 
 const ANSI = /\u001b\[[0-9;]*m/g
 const FETCH_TIMEOUT = 15_000
+// Served only when the client script really loads (it is the client's only non-relative import).
+// The package's CSS is on every dev page too, so matching any astro-consent path proves nothing.
+const CONFIG_MODULE = 'virtual:astro-consent/config'
 
 /**
  * `astro dev` from a real node_modules: load the demo's home page and every module its scripts
@@ -61,11 +64,11 @@ async function assertDevServerLoads(cwd: string): Promise<void> {
   // --ignore-lock keeps the server in the foreground: Astro 7 otherwise detects an AI agent
   // (CLAUDECODE, AI_AGENT, …) and moves it to the background with its log in .astro/, where this
   // check would never see an error. Astro 6 ignores the flag.
-  const server = spawn('npx', ['astro', 'dev', '--port', String(port), '--ignore-lock'], {
+  // Astro's own binary under node, not npx: one process, so kill() stops it, and it stays in the
+  // terminal's process group, so Ctrl+C on an interrupted run stops it too.
+  const server = spawn(process.execPath, [join(cwd, 'node_modules/.bin/astro'), 'dev', '--port', String(port), '--ignore-lock'], {
     cwd,
     env: { ...process.env, ASTRO_TELEMETRY_DISABLED: '1', FORCE_COLOR: '0' },
-    // Own process group, so one kill stops npx and the astro process it started
-    detached: true,
   })
   let raw = ''
   server.stdout.on('data', (chunk) => (raw += chunk))
@@ -73,8 +76,32 @@ async function assertDevServerLoads(cwd: string): Promise<void> {
   const output = () => raw.replace(ANSI, '')
   const exited = new Promise((resolve) => server.once('exit', resolve))
   const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
-  const get = (url: string) =>
-    fetch(url, { signal: AbortSignal.timeout(FETCH_TIMEOUT) }).then((res) => (res.ok ? res.text() : ''), () => '')
+  const get = (url: string): Promise<{ status: number; text: string }> =>
+    fetch(url, { signal: AbortSignal.timeout(FETCH_TIMEOUT) }).then(
+      async (res) => ({ status: res.status, text: await res.text() }),
+      (error: Error) => ({ status: 0, text: error.message }),
+    )
+
+  // Load the page and walk its module graph as a browser would: scripts, then the absolute imports
+  // Vite rewrote them to. Returns each path with its status.
+  const walk = async (origin: string): Promise<Map<string, number>> => {
+    const page = await get(`${origin}/`)
+    assert(page.status === 200 && page.text.includes('data-consent-banner'), `dev server did not serve the banner (${page.status}):\n${output()}`)
+    const seen = new Map<string, number>()
+    let queue = [...page.text.matchAll(/<script[^>]+src="(\/[^"]+)"/g)].map((match) => match[1]!)
+    while (queue.length > 0) {
+      const next: string[] = []
+      for (const path of queue) {
+        if (seen.has(path)) continue
+        const { status, text } = await get(origin + path)
+        seen.set(path, status)
+        if (status !== 200) continue
+        for (const match of text.matchAll(/(?:from|import)\s*["'](\/[^"']+)["']/g)) next.push(match[1]!)
+      }
+      queue = next
+    }
+    return seen
+  }
   try {
     // Astro moves to the next port when this one is taken; read the one it printed.
     let origin = ''
@@ -83,37 +110,26 @@ async function assertDevServerLoads(cwd: string): Promise<void> {
       origin = output().match(/http:\/\/localhost:\d+/)?.[0] ?? ''
     }
     assert(origin, `astro dev printed no local URL:\n${output()}`)
-    let html = ''
-    for (let i = 0; i < 30 && !html; i++) {
-      html = await get(`${origin}/`)
-      if (!html) await wait(500)
+    for (let i = 0; i < 30; i++) {
+      if ((await get(`${origin}/`)).status !== 0) break
+      await wait(500)
     }
-    assert(html.includes('data-consent-banner'), `dev server did not serve the banner:\n${output()}`)
 
-    // Walk the page's module graph: scripts, then the absolute imports Vite rewrote them to.
-    const seen = new Set<string>()
-    let queue = [...html.matchAll(/<script[^>]+src="(\/[^"]+)"/g)].map((match) => match[1]!)
-    while (queue.length > 0) {
-      const next: string[] = []
-      for (const path of queue) {
-        if (seen.has(path)) continue
-        seen.add(path)
-        const code = await get(origin + path)
-        for (const match of code.matchAll(/(?:from|import)\s*["'](\/[^"']+)["']/g)) next.push(match[1]!)
-      }
-      queue = next
+    // A 504 means Vite re-optimized mid-walk and the old URLs are stale; a browser reloads the page.
+    let seen = await walk(origin)
+    for (let i = 0; i < 2 && [...seen.values()].includes(504); i++) {
+      await wait(2000)
+      seen = await walk(origin)
     }
     // The optimizer runs after the first requests; give it time to report.
     await wait(5000)
+    const list = () => [...seen].map(([path, status]) => `${status} ${path}`).join('\n')
     assert(!/Could not resolve|error while updating dependencies/.test(output()), `astro dev failed to pre-bundle a dependency:\n${output()}`)
-    // Without this the check would pass if the walk never reached the package's client script
-    const loaded = [...seen].filter((path) => path.includes('astro-consent'))
-    assert(loaded.length > 0, `the dev page loaded no astro-consent module; loaded:\n${[...seen].join('\n')}`)
+    const failed = [...seen].filter(([, status]) => status !== 200)
+    assert(failed.length === 0, `dev modules did not load:\n${list()}\n\n${output()}`)
+    assert([...seen.keys()].some((path) => path.includes(CONFIG_MODULE)), `the walk never reached ${CONFIG_MODULE}, so the client script did not load:\n${list()}`)
   } finally {
-    // The group is gone if the server already exited
-    try {
-      if (server.pid) process.kill(-server.pid)
-    } catch {}
+    server.kill()
     // Let it stop writing node_modules/.vite before the copy is removed
     await Promise.race([exited, wait(5000)])
   }
@@ -224,5 +240,6 @@ try {
   process.exitCode = 1
 } finally {
   if (tarball) rmSync(tarball, { force: true })
-  if (dir) rmSync(dir, { recursive: true, force: true })
+  // Retries: a just-stopped dev server may still be writing node_modules/.vite
+  if (dir) rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 })
 }
