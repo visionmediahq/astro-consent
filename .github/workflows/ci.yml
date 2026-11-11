@@ -1,9 +1,21 @@
 name: CI
 
 on:
+  # Feature branches run through their PR only; main and release tags run on push.
+  # Docs-only changes skip CI (path filters do not apply to tag pushes, so tags always run).
   push:
+    branches: [main]
+    tags: ['v*']
+    paths-ignore: ['**/*.md', 'docs/**']
   pull_request:
+    paths-ignore: ['**/*.md', 'docs/**']
   workflow_dispatch:
+
+# A new push to a PR cancels that PR's older run. Runs on main and tags always finish, so every
+# main commit keeps a full result (starter-install is the release proof).
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' && !startsWith(github.ref, 'refs/tags/') }}
 
 jobs:
   unit:
@@ -48,6 +60,31 @@ jobs:
         working-directory: demo
       - run: npx playwright install --with-deps chromium
       - run: npm run demo:build -- consent
+      - run: npm run demo:build -- notice
+      - run: npm run test:e2e
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: playwright-report
+
+  # The rollout tool's browser checks (~12 min) run on main, tags and manual runs, not on PRs:
+  # nearly every PR touches the files they cover, so a path filter would not save the time.
+  # A PR that breaks the rollout tool shows up red on main right after the merge.
+  rollout:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm ci
+        working-directory: demo
+      - run: npx playwright install --with-deps chromium
+      - run: npm run demo:build -- consent
       - run: npx tsx ci/rollout/run.ts verify --demo demo/dist-consent
       # Negative controls: broken pages each rollout check must fail, and controls it must pass.
       # Exits 1 on any FAIL line, so a check that starts passing vacuously turns CI red.
@@ -62,13 +99,6 @@ jobs:
       - name: Rollout checks on the consent demo
         run: npx tsx tests/unit/rollout/checks.demo.ts
         timeout-minutes: 5
-      - run: npm run demo:build -- notice
-      - run: npm run test:e2e
-      - uses: actions/upload-artifact@v4
-        if: failure()
-        with:
-          name: playwright-report
-          path: playwright-report
 
   pack-install:
     runs-on: ubuntu-latest
