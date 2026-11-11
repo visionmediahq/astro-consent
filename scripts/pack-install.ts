@@ -1,6 +1,7 @@
 // Proves the package works from a real node_modules: npm pack → install the tarball into a copy of
 // the demo with a given Astro version → build → assert the banner and its CSS are there → build
-// once more per form of <script> in a <ConsentWidget> slot and assert that build fails (#27).
+// once more per form of <script> in a <ConsentWidget> slot and assert that build fails (#27) →
+// start `astro dev` and load the page's scripts, failing on a dependency pre-bundling error.
 // Usage: npm run test:pack -- <astro version> <@astrojs/node version>
 import { execFileSync, spawn, spawnSync } from 'node:child_process'
 import { existsSync, lstatSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
@@ -43,38 +44,51 @@ function widgetPage(slot: string): string {
   ].join('\n')
 }
 
+const ANSI = /\u001b\[[0-9;]*m/g
+const FETCH_TIMEOUT = 15_000
+
 /**
  * `astro dev` from a real node_modules: load the demo's home page and every module its scripts
- * import, as a browser would. That makes Vite pre-bundle the package's client script, which fails
- * with "Could not resolve virtual:astro-consent/config" unless the integration excludes the package
- * from optimizeDeps. The repo's own tests never see this: the demo links the package, and Vite
- * doesn't pre-bundle linked packages.
+ * import, as a browser would, so Vite pre-bundles what the page uses. On Astro 6 (Vite 7, esbuild
+ * optimizer) pre-bundling the client script fails with "Could not resolve
+ * virtual:astro-consent/config" unless the integration excludes the package from optimizeDeps.
+ * Astro 7 (Vite 8) never had that error, so there this only proves the excluded package still
+ * loads. The repo's own tests can't see it: the demo links the package, and Vite doesn't
+ * pre-bundle linked packages.
  */
 async function assertDevServerLoads(cwd: string): Promise<void> {
   const port = 4391
-  const server = spawn('npx', ['astro', 'dev', '--port', String(port)], {
+  // --ignore-lock keeps the server in the foreground: Astro 7 otherwise detects an AI agent
+  // (CLAUDECODE, AI_AGENT, …) and moves it to the background with its log in .astro/, where this
+  // check would never see an error. Astro 6 ignores the flag.
+  const server = spawn('npx', ['astro', 'dev', '--port', String(port), '--ignore-lock'], {
     cwd,
     env: { ...process.env, ASTRO_TELEMETRY_DISABLED: '1', FORCE_COLOR: '0' },
+    // Own process group, so one kill stops npx and the astro process it started
     detached: true,
   })
-  let output = ''
-  server.stdout.on('data', (chunk) => (output += chunk))
-  server.stderr.on('data', (chunk) => (output += chunk))
+  let raw = ''
+  server.stdout.on('data', (chunk) => (raw += chunk))
+  server.stderr.on('data', (chunk) => (raw += chunk))
+  const output = () => raw.replace(ANSI, '')
+  const exited = new Promise((resolve) => server.once('exit', resolve))
   const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+  const get = (url: string) =>
+    fetch(url, { signal: AbortSignal.timeout(FETCH_TIMEOUT) }).then((res) => (res.ok ? res.text() : ''), () => '')
   try {
     // Astro moves to the next port when this one is taken; read the one it printed.
     let origin = ''
     for (let i = 0; i < 60 && !origin; i++) {
       await wait(500)
-      origin = output.match(/http:\/\/localhost:\d+/)?.[0] ?? ''
+      origin = output().match(/http:\/\/localhost:\d+/)?.[0] ?? ''
     }
-    assert(origin, `astro dev printed no local URL:\n${output}`)
+    assert(origin, `astro dev printed no local URL:\n${output()}`)
     let html = ''
     for (let i = 0; i < 30 && !html; i++) {
-      html = await fetch(`${origin}/`).then((res) => (res.ok ? res.text() : ''), () => '')
+      html = await get(`${origin}/`)
       if (!html) await wait(500)
     }
-    assert(html.includes('data-consent-banner'), `dev server did not serve the banner:\n${output}`)
+    assert(html.includes('data-consent-banner'), `dev server did not serve the banner:\n${output()}`)
 
     // Walk the page's module graph: scripts, then the absolute imports Vite rewrote them to.
     const seen = new Set<string>()
@@ -84,23 +98,24 @@ async function assertDevServerLoads(cwd: string): Promise<void> {
       for (const path of queue) {
         if (seen.has(path)) continue
         seen.add(path)
-        const code = await fetch(origin + path).then((res) => res.text(), () => '')
+        const code = await get(origin + path)
         for (const match of code.matchAll(/(?:from|import)\s*["'](\/[^"']+)["']/g)) next.push(match[1]!)
       }
       queue = next
     }
     // The optimizer runs after the first requests; give it time to report.
     await wait(5000)
-    assert(seen.size > 0, 'the dev page loaded no module scripts')
-    assert(!/Could not resolve|error while updating dependencies/.test(output), `astro dev failed to pre-bundle a dependency:\n${output}`)
+    assert(!/Could not resolve|error while updating dependencies/.test(output()), `astro dev failed to pre-bundle a dependency:\n${output()}`)
+    // Without this the check would pass if the walk never reached the package's client script
+    const loaded = [...seen].filter((path) => path.includes('astro-consent'))
+    assert(loaded.length > 0, `the dev page loaded no astro-consent module; loaded:\n${[...seen].join('\n')}`)
   } finally {
-    // Astro 7's CLI starts the server as a separate process outside npx's process group, so stop
-    // everything running from this copy's node_modules, then let it exit before the copy is removed.
+    // The group is gone if the server already exited
     try {
       if (server.pid) process.kill(-server.pid)
     } catch {}
-    spawnSync('pkill', ['-f', join(cwd, 'node_modules/astro')])
-    await wait(1000)
+    // Let it stop writing node_modules/.vite before the copy is removed
+    await Promise.race([exited, wait(5000)])
   }
 }
 
