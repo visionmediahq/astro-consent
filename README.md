@@ -475,7 +475,8 @@ npx tsx ci/rollout/run.ts help
   creates no pageviews or events.
 - Coolify is only read, with `COOLIFY_READ_TOKEN` and `COOLIFY_URL` from `~/sites/vision-books/.env`.
 - CI runs `verify --demo demo/dist-consent` after the consent demo build, which covers the browser
-  checks with every registry and log host stubbed.
+  checks with every registry and log host stubbed. These checks run in the `rollout` job on `main`,
+  release tags and manual runs, not on pull requests.
 - **Classification and services.** `detect` classifies a site `consent`, `notice` or `needs-human`
   (older stored reports with `maps` still load as `consent`) and lists what it found in
   `report.services` (resolved iframe services such as maps and google-calendar, and elfsight; never trackers, which are a needs-human reason, though a registry service the batch does not wire may appear while the site is needs-human) and `report.widgets`. `wire` writes
@@ -511,7 +512,7 @@ npx tsx ci/rollout/run.ts help
     of the shipped JS and JSON (checked in `/`'s body family) are only noted: a library string
     may never be shown, and wire could not change it.
   Step 9 also runs step 8's request check at 1280 px against the container.
-  `tests/unit/rollout/fonts-fixtures.demo.ts` (CI e2e job) holds the browser negative controls.
+  `tests/unit/rollout/fonts-fixtures.demo.ts` (CI rollout job) holds the browser negative controls.
 - **Live with the fonts.** `live post-merge` checks, when the merged main has the tool's fonts.css,
   every page of every domain at 360 and 1280 px for zero Google Fonts requests (counted, never
   blocked live), every `/fonts/*.woff2` 200 and every face used loaded, on top of the banner
