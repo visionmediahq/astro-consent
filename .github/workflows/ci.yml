@@ -87,7 +87,9 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      # Installs, builds several times and starts astro dev; a hung dev request must not hold CI for hours
       - run: npm run test:pack -- ${{ matrix.astro }} ${{ matrix.adapter }}
+        timeout-minutes: 15
 
   # Proves the real distribution path: a git dependency resolved WITHOUT git inside astro-starter's
   # Docker build. Needs the repo variable STARTER_INSTALL=true and the secret STARTER_READ_TOKEN

@@ -1,8 +1,9 @@
 // Proves the package works from a real node_modules: npm pack → install the tarball into a copy of
 // the demo with a given Astro version → build → assert the banner and its CSS are there → build
-// once more per form of <script> in a <ConsentWidget> slot and assert that build fails (#27).
+// once more per form of <script> in a <ConsentWidget> slot and assert that build fails (#27) →
+// start `astro dev` and load the page's scripts, failing on a dependency pre-bundling error.
 // Usage: npm run test:pack -- <astro version> <@astrojs/node version>
-import { execFileSync, spawnSync } from 'node:child_process'
+import { execFileSync, spawn, spawnSync } from 'node:child_process'
 import { existsSync, lstatSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { REPO_ROOT, copyDemo } from './demo-copy'
@@ -41,6 +42,97 @@ function widgetPage(slot: string): string {
     `<ConsentWidget service="elfsight" script="https://elfsightcdn.com/platform.js" title="x"><div class="elfsight-app-x" data-elfsight-app-lazy></div>${slot}</ConsentWidget>`,
     '</body></html>',
   ].join('\n')
+}
+
+const ANSI = /\u001b\[[0-9;]*m/g
+const FETCH_TIMEOUT = 15_000
+// Served only when the client script really loads (it is the client's only non-relative import).
+// The package's CSS is on every dev page too, so matching any astro-consent path proves nothing.
+const CONFIG_MODULE = 'virtual:astro-consent/config'
+
+/**
+ * `astro dev` from a real node_modules: load the demo's home page and every module its scripts
+ * import, as a browser would, so Vite pre-bundles what the page uses. On Astro 6 (Vite 7, esbuild
+ * optimizer) pre-bundling the client script fails with "Could not resolve
+ * virtual:astro-consent/config" unless the integration excludes the package from optimizeDeps.
+ * Astro 7 (Vite 8) never had that error, so there this only proves the excluded package still
+ * loads. The repo's own tests can't see it: the demo links the package, and Vite doesn't
+ * pre-bundle linked packages.
+ */
+async function assertDevServerLoads(cwd: string): Promise<void> {
+  const port = 4391
+  // --ignore-lock keeps the server in the foreground: Astro 7 otherwise detects an AI agent
+  // (CLAUDECODE, AI_AGENT, …) and moves it to the background with its log in .astro/, where this
+  // check would never see an error. Astro 6 ignores the flag.
+  // Astro's own binary under node, not npx: one process, so kill() stops it, and it stays in the
+  // terminal's process group, so Ctrl+C on an interrupted run stops it too.
+  const server = spawn(process.execPath, [join(cwd, 'node_modules/.bin/astro'), 'dev', '--port', String(port), '--ignore-lock'], {
+    cwd,
+    env: { ...process.env, ASTRO_TELEMETRY_DISABLED: '1', FORCE_COLOR: '0' },
+  })
+  let raw = ''
+  server.stdout.on('data', (chunk) => (raw += chunk))
+  server.stderr.on('data', (chunk) => (raw += chunk))
+  const output = () => raw.replace(ANSI, '')
+  const exited = new Promise((resolve) => server.once('exit', resolve))
+  const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+  const get = (url: string): Promise<{ status: number; text: string }> =>
+    fetch(url, { signal: AbortSignal.timeout(FETCH_TIMEOUT) }).then(
+      async (res) => ({ status: res.status, text: await res.text() }),
+      (error: Error) => ({ status: 0, text: error.message }),
+    )
+
+  // Load the page and walk its module graph as a browser would: scripts, then the absolute imports
+  // Vite rewrote them to. Returns each path with its status.
+  const walk = async (origin: string): Promise<Map<string, number>> => {
+    const page = await get(`${origin}/`)
+    assert(page.status === 200 && page.text.includes('data-consent-banner'), `dev server did not serve the banner (${page.status}):\n${output()}`)
+    const seen = new Map<string, number>()
+    let queue = [...page.text.matchAll(/<script[^>]+src="(\/[^"]+)"/g)].map((match) => match[1]!)
+    while (queue.length > 0) {
+      const next: string[] = []
+      for (const path of queue) {
+        if (seen.has(path)) continue
+        const { status, text } = await get(origin + path)
+        seen.set(path, status)
+        if (status !== 200) continue
+        for (const match of text.matchAll(/(?:from|import)\s*["'](\/[^"']+)["']/g)) next.push(match[1]!)
+      }
+      queue = next
+    }
+    return seen
+  }
+  try {
+    // Astro moves to the next port when this one is taken; read the one it printed.
+    let origin = ''
+    for (let i = 0; i < 60 && !origin; i++) {
+      await wait(500)
+      origin = output().match(/http:\/\/localhost:\d+/)?.[0] ?? ''
+    }
+    assert(origin, `astro dev printed no local URL:\n${output()}`)
+    for (let i = 0; i < 30; i++) {
+      if ((await get(`${origin}/`)).status !== 0) break
+      await wait(500)
+    }
+
+    // A 504 means Vite re-optimized mid-walk and the old URLs are stale; a browser reloads the page.
+    let seen = await walk(origin)
+    for (let i = 0; i < 2 && [...seen.values()].includes(504); i++) {
+      await wait(2000)
+      seen = await walk(origin)
+    }
+    // The optimizer runs after the first requests; give it time to report.
+    await wait(5000)
+    const list = () => [...seen].map(([path, status]) => `${status} ${path}`).join('\n')
+    assert(!/Could not resolve|error while updating dependencies/.test(output()), `astro dev failed to pre-bundle a dependency:\n${output()}`)
+    const failed = [...seen].filter(([, status]) => status !== 200)
+    assert(failed.length === 0, `dev modules did not load:\n${list()}\n\n${output()}`)
+    assert([...seen.keys()].some((path) => path.includes(CONFIG_MODULE)), `the walk never reached ${CONFIG_MODULE}, so the client script did not load:\n${list()}`)
+  } finally {
+    server.kill()
+    // Let it stop writing node_modules/.vite before the copy is removed
+    await Promise.race([exited, wait(5000)])
+  }
 }
 
 try {
@@ -88,6 +180,9 @@ try {
   const assetDir = join(dir, 'dist/client/_astro')
   const allCss = readdirSync(assetDir).filter((file) => file.endsWith('.css')).map((file) => readFileSync(join(assetDir, file), 'utf8')).join('\n')
   assert(allCss.includes('card-actions'), 'built CSS has no card-actions — Tailwind did not scan the package in node_modules')
+
+  await assertDevServerLoads(dir)
+  console.log('✓ astro dev loads the page and its scripts without a pre-bundling error')
 
   assert(existsSync(join(installed, 'src')) && existsSync(join(installed, 'services.json')), 'installed package lacks src/ or services.json')
   for (const extra of ['tests', 'demo', 'ci', 'scripts']) {
@@ -145,5 +240,6 @@ try {
   process.exitCode = 1
 } finally {
   if (tarball) rmSync(tarball, { force: true })
-  if (dir) rmSync(dir, { recursive: true, force: true })
+  // Retries: a just-stopped dev server may still be writing node_modules/.vite
+  if (dir) rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 })
 }
