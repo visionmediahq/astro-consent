@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.1.7
 
 - Fix: on Astro 6 (Vite 7), `astro dev` on a site failed with "Could not resolve
   virtual:astro-consent/config" as soon as a browser loaded a page. Vite pre-bundled the client
