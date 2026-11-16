@@ -1,4 +1,4 @@
-import type { Lang } from './text/index'
+import type { Lang } from './text/lang'
 
 export const CATEGORIES = ['necessary', 'external', 'statistics', 'marketing'] as const
 

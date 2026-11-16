@@ -1,8 +1,9 @@
 import en from './en.json'
 import sv from './sv.json'
 
-export const LANGS = ['sv', 'en'] as const
-export type Lang = (typeof LANGS)[number]
+import { LANGS, type Lang } from './lang'
+
+export { LANGS, type Lang }
 export type Text = typeof sv
 
 export const TEXTS: Record<Lang, Text> = { sv, en }

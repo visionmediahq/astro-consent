@@ -206,11 +206,22 @@ test.describe('consent mode', () => {
     expect(acceptBox!.y + acceptBox!.height).toBeLessThanOrEqual(640)
   })
 
-  test('Decline on /en/ is remembered on /: no banner and no map', async ({ page, context }) => {
+  test('Decline on /en/ is remembered on /karta: no banner and no map', async ({ page, context }) => {
     const stubs = await stub(context)
     await page.goto('/en/')
     await action(page, 'none').click()
     await page.goto('/karta')
+    await page.waitForLoadState('networkidle')
+    await expect(banner(page)).toBeHidden()
+    await expect(page.locator('iframe')).toHaveCount(0)
+    expect(stubs.registry).toEqual([])
+  })
+
+  test('Decline on /karta is remembered on /en/map: no banner and no map', async ({ page, context }) => {
+    const stubs = await stub(context)
+    await page.goto('/karta')
+    await action(page, 'none').click()
+    await page.goto('/en/map')
     await page.waitForLoadState('networkidle')
     await expect(banner(page)).toBeHidden()
     await expect(page.locator('iframe')).toHaveCount(0)

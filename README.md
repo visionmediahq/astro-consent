@@ -72,7 +72,7 @@ repo tool and is not part of the installed package.)
 | Field | Required | Meaning |
 |---|---|---|
 | `services` | yes | Registry slugs the site uses: `google-maps`, `google-calendar` (ConsentEmbed), `elfsight` (ConsentWidget), `google-analytics`, `google-ads`, `meta-pixel`. An empty list gives notice mode. |
-| `policy_url` | no | Absolute http(s) URL of the site's privacy policy. Without it there is no "Läs mer" / "Integritetspolicy" link. |
+| `policy_url` | no | Absolute http(s) URL of the site's privacy policy. Without it there is no "Läs mer" / "Integritetspolicy" link, except on English pages where `policy_urls.en` still gives one. |
 | `policy_urls` | no | `{ "en": "https://kund.se/en/privacy" }`: the privacy policy page the English banner's "Read more" links to. Without it the English banner links to `policy_url`. Only `en` is accepted. |
 | `log_endpoint` | no | Absolute https URL. When set, every choice is sent there with `navigator.sendBeacon`. Requires Astro's `site` to be set to the real domain. |
 
@@ -81,8 +81,9 @@ Unknown keys, unknown slugs and invalid URLs fail the build with a message namin
 ## Languages
 
 The banner, the embed and widget placeholders and the privacy links are Swedish by default and
-also come in English. All five components take `lang`: `<ConsentBanner lang="en" />`,
+also come in English. The four public components take `lang`: `<ConsentBanner lang="en" />`,
 `<ConsentEmbed lang="en" … />`, `<ConsentWidget lang="en" … />`, `<PrivacyLinks lang="en" />`.
+`EmbedPlaceholder` is internal and gets its language from `ConsentEmbed` and `ConsentWidget`.
 
 `lang` resolves in this order: the prop when given (`en` and `en-GB` both give English); else
 `Astro.currentLocale` when it is a supported language, so a site with Astro's i18n needs no
@@ -126,6 +127,7 @@ import ConsentEmbed from '@visionmediahq/astro-consent/components/ConsentEmbed.a
 | `href` | Optional link to open the content at the provider. Defaults to a link built from `src`: "Embed a map" URLs (`/maps/embed?pb=…`) become a Maps search for the place name in `pb`, or its coordinates when it has no name; classic `output=embed` URLs are de-embedded; Maps Embed API URLs (`/maps/embed/v1/…`) are rebuilt from their parameters without the API key. |
 | `title` | Used for the iframe title and the "Visa …" button. |
 | `aspect` | CSS aspect-ratio, default `16 / 9`. |
+| `lang` | Optional language of the placeholder (`sv` or `en`); see Languages. |
 | `id` | Optional element id. |
 
 The iframe stays inert until the visitor clicks "Visa" or has granted the service. **Do not put a
@@ -151,13 +153,15 @@ import ConsentWidget from '@visionmediahq/astro-consent/components/ConsentWidget
 - Do not put a `<script>` in the slot (the build fails); pass its URL as `script`.
 - `id` is an optional element id.
 - `minHeight` (default `12rem`) sizes the placeholder only.
+- `lang` is the optional language of the placeholder (`sv` or `en`); see Languages.
 - The checks fail the build on prerendered pages. On SSR pages they cannot, so the request fails with a 500.
 - Google Calendar is a `<ConsentEmbed>` (service `google-calendar`); its button reads "Visa Google Kalender".
 
 ### `<PrivacyLinks class="…" />`
 
 A "Cookie-inställningar" button that reopens the banner, and an "Integritetspolicy" link when
-`policy_url` is set. Pass the text colour through `class`.
+`policy_url` is set (on English pages `policy_urls.en` also gives one). Pass the text colour through `class`.
+Optional `lang` (see Languages).
 
 ## Script API
 

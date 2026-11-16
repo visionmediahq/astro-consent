@@ -54,6 +54,7 @@ by Vision Media's Astro sites. Sites install it straight from this GitHub repo. 
 |---|---|
 | `src/services.ts`, `services.json` | Service registry; `npm run gen` regenerates the JSON (CI fails if stale) |
 | `src/config.ts` | `privacy.json` schema, `consentVersion` (Node only) |
+| `src/text/lang.ts` | `LANGS` and `type Lang`; node-free, no JSON, so the browser runtime can import it |
 | `src/text/index.ts` | `resolveLang(prop, Astro.currentLocale)`, `TEXTS`, `Lang`; node-free, components import it, never a JSON file |
 | `src/policy-url.ts` | `policyUrlFor(config, lang)`: `policy_urls[lang]` else `policy_url`; node-free |
 | `src/store.ts` | Pure consent-record logic, unit-tested |

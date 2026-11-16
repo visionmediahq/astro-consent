@@ -2,8 +2,9 @@
 
 ## 1.2.0 (unreleased)
 
-- New: the banner, the embed and widget placeholders and the privacy links speak English. All five
-  components take an optional `lang` prop (`<ConsentBanner lang="en" />`; `en` and `en-GB` both
+- New: the banner, the embed and widget placeholders and the privacy links speak English. The four
+  public components (ConsentBanner, ConsentEmbed, ConsentWidget, PrivacyLinks) take an optional
+  `lang` prop; EmbedPlaceholder is internal and gets it from ConsentEmbed/ConsentWidget (`<ConsentBanner lang="en" />`; `en` and `en-GB` both
   give English). Resolution: the prop when given, else `Astro.currentLocale` when it is a supported
   language (sites with Astro's i18n need no wiring), else Swedish. An unsupported value such as
   `de` falls back to Swedish and never breaks a page.

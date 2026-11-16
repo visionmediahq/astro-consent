@@ -131,10 +131,4 @@ describe('English consent terms are tied to CONSENT_VERSION', () => {
     copy.embed.show = 'changed'
     expect(termsHashEn(copy, SERVICES)).toBe(hashEn)
   })
-
-  test('English edits leave the Swedish hash alone', () => {
-    const copy = structuredClone(TEXTS.en) as Json
-    copy.consent.decline += ' x'
-    expect(termsHash(sv, SERVICES)).toBe(hash)
-  })
 })

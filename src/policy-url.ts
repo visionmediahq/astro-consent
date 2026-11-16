@@ -1,5 +1,5 @@
 // Node-free: components import this. Never import src/config.ts here.
-import type { Lang } from './text'
+import type { Lang } from './text/lang'
 import type { ConsentConfig } from './types'
 
 /** The privacy policy URL for a banner language: the Swedish one is `policy_url`, English prefers
