@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.2.0 (unreleased)
+## 1.2.0
 
 - New: the banner, the embed and widget placeholders and the privacy links speak English. The four
   public components (ConsentBanner, ConsentEmbed, ConsentWidget, PrivacyLinks) take an optional
