@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { expect, test } from 'vitest'
-import { CATEGORIES, SERVICES, generateServicesJson, isCategory, matchesRegistry, srcMatchesService } from '../../src/services'
+import { CATEGORIES, SERVICES, SERVICE_SLUGS, generateServicesJson, isCategory, matchesRegistry, serviceText, srcMatchesService } from '../../src/services'
 
 test('CATEGORIES is necessary, external, statistics, marketing in that order', () => {
   expect([...CATEGORIES]).toEqual(['necessary', 'external', 'statistics', 'marketing'])
@@ -110,4 +110,21 @@ test('matchesRegistry ignores fonts, recaptcha, umami, plain facebook links and 
 test('services.json on disk equals the generated output', () => {
   const onDisk = JSON.parse(readFileSync(new URL('../../services.json', import.meta.url), 'utf8'))
   expect(onDisk).toEqual(generateServicesJson())
+})
+
+test('every service has an English description', () => {
+  for (const service of Object.values(SERVICES)) expect(service.description_en).not.toBe('')
+})
+
+test('serviceText returns English names, falling back to name', () => {
+  expect(serviceText('google-calendar', 'en').name).toBe('Google Calendar')
+  expect(serviceText('meta-pixel', 'en').name).toBe('Meta Pixel')
+  expect(serviceText('google-maps', 'en').name).toBe('Google Maps')
+})
+
+test('serviceText in Swedish returns name and description_sv', () => {
+  for (const slug of SERVICE_SLUGS) {
+    expect(serviceText(slug, 'sv')).toEqual({ name: SERVICES[slug].name, description: SERVICES[slug].description_sv })
+    expect(serviceText(slug, 'en').description).toBe(SERVICES[slug].description_en)
+  }
 })
