@@ -151,9 +151,9 @@ test.describe('consent mode', () => {
     expect(await page.evaluate(() => document.activeElement === document.body)).toBe(true)
   })
 
-  test('Neka and Acceptera alla are equally prominent', async ({ page, context }) => {
+  for (const path of ['/', '/en/']) test(`Neka and Acceptera alla are equally prominent on ${path}`, async ({ page, context }) => {
     await stub(context)
-    await page.goto('/')
+    await page.goto(path)
     const decline = action(page, 'none')
     const accept = action(page, 'all')
     const [declineBox, acceptBox] = [await decline.boundingBox(), await accept.boundingBox()]
@@ -178,6 +178,43 @@ test.describe('consent mode', () => {
     })
     expect(sameParent).toBe(true)
     await expect(banner(page).locator('input:checked:not([disabled])')).toHaveCount(0)
+  })
+
+  test('on /en/ at 320 px Decline and Accept all have identical classes, colours and size', async ({ page, context }) => {
+    await stub(context)
+    await page.setViewportSize({ width: 320, height: 640 })
+    await page.goto('/en/')
+    const decline = action(page, 'none')
+    const accept = action(page, 'all')
+    await expect(decline).toHaveText('Decline')
+    await expect(accept).toHaveText('Accept all')
+    expect(await decline.getAttribute('class')).toBe(await accept.getAttribute('class'))
+    const [declineStyle, acceptStyle] = await Promise.all(
+      [decline, accept].map((button) =>
+        button.evaluate((el) => {
+          const style = getComputedStyle(el)
+          return [style.backgroundColor, style.color, style.borderColor, style.fontWeight, style.height, style.width].join('|')
+        }),
+      ),
+    )
+    expect(declineStyle).toBe(acceptStyle)
+    const [declineBox, acceptBox] = [await decline.boundingBox(), await accept.boundingBox()]
+    expect(declineBox!.x + declineBox!.width).toBeLessThanOrEqual(320)
+    expect(acceptBox!.x + acceptBox!.width).toBeLessThanOrEqual(320)
+    // Both are on screen without scrolling the banner: neither is tucked away below the other.
+    expect(declineBox!.y + declineBox!.height).toBeLessThanOrEqual(640)
+    expect(acceptBox!.y + acceptBox!.height).toBeLessThanOrEqual(640)
+  })
+
+  test('Decline on /en/ is remembered on /: no banner and no map', async ({ page, context }) => {
+    const stubs = await stub(context)
+    await page.goto('/en/')
+    await action(page, 'none').click()
+    await page.goto('/karta')
+    await page.waitForLoadState('networkidle')
+    await expect(banner(page)).toBeHidden()
+    await expect(page.locator('iframe')).toHaveCount(0)
+    expect(stubs.registry).toEqual([])
   })
 
   test('the banner is fixed and does not shift layout', async ({ page, context }) => {

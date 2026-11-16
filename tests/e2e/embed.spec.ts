@@ -277,3 +277,18 @@ test('the button label is the service name, not the iframe title', async ({ page
     await expect(show(page, id)).not.toContainText(id === 'no-href' ? 'Karta två' : 'Karta till oss')
   }
 })
+
+test('the English placeholder says "Show Google Maps" and loads only that map', async ({ page, context }) => {
+  const stubs = await stub(context)
+  await page.goto('/en/map')
+  const embed = page.locator('#en-map')
+  await expect(embed.locator('[data-load]')).toHaveText('Show Google Maps')
+  await expect(embed.locator('label')).toContainText('Always show content from Google Maps')
+  await expect(embed.locator('[data-placeholder]')).toContainText('Map to us is fetched from Google Maps')
+  expect(stubs.registry).toEqual([])
+  await embed.locator('[data-load]').click()
+  await expect(embed.locator('iframe')).toHaveCount(1)
+  await expect.poll(() => stubs.registry.length).toBe(1)
+  expect(stubs.registry[0]).toContain('pb=demo-en')
+  expect(await stored(page)).toBeNull()
+})

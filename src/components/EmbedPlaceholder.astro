@@ -1,8 +1,8 @@
 ---
 // The "Visa" placeholder shared by ConsentEmbed and ConsentWidget. Rendered inside the box; the
 // default slot replaces the info text.
-import { SERVICES, type ServiceSlug } from '../services'
-import sv from '../text/sv.json'
+import { serviceText, type ServiceSlug } from '../services'
+import { TEXTS, resolveLang } from '../text'
 
 interface Props {
   service: ServiceSlug
@@ -11,11 +11,15 @@ interface Props {
   infoId: string
   /** When set, a link to open the content at the provider is rendered. */
   openHref?: string
+  /** Language of the texts; defaults to the page's locale, else Swedish. */
+  lang?: string
 }
 
 const { service, title, infoId, openHref } = Astro.props
 
-const { name } = SERVICES[service]
+const lang = resolveLang(Astro.props.lang, Astro.currentLocale)
+const t = TEXTS[lang]
+const { name } = serviceText(service, lang)
 const fill = (text: string, vars: Record<string, string>): string =>
   text.replace(/\{(\w+)\}/g, (match, key: string) => vars[key] ?? match)
 ---
@@ -24,7 +28,7 @@ const fill = (text: string, vars: Record<string, string>): string =>
 <div data-placeholder class="flex flex-1 flex-col justify-between gap-3 p-4">
   <div class="text-base sm:text-sm" id={infoId}>
     <slot>
-      <p>{fill(sv.embed.info, { title, name })}</p>
+      <p>{fill(t.embed.info, { title, name })}</p>
     </slot>
   </div>
   <div class="flex flex-wrap items-center gap-3">
@@ -32,16 +36,16 @@ const fill = (text: string, vars: Record<string, string>): string =>
       type="button"
       class="btn btn-primary btn-sm h-auto min-h-8 whitespace-normal max-sm:w-full"
       data-load
-      aria-describedby={infoId}>{fill(sv.embed.show, { name })}</button
+      aria-describedby={infoId}>{fill(t.embed.show, { name })}</button
     >
     <label class="flex cursor-pointer items-center gap-2 text-base sm:text-xs">
       <input type="checkbox" class="checkbox checkbox-sm border-base-content/60" data-remember />
-      {fill(sv.embed.remember, { name })}
+      {fill(t.embed.remember, { name })}
     </label>
     {
       openHref && (
         <a href={openHref} target="_blank" rel="noopener noreferrer" class="link text-base text-base-content sm:text-xs" data-open>
-          {fill(sv.embed.open, { name })}
+          {fill(t.embed.open, { name })}
         </a>
       )
     }

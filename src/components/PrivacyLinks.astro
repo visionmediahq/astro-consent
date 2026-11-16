@@ -2,18 +2,25 @@
 // Footer links: reopen the consent settings, and the site's policy page if one is configured.
 // The host passes the text colour through `class` (e.g. "text-neutral-content" on a dark footer).
 import config from 'virtual:astro-consent/config'
-import sv from '../text/sv.json'
+import { policyUrlFor } from '../policy-url'
+import { TEXTS, resolveLang } from '../text'
 
 interface Props {
+  /** Language of the links ("sv" or "en"); defaults to the page's locale, else Swedish. */
+  lang?: string
   class?: string
 }
+const lang = resolveLang(Astro.props.lang, Astro.currentLocale)
+const t = TEXTS[lang]
+const policyUrl = policyUrlFor(config, lang)
 ---
 
 <nav
   data-privacy-links
-  aria-label={sv.region}
+  aria-label={t.region}
+  lang={lang === 'sv' ? undefined : lang}
   class:list={['flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-xs', Astro.props.class]}
 >
-  <button type="button" class="link link-hover" data-consent-open>{sv.links.settings}</button>
-  {config.policyUrl && <a href={config.policyUrl} class="link link-hover">{sv.links.policy}</a>}
+  <button type="button" class="link link-hover" data-consent-open>{t.links.settings}</button>
+  {policyUrl && <a href={policyUrl} class="link link-hover">{t.links.policy}</a>}
 </nav>
