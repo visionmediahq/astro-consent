@@ -73,6 +73,7 @@ repo tool and is not part of the installed package.)
 |---|---|---|
 | `services` | yes | Registry slugs the site uses: `google-maps`, `google-calendar` (ConsentEmbed), `elfsight` (ConsentWidget), `google-analytics`, `google-ads`, `meta-pixel`. An empty list gives notice mode. |
 | `policy_url` | no | Absolute http(s) URL of the site's privacy policy. Without it there is no "Läs mer" / "Integritetspolicy" link. |
+| `policy_urls` | no | `{ "en": "https://kund.se/en/privacy" }`: the privacy policy page the English banner's "Read more" links to. Without it the English banner links to `policy_url`. Only `en` is accepted. |
 | `log_endpoint` | no | Absolute https URL. When set, every choice is sent there with `navigator.sendBeacon`. Requires Astro's `site` to be set to the real domain. |
 
 Unknown keys, unknown slugs and invalid URLs fail the build with a message naming the field.
