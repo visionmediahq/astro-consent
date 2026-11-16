@@ -31,7 +31,7 @@ const schema = z.strictObject({
     .array(z.enum(SERVICE_SLUGS as [ServiceSlug, ...ServiceSlug[]]))
     .refine((list) => new Set(list).size === list.length, 'duplicate service'),
   policy_url: policyUrl.nullable().optional(),
-  policy_urls: z.strictObject({ en: policyUrl }).optional(),
+  policy_urls: z.strictObject({ en: policyUrl.optional() }).optional(),
   log_endpoint: z
     .url({ protocol: /^https$/ })
     .refine((url) => /^https:\/\/[^/]/i.test(url), 'must start with https://')

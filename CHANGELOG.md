@@ -17,7 +17,7 @@
 - The English wording is pinned in `tests/unit/consent-terms.en.json`, the way the Swedish one is.
   `CONSENT_VERSION` is unchanged: no visitor is asked again, and a choice made on an English page
   holds on a Swedish one.
-- Swedish-only sites are unchanged: no new config, same markup, same output.
+- Swedish-only sites are unchanged: no new config, and the markup and strings are unchanged (the client script carries the English texts too).
 - Sites with English pages pass `lang` themselves for now; wiring by the rollout tool follows later.
 
 ## 1.1.7

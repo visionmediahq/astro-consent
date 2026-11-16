@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, test } from 'vitest'
 import { builtCss, partsMissingFromBuild } from '../../ci/rollout/lib/daisyui'
 import { DEMO_DIR } from '../../scripts/demo-copy'
+import { SERVICES } from '../../src/services'
 import { TEXTS } from '../../src/text'
 import { buildDemo, cleanupBuilds, type BuildResult } from './helpers'
 
@@ -438,6 +439,10 @@ describe('banner and footer markup', () => {
       const html = markup(page)
       for (const fragment of swedishOnly(TEXTS.sv)) expect(html, fragment).not.toContain(fragment)
       expect(banner.querySelector('[data-consent-service="google-maps"]')!.text).toContain('Google Maps')
+      const bannerHtml = banner.outerHTML
+      const swedishNames = Object.values(SERVICES).filter((s) => s.name_en && s.name_en !== s.name).map((s) => s.name)
+      expect(swedishNames.length).toBeGreaterThan(0)
+      for (const name of swedishNames) expect(bannerHtml, name).not.toContain(name)
     })
 
     test('/en/map (consent): the placeholder is English and names the service', () => {

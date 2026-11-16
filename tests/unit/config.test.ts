@@ -108,6 +108,13 @@ describe('policy_urls', () => {
     expect(toConsentConfig(privacy, undefined).policyUrls.en).toBe(en)
   })
 
+  test('an empty policy_urls parses and gives policyUrls {}', () => {
+    const privacy = parsePrivacyConfig({ services: [], policy_urls: {} })
+    expect(privacy.policy_urls).toEqual({})
+    expect(toConsentConfig(privacy, undefined).policyUrls).toEqual({})
+    expect(fieldOf({ services: [], policy_urls: { en: null } })).toBe('policy_urls')
+  })
+
   test('policy_urls rejects a malformed URL and an unknown language, naming policy_urls', () => {
     expect(fieldOf({ services: [], policy_urls: { en: 'https:/x' } })).toBe('policy_urls')
     expect(fieldOf({ services: [], policy_urls: { de: en } })).toBe('policy_urls')

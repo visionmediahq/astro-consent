@@ -59,7 +59,7 @@ function termsHashEn(en: Json, servicesObj: Record<string, Json>): string {
           category: s.category,
           vendor: s.vendor,
           description_en: s.description_en,
-          name: s.name_en ?? s.name,
+          name_en: s.name_en ?? null,
         },
       ]),
     ),
@@ -123,6 +123,12 @@ describe('English consent terms are tied to CONSENT_VERSION', () => {
     const svc = structuredClone(SERVICES) as Record<string, Json>
     svc['google-calendar']!.name_en += ' x'
     expect(termsHashEn(TEXTS.en, svc)).not.toBe(hashEn)
+  })
+
+  test('a base (Swedish) name change does not change the English hash', () => {
+    const svc = structuredClone(SERVICES) as Record<string, Json>
+    svc['google-calendar']!.name += ' x'
+    expect(termsHashEn(TEXTS.en, svc)).toBe(hashEn)
   })
 
   test('excluded keys do not change the hash', () => {

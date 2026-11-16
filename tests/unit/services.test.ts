@@ -113,7 +113,7 @@ test('services.json on disk equals the generated output', () => {
 })
 
 test('every service has an English description', () => {
-  for (const service of Object.values(SERVICES)) expect(service.description_en).not.toBe('')
+  for (const service of Object.values(SERVICES)) expect(service.description_en?.trim()).toBeTruthy()
 })
 
 test('serviceText returns English names, falling back to name', () => {
