@@ -165,6 +165,22 @@ try {
   const installedVite = JSON.parse(readFileSync(join(dir, 'node_modules/vite/package.json'), 'utf8')).version
   console.log(`installed: astro@${installedAstro} vite@${installedVite}`)
 
+  // Two minimal pages for the banner language check below; they render the banner directly, not through the demo layout.
+  for (const [name, props] of [['lang-en', ' lang="en"'], ['lang-default', '']] as const) {
+    writeFileSync(
+      join(dir, `src/pages/${name}.astro`),
+      [
+        '---',
+        "import ConsentBanner from '@visionmediahq/astro-consent/components/ConsentBanner.astro'",
+        'export const prerender = true',
+        '---',
+        '<html><head><title>t</title></head><body>',
+        `<ConsentBanner${props} />`,
+        '</body></html>',
+      ].join('\n'),
+    )
+  }
+
   run('npx', ['astro', 'build'], dir)
 
   const index = readFileSync(join(dir, 'dist/client/index.html'), 'utf8')
@@ -177,6 +193,20 @@ try {
   for (const [, inner] of payloads) assert(!/data-(?:load|placeholder)/.test(inner), 'a widget placeholder is inside its <template data-payload>: the template was not closed')
   const liveLoads = flode.replace(/<template[\s\S]*?<\/template>/g, '').match(/data-load/g)?.length ?? 0
   assert(liveLoads >= 3, `flode/index.html has ${liveLoads} live "Visa" buttons, expected 3`)
+  // English banner (lang prop) and the Swedish default, on this Astro version. The site has no i18n
+  // config, so a banner with no props gets Astro.currentLocale === undefined and must stay Swedish.
+  const en = JSON.parse(readFileSync(join(REPO_ROOT, 'src/text/en.json'), 'utf8')).consent.acceptAll as string
+  const sv = JSON.parse(readFileSync(join(REPO_ROOT, 'src/text/sv.json'), 'utf8')).consent.acceptAll as string
+  assert(!/i18n/.test(readFileSync(join(dir, 'astro.config.ts'), 'utf8')), 'the test site must have no i18n config')
+  const bannerTag = (html: string): string => html.match(/<section[^>]*data-consent-banner[^>]*>/)?.[0] ?? ''
+  const enPage = readFileSync(join(dir, 'dist/client/lang-en/index.html'), 'utf8')
+  assert(enPage.includes(en) && !enPage.includes(sv), `lang-en: <ConsentBanner lang="en" /> must show "${en}"`)
+  assert(/\slang="en"/.test(bannerTag(enPage)), 'lang-en: the banner has no lang="en"')
+  const svPage = readFileSync(join(dir, 'dist/client/lang-default/index.html'), 'utf8')
+  assert(svPage.includes(sv) && !svPage.includes(en), `lang-default: <ConsentBanner /> without i18n must show "${sv}"`)
+  assert(bannerTag(svPage) !== '' && !/\slang=/.test(bannerTag(svPage)), 'lang-default: the Swedish banner must have no lang attribute')
+  console.log('✓ English banner with lang="en", Swedish default without i18n')
+
   const assetDir = join(dir, 'dist/client/_astro')
   const allCss = readdirSync(assetDir).filter((file) => file.endsWith('.css')).map((file) => readFileSync(join(assetDir, file), 'utf8')).join('\n')
   assert(allCss.includes('card-actions'), 'built CSS has no card-actions — Tailwind did not scan the package in node_modules')
