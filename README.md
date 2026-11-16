@@ -78,11 +78,30 @@ repo tool and is not part of the installed package.)
 
 Unknown keys, unknown slugs and invalid URLs fail the build with a message naming the field.
 
+## Languages
+
+The banner, the embed and widget placeholders and the privacy links are Swedish by default and
+also come in English. All five components take `lang`: `<ConsentBanner lang="en" />`,
+`<ConsentEmbed lang="en" … />`, `<ConsentWidget lang="en" … />`, `<PrivacyLinks lang="en" />`.
+
+`lang` resolves in this order: the prop when given (`en` and `en-GB` both give English); else
+`Astro.currentLocale` when it is a supported language, so a site with Astro's i18n needs no
+wiring; else Swedish. An unsupported value such as `de` gives Swedish and never breaks a page. On
+English pages the banner container (and the `PrivacyLinks` root) carries `lang="en"`.
+
+The English "Read more" and privacy link go to `policy_urls.en` in `privacy.json`, else to
+`policy_url`. A stored choice does not depend on language: a choice made on an English page holds
+on a Swedish one, and `CONSENT_VERSION` is the same for both.
+
+Sites with English pages pass `lang` themselves for now (layout to `ConsentBanner` and
+`PrivacyLinks`; English pages to `ConsentEmbed` and `ConsentWidget`); automatic wiring by the
+rollout tool follows later.
+
 ## Components
 
 ### `<ConsentBanner />`
 
-No props. Hidden until the runtime decides to show it; never takes focus on its own.
+Optional `lang` (see Languages). Hidden until the runtime decides to show it; never takes focus on its own.
 
 ### `<ConsentEmbed>`
 

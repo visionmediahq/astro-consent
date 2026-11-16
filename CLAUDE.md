@@ -38,12 +38,12 @@ by Vision Media's Astro sites. Sites install it straight from this GitHub repo. 
 ## DOM contract (components render it, `client.ts` queries it)
 
 ```
-[data-consent-banner][data-mode=notice|consent][data-view=main|settings][hidden]
+[data-consent-banner][lang=en]?[data-mode=notice|consent][data-view=main|settings][hidden]
   [data-consent-main]   form[data-consent-settings]        (consent mode only)
   [data-consent-action=notice_ok|all|none|settings|back|custom]
   [data-consent-category=<category>] input[name=<category>]
   [data-consent-service=<slug>][hidden] input[name="service:<slug>"]
-[data-privacy-links] [data-consent-open]
+[data-privacy-links][lang=en]? [data-consent-open]
 [data-consent-embed=<slug>][data-script=<url>]? template[data-payload] [data-placeholder] [data-load] [data-remember] a[data-open]?
   + [data-active] once the payload is in; a widget (data-script, no a[data-open]) also gets its script, once per URL
 ```
@@ -54,6 +54,8 @@ by Vision Media's Astro sites. Sites install it straight from this GitHub repo. 
 |---|---|
 | `src/services.ts`, `services.json` | Service registry; `npm run gen` regenerates the JSON (CI fails if stale) |
 | `src/config.ts` | `privacy.json` schema, `consentVersion` (Node only) |
+| `src/text/index.ts` | `resolveLang(prop, Astro.currentLocale)`, `TEXTS`, `Lang`; node-free, components import it, never a JSON file |
+| `src/policy-url.ts` | `policyUrlFor(config, lang)`: `policy_urls[lang]` else `policy_url`; node-free |
 | `src/store.ts` | Pure consent-record logic, unit-tested |
 | `src/integration.ts`, `src/scan.ts` | The Astro integration and the build-time embed scan |
 | `src/client.ts` | Browser runtime |

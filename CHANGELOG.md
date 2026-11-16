@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.2.0 (unreleased)
+
+- New: the banner, the embed and widget placeholders and the privacy links speak English. All five
+  components take an optional `lang` prop (`<ConsentBanner lang="en" />`; `en` and `en-GB` both
+  give English). Resolution: the prop when given, else `Astro.currentLocale` when it is a supported
+  language (sites with Astro's i18n need no wiring), else Swedish. An unsupported value such as
+  `de` falls back to Swedish and never breaks a page.
+- English text lives in `src/text/en.json` (same keys as `sv.json`), with English names and
+  descriptions for the services. The banner's container carries `lang="en"` on English pages so
+  screen readers switch voice; the privacy links root does the same.
+- `privacy.json`: optional `policy_urls: { "en": "https://kund.se/en/privacy" }`. The English
+  banner's "Read more" and the English privacy link use it, and fall back to `policy_url`.
+  Validated like `policy_url`; only `en` is accepted.
+- The English wording is pinned in `tests/unit/consent-terms.en.json`, the way the Swedish one is.
+  `CONSENT_VERSION` is unchanged: no visitor is asked again, and a choice made on an English page
+  holds on a Swedish one.
+- Swedish-only sites are unchanged: no new config, same markup, same output.
+- Sites with English pages pass `lang` themselves for now; wiring by the rollout tool follows later.
+
 ## 1.1.7
 
 - Fix: on Astro 6 (Vite 7), `astro dev` on a site failed with "Could not resolve
