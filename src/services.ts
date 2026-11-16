@@ -1,3 +1,5 @@
+import type { Lang } from './text/lang'
+
 export const CATEGORIES = ['necessary', 'external', 'statistics', 'marketing'] as const
 
 export type Category = (typeof CATEGORIES)[number]
@@ -6,11 +8,14 @@ export type Target = Category | ServiceSlug
 
 export interface Service {
   name: string
+  /** English name, only where `name` is Swedish. */
+  name_en?: string
   vendor: string
   category: Exclude<Category, 'necessary'>
   /** Lower-case substrings of a request URL (host, or host + path) that identify the service. */
   match: string[]
   description_sv: string
+  description_en: string
 }
 
 export const SERVICES: Record<ServiceSlug, Service> = {
@@ -20,14 +25,17 @@ export const SERVICES: Record<ServiceSlug, Service> = {
     category: 'external',
     match: ['google.com/maps', 'maps.google.', 'maps.googleapis.com', 'maps.gstatic.com', 'places.googleapis.com'],
     description_sv: 'Kartor från Google.',
+    description_en: 'Maps from Google.',
   },
   'google-calendar': {
     // Registry name is Swedish (shown in the banner and placeholder); the slug stays English.
     name: 'Google Kalender',
+    name_en: 'Google Calendar',
     vendor: 'Google Ireland Ltd',
     category: 'external',
     match: ['calendar.google.com'],
     description_sv: 'Kalendrar från Google.',
+    description_en: 'Calendars from Google.',
   },
   'google-analytics': {
     name: 'Google Analytics',
@@ -35,6 +43,7 @@ export const SERVICES: Record<ServiceSlug, Service> = {
     category: 'statistics',
     match: ['googletagmanager.com', 'google-analytics.com', 'analytics.google.com'],
     description_sv: 'Besöksstatistik från Google.',
+    description_en: 'Visitor statistics from Google.',
   },
   'google-ads': {
     name: 'Google Ads',
@@ -42,13 +51,16 @@ export const SERVICES: Record<ServiceSlug, Service> = {
     category: 'marketing',
     match: ['googleadservices.com', 'doubleclick.net', 'googlesyndication.com'],
     description_sv: 'Annonsmätning från Google.',
+    description_en: 'Ad measurement from Google.',
   },
   'meta-pixel': {
     name: 'Meta-pixel',
+    name_en: 'Meta Pixel',
     vendor: 'Meta Platforms Ireland Ltd',
     category: 'marketing',
     match: ['connect.facebook.net', 'facebook.com/tr'],
     description_sv: 'Annonsmätning från Meta (Facebook, Instagram).',
+    description_en: 'Ad measurement from Meta (Facebook, Instagram).',
   },
   elfsight: {
     name: 'Elfsight',
@@ -56,10 +68,18 @@ export const SERVICES: Record<ServiceSlug, Service> = {
     category: 'external',
     match: ['elfsightcdn.com', 'elfsight.com'],
     description_sv: 'Flöden från sociala medier, till exempel Instagram, via Elfsight.',
+    description_en: 'Social media feeds, for example Instagram, via Elfsight.',
   },
 }
 
 export const SERVICE_SLUGS = Object.keys(SERVICES) as ServiceSlug[]
+
+export function serviceText(slug: ServiceSlug, lang: Lang): { name: string; description: string } {
+  const service = SERVICES[slug]
+  return lang === 'en'
+    ? { name: service.name_en ?? service.name, description: service.description_en }
+    : { name: service.name, description: service.description_sv }
+}
 
 export function isCategory(target: string): target is Category {
   return (CATEGORIES as readonly string[]).includes(target)

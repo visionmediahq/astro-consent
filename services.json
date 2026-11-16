@@ -18,16 +18,19 @@
         "maps.gstatic.com",
         "places.googleapis.com"
       ],
-      "description_sv": "Kartor från Google."
+      "description_sv": "Kartor från Google.",
+      "description_en": "Maps from Google."
     },
     "google-calendar": {
       "name": "Google Kalender",
+      "name_en": "Google Calendar",
       "vendor": "Google Ireland Ltd",
       "category": "external",
       "match": [
         "calendar.google.com"
       ],
-      "description_sv": "Kalendrar från Google."
+      "description_sv": "Kalendrar från Google.",
+      "description_en": "Calendars from Google."
     },
     "google-analytics": {
       "name": "Google Analytics",
@@ -38,7 +41,8 @@
         "google-analytics.com",
         "analytics.google.com"
       ],
-      "description_sv": "Besöksstatistik från Google."
+      "description_sv": "Besöksstatistik från Google.",
+      "description_en": "Visitor statistics from Google."
     },
     "google-ads": {
       "name": "Google Ads",
@@ -49,17 +53,20 @@
         "doubleclick.net",
         "googlesyndication.com"
       ],
-      "description_sv": "Annonsmätning från Google."
+      "description_sv": "Annonsmätning från Google.",
+      "description_en": "Ad measurement from Google."
     },
     "meta-pixel": {
       "name": "Meta-pixel",
+      "name_en": "Meta Pixel",
       "vendor": "Meta Platforms Ireland Ltd",
       "category": "marketing",
       "match": [
         "connect.facebook.net",
         "facebook.com/tr"
       ],
-      "description_sv": "Annonsmätning från Meta (Facebook, Instagram)."
+      "description_sv": "Annonsmätning från Meta (Facebook, Instagram).",
+      "description_en": "Ad measurement from Meta (Facebook, Instagram)."
     },
     "elfsight": {
       "name": "Elfsight",
@@ -69,7 +76,8 @@
         "elfsightcdn.com",
         "elfsight.com"
       ],
-      "description_sv": "Flöden från sociala medier, till exempel Instagram, via Elfsight."
+      "description_sv": "Flöden från sociala medier, till exempel Instagram, via Elfsight.",
+      "description_en": "Social media feeds, for example Instagram, via Elfsight."
     }
   }
 }

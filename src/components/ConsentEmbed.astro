@@ -7,7 +7,7 @@ import config from 'virtual:astro-consent/config'
 import { deEmbed } from '../embed-url'
 import { scanError } from '../scan'
 import { type ServiceSlug, srcMatchesService } from '../services'
-import sv from '../text/sv.json'
+import { TEXTS, resolveLang } from '../text'
 import EmbedPlaceholder from './EmbedPlaceholder.astro'
 
 interface Props {
@@ -20,9 +20,12 @@ interface Props {
   /** CSS aspect-ratio of the box, e.g. "16 / 9". */
   aspect?: string
   id?: string
+  /** Language of the placeholder; defaults to the page's locale, else Swedish. */
+  lang?: string
 }
 
 const { service, src, href, title, aspect = '16 / 9', id } = Astro.props
+const lang = resolveLang(Astro.props.lang, Astro.currentLocale)
 
 // Fallback for a non-literal `service`; literal ones are caught by the build-time scan.
 if (!config.services.includes(service)) {
@@ -47,7 +50,7 @@ const openHref = href ?? deEmbed(src)
 
 {!belongs ? (
   <div id={id} class="flex items-center rounded-box bg-base-200 p-4 text-base text-base-content sm:text-sm">
-    <p>{sv.embed.unavailable.replace('{title}', title)}</p>
+    <p>{TEXTS[lang].embed.unavailable.replace('{title}', title)}</p>
   </div>
 ) : (
 <div
@@ -67,11 +70,11 @@ const openHref = href ?? deEmbed(src)
   </template>
   {
     Astro.slots.has('placeholder') ? (
-      <EmbedPlaceholder service={service} title={title} infoId={infoId} openHref={openHref}>
+      <EmbedPlaceholder service={service} title={title} infoId={infoId} openHref={openHref} lang={lang}>
         <slot name="placeholder" />
       </EmbedPlaceholder>
     ) : (
-      <EmbedPlaceholder service={service} title={title} infoId={infoId} openHref={openHref} />
+      <EmbedPlaceholder service={service} title={title} infoId={infoId} openHref={openHref} lang={lang} />
     )
   }
 </div>

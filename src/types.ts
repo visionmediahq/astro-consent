@@ -6,6 +6,8 @@ import type { Category, ServiceSlug } from './services'
 export interface PrivacyConfig {
   services: ServiceSlug[]
   policy_url?: string
+  /** Per-language privacy policy pages; English falls back to `policy_url`. */
+  policy_urls?: { en?: string }
   log_endpoint?: string
 }
 
@@ -15,6 +17,7 @@ export interface ConsentConfig {
   categories: Category[]
   consentVersion: string
   policyUrl: string | null
+  policyUrls: { en?: string }
   logEndpoint: string | null
   /** Hostname of the Astro `site`, e.g. "kund.se". */
   site: string | null

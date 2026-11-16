@@ -1,11 +1,21 @@
-import { existsSync, readFileSync } from 'node:fs'
 import { expect, test } from 'vitest'
+import { LANGS, TEXTS, resolveLang } from '../../src/text/index'
 
-const path = new URL('../../src/text/sv.json', import.meta.url)
-const sv = existsSync(path) ? JSON.parse(readFileSync(path, 'utf8')) : {}
+const sv = TEXTS.sv
+
+function keysOf(value: unknown, prefix = ''): string[] {
+  if (typeof value === 'object' && value !== null) {
+    return Object.entries(value).flatMap(([k, v]) => keysOf(v, prefix ? `${prefix}.${k}` : k)).sort()
+  }
+  return [prefix]
+}
+
+function valueAt(root: unknown, key: string): unknown {
+  return key.split('.').reduce<unknown>((value, part) => (value as Record<string, unknown> | undefined)?.[part], root)
+}
 
 function get(key: string): unknown {
-  return key.split('.').reduce<unknown>((value, part) => (value as Record<string, unknown> | undefined)?.[part], sv)
+  return valueAt(sv, key)
 }
 
 function allStrings(value: unknown): string[] {
@@ -36,11 +46,40 @@ test('sv.json has every key the components and runtime use', () => {
 })
 
 test('no string claims there are no cookies or no third parties', () => {
-  const strings = allStrings(sv)
-  expect(strings.length).toBeGreaterThan(0)
-  for (const text of strings) {
-    expect(text).not.toMatch(/inga (spårnings)?cookies|inga tredjepart|inga externa/i)
+  for (const lang of LANGS) {
+    const strings = allStrings(TEXTS[lang])
+    expect(strings.length, lang).toBeGreaterThan(0)
+    for (const text of strings) {
+      expect(text, lang).not.toMatch(/inga (spårnings)?cookies|inga tredjepart|inga externa/i)
+      expect(text, lang).not.toMatch(/\bno (tracking )?cookies|\bno third[- ]part|\bno external/i)
+    }
   }
+})
+
+test('every language file has exactly the keys of sv.json, none empty', () => {
+  for (const lang of LANGS) expect(keysOf(TEXTS[lang]), lang).toEqual(keysOf(TEXTS.sv))
+  for (const lang of LANGS) for (const s of allStrings(TEXTS[lang])) expect(s.trim(), lang).not.toBe('')
+})
+
+test('every placeholder in a Swedish value is in the other languages too', () => {
+  const placeholders = (v: unknown) => [...new Set(String(v).match(/\{\w+\}/g) ?? [])].sort()
+  for (const lang of LANGS) {
+    for (const key of keysOf(TEXTS.sv)) {
+      expect(placeholders(valueAt(TEXTS[lang], key)), `${lang} ${key}`).toEqual(placeholders(valueAt(TEXTS.sv, key)))
+    }
+  }
+})
+
+test('resolveLang: the prop wins, normalised; unsupported is Swedish', () => {
+  expect(resolveLang('en')).toBe('en')
+  expect(resolveLang('en-GB')).toBe('en')
+  expect(resolveLang('EN')).toBe('en')
+  expect(resolveLang('de', 'en')).toBe('sv')
+  expect(resolveLang('', 'en')).toBe('en')
+  expect(resolveLang(undefined, 'en')).toBe('en')
+  expect(resolveLang(undefined, 'sv')).toBe('sv')
+  expect(resolveLang(undefined, undefined)).toBe('sv')
+  expect(resolveLang(null, 'fr')).toBe('sv')
 })
 
 test('placeholders are consistent', () => {

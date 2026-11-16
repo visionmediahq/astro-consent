@@ -1,0 +1,50 @@
+{
+  "region": "Cookie settings",
+  "notice": {
+    "title": "How we measure visits",
+    "body": "We measure visits anonymously with Umami, without cookies and without personal data. Your choice is saved in the browser.",
+    "ok": "OK",
+    "more": "Read more"
+  },
+  "consent": {
+    "title": "Your choice of cookies and external content",
+    "body": "We measure visits anonymously without cookies. The website also contains services from other companies that are loaded only once you accept them. You can change your choice at any time via “Cookie settings” at the bottom of the page.",
+    "acceptAll": "Accept all",
+    "decline": "Decline",
+    "settings": "Settings",
+    "save": "Save choices",
+    "back": "Back",
+    "more": "Read more",
+    "alwaysOn": "Always on",
+    "serviceRow": "{name} — always shown"
+  },
+  "categories": {
+    "necessary": {
+      "label": "Necessary",
+      "description": "Required for the website to work, for example the contact form and remembering your choice here."
+    },
+    "external": {
+      "label": "External content",
+      "description": "Maps and other content fetched from other companies. They receive your IP address and may set cookies when the content is shown."
+    },
+    "statistics": {
+      "label": "Statistics",
+      "description": "Analytics tools from other companies that set cookies to track how the website is used."
+    },
+    "marketing": {
+      "label": "Marketing",
+      "description": "Advertising and marketing tools that set cookies to follow you between websites."
+    }
+  },
+  "embed": {
+    "show": "Show {name}",
+    "remember": "Always show content from {name}",
+    "info": "{title} is fetched from {name}. When you show it, your IP address is sent there and cookies may be set.",
+    "open": "Open in {name}",
+    "unavailable": "{title} cannot be shown."
+  },
+  "links": {
+    "settings": "Cookie settings",
+    "policy": "Privacy policy"
+  }
+}

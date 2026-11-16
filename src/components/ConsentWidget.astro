@@ -8,6 +8,7 @@ import '../styles/contrast.css'
 import config from 'virtual:astro-consent/config'
 import { scanError } from '../scan'
 import { type ServiceSlug } from '../services'
+import { resolveLang } from '../text'
 import { widgetError } from '../widget'
 import EmbedPlaceholder from './EmbedPlaceholder.astro'
 
@@ -19,9 +20,12 @@ interface Props {
   /** Minimum height of the box before the widget loads, as CSS. */
   minHeight?: string
   id?: string
+  /** Language of the placeholder; defaults to the page's locale, else Swedish. */
+  lang?: string
 }
 
 const { service, script, title, minHeight = '12rem', id } = Astro.props
+const lang = resolveLang(Astro.props.lang, Astro.currentLocale)
 
 // Fallback for a non-literal `service`; literal ones are caught by the build-time scan.
 if (!config.services.includes(service)) {
@@ -44,5 +48,5 @@ const infoId = `${id ?? 'consent-embed-' + crypto.randomUUID().slice(0, 8)}-info
   style={`--consent-min-h: ${minHeight}`}
 >
   <template data-payload set:html={markup}></template>
-  <EmbedPlaceholder service={service} title={title} infoId={infoId} />
+  <EmbedPlaceholder service={service} title={title} infoId={infoId} lang={lang} />
 </div>

@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'vitest'
+import { policyUrlFor } from '../../src/policy-url'
 import { ConfigError, consentVersion, parsePrivacyConfig, toConsentConfig } from '../../src/config'
 
 function fieldOf(raw: unknown): string {
@@ -95,5 +96,38 @@ describe('toConsentConfig', () => {
   test('toConsentConfig reduces site to its hostname', () => {
     expect(toConsentConfig({ services: [] }, 'https://www.kund.se/').site).toBe('www.kund.se')
     expect(toConsentConfig({ services: [] }, undefined).site).toBeNull()
+  })
+})
+
+describe('policy_urls', () => {
+  const en = 'https://kund.example/en/privacy'
+
+  test('policy_urls.en parses and reaches the consent config', () => {
+    const privacy = parsePrivacyConfig({ services: [], policy_urls: { en } })
+    expect(privacy.policy_urls).toEqual({ en })
+    expect(toConsentConfig(privacy, undefined).policyUrls.en).toBe(en)
+  })
+
+  test('an empty policy_urls parses and gives policyUrls {}', () => {
+    const privacy = parsePrivacyConfig({ services: [], policy_urls: {} })
+    expect(privacy.policy_urls).toEqual({})
+    expect(toConsentConfig(privacy, undefined).policyUrls).toEqual({})
+    expect(fieldOf({ services: [], policy_urls: { en: null } })).toBe('policy_urls')
+  })
+
+  test('policy_urls rejects a malformed URL and an unknown language, naming policy_urls', () => {
+    expect(fieldOf({ services: [], policy_urls: { en: 'https:/x' } })).toBe('policy_urls')
+    expect(fieldOf({ services: [], policy_urls: { de: en } })).toBe('policy_urls')
+  })
+
+  test('policyUrls is {} when policy_urls is absent', () => {
+    expect(toConsentConfig(parsePrivacyConfig({ services: [] }), undefined).policyUrls).toEqual({})
+  })
+
+  test('policyUrlFor picks the English URL, falls back to policy_url, and is null for sv without one', () => {
+    expect(policyUrlFor({ policyUrl: null, policyUrls: { en } }, 'en')).toBe(en)
+    expect(policyUrlFor({ policyUrl: 'https://kund.se/p', policyUrls: {} }, 'en')).toBe('https://kund.se/p')
+    expect(policyUrlFor({ policyUrl: 'https://kund.se/p', policyUrls: { en } }, 'sv')).toBe('https://kund.se/p')
+    expect(policyUrlFor({ policyUrl: null, policyUrls: { en } }, 'sv')).toBeNull()
   })
 })

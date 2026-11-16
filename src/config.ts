@@ -20,17 +20,18 @@ export class ConfigError extends Error {
   }
 }
 
+// `//` after the scheme is checked here, not left to z.url: zod 4.3.6 (the floor, #17) accepts
+// `https:/kund.se` and `https:kund.se`, which 4.6 rejects.
+const policyUrl = z
+  .url({ protocol: /^https?$/ })
+  .refine((url) => /^https?:\/\/[^/]/i.test(url), 'must start with http:// or https://')
+
 const schema = z.strictObject({
   services: z
     .array(z.enum(SERVICE_SLUGS as [ServiceSlug, ...ServiceSlug[]]))
     .refine((list) => new Set(list).size === list.length, 'duplicate service'),
-  // `//` after the scheme is checked here, not left to z.url: zod 4.3.6 (the floor, #17) accepts
-  // `https:/kund.se` and `https:kund.se`, which 4.6 rejects.
-  policy_url: z
-    .url({ protocol: /^https?$/ })
-    .refine((url) => /^https?:\/\/[^/]/i.test(url), 'must start with http:// or https://')
-    .nullable()
-    .optional(),
+  policy_url: policyUrl.nullable().optional(),
+  policy_urls: z.strictObject({ en: policyUrl.optional() }).optional(),
   log_endpoint: z
     .url({ protocol: /^https$/ })
     .refine((url) => /^https:\/\/[^/]/i.test(url), 'must start with https://')
@@ -44,15 +45,16 @@ export function parsePrivacyConfig(raw: unknown): PrivacyConfig {
     const issue = result.error.issues[0]!
     // zod 4 reports an unknown key in `keys`, with an empty path.
     const field =
-      issue.code === 'unrecognized_keys'
-        ? issue.keys[0]!
-        : issue.path.length > 0
-          ? String(issue.path[0])
+      issue.path.length > 0
+        ? String(issue.path[0])
+        : issue.code === 'unrecognized_keys'
+          ? issue.keys[0]!
           : 'privacy.json'
     throw new ConfigError(field, issue.message)
   }
   const config: PrivacyConfig = { services: result.data.services }
   if (result.data.policy_url) config.policy_url = result.data.policy_url
+  if (result.data.policy_urls) config.policy_urls = result.data.policy_urls
   if (result.data.log_endpoint) config.log_endpoint = result.data.log_endpoint
   return config
 }
@@ -73,6 +75,7 @@ export function toConsentConfig(privacy: PrivacyConfig, site: string | undefined
     categories: ['necessary', ...used],
     consentVersion: consentVersion(privacy.services),
     policyUrl: privacy.policy_url ?? null,
+    policyUrls: privacy.policy_urls ?? {},
     logEndpoint: privacy.log_endpoint ?? null,
     site: site ? new URL(site).hostname : null,
   }

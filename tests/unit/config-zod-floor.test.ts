@@ -45,4 +45,10 @@ test('the schema accepts a full config and rejects bad values on the floor zod',
   // Review of #144: 4.3.6's z.url alone accepts these; config.ts refuses them on every version.
   expect(field({ services: [], policy_url: 'https:/kund.se/integritet' })).toBe('policy_url')
   expect(field({ services: [], log_endpoint: 'https:log.kund.se' })).toBe('log_endpoint')
+  const en = 'https://kund.example/en/privacy'
+  expect(parsePrivacyConfig({ services: [], policy_urls: { en } })).toEqual({ services: [], policy_urls: { en } })
+  expect(parsePrivacyConfig({ services: [], policy_urls: {} })).toEqual({ services: [], policy_urls: {} })
+  expect(field({ services: [], policy_urls: { en: null } })).toBe('policy_urls')
+  expect(field({ services: [], policy_urls: { en: 'https:/x' } })).toBe('policy_urls')
+  expect(field({ services: [], policy_urls: { de: en } })).toBe('policy_urls')
 })

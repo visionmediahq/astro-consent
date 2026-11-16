@@ -5,12 +5,13 @@ import '../styles/global.css'
 
 interface Props {
   title: string
+  lang?: string
 }
-const { title } = Astro.props
+const { title, lang = 'sv' } = Astro.props
 ---
 
 <!doctype html>
-<html lang="sv" data-theme="light">
+<html lang={lang} data-theme="light">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -20,10 +21,10 @@ const { title } = Astro.props
     <main class="mx-auto max-w-3xl p-6">
       <slot />
     </main>
-    <ConsentBanner />
+    <ConsentBanner lang={lang} />
     <!-- Mirrors astro-starter's dark VisionFooter -->
     <footer class="bg-neutral py-3">
-      <PrivacyLinks class="text-neutral-content" />
+      <PrivacyLinks lang={lang} class="text-neutral-content" />
     </footer>
   </body>
 </html>

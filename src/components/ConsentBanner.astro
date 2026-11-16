@@ -3,9 +3,18 @@
 // Rendered once per page, next to the footer. Themed entirely by the site's DaisyUI theme.
 import '../styles/contrast.css'
 import config from 'virtual:astro-consent/config'
-import { SERVICES, type Category, type ServiceSlug } from '../services'
-import sv from '../text/sv.json'
+import { SERVICES, serviceText, type Category, type ServiceSlug } from '../services'
+import { policyUrlFor } from '../policy-url'
+import { TEXTS, resolveLang } from '../text'
 
+interface Props {
+  /** Banner language ("sv" or "en"); defaults to the page's locale, else Swedish. */
+  lang?: string
+}
+
+const lang = resolveLang(Astro.props.lang, Astro.currentLocale)
+const t = TEXTS[lang]
+const policyUrl = policyUrlFor(config, lang)
 const mode = config.services.length > 0 ? 'consent' : 'notice'
 const servicesIn = (category: Category): ServiceSlug[] =>
   config.services.filter((slug) => SERVICES[slug].category === category)
@@ -17,7 +26,8 @@ const servicesIn = (category: Category): ServiceSlug[] =>
   data-view="main"
   hidden
   role="region"
-  aria-label={sv.region}
+  aria-label={t.region}
+  lang={lang === 'sv' ? undefined : lang}
   class:list={[
     'card fixed inset-x-4 bottom-4 z-[99] mx-auto max-h-[calc(100dvh-2rem)] max-w-[42rem] overflow-y-auto border border-base-300 bg-base-100 text-base-content shadow-xl',
     // #131: on a phone the notice is a bar flush with the bottom edge, not a card covering a quarter of the first screen.
@@ -33,59 +43,59 @@ const servicesIn = (category: Category): ServiceSlug[] =>
     {
       mode === 'notice' ? (
         <>
-          <h2 class="card-title text-base">{sv.notice.title}</h2>
+          <h2 class="card-title text-base">{t.notice.title}</h2>
           <p class="text-sm">
-            {sv.notice.body}
-            {config.policyUrl && (
+            {t.notice.body}
+            {policyUrl && (
               <>
                 {' '}
-                <a class="link text-base-content" href={config.policyUrl}>{sv.notice.more}</a>
+                <a class="link text-base-content" href={policyUrl}>{t.notice.more}</a>
               </>
             )}
           </p>
           <div class="card-actions justify-end">
             <button type="button" class="btn btn-primary btn-sm max-sm:w-full" data-consent-action="notice_ok">
-              {sv.notice.ok}
+              {t.notice.ok}
             </button>
           </div>
         </>
       ) : (
         <>
           <div data-consent-main class="flex flex-col gap-3">
-            <h2 class="card-title text-base">{sv.consent.title}</h2>
+            <h2 class="card-title text-base">{t.consent.title}</h2>
             <p class="text-sm">
-              {sv.consent.body}
-              {config.policyUrl && (
+              {t.consent.body}
+              {policyUrl && (
                 <>
                   {' '}
-                  <a class="link text-base-content" href={config.policyUrl}>{sv.consent.more}</a>
+                  <a class="link text-base-content" href={policyUrl}>{t.consent.more}</a>
                 </>
               )}
             </p>
             <div class="card-actions justify-end gap-2">
               <button type="button" class="btn btn-ghost btn-sm max-sm:w-full" data-consent-action="settings">
-                {sv.consent.settings}
+                {t.consent.settings}
               </button>
               {/* Same classes as "Acceptera alla": declining must be as prominent as accepting. */}
               <button type="button" class="btn btn-primary btn-sm max-sm:w-full" data-consent-action="none">
-                {sv.consent.decline}
+                {t.consent.decline}
               </button>
               <button type="button" class="btn btn-primary btn-sm max-sm:w-full" data-consent-action="all">
-                {sv.consent.acceptAll}
+                {t.consent.acceptAll}
               </button>
             </div>
           </div>
 
           <form data-consent-settings hidden class="flex flex-col gap-3">
-            <h2 class="card-title text-base">{sv.consent.settings}</h2>
+            <h2 class="card-title text-base">{t.consent.settings}</h2>
             {config.categories.map((category) => (
               <div data-consent-category={category} class="flex flex-col gap-1">
                 {/* A plain flex row: DaisyUI 5's .label does not wrap and dims the text. */}
                 <label class="flex cursor-pointer items-start justify-between gap-4">
                   <span>
-                    <span class="text-sm font-medium">{sv.categories[category].label}</span>
+                    <span class="text-sm font-medium">{t.categories[category].label}</span>
                     <span class="block whitespace-normal text-xs text-base-content/80">
-                      {sv.categories[category].description}
+                      {t.categories[category].description}
                     </span>
                   </span>
                   {/* Toggles get an explicit boundary (WCAG 1.4.11): DaisyUI's is base-content at 50 %
@@ -93,7 +103,7 @@ const servicesIn = (category: Category): ServiceSlug[] =>
                       base-100. Checked, the ring is full base-content, as DaisyUI's uncoloured toggle has it. */}
                   {category === 'necessary' ? (
                     <span class="flex shrink-0 items-center gap-2">
-                      <span class="badge badge-neutral badge-sm">{sv.consent.alwaysOn}</span>
+                      <span class="badge badge-neutral badge-sm">{t.consent.alwaysOn}</span>
                       <input type="checkbox" class="toggle toggle-sm" name="necessary" checked disabled />
                     </span>
                   ) : (
@@ -110,7 +120,7 @@ const servicesIn = (category: Category): ServiceSlug[] =>
                     hidden
                     class="flex cursor-pointer items-center justify-between gap-4 pl-4"
                   >
-                    <span class="text-xs">{sv.consent.serviceRow.replace('{name}', SERVICES[slug].name)}</span>
+                    <span class="text-xs">{t.consent.serviceRow.replace('{name}', serviceText(slug, lang).name)}</span>
                     <input
                       type="checkbox"
                       class="toggle toggle-xs shrink-0 border-base-content/60 checked:border-base-content"
@@ -122,10 +132,10 @@ const servicesIn = (category: Category): ServiceSlug[] =>
             ))}
             <div class="card-actions justify-end gap-2">
               <button type="button" class="btn btn-ghost btn-sm max-sm:w-full" data-consent-action="back">
-                {sv.consent.back}
+                {t.consent.back}
               </button>
               <button type="submit" class="btn btn-primary btn-sm max-sm:w-full" data-consent-action="custom">
-                {sv.consent.save}
+                {t.consent.save}
               </button>
             </div>
           </form>

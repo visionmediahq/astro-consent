@@ -3,6 +3,8 @@ import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, test } from 'vitest'
 import { builtCss, partsMissingFromBuild } from '../../ci/rollout/lib/daisyui'
 import { DEMO_DIR } from '../../scripts/demo-copy'
+import { SERVICES } from '../../src/services'
+import { TEXTS } from '../../src/text'
 import { buildDemo, cleanupBuilds, type BuildResult } from './helpers'
 
 const TIMEOUT = { timeout: 180_000 }
@@ -409,6 +411,72 @@ describe('banner and footer markup', () => {
     expect(noticePage.querySelectorAll('[data-consent-banner] a')).toHaveLength(0)
     expect(noticePage.querySelectorAll('[data-privacy-links] a')).toHaveLength(0)
     expect(noticePage.querySelector('[data-privacy-links] [data-consent-open]')).not.toBeNull()
+  })
+
+  describe('language', () => {
+    const EN_POLICY = 'https://demo.test/en/integritet'
+    const fragments = (text: string): string[] => text.split(/\{\w+\}/).map((part) => part.trim()).filter((part) => part.length >= 4)
+    const markup = (page: ReturnType<BuildResult['html']>): string =>
+      ['[data-consent-banner]', '[data-privacy-links]', '[data-placeholder]'].flatMap((selector) => page.querySelectorAll(selector).map((el) => el.outerHTML)).join('\n')
+    const values = (value: unknown): string[] =>
+      typeof value === 'string' ? [value] : value && typeof value === 'object' ? Object.values(value).flatMap(values) : []
+    const englishFragments = values(TEXTS.en).flatMap(fragments)
+    // A Swedish fragment that English text also contains (a brand name, "OK") cannot prove anything.
+    const swedishOnly = (texts: unknown): string[] => values(texts).flatMap(fragments).filter((f) => !englishFragments.some((en) => en.includes(f)))
+
+    test('/en/ (consent): English banner text, root lang, English policy link, no Swedish text', () => {
+      const page = consentBuild.html('en/index.html')
+      const banner = page.querySelector('[data-consent-banner]')!
+      expect(banner.getAttribute('lang')).toBe('en')
+      expect(banner.querySelector('[data-consent-action="all"]')!.text.trim()).toBe(TEXTS.en.consent.acceptAll)
+      expect(banner.querySelector('[data-consent-action="none"]')!.text.trim()).toBe(TEXTS.en.consent.decline)
+      expect(banner.querySelector(`a[href="${EN_POLICY}"]`)!.text.trim()).toBe(TEXTS.en.consent.more)
+      expect(banner.querySelector('a[href="https://demo.test/integritet"]')).toBeNull()
+      const links = page.querySelector('[data-privacy-links]')!
+      expect(links.getAttribute('lang')).toBe('en')
+      expect(links.querySelector('[data-consent-open]')!.text.trim()).toBe(TEXTS.en.links.settings)
+      expect(links.querySelector(`a[href="${EN_POLICY}"]`)!.text.trim()).toBe(TEXTS.en.links.policy)
+      const html = markup(page)
+      for (const fragment of swedishOnly(TEXTS.sv)) expect(html, fragment).not.toContain(fragment)
+      expect(banner.querySelector('[data-consent-service="google-maps"]')!.text).toContain('Google Maps')
+      const bannerHtml = banner.outerHTML
+      const swedishNames = Object.values(SERVICES).filter((s) => s.name_en && s.name_en !== s.name).map((s) => s.name)
+      expect(swedishNames.length).toBeGreaterThan(0)
+      for (const name of swedishNames) expect(bannerHtml, name).not.toContain(name)
+    })
+
+    test('/en/map (consent): the placeholder is English and names the service', () => {
+      const placeholder = consentBuild.html('en/map/index.html').querySelector('#en-map [data-placeholder]')!
+      expect(placeholder.querySelector('[data-load]')!.text.trim()).toBe('Show Google Maps')
+      expect(placeholder.text).toContain('Always show content from Google Maps')
+      expect(placeholder.text).toContain('Map to us is fetched from Google Maps')
+      for (const fragment of swedishOnly(TEXTS.sv.embed)) expect(placeholder.outerHTML, fragment).not.toContain(fragment)
+    })
+
+    test('/en/ (notice): English notice and links', () => {
+      const page = noticeBuild.html('en/index.html')
+      const banner = page.querySelector('[data-consent-banner]')!
+      expect(banner.getAttribute('lang')).toBe('en')
+      expect(banner.querySelector('[data-consent-action="notice_ok"]')!.text.trim()).toBe(TEXTS.en.notice.ok)
+      expect(banner.text).toContain(TEXTS.en.notice.title)
+      expect(banner.querySelector(`a[href="${EN_POLICY}"]`)!.text.trim()).toBe(TEXTS.en.notice.more)
+      expect(page.querySelector('[data-privacy-links] [data-consent-open]')!.text.trim()).toBe(TEXTS.en.links.settings)
+      expect(page.querySelector('[data-privacy-links]')!.getAttribute('lang')).toBe('en')
+      for (const fragment of swedishOnly({ n: TEXTS.sv.notice, l: TEXTS.sv.links })) expect(markup(page), fragment).not.toContain(fragment)
+    })
+
+    test('/ keeps Swedish text and no lang attribute on the banner or the links', () => {
+      for (const build of [consentBuild, noticeBuild]) {
+        const page = build.html('index.html')
+        expect(page.querySelector('[data-consent-banner]')!.hasAttribute('lang')).toBe(false)
+        expect(page.querySelector('[data-privacy-links]')!.hasAttribute('lang')).toBe(false)
+        expect(page.querySelector('[data-privacy-links] [data-consent-open]')!.text.trim()).toBe(TEXTS.sv.links.settings)
+      }
+      const consent = consentBuild.html('index.html')
+      expect(consent.querySelector('[data-consent-action="all"]')!.text.trim()).toBe(TEXTS.sv.consent.acceptAll)
+      expect(consent.querySelector('a[href="https://demo.test/integritet"]')!.text.trim()).toBe(TEXTS.sv.consent.more)
+      expect(noticeBuild.html('index.html').querySelector('[data-consent-action="notice_ok"]')!.text.trim()).toBe(TEXTS.sv.notice.ok)
+    })
   })
 
   test('the banner still carries card-actions', () => {
