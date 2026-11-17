@@ -3,6 +3,9 @@ name: CI
 on:
   # Feature branches run through their PR only; main and release tags run on push.
   # Docs-only changes skip CI (path filters do not apply to tag pushes, so tags always run).
+  # The filter on pull_request is safe only because no ruleset or branch protection requires CI
+  # checks here. If one ever does, take the filter off pull_request: a workflow skipped by a path
+  # filter leaves required checks pending forever, so a docs-only PR could never merge.
   push:
     branches: [main]
     tags: ['v*']
