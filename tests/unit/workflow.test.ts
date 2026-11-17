@@ -42,8 +42,12 @@ test('push runs CI on main and release tags only; feature branches run through t
   expect(on).toMatch(/^  workflow_dispatch:/m)
 })
 
+// Only PR runs may share a group: a group also cancels a *pending* run when a newer one queues,
+// even with cancel-in-progress false, so main, tag and manual runs each get their own (run_id).
 test('a new push cancels an older PR run, never a run on main or a tag', () => {
   const concurrency = workflow.slice(workflow.indexOf('\nconcurrency:'), workflow.indexOf('\njobs:'))
-  expect(concurrency).toMatch(/group: ci-\$\{\{ github\.workflow \}\}-\$\{\{ github\.ref \}\}/)
-  expect(concurrency).toMatch(/cancel-in-progress: \$\{\{ github\.ref != 'refs\/heads\/main' && !startsWith\(github\.ref, 'refs\/tags\/'\) \}\}/)
+  expect(concurrency).toContain(
+    "group: ${{ github.event_name == 'pull_request' && format('{0}-{1}', github.workflow, github.ref) || format('{0}-{1}', github.workflow, github.run_id) }}",
+  )
+  expect(concurrency).toContain("cancel-in-progress: ${{ github.event_name == 'pull_request' }}")
 })
