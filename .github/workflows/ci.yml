@@ -11,11 +11,13 @@ on:
     paths-ignore: ['**/*.md', 'docs/**']
   workflow_dispatch:
 
-# A new push to a PR cancels that PR's older run. Runs on main and tags always finish, so every
-# main commit keeps a full result (starter-install is the release proof).
+# Only PR runs share a group: a new push to a PR cancels that PR's older run. Every other run
+# gets its own group (run_id), because a group also cancels a *pending* run when a newer one
+# queues, even with cancel-in-progress false. So no run on main or a tag is ever cancelled.
+# (A docs-only push to main starts no run at all; see paths-ignore above.)
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.ref != 'refs/heads/main' && !startsWith(github.ref, 'refs/tags/') }}
+  group: ${{ github.event_name == 'pull_request' && format('{0}-{1}', github.workflow, github.ref) || format('{0}-{1}', github.workflow, github.run_id) }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   unit:
