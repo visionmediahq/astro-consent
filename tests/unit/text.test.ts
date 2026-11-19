@@ -56,6 +56,22 @@ test('no string claims there are no cookies or no third parties', () => {
   }
 })
 
+// Lighthouse's SEO audit "link-text" fails a link whose whole text is a generic phrase from its
+// blocklist ("Läs mer", "Read more", "mer", "här", …). The notice link renders on every page of a
+// notice-mode site, so a generic text costs every page 8 SEO points. consent.more is in the
+// CONSENT_VERSION hash, so changing it would ask every visitor again; it stays as it is for now.
+const GENERIC_LINK_TEXT = [
+  'läs mer', 'mer', 'här', 'klicka här', 'mer info', 'mer information', 'fortsätt', 'start',
+  'read more', 'more', 'here', 'click here', 'learn more', 'more info', 'more information', 'continue', 'go',
+]
+
+test('the notice link text says where it leads (Lighthouse link-text)', () => {
+  for (const lang of LANGS) {
+    const text = TEXTS[lang].notice.more.trim().toLowerCase().replace(/[.!?…]+$/, '')
+    expect(GENERIC_LINK_TEXT, `${lang}: "${TEXTS[lang].notice.more}"`).not.toContain(text)
+  }
+})
+
 test('every language file has exactly the keys of sv.json, none empty', () => {
   for (const lang of LANGS) expect(keysOf(TEXTS[lang]), lang).toEqual(keysOf(TEXTS.sv))
   for (const lang of LANGS) for (const s of allStrings(TEXTS[lang])) expect(s.trim(), lang).not.toBe('')

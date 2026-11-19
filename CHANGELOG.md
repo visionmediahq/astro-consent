@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.2.1
+
+- Fix: the notice banner's policy link said only "Läs mer" ("Read more" in English). Lighthouse's
+  SEO audit `link-text` fails that phrase, which cost every page of a notice-mode site 8 SEO points
+  (92 instead of 100). It now reads "Läs mer i integritetspolicyn" ("Read more in the privacy
+  policy"). A unit test keeps it off Lighthouse's generic-phrase list.
+- The consent banner's "Läs mer" (consent mode) is unchanged: its wording is part of the
+  `CONSENT_VERSION` hash, and changing it would ask every visitor again.
+
 ## 1.2.0
 
 - New: the banner, the embed and widget placeholders and the privacy links speak English. The four
