@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.2.2
 
 - Fix: on a phone (under `sm`) the banner's text and buttons are 16px, not 14px and 12px: the notice
   and consent paragraphs, the buttons, the settings view's category and service rows. From `sm` up the
