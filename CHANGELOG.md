@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- Fix: on a phone (under `sm`) the banner's text and buttons are 16px, not 14px and 12px: the notice
+  and consent paragraphs, the buttons, the settings view's category and service rows. From `sm` up the
+  sizes are as before. In consent mode "Avvisa" and "Acceptera alla" sit side by side and "Inställningar"
+  spans the row below, so the banner stays at about 314px tall at 390px wide (294px before). The notice
+  bar grows from 137px to about 177px. Classes only: the `CONSENT_VERSION` hash is unchanged.
+
 ## 1.2.1
 
 - Fix: the notice banner's policy link said only "Läs mer" ("Read more" in English). Lighthouse's

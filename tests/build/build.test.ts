@@ -353,7 +353,7 @@ describe('banner and footer markup', () => {
     expect(settings.parentNode).toBe(all.parentNode)
     for (const button of [none, all]) {
       expect(button.classList.contains('btn')).toBe(true)
-      expect(button.classList.contains('btn-sm')).toBe(true)
+      expect(button.classList.contains('sm:btn-sm')).toBe(true)
     }
     expect(none.getAttribute('class')).toBe(all.getAttribute('class'))
 

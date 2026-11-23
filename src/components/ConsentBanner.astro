@@ -44,7 +44,7 @@ const servicesIn = (category: Category): ServiceSlug[] =>
       mode === 'notice' ? (
         <>
           <h2 class="card-title text-base">{t.notice.title}</h2>
-          <p class="text-sm">
+          <p class="text-base sm:text-sm">
             {t.notice.body}
             {policyUrl && (
               <>
@@ -54,7 +54,7 @@ const servicesIn = (category: Category): ServiceSlug[] =>
             )}
           </p>
           <div class="card-actions justify-end">
-            <button type="button" class="btn btn-primary btn-sm max-sm:w-full" data-consent-action="notice_ok">
+            <button type="button" class="btn btn-primary max-sm:w-full max-sm:text-base sm:btn-sm" data-consent-action="notice_ok">
               {t.notice.ok}
             </button>
           </div>
@@ -63,7 +63,7 @@ const servicesIn = (category: Category): ServiceSlug[] =>
         <>
           <div data-consent-main class="flex flex-col gap-3">
             <h2 class="card-title text-base">{t.consent.title}</h2>
-            <p class="text-sm">
+            <p class="text-base sm:text-sm">
               {t.consent.body}
               {policyUrl && (
                 <>
@@ -72,15 +72,15 @@ const servicesIn = (category: Category): ServiceSlug[] =>
                 </>
               )}
             </p>
-            <div class="card-actions justify-end gap-2">
-              <button type="button" class="btn btn-ghost btn-sm max-sm:w-full" data-consent-action="settings">
+            <div class="card-actions justify-end gap-2 max-sm:grid max-sm:grid-cols-2">
+              <button type="button" class="btn btn-ghost max-sm:order-last max-sm:col-span-2 max-sm:w-full max-sm:text-base sm:btn-sm" data-consent-action="settings">
                 {t.consent.settings}
               </button>
               {/* Same classes as "Acceptera alla": declining must be as prominent as accepting. */}
-              <button type="button" class="btn btn-primary btn-sm max-sm:w-full" data-consent-action="none">
+              <button type="button" class="btn btn-primary max-sm:w-full max-sm:text-base sm:btn-sm" data-consent-action="none">
                 {t.consent.decline}
               </button>
-              <button type="button" class="btn btn-primary btn-sm max-sm:w-full" data-consent-action="all">
+              <button type="button" class="btn btn-primary max-sm:w-full max-sm:text-base sm:btn-sm" data-consent-action="all">
                 {t.consent.acceptAll}
               </button>
             </div>
@@ -93,8 +93,8 @@ const servicesIn = (category: Category): ServiceSlug[] =>
                 {/* A plain flex row: DaisyUI 5's .label does not wrap and dims the text. */}
                 <label class="flex cursor-pointer items-start justify-between gap-4">
                   <span>
-                    <span class="text-sm font-medium">{t.categories[category].label}</span>
-                    <span class="block whitespace-normal text-xs text-base-content/80">
+                    <span class="text-base font-medium sm:text-sm">{t.categories[category].label}</span>
+                    <span class="block whitespace-normal text-base text-base-content/80 sm:text-xs">
                       {t.categories[category].description}
                     </span>
                   </span>
@@ -120,7 +120,7 @@ const servicesIn = (category: Category): ServiceSlug[] =>
                     hidden
                     class="flex cursor-pointer items-center justify-between gap-4 pl-4"
                   >
-                    <span class="text-xs">{t.consent.serviceRow.replace('{name}', serviceText(slug, lang).name)}</span>
+                    <span class="text-base sm:text-xs">{t.consent.serviceRow.replace('{name}', serviceText(slug, lang).name)}</span>
                     <input
                       type="checkbox"
                       class="toggle toggle-xs shrink-0 border-base-content/60 checked:border-base-content"
@@ -131,10 +131,10 @@ const servicesIn = (category: Category): ServiceSlug[] =>
               </div>
             ))}
             <div class="card-actions justify-end gap-2">
-              <button type="button" class="btn btn-ghost btn-sm max-sm:w-full" data-consent-action="back">
+              <button type="button" class="btn btn-ghost max-sm:w-full max-sm:text-base sm:btn-sm" data-consent-action="back">
                 {t.consent.back}
               </button>
-              <button type="submit" class="btn btn-primary btn-sm max-sm:w-full" data-consent-action="custom">
+              <button type="submit" class="btn btn-primary max-sm:w-full max-sm:text-base sm:btn-sm" data-consent-action="custom">
                 {t.consent.save}
               </button>
             </div>
