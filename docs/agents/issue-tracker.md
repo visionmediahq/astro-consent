@@ -1,11 +1,16 @@
 # Issue tracker: GitHub
 
-Issues and specs for this repo live as GitHub issues. Use the `gh` CLI for all operations.
+Issues and specs for this repo live as GitHub issues in `visionmediahq/astro-consent`. Locally, use
+the `gh` CLI as below. In a cloud session, where `gh` only searches, use the GitHub MCP tools (see
+"Without the `gh` CLI").
+
+Specs used to be written as files under `docs/superpowers/specs/` and `docs/superpowers/plans/`.
+Those are history: new specs and plans go to GitHub Issues.
 
 ## Conventions
 
 - **Create an issue**: `gh issue create --title "..." --body "..."`. Use a heredoc for multi-line bodies.
-- **Read an issue**: `gh issue view <number> --comments`, filtering comments by `jq` and also fetching labels.
+- **Read an issue**: `gh issue view <number> --json title,body,labels,comments --jq '{title, body, labels: [.labels[].name], comments: [.comments[].body]}'`.
 - **List issues**: `gh issue list --state open --json number,title,body,labels,comments --jq '[.[] | {number, title, body, labels: [.labels[].name], comments: [.comments[].body]}]'` with appropriate `--label` and `--state` filters.
 - **Comment on an issue**: `gh issue comment <number> --body "..."`
 - **Apply / remove labels**: `gh issue edit <number> --add-label "..."` / `--remove-label "..."`
@@ -18,8 +23,15 @@ Infer the repo from `git remote -v`; `gh` does this automatically when run insid
 In Claude Code cloud sessions `gh` only handles search (`gh api -X GET search/issues …`). Everything
 else goes through the GitHub MCP tools: `issue_read` (get, get_comments, get_labels), `list_issues`,
 `issue_write` (create/update, labels, close with `state_reason`), `add_issue_comment` and
-`sub_issue_write`. `issue_write` `create` refuses a label that doesn't exist yet; create the issue
-without it, then `issue_write` `update` with the label, which creates it.
+`sub_issue_write`.
+
+- **Labels:** `issue_write` `create` refuses a label that doesn't exist yet. This applies to the
+  `wayfinder:*` labels, which are not created in advance. Create the issue without the label, then
+  apply it with `issue_write` `update`, which creates it.
+- **Wayfinding:** create a child ticket with `issue_write` `create` and `parent_issue_number`, and
+  claim one with `issue_write` `update` and `assignees`. The MCP tools can't create native issue
+  dependencies, so write the blocking edges as a `Blocked by: #<n>, #<n>` line or section in the
+  child's body, the fallback the Wayfinding section describes.
 
 ## Pull requests as a triage surface
 

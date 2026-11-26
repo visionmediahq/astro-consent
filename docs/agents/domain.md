@@ -4,39 +4,17 @@ How the engineering skills should consume this repo's domain documentation when 
 
 ## Before exploring, read these
 
-- **`CONTEXT.md`** at the repo root, or
-- **`CONTEXT-MAP.md`** at the repo root if it exists: it points at one `CONTEXT.md` per context. Read each one relevant to the topic.
-- **`docs/adr/`**: read ADRs that touch the area you're about to work in. In multi-context repos, also check `src/<context>/docs/adr/` for context-scoped decisions.
+This repo is single-context: one glossary and one ADR folder, both at the root.
 
-If any of these files don't exist, **proceed silently**. Don't flag their absence; don't suggest creating them upfront. The `/domain-modeling` skill (reached via `/grill-with-docs` and `/improve-codebase-architecture`) creates them lazily when terms or decisions actually get resolved.
+- **`CONTEXT.md`** at the repo root.
+- **`docs/adr/`**: read the ADRs that touch the area you're about to work in.
 
-## File structure
+If either doesn't exist, **proceed silently**. Don't flag its absence, and don't suggest creating it
+upfront. The `/domain-modeling` skill (reached via `/grill-with-docs` and
+`/improve-codebase-architecture`) creates them when a term or decision is actually settled.
 
-Single-context repo (most repos):
-
-```
-/
-├── CONTEXT.md
-├── docs/adr/
-│   ├── 0001-event-sourced-orders.md
-│   └── 0002-postgres-for-write-model.md
-└── src/
-```
-
-Multi-context repo (presence of `CONTEXT-MAP.md` at the root):
-
-```
-/
-├── CONTEXT-MAP.md
-├── docs/adr/                          ← system-wide decisions
-└── src/
-    ├── ordering/
-    │   ├── CONTEXT.md
-    │   └── docs/adr/                  ← context-specific decisions
-    └── billing/
-        ├── CONTEXT.md
-        └── docs/adr/
-```
+`CLAUDE.md` remains the source for the repo's rules, layout and DOM contract; `CONTEXT.md` holds the
+domain vocabulary (service, grant, category, embed, …) and must not restate those rules.
 
 ## Use the glossary's vocabulary
 
