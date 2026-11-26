@@ -43,36 +43,27 @@ function textsHash(texts: Json): string {
   })
 }
 
-function termsSv(texts: Json, services: Record<string, Json>): TermsEntry {
+type Projection = (service: Json) => Json
+
+const svService: Projection = (s) => ({ category: s.category, vendor: s.vendor, description_sv: s.description_sv })
+const enService: Projection = (s) => ({
+  category: s.category,
+  vendor: s.vendor,
+  description_en: s.description_en,
+  name_en: s.name_en ?? null,
+})
+
+function terms(texts: Json, services: Record<string, Json>, project: Projection): TermsEntry {
   return {
     texts: textsHash(texts),
-    services: Object.fromEntries(
-      Object.entries(services).map(([slug, s]) => [
-        slug,
-        sha256({ category: s.category, vendor: s.vendor, description_sv: s.description_sv }),
-      ]),
-    ),
+    services: Object.fromEntries(Object.entries(services).map(([slug, s]) => [slug, sha256(project(s))])),
   }
 }
 
-function termsEn(texts: Json, services: Record<string, Json>): TermsEntry {
-  return {
-    texts: textsHash(texts),
-    services: Object.fromEntries(
-      Object.entries(services).map(([slug, s]) => [
-        slug,
-        sha256({
-          category: s.category,
-          vendor: s.vendor,
-          description_en: s.description_en,
-          name_en: s.name_en ?? null,
-        }),
-      ]),
-    ),
-  }
-}
+const termsSv = (texts: Json, services: Record<string, Json>) => terms(texts, services, svService)
+const termsEn = (texts: Json, services: Record<string, Json>) => terms(texts, services, enService)
 
-const BUMP =
+const BUMP_ADVICE =
   'Raise CONSENT_VERSION in src/config.ts and add a new entry to both consent-terms.json and ' +
   'consent-terms.en.json; never edit an existing one.'
 
@@ -82,7 +73,7 @@ const BUMP =
 function termsProblems(file: string, version: string, entry: TermsEntry, current: TermsEntry): string[] {
   const problems: string[] = []
   if (entry.texts !== current.texts) {
-    problems.push(`${file}: the banner or category wording changed. ${BUMP} Current texts hash: ${current.texts}`)
+    problems.push(`${file}: the banner or category wording changed. ${BUMP_ADVICE} Current texts hash: ${current.texts}`)
   }
   for (const [slug, hash] of Object.entries(current.services)) {
     const registered = entry.services[slug]
@@ -93,7 +84,7 @@ function termsProblems(file: string, version: string, entry: TermsEntry, current
       )
     } else if (registered !== hash) {
       problems.push(
-        `${file}: service "${slug}" changed (category, vendor or purpose). ${BUMP} Current hash: ${hash}`,
+        `${file}: service "${slug}" changed (category, vendor or purpose). ${BUMP_ADVICE} Current hash: ${hash}`,
       )
     }
   }
@@ -101,17 +92,17 @@ function termsProblems(file: string, version: string, entry: TermsEntry, current
 }
 
 const version = String(CONSENT_VERSION)
-const current = termsSv(sv, SERVICES)
+const currentSv = termsSv(sv, SERVICES)
 const currentEn = termsEn(TEXTS.en, SERVICES)
 
 const cases = [
-  { file: 'consent-terms.json', reg: registry, now: current },
-  { file: 'consent-terms.en.json', reg: registryEn, now: currentEn },
+  { file: 'consent-terms.json', registry, terms: currentSv },
+  { file: 'consent-terms.en.json', registry: registryEn, terms: currentEn },
 ]
 
-describe.each(cases)('$file is tied to CONSENT_VERSION', ({ file, reg, now }) => {
+describe.each(cases)('$file is tied to CONSENT_VERSION', ({ file, registry, terms }) => {
   test('every entry has the { texts, services } shape', () => {
-    for (const [v, entry] of Object.entries(reg)) {
+    for (const [v, entry] of Object.entries(registry)) {
       expect(typeof entry.texts, `${file} entry "${v}"`).toBe('string')
       expect(typeof entry.services, `${file} entry "${v}"`).toBe('object')
       for (const hash of Object.values(entry.services)) expect(hash).toMatch(/^[0-9a-f]{64}$/)
@@ -120,18 +111,20 @@ describe.each(cases)('$file is tied to CONSENT_VERSION', ({ file, reg, now }) =>
 
   test('registered', () => {
     expect(
-      reg[version],
-      `No ${file} entry for CONSENT_VERSION=${version}. Add "${version}": ${JSON.stringify(now)}.`,
+      registry[version],
+      `No ${file} entry for CONSENT_VERSION=${version}. Add "${version}": ${JSON.stringify(terms)}.`,
     ).toBeDefined()
   })
 
   test('unchanged', () => {
-    expect(termsProblems(file, version, reg[version]!, now).join('\n')).toBe('')
+    const entry = registry[version]
+    if (!entry) return // 'registered' reports it
+    expect(termsProblems(file, version, entry, terms).join('\n')).toBe('')
   })
 })
 
 describe('termsProblems', () => {
-  const entry = termsSv(sv, SERVICES)
+  const entry = currentSv
   const withNew = (s: Record<string, Json>) => ({
     ...s,
     'new-service': { category: 'external', vendor: 'V', description_sv: 'Ny.', description_en: 'New.' },
@@ -185,14 +178,14 @@ describe('what the Swedish hashes cover', () => {
     svc['google-calendar']!.description_en += ' x'
     svc['google-calendar']!.name_en += ' x'
     svc['google-calendar']!.match.push('x')
-    expect(termsSv(copy, svc)).toEqual(current)
+    expect(termsSv(copy, svc)).toEqual(currentSv)
   })
 
   test('included keys change them', () => {
     for (const key of ['category', 'vendor', 'description_sv']) {
       const svc = structuredClone(SERVICES) as Record<string, Json>
       svc['google-maps']![key] += ' x'
-      expect(termsSv(sv, svc).services['google-maps'], key).not.toBe(current.services['google-maps'])
+      expect(termsSv(sv, svc).services['google-maps'], key).not.toBe(currentSv.services['google-maps'])
     }
   })
 })
