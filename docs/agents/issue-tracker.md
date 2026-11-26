@@ -18,8 +18,8 @@ Infer the repo from `git remote -v`; `gh` does this automatically when run insid
 In Claude Code cloud sessions `gh` only handles search (`gh api -X GET search/issues …`). Everything
 else goes through the GitHub MCP tools: `issue_read` (get, get_comments, get_labels), `list_issues`,
 `issue_write` (create/update, labels, close with `state_reason`), `add_issue_comment` and
-`sub_issue_write`. A label that doesn't exist yet is created by the first `issue_write` that applies
-it.
+`sub_issue_write`. `issue_write` `create` refuses a label that doesn't exist yet; create the issue
+without it, then `issue_write` `update` with the label, which creates it.
 
 ## Pull requests as a triage surface
 
