@@ -105,3 +105,17 @@ the `release-guard` job only flags a tag pushed without that proof, it cannot ta
 
 Then `git tag -a vX.Y.Z -m "…"` and push the tag. Sites depend on
 `github:visionmediahq/astro-consent#semver:^1.0.0`. Update `CHANGELOG.md`.
+
+## Agent skills
+
+### Issue tracker
+
+GitHub Issues in `visionmediahq/astro-consent`. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+The five default labels (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`). See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: `CONTEXT.md` and `docs/adr/` at the root, created when needed. See `docs/agents/domain.md`.
