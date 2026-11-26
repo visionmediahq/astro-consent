@@ -82,13 +82,16 @@ export interface Embed {
 }
 
 /**
- * Per-service embed behaviour. A new service adds a branch here; `ConsentEmbed` and the browser
- * runtime stay as they are. Node-free: the components import it.
+ * Per-service embed behaviour, so `ConsentEmbed` and the browser runtime need no service-specific
+ * code. The returned `src` must still belong to `service` (`srcMatchesService`): the component
+ * checks it and renders the "unavailable" message otherwise. Node-free: the components import it.
  */
 export function embedFor(service: ServiceSlug, src: string): Embed {
   switch (service) {
+    case 'google-maps':
+    case 'google-calendar':
     default:
-      // Maps and Calendar: the URL is embedded as given, and the open link de-embeds it.
+      // The URL is embedded as given, and the open link de-embeds it.
       return { src, href: openLink(src) }
   }
 }

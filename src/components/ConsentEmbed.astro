@@ -34,7 +34,9 @@ if (!config.services.includes(service)) {
 
 // #107: a src that is not the service's (a CMS field holding another site's URL) would load that
 // site under the service's name after consent. Render a message instead, and say so in the log.
-const belongs = srcMatchesService(src, service)
+// The rendered src is checked too, so a service's rewrite can never load a host that isn't its own.
+const embed = embedFor(service, src)
+const belongs = srcMatchesService(src, service) && srcMatchesService(embed.src, service)
 if (!belongs) {
   let host = '(no host)'
   try {
@@ -45,7 +47,6 @@ if (!belongs) {
 
 // No per-instance id exists (`id` is optional), so the info element gets a random suffix.
 const infoId = `${id ?? 'consent-embed-' + crypto.randomUUID().slice(0, 8)}-info`
-const embed = embedFor(service, src)
 const openHref = href ?? embed.href
 const aspect = Astro.props.aspect ?? embed.aspect ?? '16 / 9'
 ---

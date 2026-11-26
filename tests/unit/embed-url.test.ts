@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { expect, test } from 'vitest'
 import { embedFor } from '../../src/embed-url'
+import { srcMatchesService } from '../../src/services'
 
 const mapsHref = (src: string) => embedFor('google-maps', src).href
 
@@ -105,6 +106,7 @@ test('Maps and Calendar embed the src exactly as given, with no allow list, auto
   for (const [service, src] of cases) {
     const embed = embedFor(service, src)
     expect(embed.src).toBe(src)
+    expect(srcMatchesService(embed.src, service)).toBe(true)
     expect(embed.allow).toBeUndefined()
     expect(embed.autoplay).toBeUndefined()
     expect(embed.aspect).toBeUndefined()
