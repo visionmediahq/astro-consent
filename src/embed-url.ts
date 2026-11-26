@@ -1,3 +1,5 @@
+import type { ServiceSlug } from './services'
+
 const MAPS = 'https://www.google.com/maps'
 
 /** Builds a Google Maps URL from the given parameters, in the given order. */
@@ -44,8 +46,11 @@ function fromPb(pb: string): string {
   return MAPS
 }
 
-/** Turns a Google Maps embed URL into a link a visitor can open in a new tab. Other URLs pass through. */
-export function deEmbed(src: string): string {
+/**
+ * The open link for an embed URL: a Google Maps embed URL becomes a link a visitor can open in a new
+ * tab; other URLs pass through, minus an `output=embed` parameter.
+ */
+function openLink(src: string): string {
   let url: URL
   try {
     url = new URL(src)
@@ -60,4 +65,30 @@ export function deEmbed(src: string): string {
   url.pathname = url.pathname.replace('/maps/embed', '/maps')
   if (url.searchParams.get('output') === 'embed') url.searchParams.delete('output')
   return url.toString()
+}
+
+/** What `ConsentEmbed` renders for one service's embed URL. */
+export interface Embed {
+  /** The iframe `src`. */
+  src: string
+  /** The "open" link, to the content at the provider. */
+  href: string
+  /** The iframe's `allow` attribute, when the service needs one. */
+  allow?: string
+  /** A query parameter that starts playback, added only when the visitor clicked "Visa". */
+  autoplay?: string
+  /** The default CSS aspect-ratio of the box, when the service has its own. */
+  aspect?: string
+}
+
+/**
+ * Per-service embed behaviour. A new service adds a branch here; `ConsentEmbed` and the browser
+ * runtime stay as they are. Node-free: the components import it.
+ */
+export function embedFor(service: ServiceSlug, src: string): Embed {
+  switch (service) {
+    default:
+      // Maps and Calendar: the URL is embedded as given, and the open link de-embeds it.
+      return { src, href: openLink(src) }
+  }
 }
