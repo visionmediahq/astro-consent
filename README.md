@@ -743,6 +743,7 @@ npx tsx ci/rollout/run.ts help
 CI green on `main` **including the `starter-install` job** (repo variable `STARTER_INSTALL=true` and
 secret `STARTER_READ_TOKEN`), then tag `vX.Y.Z` and push the tag. A pushed tag is live for every site
 on `semver:^1.0.0` at its next install. Raise `CONSENT_VERSION` in `src/config.ts`
-when the banner wording changes, so every visitor is asked again. Never add a script named `prepare`,
+when the banner wording or an existing service's category, vendor or purpose changes, so every
+visitor is asked again (adding a service needs no bump; `tests/unit/consent-terms.test.ts` says which). Never add a script named `prepare`,
 `preinstall`, `install`, `postinstall`, `prepack` or `build`, or a `workspaces` field, to
 `package.json`.

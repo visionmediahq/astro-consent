@@ -7,12 +7,17 @@ import { TEXTS } from '../../src/text'
 
 type Json = Record<string, any>
 
-const sv: Json = JSON.parse(readFileSync(new URL('../../src/text/sv.json', import.meta.url), 'utf8'))
-const registry: Record<string, string> = JSON.parse(
-  readFileSync(new URL('./consent-terms.json', import.meta.url), 'utf8'),
-)
+/** One registry entry: the hash of the banner/category wording, and one hash per service. An entry
+ *  may gain a slug (a service added to the registry), but nothing in it may change. */
+interface TermsEntry {
+  texts: string
+  services: Record<string, string>
+}
+type TermsRegistry = Record<string, TermsEntry>
 
-const registryEn: Record<string, string> = JSON.parse(
+const sv: Json = JSON.parse(readFileSync(new URL('../../src/text/sv.json', import.meta.url), 'utf8'))
+const registry: TermsRegistry = JSON.parse(readFileSync(new URL('./consent-terms.json', import.meta.url), 'utf8'))
+const registryEn: TermsRegistry = JSON.parse(
   readFileSync(new URL('./consent-terms.en.json', import.meta.url), 'utf8'),
 )
 
@@ -28,113 +33,192 @@ function canonical(value: unknown): string {
   return JSON.stringify(value)
 }
 
-function termsHash(svObj: Json, servicesObj: Record<string, Json>): string {
-  const terms = canonical({
-    sv: {
-      consent: svObj.consent,
-      categories: svObj.categories,
-      embed: { remember: svObj.embed.remember, info: svObj.embed.info },
-    },
-    services: Object.fromEntries(
-      Object.entries(servicesObj).map(([slug, s]) => [
-        slug,
-        { category: s.category, vendor: s.vendor, description_sv: s.description_sv },
-      ]),
-    ),
+const sha256 = (value: unknown): string => createHash('sha256').update(canonical(value)).digest('hex')
+
+function textsHash(texts: Json): string {
+  return sha256({
+    consent: texts.consent,
+    categories: texts.categories,
+    embed: { remember: texts.embed.remember, info: texts.embed.info },
   })
-  return createHash('sha256').update(terms).digest('hex')
 }
 
-function termsHashEn(en: Json, servicesObj: Record<string, Json>): string {
-  const terms = canonical({
-    en: {
-      consent: en.consent,
-      categories: en.categories,
-      embed: { remember: en.embed.remember, info: en.embed.info },
-    },
+function termsSv(texts: Json, services: Record<string, Json>): TermsEntry {
+  return {
+    texts: textsHash(texts),
     services: Object.fromEntries(
-      Object.entries(servicesObj).map(([slug, s]) => [
+      Object.entries(services).map(([slug, s]) => [
         slug,
-        {
+        sha256({ category: s.category, vendor: s.vendor, description_sv: s.description_sv }),
+      ]),
+    ),
+  }
+}
+
+function termsEn(texts: Json, services: Record<string, Json>): TermsEntry {
+  return {
+    texts: textsHash(texts),
+    services: Object.fromEntries(
+      Object.entries(services).map(([slug, s]) => [
+        slug,
+        sha256({
           category: s.category,
           vendor: s.vendor,
           description_en: s.description_en,
           name_en: s.name_en ?? null,
-        },
+        }),
       ]),
     ),
-  })
-  return createHash('sha256').update(terms).digest('hex')
+  }
 }
 
-const hash = termsHash(sv, SERVICES)
-const hashEn = termsHashEn(TEXTS.en, SERVICES)
+const BUMP =
+  'Raise CONSENT_VERSION in src/config.ts and add a new entry to both consent-terms.json and ' +
+  'consent-terms.en.json; never edit an existing one.'
 
-describe('consent terms are tied to CONSENT_VERSION', () => {
+/** What is wrong with `entry` (the registry entry for the current CONSENT_VERSION) given the terms as
+ *  they are now. A slug that is not in the entry is a new service: it is added to the entry, no bump.
+ *  A slug in the entry that is gone from the registry is a removed service: nobody needs asking again. */
+function termsProblems(file: string, version: string, entry: TermsEntry, current: TermsEntry): string[] {
+  const problems: string[] = []
+  if (entry.texts !== current.texts) {
+    problems.push(`${file}: the banner or category wording changed. ${BUMP} Current texts hash: ${current.texts}`)
+  }
+  for (const [slug, hash] of Object.entries(current.services)) {
+    const registered = entry.services[slug]
+    if (registered === undefined) {
+      problems.push(
+        `${file}: service "${slug}" is not in entry "${version}". A new service needs no bump: ` +
+          `add "${slug}": "${hash}" to the services of entry "${version}".`,
+      )
+    } else if (registered !== hash) {
+      problems.push(
+        `${file}: service "${slug}" changed (category, vendor or purpose). ${BUMP} Current hash: ${hash}`,
+      )
+    }
+  }
+  return problems
+}
+
+const version = String(CONSENT_VERSION)
+const current = termsSv(sv, SERVICES)
+const currentEn = termsEn(TEXTS.en, SERVICES)
+
+const cases = [
+  { file: 'consent-terms.json', reg: registry, now: current },
+  { file: 'consent-terms.en.json', reg: registryEn, now: currentEn },
+]
+
+describe.each(cases)('$file is tied to CONSENT_VERSION', ({ file, reg, now }) => {
+  test('every entry has the { texts, services } shape', () => {
+    for (const [v, entry] of Object.entries(reg)) {
+      expect(typeof entry.texts, `${file} entry "${v}"`).toBe('string')
+      expect(typeof entry.services, `${file} entry "${v}"`).toBe('object')
+      for (const hash of Object.values(entry.services)) expect(hash).toMatch(/^[0-9a-f]{64}$/)
+    }
+  })
+
   test('registered', () => {
     expect(
-      registry[String(CONSENT_VERSION)],
-      `No consent-terms entry for CONSENT_VERSION=${CONSENT_VERSION}. Add "${CONSENT_VERSION}": "${hash}".`,
+      reg[version],
+      `No ${file} entry for CONSENT_VERSION=${version}. Add "${version}": ${JSON.stringify(now)}.`,
     ).toBeDefined()
   })
 
   test('unchanged', () => {
-    expect(
-      hash,
-      `Consent terms changed (banner/category wording or a service's category, vendor or purpose). ` +
-        `Raise CONSENT_VERSION in src/config.ts and add a new entry to both consent-terms.json and consent-terms.en.json; never edit an existing one. Current hash: ${hash}`,
-    ).toBe(registry[String(CONSENT_VERSION)])
-  })
-
-  test('excluded keys do not change the hash', () => {
-    const copy = structuredClone(sv)
-    copy.embed.show = 'changed'
-    copy.notice.body = 'changed'
-    expect(termsHash(copy, SERVICES)).toBe(hash)
-  })
-
-  test('included keys change the hash', () => {
-    const copy = structuredClone(SERVICES) as Record<string, Json>
-    copy['google-maps']!.description_sv += ' x'
-    expect(termsHash(sv, copy)).not.toBe(hash)
+    expect(termsProblems(file, version, reg[version]!, now).join('\n')).toBe('')
   })
 })
 
-describe('English consent terms are tied to CONSENT_VERSION', () => {
-  test('registered', () => {
-    expect(
-      registryEn[String(CONSENT_VERSION)],
-      `No consent-terms.en entry for CONSENT_VERSION=${CONSENT_VERSION}. Add "${CONSENT_VERSION}": "${hashEn}".`,
-    ).toBeDefined()
+describe('termsProblems', () => {
+  const entry = termsSv(sv, SERVICES)
+  const withNew = (s: Record<string, Json>) => ({
+    ...s,
+    'new-service': { category: 'external', vendor: 'V', description_sv: 'Ny.', description_en: 'New.' },
   })
 
-  test('unchanged', () => {
-    expect(
-      hashEn,
-      `English consent terms changed. Raise CONSENT_VERSION in src/config.ts and add a new entry to both ` +
-        `consent-terms.json and consent-terms.en.json; never edit an existing one. Current hash: ${hashEn}`,
-    ).toBe(registryEn[String(CONSENT_VERSION)])
+  test('a new service added to the current entry passes with no bump', () => {
+    const now = termsSv(sv, withNew(SERVICES))
+    const added = { texts: entry.texts, services: { ...entry.services, 'new-service': now.services['new-service']! } }
+    expect(termsProblems('f', '2', added, now)).toEqual([])
   })
 
-  test('included keys change the hash', () => {
+  test('a service missing from the current entry fails and says to add it', () => {
+    const now = termsSv(sv, withNew(SERVICES))
+    const [problem, ...rest] = termsProblems('f', '2', entry, now)
+    expect(rest).toEqual([])
+    expect(problem).toContain('"new-service" is not in entry "2"')
+    expect(problem).toContain(`add "new-service": "${now.services['new-service']}"`)
+    expect(problem).toContain('no bump')
+  })
+
+  test("a changed service's hash fails and says to raise CONSENT_VERSION", () => {
+    const svc = structuredClone(SERVICES) as Record<string, Json>
+    svc['google-maps']!.description_sv += ' x'
+    const [problem, ...rest] = termsProblems('f', '2', entry, termsSv(sv, svc))
+    expect(rest).toEqual([])
+    expect(problem).toContain('"google-maps" changed')
+    expect(problem).toContain('Raise CONSENT_VERSION')
+  })
+
+  test('changed texts fail and say to raise CONSENT_VERSION', () => {
+    const copy = structuredClone(sv)
+    copy.consent.decline += ' x'
+    const [problem, ...rest] = termsProblems('f', '2', entry, termsSv(copy, SERVICES))
+    expect(rest).toEqual([])
+    expect(problem).toContain('wording changed')
+    expect(problem).toContain('Raise CONSENT_VERSION')
+  })
+
+  test('a service removed from the registry needs no bump', () => {
+    const { elfsight: _, ...fewer } = SERVICES
+    expect(termsProblems('f', '2', entry, termsSv(sv, fewer))).toEqual([])
+  })
+})
+
+describe('what the Swedish hashes cover', () => {
+  test('excluded keys do not change them', () => {
+    const copy = structuredClone(sv)
+    copy.embed.show = 'changed'
+    copy.notice.body = 'changed'
+    const svc = structuredClone(SERVICES) as Record<string, Json>
+    svc['google-calendar']!.description_en += ' x'
+    svc['google-calendar']!.name_en += ' x'
+    svc['google-calendar']!.match.push('x')
+    expect(termsSv(copy, svc)).toEqual(current)
+  })
+
+  test('included keys change them', () => {
+    for (const key of ['category', 'vendor', 'description_sv']) {
+      const svc = structuredClone(SERVICES) as Record<string, Json>
+      svc['google-maps']![key] += ' x'
+      expect(termsSv(sv, svc).services['google-maps'], key).not.toBe(current.services['google-maps'])
+    }
+  })
+})
+
+describe('what the English hashes cover', () => {
+  test('included keys change them', () => {
     const copy = structuredClone(TEXTS.en) as Json
     copy.consent.decline += ' x'
-    expect(termsHashEn(copy, SERVICES)).not.toBe(hashEn)
-    const svc = structuredClone(SERVICES) as Record<string, Json>
-    svc['google-calendar']!.name_en += ' x'
-    expect(termsHashEn(TEXTS.en, svc)).not.toBe(hashEn)
+    expect(termsEn(copy, SERVICES).texts).not.toBe(currentEn.texts)
+    for (const key of ['category', 'vendor', 'description_en', 'name_en']) {
+      const svc = structuredClone(SERVICES) as Record<string, Json>
+      svc['google-calendar']![key] += ' x'
+      expect(termsEn(TEXTS.en, svc).services['google-calendar'], key).not.toBe(currentEn.services['google-calendar'])
+    }
   })
 
-  test('a base (Swedish) name change does not change the English hash', () => {
+  test('a base (Swedish) name change does not change them', () => {
     const svc = structuredClone(SERVICES) as Record<string, Json>
     svc['google-calendar']!.name += ' x'
-    expect(termsHashEn(TEXTS.en, svc)).toBe(hashEn)
+    expect(termsEn(TEXTS.en, svc)).toEqual(currentEn)
   })
 
-  test('excluded keys do not change the hash', () => {
+  test('excluded keys do not change them', () => {
     const copy = structuredClone(TEXTS.en) as Json
     copy.notice.body = 'changed'
     copy.embed.show = 'changed'
-    expect(termsHashEn(copy, SERVICES)).toBe(hashEn)
+    expect(termsEn(copy, SERVICES)).toEqual(currentEn)
   })
 })

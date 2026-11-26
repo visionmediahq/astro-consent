@@ -1,4 +1,22 @@
 {
-  "1": "c84b631e5e55e0d2640033431beb82ff71d3e64a8436c3a379ff7dc9e40278ec",
-  "2": "a789bfd0b2f5b4643436d3b67fa006e0466acf9d908aa1e3a0c1041f27429d73"
+  "1": {
+    "texts": "3876b98531a5120a357ac40c34963f0f362f15d770ee7078a9c6a3f93ce546fe",
+    "services": {
+      "google-maps": "1f23a92975cfa220896990d88a374d77edf427ff4018912b11bd01dd4baab041",
+      "google-analytics": "7b45408f5735ad5c8854ed2daf2a53d2059b4af1073f3f872ea0512055e64b70",
+      "google-ads": "ceb18e010288ce62cebeaab3fd9455e8d85ac710dbf602b6151f40007ff4d788",
+      "meta-pixel": "9a2d092691f2a5fd70ea818735f463bd035e88e50a596969b27d77ad44a0658c"
+    }
+  },
+  "2": {
+    "texts": "3876b98531a5120a357ac40c34963f0f362f15d770ee7078a9c6a3f93ce546fe",
+    "services": {
+      "google-maps": "1f23a92975cfa220896990d88a374d77edf427ff4018912b11bd01dd4baab041",
+      "google-calendar": "95cca412125651cfe6a5a51770d89f3d1b4b0f5981bfcdd629f164caab3177b7",
+      "google-analytics": "7b45408f5735ad5c8854ed2daf2a53d2059b4af1073f3f872ea0512055e64b70",
+      "google-ads": "ceb18e010288ce62cebeaab3fd9455e8d85ac710dbf602b6151f40007ff4d788",
+      "meta-pixel": "9a2d092691f2a5fd70ea818735f463bd035e88e50a596969b27d77ad44a0658c",
+      "elfsight": "5db1333dc33e2631e9b7ab018ef2692fa9974d4539fea7b3027f439a9fc8e095"
+    }
+  }
 }

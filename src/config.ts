@@ -6,8 +6,9 @@ import type { ConsentConfig, PrivacyConfig } from './types'
 
 export type { ConsentConfig, PrivacyConfig } from './types'
 
-/** Raise when the banner or category wording changes, or a service's category, vendor or purpose changes:
- *  every visitor is asked again. tests/unit/consent-terms.test.ts enforces it. */
+/** Raise when the banner or category wording changes, or an existing service's category, vendor or purpose
+ *  changes: every visitor is asked again. Adding a service needs no bump. tests/unit/consent-terms.test.ts
+ *  enforces it. */
 export const CONSENT_VERSION = 2
 
 export class ConfigError extends Error {
