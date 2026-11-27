@@ -145,6 +145,8 @@ add preconnect hints or static map images for the provider; they would contact i
 - `https://www.youtube.com/watch?v=<id>` (also `youtube.com` and `m.youtube.com`);
 - `https://youtu.be/<id>` (a share link, `?si=…` and all);
 - `https://www.youtube.com/shorts/<id>`: the box defaults to `9 / 16` instead of `16 / 9`;
+- `https://www.youtube.com/live/<id>` (a stream or its recording, as YouTube's share button gives
+  it);
 - `https://www.youtube.com/embed/<id>` or `https://www.youtube-nocookie.com/embed/<id>`.
 
 A start time (`t=90`, `t=90s`, `t=1m30s`, `t=1h2m3s` or `start=90`) and a playlist (`list=…`) next

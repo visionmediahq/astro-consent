@@ -89,8 +89,8 @@ function seconds(value: string | null): number | null {
 }
 
 /**
- * A YouTube URL in any form an editor pastes (`watch?v=`, `youtu.be/`, `/shorts/`, `/embed/` on
- * youtube.com or youtube-nocookie.com). The player always loads from youtube-nocookie.com; the
+ * A YouTube URL in any form an editor pastes (`watch?v=`, `youtu.be/`, `/shorts/`, `/live/`,
+ * `/embed/` on youtube.com or youtube-nocookie.com). The player always loads from youtube-nocookie.com; the
  * video id and playlist id are checked against their alphabets, so nothing else reaches either URL.
  * Null for another host or a URL with no video id (a channel or a bare playlist).
  */
@@ -112,6 +112,8 @@ function youtube(src: string): Embed | null {
   else if ((onYoutube || isHost(host, 'youtube-nocookie.com')) && first === 'embed') id = second
   else if (onYoutube && first === 'watch' && second === undefined) id = url.searchParams.get('v')
   else if (onYoutube && first === 'shorts') [id, shorts] = [second, true]
+  // A stream or its recording, as YouTube's share button gives it; a channel's /@name/live is not.
+  else if (onYoutube && first === 'live') id = second
   // /embed/videoseries?list= is a bare playlist, and its name happens to be 11 id characters long.
   if (!id || id === 'videoseries' || !VIDEO_ID.test(id)) return null
 

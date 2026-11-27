@@ -168,6 +168,24 @@ describe('embedFor youtube', () => {
     }
   })
 
+  // #180: YouTube's share button gives /live/<id> for a stream or its recording.
+  test('a live URL gets the same player, link and box as a watch URL', () => {
+    for (const src of [
+      `https://www.youtube.com/live/${ID}`,
+      `https://youtube.com/live/${ID}`,
+      `https://m.youtube.com/live/${ID}`,
+      `https://www.youtube.com/live/${ID}?si=AbCdEfGh`,
+      `https://www.youtube.com/live/${ID}?feature=share`,
+    ]) {
+      expect(yt(src), src).toEqual({
+        src: PLAYER,
+        href: WATCH,
+        allow: 'autoplay; encrypted-media; picture-in-picture; fullscreen',
+        autoplay: 'autoplay=1',
+      })
+    }
+  })
+
   test('the player gets the allow list it needs', () => {
     expect(yt(WATCH)!.allow).toBe('autoplay; encrypted-media; picture-in-picture; fullscreen')
   })
@@ -188,6 +206,8 @@ describe('embedFor youtube', () => {
       [`https://youtu.be/${ID}?t=45`, 45],
       [`https://www.youtube.com/embed/${ID}?start=90`, 90],
       [`https://www.youtube.com/shorts/${ID}?t=5`, 5],
+      [`https://www.youtube.com/live/${ID}?t=90`, 90],
+      [`https://www.youtube.com/live/${ID}?si=AbCdEfGh&t=1m30s`, 90],
       [`https://www.youtube.com/watch?v=${ID}#t=90`, 90],
     ]
     for (const [src, seconds] of cases) {
@@ -217,6 +237,7 @@ describe('embedFor youtube', () => {
       href: `${WATCH}&t=30&list=${list}`,
     })
     expect(yt(`https://www.youtube.com/embed/${ID}?list=${list}`)!.src).toBe(`${PLAYER}?list=${list}`)
+    expect(yt(`https://www.youtube.com/live/${ID}?list=${list}`)!.src).toBe(`${PLAYER}?list=${list}`)
   })
 
   test('a playlist id that is not one is dropped', () => {
@@ -237,6 +258,10 @@ describe('embedFor youtube', () => {
       'https://www.youtube.com/watch?v=dQw4w9WgX%22',
       'https://youtu.be/',
       'https://www.youtube.com/shorts/',
+      'https://www.youtube.com/live/',
+      'https://www.youtube.com/live/short',
+      'https://www.youtube.com/@visionmedia/live',
+      'https://www.youtube.com/channel/UC1234567890/live',
       'https://www.youtube.com/',
       'not a url',
       '',
