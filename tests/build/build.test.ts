@@ -50,7 +50,7 @@ describe('integration', () => {
     const config = JSON.parse(build.html('cfg/index.html').querySelector('#cfg')!.text)
     expect(config.consentVersion).toMatch(/^2:[0-9a-f]{6}$/)
     expect(config.site).toBe('demo.test')
-    expect(config.services).toEqual(['google-maps', 'google-analytics', 'google-calendar', 'elfsight'])
+    expect(config.services).toEqual(['google-maps', 'google-analytics', 'google-calendar', 'elfsight', 'youtube'])
     expect(config.categories).toEqual(['necessary', 'external', 'statistics'])
   })
 
@@ -347,8 +347,10 @@ describe('ConsentWidget', () => {
   test('build fails on a widget whose service is not in privacy.json', TIMEOUT, () => {
     const build = buildDemo('consent', (dir) => {
       writePrivacy(dir, { services: ['google-maps'] })
-      // The demo's own /flode, /nastlad and /karta-efter-widget use elfsight and google-calendar too; leave bad.astro the only offender.
+      // The demo's own /flode, /nastlad, /karta-efter-widget and the video pages use other services too; leave bad.astro the only offender.
       rmSync(join(dir, 'src/pages/flode.astro'))
+      rmSync(join(dir, 'src/pages/video.astro'))
+      rmSync(join(dir, 'src/pages/en/video.astro'))
       rmSync(join(dir, 'src/pages/nastlad.astro'))
       rmSync(join(dir, 'src/pages/karta-efter-widget.astro'))
       writeFileSync(join(dir, 'src/pages/bad.astro'), widgetPage(widget('')))

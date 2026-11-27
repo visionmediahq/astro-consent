@@ -84,7 +84,7 @@ function seconds(value: string | null): number | null {
     : units
       ? Number(units[1] ?? 0) * 3600 + Number(units[2] ?? 0) * 60 + Number(units[3] ?? 0)
       : 0
-  return total > 0 ? total : null
+  return total > 0 && Number.isSafeInteger(total) ? total : null
 }
 
 /**
@@ -106,17 +106,16 @@ function youtube(src: string): Embed | null {
   const [first, second] = url.pathname.split('/').filter(Boolean)
   let id: string | null | undefined
   let shorts = false
+  const onYoutube = isHost(host, 'youtube.com')
   if (host === 'youtu.be') id = first
-  else if (isHost(host, 'youtube.com') || isHost(host, 'youtube-nocookie.com')) {
-    if (first === 'embed') id = second
-    else if (isHost(host, 'youtube.com') && first === 'watch' && second === undefined) id = url.searchParams.get('v')
-    else if (isHost(host, 'youtube.com') && first === 'shorts') [id, shorts] = [second, true]
-  }
+  else if ((onYoutube || isHost(host, 'youtube-nocookie.com')) && first === 'embed') id = second
+  else if (onYoutube && first === 'watch' && second === undefined) id = url.searchParams.get('v')
+  else if (onYoutube && first === 'shorts') [id, shorts] = [second, true]
   // /embed/videoseries?list= is a bare playlist, and its name happens to be 11 id characters long.
   if (!id || id === 'videoseries' || !VIDEO_ID.test(id)) return null
 
   const hash = new URLSearchParams(url.hash.slice(1))
-  const start = seconds(url.searchParams.get('t') ?? url.searchParams.get('start') ?? hash.get('t'))
+  const start = seconds(url.searchParams.get('t')) ?? seconds(url.searchParams.get('start')) ?? seconds(hash.get('t'))
   const list = url.searchParams.get('list')
   const player = new URL(YOUTUBE_PLAYER + id)
   const watch = new URL(YOUTUBE_WATCH)

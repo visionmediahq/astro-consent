@@ -196,6 +196,12 @@ describe('embedFor youtube', () => {
     }
   })
 
+  test('an invalid t falls back to start, and a start time too large to be one is dropped', () => {
+    expect(yt(`https://www.youtube.com/embed/${ID}?t=abc&start=90`)!.src).toBe(`${PLAYER}?start=90`)
+    expect(yt(`${WATCH}&t=${'9'.repeat(30)}`)!.src).toBe(PLAYER)
+    expect(yt(`${WATCH}&t=${'9'.repeat(30)}h`)!.src).toBe(PLAYER)
+  })
+
   test('a playlist next to a video id is kept on both, after the start time', () => {
     const list = 'PLx0sYbCqOb8TBPRdmBHs5Iftvv9TPboYG'
     expect(yt(`${WATCH}&list=${list}`)).toMatchObject({ src: `${PLAYER}?list=${list}`, href: `${WATCH}&list=${list}` })

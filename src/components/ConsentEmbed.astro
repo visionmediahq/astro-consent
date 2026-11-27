@@ -38,15 +38,15 @@ if (!config.services.includes(service)) {
 // A src that is the service's but gives it nothing to embed (a YouTube channel, no video id) gets
 // the same message: a wrong URL in a CMS field must never fail a deploy.
 const ownSrc = srcMatchesService(src, service)
-const embed = ownSrc ? embedFor(service, src) : null
-const belongs = embed !== null && srcMatchesService(embed.src, service)
+const proposed = ownSrc ? embedFor(service, src) : null
+const embed = proposed && srcMatchesService(proposed.src, service) ? proposed : null
 if (!ownSrc) {
   let host = '(no host)'
   try {
     host = new URL(src.startsWith('//') ? `https:${src}` : src).host || host
   } catch {}
   console.warn(`[astro-consent] ${Astro.url.pathname}: ConsentEmbed service="${service}" has a src on ${host}, which is not ${service}'s; it renders a message instead of the embed`)
-} else if (!belongs) {
+} else if (!embed) {
   console.warn(`[astro-consent] ${Astro.url.pathname}: ConsentEmbed service="${service}" has a src with nothing to embed (${src}); it renders a message instead of the embed`)
 }
 
@@ -56,7 +56,7 @@ const openHref = href ?? embed?.href
 const aspect = Astro.props.aspect ?? embed?.aspect ?? '16 / 9'
 ---
 
-{!belongs || !embed ? (
+{!embed ? (
   <div id={id} class="flex items-center rounded-box bg-base-200 p-4 text-base text-base-content sm:text-sm">
     <p>{TEXTS[lang].embed.unavailable.replace('{title}', title)}</p>
   </div>
