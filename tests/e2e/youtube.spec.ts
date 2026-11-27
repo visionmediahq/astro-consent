@@ -32,7 +32,10 @@ test('the placeholders say what showing a video means, link to the watch page, a
     'https://www.youtube.com/watch?v=demoSecond1',
   )
   expect(stubs.registry).toEqual([])
-  await expect(page.locator('iframe, [data-consent-embed] img')).toHaveCount(0)
+  await expect(page.locator('iframe')).toHaveCount(0)
+  // No thumbnail from YouTube: the only image is the site's own poster (#172).
+  const images = await page.locator('[data-consent-embed] img').evaluateAll((els) => els.map((el) => (el as HTMLImageElement).currentSrc))
+  for (const src of images) expect(new URL(src).origin, src).toBe(new URL(page.url()).origin)
 })
 
 test('Visa loads only that video from youtube-nocookie.com, with the allow list, and stores nothing', async ({ page, context }) => {

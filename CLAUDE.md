@@ -18,7 +18,7 @@ by Vision Media's Astro sites. Sites install it straight from this GitHub repo. 
 - **`client.ts` never writes `vm_consent` on page load or when adopting another tab's change.**
   Writes come only from the banner or an embed checkbox. This is what keeps cross-tab sync loop-free.
 - **Browser-safe imports.** `src/config.ts` uses `node:crypto` and zod: `client.ts`, `store.ts`,
-  `services.ts`, `embed-url.ts`, `widget.ts` and the components must not import from it at all.
+  `services.ts`, `embed-url.ts`, `widget.ts`, `poster.ts` and the components must not import from it at all.
   Shared types live in the node-free `src/types.ts`. A site that imports the script API type-checks
   `client.ts` and everything it imports as part of its own program
   (`tests/build/site-typecheck.test.ts` pins this).
@@ -62,6 +62,7 @@ by Vision Media's Astro sites. Sites install it straight from this GitHub repo. 
 | `src/integration.ts`, `src/scan.ts` | The Astro integration and the build-time embed scan |
 | `src/client.ts` | Browser runtime |
 | `src/widget.ts` | `<ConsentWidget>` render-time checks (script host, empty slot, no `<script>`), unit-tested |
+| `src/poster.ts` | `<ConsentEmbed poster>` render-time check (no registry host), unit-tested |
 | `src/components/`, `src/text/` (`sv.json`, `en.json`, `index.ts`) | Markup and strings: `ConsentBanner`, `ConsentEmbed` (iframes), `ConsentWidget` (script widgets), `EmbedPlaceholder` (shared by both), `PrivacyLinks` |
 | `demo/` | Demo site the tests build in two modes (`privacy.consent.json`, `privacy.notice.json`) |
 | `scripts/` | `demo-copy`, `build-demo`, `pack-install`, `gen-services` |

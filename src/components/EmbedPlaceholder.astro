@@ -1,6 +1,8 @@
 ---
 // The "Visa" placeholder shared by ConsentEmbed and ConsentWidget. Rendered inside the box; the
 // default slot replaces the info text.
+import type { ImageMetadata } from 'astro'
+import { Image } from 'astro:assets'
 import { serviceText, type ServiceSlug } from '../services'
 import { TEXTS, resolveLang } from '../text'
 
@@ -13,19 +15,27 @@ interface Props {
   openHref?: string
   /** Language of the texts; defaults to the page's locale, else Swedish. */
   lang?: string
+  /**
+   * The site's own image, drawn behind the controls. Checked by the caller (posterError). Needs a
+   * stacking context on the box (`isolate`): the image sits at z -10, under this element's own 65 %
+   * black, and white text on that black over a pure white image is still 7:1. The rollout contrast
+   * check reads background colours only, so it measures the text on the black, never the image.
+   */
+  poster?: ImageMetadata | string
 }
 
-const { service, title, infoId, openHref } = Astro.props
+const { service, title, infoId, openHref, poster } = Astro.props
 
 const lang = resolveLang(Astro.props.lang, Astro.currentLocale)
 const t = TEXTS[lang]
 const { name } = serviceText(service, lang)
+const posterClass = 'absolute inset-0 -z-10 h-full w-full rounded-box object-cover'
 const fill = (text: string, vars: Record<string, string>): string =>
   text.replace(/\{(\w+)\}/g, (match, key: string) => vars[key] ?? match)
 ---
 
 {/* In normal flow, not absolute: on a narrow screen the box grows instead of clipping. */}
-<div data-placeholder class="flex flex-1 flex-col justify-between gap-3 p-4">
+<div data-placeholder class:list={['flex flex-1 flex-col justify-between gap-3 p-4', poster && 'rounded-box bg-black/65 text-white']}>
   <div class="text-base sm:text-sm" id={infoId}>
     <slot>
       <p>{fill(t.embed.info, { title, name })}</p>
@@ -39,15 +49,24 @@ const fill = (text: string, vars: Record<string, string>): string =>
       aria-describedby={infoId}>{fill(t.embed.show, { name })}</button
     >
     <label class="flex cursor-pointer items-center gap-2 text-base sm:text-xs">
-      <input type="checkbox" class="checkbox checkbox-sm border-base-content/60" data-remember />
+      <input type="checkbox" class:list={['checkbox checkbox-sm', poster ? 'border-white text-white' : 'border-base-content/60']} data-remember />
       {fill(t.embed.remember, { name })}
     </label>
     {
       openHref && (
-        <a href={openHref} target="_blank" rel="noopener noreferrer" class="link text-base text-base-content sm:text-xs" data-open>
+        <a href={openHref} target="_blank" rel="noopener noreferrer" class:list={['link text-base sm:text-xs', poster ? 'text-white' : 'text-base-content']} data-open>
           {fill(t.embed.open, { name })}
         </a>
       )
     }
   </div>
+  {/* alt="": the info text above already names the title. Removed with the placeholder on activation. */}
+  {
+    poster &&
+      (typeof poster === 'string' ? (
+        <img src={poster} alt="" loading="lazy" decoding="async" class={posterClass} />
+      ) : (
+        <Image src={poster} alt="" class={posterClass} />
+      ))
+  }
 </div>

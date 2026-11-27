@@ -3,8 +3,10 @@
 // has granted the service. Never put a <script> in this component's slots: Astro bundles and runs
 // it regardless of the template. Anything loaded by script goes through onConsent() instead.
 import '../styles/contrast.css'
+import type { ImageMetadata } from 'astro'
 import config from 'virtual:astro-consent/config'
 import { embedFor } from '../embed-url'
+import { posterError } from '../poster'
 import { scanError } from '../scan'
 import { type ServiceSlug, srcMatchesService } from '../services'
 import { TEXTS, resolveLang } from '../text'
@@ -22,15 +24,21 @@ interface Props {
   id?: string
   /** Language of the placeholder; defaults to the page's locale, else Swedish. */
   lang?: string
+  /** The site's own image behind the placeholder: an imported image, or a path to the site's file. */
+  poster?: ImageMetadata | string
 }
 
-const { service, src, href, title, id } = Astro.props
+const { service, src, href, title, id, poster } = Astro.props
 const lang = resolveLang(Astro.props.lang, Astro.currentLocale)
 
 // Fallback for a non-literal `service`; literal ones are caught by the build-time scan.
 if (!config.services.includes(service)) {
   throw new Error(scanError(Astro.url.pathname, service, config.services))
 }
+
+// A poster is requested before consent: one on a registry host would leak the visit (#172).
+const posterProblem = poster === undefined ? null : posterError(Astro.url.pathname, service, typeof poster === 'string' ? poster : poster.src)
+if (posterProblem) throw new Error(posterProblem)
 
 // #107: a src that is not the service's (a CMS field holding another site's URL) would load that
 // site under the service's name after consent. Render a message instead, and say so in the log.
@@ -68,7 +76,7 @@ const aspect = Astro.props.aspect ?? embed?.aspect ?? '16 / 9'
   id={id}
   data-consent-embed={service}
   data-autoplay={embed.autoplay}
-  class="relative flex flex-col rounded-box bg-base-200 text-base-content data-active:overflow-hidden"
+  class:list={['relative flex flex-col rounded-box bg-base-200 text-base-content data-active:overflow-hidden', poster && 'isolate']}
   style={aspect === 'auto' ? undefined : `aspect-ratio: ${aspect}`}
 >
   <template data-payload>
@@ -83,11 +91,11 @@ const aspect = Astro.props.aspect ?? embed?.aspect ?? '16 / 9'
   </template>
   {
     Astro.slots.has('placeholder') ? (
-      <EmbedPlaceholder service={service} title={title} infoId={infoId} openHref={openHref} lang={lang}>
+      <EmbedPlaceholder service={service} title={title} infoId={infoId} openHref={openHref} lang={lang} poster={poster}>
         <slot name="placeholder" />
       </EmbedPlaceholder>
     ) : (
-      <EmbedPlaceholder service={service} title={title} infoId={infoId} openHref={openHref} lang={lang} />
+      <EmbedPlaceholder service={service} title={title} infoId={infoId} openHref={openHref} lang={lang} poster={poster} />
     )
   }
 </div>
