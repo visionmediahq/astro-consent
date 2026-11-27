@@ -51,6 +51,38 @@ test('srcMatchesService refuses look-alikes of the calendar and widget hosts too
   expect(srcMatchesService('https://apps.elfsight.com/p/x', 'elfsight')).toBe(true)
 })
 
+// #170: an editor pastes whichever YouTube URL they have; every form belongs to youtube.
+test('srcMatchesService accepts the YouTube hosts', () => {
+  for (const url of [
+    'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+    'https://youtube.com/watch?v=dQw4w9WgXcQ',
+    'https://m.youtube.com/watch?v=dQw4w9WgXcQ',
+    'https://youtu.be/dQw4w9WgXcQ',
+    'https://www.youtube.com/shorts/dQw4w9WgXcQ',
+    'https://www.youtube.com/embed/dQw4w9WgXcQ',
+    'https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ',
+  ])
+    expect(srcMatchesService(url, 'youtube'), url).toBe(true)
+  for (const url of [
+    'https://evil.io/youtube.com/embed/dQw4w9WgXcQ',
+    'https://youtube.com.evil.io/embed/dQw4w9WgXcQ',
+    'https://notyoutube.com/watch?v=dQw4w9WgXcQ',
+    'https://example.com/embed/dQw4w9WgXcQ',
+  ])
+    expect(srcMatchesService(url, 'youtube'), url).toBe(false)
+  expect(srcMatchesService('https://www.youtube.com/embed/dQw4w9WgXcQ', 'google-maps')).toBe(false)
+})
+
+test('matchesRegistry classifies YouTube player, image and video hosts as youtube', () => {
+  for (const url of [
+    'https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ',
+    'https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg',
+    'https://rr1---sn-abc.googlevideo.com/videoplayback',
+    'https://youtu.be/dQw4w9WgXcQ',
+  ])
+    expect(matchesRegistry(url), url).toBe('youtube')
+})
+
 test('srcMatchesService refuses another host, a look-alike host, a host-less src, and another service', () => {
   for (const url of [
     'https://example.org/map',

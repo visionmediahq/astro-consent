@@ -5,6 +5,7 @@ import { builtCss, partsMissingFromBuild } from '../../ci/rollout/lib/daisyui'
 import { DEMO_DIR } from '../../scripts/demo-copy'
 import { SERVICES } from '../../src/services'
 import { TEXTS } from '../../src/text'
+import { parse } from 'node-html-parser'
 import { buildDemo, cleanupBuilds, type BuildResult } from './helpers'
 
 const TIMEOUT = { timeout: 180_000 }
@@ -286,6 +287,49 @@ test('ConsentEmbed with a src of another host renders a message, no payload, and
   // The right one is untouched.
   expect(html.querySelector('#right')!.getAttribute('data-consent-embed')).toBe('google-maps')
   expect(html.querySelector('#right template[data-payload]')).not.toBeNull()
+})
+
+// #170: YouTube is gated like any other embed: the scan refuses it on a site that does not list it.
+test('a youtube embed on a site whose privacy.json lacks youtube fails the build with the scan message', TIMEOUT, () => {
+  const privacy = JSON.parse(readFileSync(join(DEMO_DIR, 'privacy.consent.json'), 'utf8')) as { services: string[] }
+  const build = buildDemo('consent', (dir) =>
+    writePrivacy(dir, { ...privacy, services: privacy.services.filter((slug) => slug !== 'youtube') }),
+  )
+  expect(build.code).not.toBe(0)
+  expect(build.output).toMatch(/video\.astro/)
+  expect(build.output).toMatch(/youtube/)
+  expect(build.output).toMatch(/privacy\.json/)
+})
+
+// #170: whatever form the editor pasted, the payload loads the video from youtube-nocookie.com with
+// the player's allow list; a URL with no video id is a message and a warning, never a failed build.
+test('ConsentEmbed youtube: a nocookie player with its allow list, Shorts portrait, no id is a message', TIMEOUT, () => {
+  const build = buildDemo('consent', (dir) =>
+    writeFileSync(
+      join(dir, 'src/pages/yt.astro'),
+      page(
+        ['export const prerender = true', "const fromCms = 'https://www.youtube.com/@visionmedia'"],
+        [
+          '<ConsentEmbed id="watch" service="youtube" src="https://youtu.be/dQw4w9WgXcQ?t=1m30s" title="w" />',
+          '<ConsentEmbed id="shorts" service="youtube" src="https://www.youtube.com/shorts/dQw4w9WgXcQ" title="s" />',
+          '<ConsentEmbed id="channel" service="youtube" src={fromCms} title="Vår kanal" />',
+        ].join('\n'),
+      ),
+    ),
+  )
+  expect(build.code).toBe(0)
+  const html = build.html('yt/index.html')
+  const iframe = parse(html.querySelector('#watch template[data-payload]')!.innerHTML).querySelector('iframe')!
+  expect(iframe.getAttribute('src')).toBe('https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ?start=90')
+  expect(iframe.getAttribute('allow')).toBe('autoplay; encrypted-media; picture-in-picture; fullscreen')
+  expect(html.querySelector('#watch a[data-open]')!.getAttribute('href')).toBe('https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=90')
+  expect(html.querySelector('#watch')!.getAttribute('style')).toBe('aspect-ratio: 16 / 9')
+  expect(html.querySelector('#shorts')!.getAttribute('style')).toBe('aspect-ratio: 9 / 16')
+  const channel = html.querySelector('#channel')!
+  expect(channel.hasAttribute('data-consent-embed')).toBe(false)
+  expect(channel.querySelector('template, iframe, [data-load], [data-open], [data-remember]')).toBeNull()
+  expect(channel.textContent).toContain('Vår kanal kan inte visas.')
+  expect(build.output).toMatch(/yt.*youtube.*nothing to embed/s)
 })
 
 const WIDGET_SCRIPT = 'https://elfsightcdn.com/platform.js'

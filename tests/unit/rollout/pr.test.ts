@@ -353,7 +353,7 @@ describe('openPr', () => {
     expect(templateKind('{"policy_url":"https://kund.se/p"}')).toEqual({ kind: 'notice', services: [], policy: true })
     expect(templateKind('{"policy_url":null}')).toMatchObject({ policy: false })
     expect(templateKind('{"policy_url":""}')).toMatchObject({ policy: false })
-    expect(() => templateKind('{"services":["google-maps","youtube"]}')).toThrow('unknown service youtube in privacy.json')
+    expect(() => templateKind('{"services":["google-maps","vimeo"]}')).toThrow('unknown service vimeo in privacy.json')
     expect(() => templateKind('[]')).toThrow(/privacy\.json/)
   })
 

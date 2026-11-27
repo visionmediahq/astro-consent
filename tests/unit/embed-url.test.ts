@@ -1,9 +1,9 @@
 import { readFileSync } from 'node:fs'
-import { expect, test } from 'vitest'
+import { describe, expect, test } from 'vitest'
 import { embedFor } from '../../src/embed-url'
 import { srcMatchesService } from '../../src/services'
 
-const mapsHref = (src: string) => embedFor('google-maps', src).href
+const mapsHref = (src: string) => embedFor('google-maps', src)!.href
 
 // "Share → Embed a map" URLs (/maps/embed?pb=…). Google ignores pb= outside an iframe, so /maps?pb=
 // opens the visitor's own location. The link is rebuilt from the place name or the coordinates.
@@ -92,7 +92,7 @@ test('falls back to plain Google Maps for an Embed API URL it cannot translate, 
 
 test('leaves a Google Calendar embed URL with src and ctz as it is', () => {
   const url = 'https://calendar.google.com/calendar/embed?src=abc%40group.calendar.google.com&ctz=Europe%2FStockholm'
-  expect(embedFor('google-calendar', url).href).toBe(url)
+  expect(embedFor('google-calendar', url)!.href).toBe(url)
 })
 
 // embedFor: what ConsentEmbed renders for each service. Maps and Calendar load the URL as given,
@@ -104,7 +104,7 @@ test('Maps and Calendar embed the src exactly as given, with no allow list, auto
     ['google-calendar', 'https://calendar.google.com/calendar/embed?src=abc%40group.calendar.google.com&ctz=Europe%2FStockholm'],
   ] as const
   for (const [service, src] of cases) {
-    const embed = embedFor(service, src)
+    const embed = embedFor(service, src)!
     expect(embed.src).toBe(src)
     expect(srcMatchesService(embed.src, service)).toBe(true)
     expect(embed.allow).toBeUndefined()
@@ -115,7 +115,7 @@ test('Maps and Calendar embed the src exactly as given, with no allow list, auto
 
 test('a Calendar URL with output=embed keeps today\'s open link', () => {
   const url = 'https://calendar.google.com/calendar/embed?src=abc&output=embed'
-  expect(embedFor('google-calendar', url).href).toBe('https://calendar.google.com/calendar/embed?src=abc')
+  expect(embedFor('google-calendar', url)!.href).toBe('https://calendar.google.com/calendar/embed?src=abc')
 })
 
 test('the embed-URL module is browser-safe: it imports nothing but the node-free types', () => {
@@ -123,4 +123,127 @@ test('the embed-URL module is browser-safe: it imports nothing but the node-free
   const imports = [...source.matchAll(/^import\b[^'"]*['"]([^'"]+)['"]/gm)].map((m) => m[1])
   expect(imports.every((from) => from === './services' || from === './types')).toBe(true)
   expect(source).not.toMatch(/node:|from '\.\/config'|zod/)
+})
+
+// #170: YouTube. Editors paste whichever URL they have; the iframe always loads the video from
+// youtube-nocookie.com, and the open link goes to the normal watch page.
+describe('embedFor youtube', () => {
+  const ID = 'dQw4w9WgXcQ'
+  const PLAYER = `https://www.youtube-nocookie.com/embed/${ID}`
+  const WATCH = `https://www.youtube.com/watch?v=${ID}`
+  const yt = (src: string) => embedFor('youtube', src)
+
+  test('every accepted URL form gives the same nocookie player and watch link', () => {
+    for (const src of [
+      `https://www.youtube.com/watch?v=${ID}`,
+      `https://youtube.com/watch?v=${ID}`,
+      `https://m.youtube.com/watch?v=${ID}&feature=share`,
+      `https://www.youtube.com/watch?feature=youtu.be&v=${ID}`,
+      `https://youtu.be/${ID}`,
+      `https://youtu.be/${ID}?si=AbCdEfGh`,
+      `https://www.youtube.com/embed/${ID}`,
+      `https://www.youtube.com/embed/${ID}?rel=0`,
+      `https://www.youtube-nocookie.com/embed/${ID}`,
+      `//www.youtube.com/embed/${ID}`,
+      `  https://www.youtube.com/watch?v=${ID}  `,
+    ]) {
+      const embed = yt(src)
+      expect(embed, src).not.toBeNull()
+      expect(embed!.src, src).toBe(PLAYER)
+      expect(embed!.href, src).toBe(WATCH)
+      expect(embed!.aspect, src).toBeUndefined()
+      expect(srcMatchesService(embed!.src, 'youtube')).toBe(true)
+    }
+  })
+
+  test('a Shorts URL gets the same player and link, in a portrait box', () => {
+    for (const src of [`https://www.youtube.com/shorts/${ID}`, `https://youtube.com/shorts/${ID}?feature=share`]) {
+      expect(yt(src), src).toEqual({
+        src: PLAYER,
+        href: WATCH,
+        allow: 'autoplay; encrypted-media; picture-in-picture; fullscreen',
+        aspect: '9 / 16',
+      })
+    }
+  })
+
+  test('the player gets the allow list it needs', () => {
+    expect(yt(WATCH)!.allow).toBe('autoplay; encrypted-media; picture-in-picture; fullscreen')
+  })
+
+  test('a start time in any form becomes start=<seconds> on the player and t=<seconds> on the link', () => {
+    const cases: Array<[string, number]> = [
+      [`${WATCH}&t=90`, 90],
+      [`${WATCH}&t=90s`, 90],
+      [`${WATCH}&t=1m30s`, 90],
+      [`${WATCH}&t=1h2m3s`, 3723],
+      [`${WATCH}&t=2m`, 120],
+      [`https://youtu.be/${ID}?t=45`, 45],
+      [`https://www.youtube.com/embed/${ID}?start=90`, 90],
+      [`https://www.youtube.com/shorts/${ID}?t=5`, 5],
+      [`https://www.youtube.com/watch?v=${ID}#t=90`, 90],
+    ]
+    for (const [src, seconds] of cases) {
+      expect(yt(src)!.src, src).toBe(`${PLAYER}?start=${seconds}`)
+      expect(yt(src)!.href, src).toBe(`${WATCH}&t=${seconds}`)
+    }
+  })
+
+  test('a start time that is zero or not a time is dropped', () => {
+    for (const t of ['0', '0s', 'abc', '1x', '-5', '', '1m30', '90.5']) {
+      expect(yt(`${WATCH}&t=${t}`)!.src, t).toBe(PLAYER)
+      expect(yt(`${WATCH}&t=${t}`)!.href, t).toBe(WATCH)
+    }
+  })
+
+  test('a playlist next to a video id is kept on both, after the start time', () => {
+    const list = 'PLx0sYbCqOb8TBPRdmBHs5Iftvv9TPboYG'
+    expect(yt(`${WATCH}&list=${list}`)).toMatchObject({ src: `${PLAYER}?list=${list}`, href: `${WATCH}&list=${list}` })
+    expect(yt(`https://youtu.be/${ID}?list=${list}&t=30`)).toMatchObject({
+      src: `${PLAYER}?start=30&list=${list}`,
+      href: `${WATCH}&t=30&list=${list}`,
+    })
+    expect(yt(`https://www.youtube.com/embed/${ID}?list=${list}`)!.src).toBe(`${PLAYER}?list=${list}`)
+  })
+
+  test('a playlist id that is not one is dropped', () => {
+    expect(yt(`${WATCH}&list=a"b`)!.src).toBe(PLAYER)
+    expect(yt(`${WATCH}&list=`)!.src).toBe(PLAYER)
+  })
+
+  test('a URL with no video id gives no embed', () => {
+    for (const src of [
+      'https://www.youtube.com/@visionmedia',
+      'https://www.youtube.com/channel/UC1234567890',
+      'https://www.youtube.com/playlist?list=PLx0sYbCqOb8TBPRdmBHs5Iftvv9TPboYG',
+      'https://www.youtube.com/embed/videoseries?list=PLx0sYbCqOb8TBPRdmBHs5Iftvv9TPboYG',
+      'https://www.youtube.com/watch',
+      'https://www.youtube.com/watch?v=',
+      'https://www.youtube.com/watch?v=short',
+      'https://www.youtube.com/watch?v=dQw4w9WgXcQx',
+      'https://www.youtube.com/watch?v=dQw4w9WgX%22',
+      'https://youtu.be/',
+      'https://www.youtube.com/shorts/',
+      'https://www.youtube.com/',
+      'not a url',
+      '',
+    ])
+      expect(yt(src), src).toBeNull()
+  })
+
+  test('a URL on another host gives no embed, even with a YouTube-shaped path', () => {
+    for (const src of [
+      `https://example.com/embed/${ID}`,
+      `https://example.com/watch?v=${ID}`,
+      `https://youtube.com.evil.io/watch?v=${ID}`,
+      `https://evil.io/youtu.be/${ID}`,
+      `https://i.ytimg.com/vi/${ID}/hqdefault.jpg`,
+      `http://www.youtube.com/watch?v=${ID}`.replace('http:', 'javascript:'),
+    ])
+      expect(yt(src), src).toBeNull()
+  })
+
+  test('an http URL is upgraded: the player is always https', () => {
+    expect(yt(`http://www.youtube.com/watch?v=${ID}`)!.src).toBe(PLAYER)
+  })
 })

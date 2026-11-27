@@ -1,0 +1,17 @@
+---
+import ConsentEmbed from '@visionmediahq/astro-consent/components/ConsentEmbed.astro'
+import Base from '../layouts/Base.astro'
+export const prerender = true
+---
+
+<Base title="Video">
+  <h1 class="text-2xl font-bold">Våra videor</h1>
+  <div class="mt-4 flex flex-col gap-6">
+    <!-- Each one is the URL an editor pastes: a watch page, a Shorts page and a share link. -->
+    <ConsentEmbed id="video-watch" service="youtube" src="https://www.youtube.com/watch?v=demoWatch01&t=1m30s" title="Så tränar vi" />
+    <div class="max-w-xs">
+      <ConsentEmbed id="video-shorts" service="youtube" src="https://www.youtube.com/shorts/demoShort01" title="Veckans kast" />
+    </div>
+    <ConsentEmbed id="video-second" service="youtube" src="https://youtu.be/demoSecond1" title="Graderingen" />
+  </div>
+</Base>

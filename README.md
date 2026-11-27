@@ -71,7 +71,7 @@ repo tool and is not part of the installed package.)
 
 | Field | Required | Meaning |
 |---|---|---|
-| `services` | yes | Registry slugs the site uses: `google-maps`, `google-calendar` (ConsentEmbed), `elfsight` (ConsentWidget), `google-analytics`, `google-ads`, `meta-pixel`. An empty list gives notice mode. |
+| `services` | yes | Registry slugs the site uses: `google-maps`, `google-calendar`, `youtube` (ConsentEmbed), `elfsight` (ConsentWidget), `google-analytics`, `google-ads`, `meta-pixel`. An empty list gives notice mode. |
 | `policy_url` | no | Absolute http(s) URL of the site's privacy policy. Without it there is no "Läs mer" / "Integritetspolicy" link, except on English pages where `policy_urls.en` still gives one. |
 | `policy_urls` | no | `{ "en": "https://kund.se/en/privacy" }`: the privacy policy page the English banner's "Read more" links to. Without it the English banner links to `policy_url`. Only `en` is accepted. |
 | `log_endpoint` | no | Absolute https URL. When set, every choice is sent there with `navigator.sendBeacon`. Requires Astro's `site` to be set to the real domain. |
@@ -133,6 +133,51 @@ import ConsentEmbed from '@visionmediahq/astro-consent/components/ConsentEmbed.a
 The iframe stays inert until the visitor clicks "Visa" or has granted the service. **Do not put a
 `<script>` in its slots**: Astro runs it regardless. Load scripts through `onConsent` instead. Do not
 add preconnect hints or static map images for the provider; they would contact it before consent.
+
+#### YouTube
+
+```astro
+<ConsentEmbed service="youtube" src="https://www.youtube.com/watch?v=…" title="Så tränar vi" />
+```
+
+`src` is the URL the editor has; any of these forms works:
+
+- `https://www.youtube.com/watch?v=<id>` (also `youtube.com` and `m.youtube.com`);
+- `https://youtu.be/<id>` (a share link, `?si=…` and all);
+- `https://www.youtube.com/shorts/<id>`: the box defaults to `9 / 16` instead of `16 / 9`;
+- `https://www.youtube.com/embed/<id>` or `https://www.youtube-nocookie.com/embed/<id>`.
+
+A start time (`t=90`, `t=90s`, `t=1m30s`, `t=1h2m3s` or `start=90`) and a playlist (`list=…`) next
+to the video id are kept. The iframe always loads `https://www.youtube-nocookie.com/embed/<id>`
+(with `start` in seconds and `list`) and gets `allow="autoplay; encrypted-media; picture-in-picture;
+fullscreen"`; "Öppna i YouTube" links to `https://www.youtube.com/watch?v=<id>` (with `t` and
+`list`). A URL with no video id, such as a channel or a bare playlist page, shows "… kan inte visas."
+and a warning in the build or server log, and never fails the build. A `src` on another host gets
+the #107 handling above.
+
+Consent is the same as for a map: "Visa YouTube" shows that one video and stores nothing, "Visa
+alltid innehåll från YouTube" stores a `youtube` grant, and the banner's "Externt innehåll" covers
+it. Adding `youtube` to a site's `privacy.json` gives the site a new consent version, so its
+visitors are asked again; other sites are not affected.
+
+Hosts: the page frames `https://www.youtube-nocookie.com`, so a site with a Content-Security-Policy
+adds it to `frame-src`. The player then fetches the video from `https://*.googlevideo.com` and its
+images from `https://i.ytimg.com`. Those requests come from YouTube's own frame, so the site's CSP
+does not cover them, but a network allowlist must let them through.
+
+A line for the site's privacy policy:
+
+> Vi visar videor från YouTube (Google Ireland Ltd). En video hämtas först när du klickar på "Visa
+> YouTube" eller har gett ditt samtycke till externt innehåll. Då skickas din IP-adress till Google,
+> tillsammans med uppgifter om din webbläsare och vilken sida videon finns på, och YouTube kan sätta
+> cookies eller spara uppgifter i din webbläsare.
+
+In English:
+
+> We show videos from YouTube (Google Ireland Ltd). A video is loaded only when you click "Show
+> YouTube" or have consented to external content. Your IP address is then sent to Google, together
+> with details of your browser and the page the video is on, and YouTube may set cookies or store
+> data in your browser.
 
 ### `<ConsentWidget>`
 

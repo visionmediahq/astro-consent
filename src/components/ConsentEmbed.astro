@@ -35,23 +35,28 @@ if (!config.services.includes(service)) {
 // #107: a src that is not the service's (a CMS field holding another site's URL) would load that
 // site under the service's name after consent. Render a message instead, and say so in the log.
 // The rendered src is checked too, so a service's rewrite can never load a host that isn't its own.
-const embed = embedFor(service, src)
-const belongs = srcMatchesService(src, service) && srcMatchesService(embed.src, service)
-if (!belongs) {
+// A src that is the service's but gives it nothing to embed (a YouTube channel, no video id) gets
+// the same message: a wrong URL in a CMS field must never fail a deploy.
+const ownSrc = srcMatchesService(src, service)
+const embed = ownSrc ? embedFor(service, src) : null
+const belongs = embed !== null && srcMatchesService(embed.src, service)
+if (!ownSrc) {
   let host = '(no host)'
   try {
     host = new URL(src.startsWith('//') ? `https:${src}` : src).host || host
   } catch {}
   console.warn(`[astro-consent] ${Astro.url.pathname}: ConsentEmbed service="${service}" has a src on ${host}, which is not ${service}'s; it renders a message instead of the embed`)
+} else if (!belongs) {
+  console.warn(`[astro-consent] ${Astro.url.pathname}: ConsentEmbed service="${service}" has a src with nothing to embed (${src}); it renders a message instead of the embed`)
 }
 
 // No per-instance id exists (`id` is optional), so the info element gets a random suffix.
 const infoId = `${id ?? 'consent-embed-' + crypto.randomUUID().slice(0, 8)}-info`
-const openHref = href ?? embed.href
-const aspect = Astro.props.aspect ?? embed.aspect ?? '16 / 9'
+const openHref = href ?? embed?.href
+const aspect = Astro.props.aspect ?? embed?.aspect ?? '16 / 9'
 ---
 
-{!belongs ? (
+{!belongs || !embed ? (
   <div id={id} class="flex items-center rounded-box bg-base-200 p-4 text-base text-base-content sm:text-sm">
     <p>{TEXTS[lang].embed.unavailable.replace('{title}', title)}</p>
   </div>

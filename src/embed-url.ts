@@ -67,6 +67,76 @@ function openLink(src: string): string {
   return url.toString()
 }
 
+const YOUTUBE_PLAYER = 'https://www.youtube-nocookie.com/embed/'
+const YOUTUBE_WATCH = 'https://www.youtube.com/watch'
+const YOUTUBE_ALLOW = 'autoplay; encrypted-media; picture-in-picture; fullscreen'
+const VIDEO_ID = /^[A-Za-z0-9_-]{11}$/
+const PLAYLIST_ID = /^[A-Za-z0-9_-]+$/
+
+const isHost = (host: string, domain: string) => host === domain || host.endsWith(`.${domain}`)
+
+/** Seconds from `t=90`, `t=90s`, `t=1m30s`, `t=1h2m3s` or `start=90`; null for 0 or anything else. */
+function seconds(value: string | null): number | null {
+  if (!value) return null
+  const units = value.match(/^(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s)?$/)
+  const total = /^\d+$/.test(value)
+    ? Number(value)
+    : units
+      ? Number(units[1] ?? 0) * 3600 + Number(units[2] ?? 0) * 60 + Number(units[3] ?? 0)
+      : 0
+  return total > 0 ? total : null
+}
+
+/**
+ * A YouTube URL in any form an editor pastes (`watch?v=`, `youtu.be/`, `/shorts/`, `/embed/` on
+ * youtube.com or youtube-nocookie.com). The player always loads from youtube-nocookie.com; the
+ * video id and playlist id are checked against their alphabets, so nothing else reaches either URL.
+ * Null for another host or a URL with no video id (a channel or a bare playlist).
+ */
+function youtube(src: string): Embed | null {
+  let url: URL
+  try {
+    const trimmed = src.trim()
+    url = new URL(trimmed.startsWith('//') ? `https:${trimmed}` : trimmed)
+  } catch {
+    return null
+  }
+  if (url.protocol !== 'https:' && url.protocol !== 'http:') return null
+  const host = url.hostname.toLowerCase().replace(/\.$/, '')
+  const [first, second] = url.pathname.split('/').filter(Boolean)
+  let id: string | null | undefined
+  let shorts = false
+  if (host === 'youtu.be') id = first
+  else if (isHost(host, 'youtube.com') || isHost(host, 'youtube-nocookie.com')) {
+    if (first === 'embed') id = second
+    else if (isHost(host, 'youtube.com') && first === 'watch' && second === undefined) id = url.searchParams.get('v')
+    else if (isHost(host, 'youtube.com') && first === 'shorts') [id, shorts] = [second, true]
+  }
+  // /embed/videoseries?list= is a bare playlist, and its name happens to be 11 id characters long.
+  if (!id || id === 'videoseries' || !VIDEO_ID.test(id)) return null
+
+  const hash = new URLSearchParams(url.hash.slice(1))
+  const start = seconds(url.searchParams.get('t') ?? url.searchParams.get('start') ?? hash.get('t'))
+  const list = url.searchParams.get('list')
+  const player = new URL(YOUTUBE_PLAYER + id)
+  const watch = new URL(YOUTUBE_WATCH)
+  watch.searchParams.set('v', id)
+  if (start !== null) {
+    player.searchParams.set('start', String(start))
+    watch.searchParams.set('t', String(start))
+  }
+  if (list && PLAYLIST_ID.test(list)) {
+    player.searchParams.set('list', list)
+    watch.searchParams.set('list', list)
+  }
+  return {
+    src: player.toString(),
+    href: watch.toString(),
+    allow: YOUTUBE_ALLOW,
+    ...(shorts ? { aspect: '9 / 16' } : {}),
+  }
+}
+
 /** What `ConsentEmbed` renders for one service's embed URL. */
 export interface Embed {
   /** The iframe `src`. */
@@ -83,11 +153,14 @@ export interface Embed {
 
 /**
  * Per-service embed behaviour, so `ConsentEmbed` and the browser runtime need no service-specific
- * code. The returned `src` must still belong to `service` (`srcMatchesService`): the component
- * checks it and renders the "unavailable" message otherwise. Node-free: the components import it.
+ * code. Null when `src` gives the service nothing to embed (a YouTube URL with no video id). The
+ * returned `src` must still belong to `service` (`srcMatchesService`): the component checks it and
+ * renders the "unavailable" message otherwise, as it does for null. Node-free: the components import it.
  */
-export function embedFor(service: ServiceSlug, src: string): Embed {
+export function embedFor(service: ServiceSlug, src: string): Embed | null {
   switch (service) {
+    case 'youtube':
+      return youtube(src)
     case 'google-maps':
     case 'google-calendar':
     default:

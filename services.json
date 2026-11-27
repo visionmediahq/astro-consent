@@ -78,6 +78,20 @@
       ],
       "description_sv": "Flöden från sociala medier, till exempel Instagram, via Elfsight.",
       "description_en": "Social media feeds, for example Instagram, via Elfsight."
+    },
+    "youtube": {
+      "name": "YouTube",
+      "vendor": "Google Ireland Ltd",
+      "category": "external",
+      "match": [
+        "youtube.com",
+        "youtube-nocookie.com",
+        "youtu.be",
+        "ytimg.com",
+        "googlevideo.com"
+      ],
+      "description_sv": "Videor från YouTube.",
+      "description_en": "Videos from YouTube."
     }
   }
 }
