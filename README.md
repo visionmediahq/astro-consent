@@ -146,15 +146,19 @@ import poster from '../assets/traning.jpg'
 ```
 
 The image covers the box behind the controls, darkened, with white text over it: white on the
-darkening keeps WCAG AA (4.5:1) over any image, even a white one. It has `alt=""`, because the info
-text already names the title, and it goes away with the placeholder when the embed loads. It works
-for every service.
+darkening keeps WCAG AA (4.5:1) over any image, even a white one (about 7:1). It has `alt=""`,
+because the info text already names the title, and it goes away with the placeholder when the embed
+loads. It works for every service. Content in the `placeholder` slot sits on the same dark
+background and inherits the white: do not give it a dark text colour. The rollout tool's contrast
+check sees the darkening but not the image under it.
 
-The poster is requested before consent, so it must be the site's own image. A poster on a registry
-host (a `match` pattern in `src/services.ts`), such as a YouTube thumbnail on `i.ytimg.com` or a
-Maps static image, throws at render: the build fails on a prerendered page, and an SSR page answers
-500. The message names the page, the poster and its host. A path on the site's own domain passes
-whatever it is called, and so does another host outside the registry, such as the site's own CDN.
+The poster is requested before consent, so it must be the site's own image. A poster URL that
+matches a registry pattern (a `match` entry in `src/services.ts`: a host such as `i.ytimg.com`, or a
+host and path such as `google.com/maps`), like a YouTube thumbnail or a Maps static image, throws at
+render: the build fails on a prerendered page, and an SSR page answers 500. The message names the
+page, the poster and its host. Matching works as for an embed's `src` (#107): a path on the site's
+own domain passes whatever it is called, and so does a URL outside the registry, such as the site's
+own CDN.
 
 #### YouTube
 

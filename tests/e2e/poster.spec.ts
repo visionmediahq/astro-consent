@@ -39,6 +39,8 @@ test('the embeds without a poster keep the plain box', async ({ page, context })
   await expect(page.locator('#video-second img, #video-shorts img')).toHaveCount(0)
 })
 
+// The rollout check reads background colours only: it sees the text on the darkening, not the image
+// under it (that is the next test). It must still pass, or verify step 6 fails every site with a poster.
 test('the rollout contrast check passes over the poster, at desktop and phone width', async ({ page, context }) => {
   await stub(context)
   await page.goto('/video')

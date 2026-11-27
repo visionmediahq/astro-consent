@@ -17,8 +17,9 @@ interface Props {
   lang?: string
   /**
    * The site's own image, drawn behind the controls. Checked by the caller (posterError). Needs a
-   * stacking context on the box (`isolate`): the image sits at z -10, under this element's own
-   * translucent black, which every contrast check sees as the background of the white text.
+   * stacking context on the box (`isolate`): the image sits at z -10, under this element's own 65 %
+   * black, and white text on that black over a pure white image is still 7:1. The rollout contrast
+   * check reads background colours only, so it measures the text on the black, never the image.
    */
   poster?: ImageMetadata | string
 }
@@ -28,6 +29,7 @@ const { service, title, infoId, openHref, poster } = Astro.props
 const lang = resolveLang(Astro.props.lang, Astro.currentLocale)
 const t = TEXTS[lang]
 const { name } = serviceText(service, lang)
+const posterClass = 'absolute inset-0 -z-10 h-full w-full rounded-box object-cover'
 const fill = (text: string, vars: Record<string, string>): string =>
   text.replace(/\{(\w+)\}/g, (match, key: string) => vars[key] ?? match)
 ---
@@ -62,9 +64,9 @@ const fill = (text: string, vars: Record<string, string>): string =>
   {
     poster &&
       (typeof poster === 'string' ? (
-        <img src={poster} alt="" loading="lazy" decoding="async" class="absolute inset-0 -z-10 h-full w-full rounded-box object-cover" />
+        <img src={poster} alt="" loading="lazy" decoding="async" class={posterClass} />
       ) : (
-        <Image src={poster} alt="" class="absolute inset-0 -z-10 h-full w-full rounded-box object-cover" />
+        <Image src={poster} alt="" class={posterClass} />
       ))
   }
 </div>
