@@ -1,0 +1,35 @@
+---
+import PageLayout from '../layouts/PageLayout.astro'
+import ValueRow from '../components/ValueRow.astro'
+import YouTubeVideo from '../components/YouTubeVideo.astro'
+import Card from '../components/Card.astro'
+
+export const prerender = true
+---
+
+<PageLayout
+  title="Vår judo | Exempelklubben"
+  description="Så tränar vi i Exempelklubben."
+  hero={{
+    title: 'Vår Judo',
+    subtitle: 'Så tränar vi i Exempelklubben.',
+    image: '/images/exempel-hero.webp',
+    imageAlt: 'Två barn i kamp på mattan',
+  }}
+>
+  <ValueRow />
+
+  <section class="bg-base-200 py-(--section-py)" aria-labelledby="video-rubrik">
+    <div class="container-page max-w-4xl" data-animate>
+      <h2 id="video-rubrik">Börja träna med oss</h2>
+      <div class="mt-8">
+        <YouTubeVideo
+          id="ExempelVid1"
+          title="Exempelklubben - börja träna med oss"
+          poster="/images/exempel-poster.webp"
+          posterAlt="Barn i nybörjargruppen samlade på mattan med sina tränare"
+        />
+      </div>
+    </div>
+  </section>
+</PageLayout>

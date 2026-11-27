@@ -804,6 +804,13 @@ describe('detect: YouTube outside ConsentEmbed (#173)', () => {
     '  }\n' +
     '</script>\n'
   const notice = (extra: Record<string, string>) => detect(withFiles(pilot('site-1286040212'), extra), 'x', ['x.se'])
+  /**
+   * A client site's click-to-load, copied verbatim: the player URL is a frontmatter template
+   * literal in `data-youtube={embed}`, and the script builds the iframe with createElement. The page
+   * that renders it passes only a video id; it is trimmed to that section, names anonymised.
+   */
+  const SITE_COMPONENT = readFileSync(join(FIXTURES, 'youtube-site-1452721157.astro.txt'), 'utf8')
+  const SITE_PAGE = readFileSync(join(FIXTURES, 'youtube-site-1452721157-page.astro.txt'), 'utf8')
 
   test('the clean pilot is notice, so every reason below comes from the YouTube file', () => {
     expect(notice({}).classification).toBe('notice')
@@ -821,6 +828,30 @@ describe('detect: YouTube outside ConsentEmbed (#173)', () => {
   test('a YouTube iframe in Markdown is an unresolved iframe, as any iframe there', () => {
     const r = notice({ 'src/content/blog/film.md': `# Film\n\n<iframe src="https://www.youtube.com/embed/${ID}"></iframe>\n` })
     expect(r.reasons).toEqual(['unresolved iframe src in src/content/blog/film.md'])
+  })
+
+  test("a client site's click-to-load component is a script-built YouTube embed (createElement)", () => {
+    const files = { 'src/components/YouTubeVideo.astro': SITE_COMPONENT, 'src/pages/var-judo.astro': SITE_PAGE }
+    const scripts = detectScripts(inline(files))
+    expect(scripts.scriptBuilt).toEqual([{ service: 'youtube', file: 'src/components/YouTubeVideo.astro', where: 'createElement' }])
+    expect(scripts.trackers).toEqual([])
+    const r = notice(files)
+    expect(r.classification).toBe('needs-human')
+    expect(r.reasons).toEqual(['script-built embed youtube in src/components/YouTubeVideo.astro (createElement)'])
+  })
+
+  test('the same page rewired as ConsentEmbed, the component deleted, is no YouTube hit', () => {
+    const page = SITE_PAGE.replace(
+      "import YouTubeVideo from '../components/YouTubeVideo.astro'",
+      "import ConsentEmbed from '@visionmediahq/astro-consent/components/ConsentEmbed.astro'\nimport poster from '../assets/exempel-poster.webp'",
+    ).replace(
+      /<YouTubeVideo[\s\S]*?\/>/,
+      '<ConsentEmbed service="youtube" src="https://www.youtube.com/watch?v=ExempelVid1" title="Exempelklubben - börja träna med oss" poster={poster} />',
+    )
+    expect(page).toContain('<ConsentEmbed service="youtube"')
+    const r = notice({ 'src/pages/var-judo.astro': page })
+    expect(r.reasons).toEqual([])
+    expect(r.classification).toBe('notice')
   })
 
   test('a home-made click-to-load component is a script-built YouTube embed', () => {
@@ -929,6 +960,15 @@ describe('detect: YouTube outside ConsentEmbed (#173)', () => {
       { service: 'youtube', file: 'package.json', where: `dependency ${name}` },
       { service: 'youtube', file: 'src/pages/film.astro', where: `import ${name}` },
     ])
+  })
+
+  test("a site's own component with YouTube in its name is not a package, whatever the import path", () => {
+    const link = '---\nconst { channel } = Astro.props\n---\n<a href={`https://www.youtube.com/@${channel}`}>YouTube</a>\n'
+    const page =
+      "---\nimport YouTubeLink from '../components/YouTubeLink.astro'\nimport YouTubeIcon from '@/components/YouTubeIcon.astro'\n" +
+      "import YouTubeBadge from '~/components/YouTubeBadge.astro'\n---\n<YouTubeLink channel=\"klubben\" /><YouTubeIcon /><YouTubeBadge />\n"
+    const r = detectScripts(inline({ 'src/components/YouTubeLink.astro': link, 'src/pages/index.astro': page }))
+    expect(r.scriptBuilt).toEqual([])
   })
 
   test('a script from a Google Calendar host is a tracker again; a Calendar link in a script is not', () => {

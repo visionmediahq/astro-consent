@@ -296,6 +296,13 @@ const MARKDOWN_LINK = /(?<!!)\[[^\]]*\]\([^)\s]*\)/g
  */
 const YOUTUBE_PACKAGE = /youtube|^astro-embed$/i
 
+/**
+ * A package specifier, not one of the site's own files: a relative or root path, or a path alias
+ * (`@/`, `~/`, `#`). A site component called `YouTubeLink.astro` is the site's own markup, which
+ * the rest of detect reads; only a package's name says what it renders.
+ */
+const isPackage = (from: string): boolean => !/^(?:\.|\/|@\/|~\/|#)/.test(from)
+
 /** Relative specifiers a `<script>` body imports. */
 const SCRIPT_IMPORT = /\b(?:from|import)\s*(['"])(\.\.?\/[^'"]+)\1/g
 
@@ -574,7 +581,7 @@ export function detectScripts(files: SiteFiles): DetectedScripts {
         .filter((n): n is string => n !== null),
     )
     for (const e of embedsInAttributes(tree.root, packageComponents)) addBuilt({ ...e, file })
-    for (const i of imported) if (YOUTUBE_PACKAGE.test(i.from)) addBuilt({ service: 'youtube', file, where: `import ${i.from}` })
+    for (const i of imported) if (isPackage(i.from) && YOUTUBE_PACKAGE.test(i.from)) addBuilt({ service: 'youtube', file, where: `import ${i.from}` })
     // Only when the URL itself was not found above: one reason per map is enough.
     for (const service of iframeBuiltFromVariable(files, file, text, scripts, tree.frontmatter?.text ?? '')) {
       if (!scriptBuilt.some((x) => x.file === file && x.service === service)) addBuilt({ service, file, where: 'createElement' })
