@@ -148,16 +148,17 @@ test('the English page says "Show YouTube" and links to the watch page', async (
   expect(await stored(page)).toBeNull()
 })
 
-test('the Shorts box is portrait and the others are landscape, before and after Visa', async ({ page, context }) => {
+test('the Shorts box is 9 / 16 (portrait) and the others 16 / 9, before and after Visa', async ({ page, context }) => {
   await stub(context)
   await page.goto('/video')
-  const ratio = async (id: string) => {
+  // Width over height, the way CSS aspect-ratio writes it.
+  const aspect = async (id: string) => {
     const box = (await embed(page, id).boundingBox())!
-    return box.height / box.width
+    return box.width / box.height
   }
-  expect(await ratio('video-shorts')).toBeCloseTo(16 / 9, 1)
-  expect(await ratio('video-watch')).toBeCloseTo(9 / 16, 1)
+  expect(await aspect('video-shorts')).toBeCloseTo(9 / 16, 1)
+  expect(await aspect('video-watch')).toBeCloseTo(16 / 9, 1)
   await show(page, 'video-shorts').click()
   await expect(embed(page, 'video-shorts').locator('iframe')).toHaveCount(1)
-  expect(await ratio('video-shorts')).toBeCloseTo(16 / 9, 1)
+  expect(await aspect('video-shorts')).toBeCloseTo(9 / 16, 1)
 })
