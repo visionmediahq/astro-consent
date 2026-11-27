@@ -182,10 +182,16 @@ async function loadedWithoutAutoplay(page: Page, ids: string[]): Promise<void> {
 
 const focusedTag = (page: Page) => page.evaluate(() => document.activeElement?.tagName)
 
-/** Every video on the page has loaded without autoplay, and focus is where it was (on the body). */
+/**
+ * Every video on the page has loaded without autoplay, and focus is where it was (on the body).
+ * Polled, not read once: after a banner button is clicked, the banner hides and Chromium moves focus
+ * from that button to the body only at its next rendering update. Until then `activeElement` is the
+ * hidden button, which a slow CI runner can see (a flake on `main` after the 1.3.0 release). A focus
+ * that went into a player never comes back to the body, so this still fails.
+ */
 async function loadedQuietly(page: Page): Promise<void> {
   await loadedWithoutAutoplay(page, VIDEOS)
-  expect(await focusedTag(page)).toBe('BODY')
+  await expect.poll(() => focusedTag(page)).toBe('BODY')
 }
 
 test('Visa plays the clicked video and moves focus into it', async ({ page, context }) => {
