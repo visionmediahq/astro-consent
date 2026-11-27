@@ -1,5 +1,5 @@
 {
-  "services": ["google-maps", "google-analytics", "google-calendar", "elfsight"],
+  "services": ["google-maps", "google-analytics", "google-calendar", "elfsight", "youtube"],
   "policy_url": "https://demo.test/integritet",
   "policy_urls": { "en": "https://demo.test/en/integritet" },
   "log_endpoint": "https://log.demo.test/consent"
