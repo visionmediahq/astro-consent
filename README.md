@@ -827,7 +827,9 @@ npx tsx ci/rollout/run.ts help
       `![…](https://i.ytimg.com/…)` counts.
     - A package that renders a YouTube player or poster itself (a dependency or import whose
       name contains `youtube`, or `astro-embed`) gives `(dependency <name>)` in `package.json`
-      and `(import <name>)` in each `.astro` file that imports it.
+      and `(import <name>)` in each `.astro` file that imports it. Only package names count: a
+      site's own `YouTubeLink.astro`, imported by a relative path or an alias (`@/`, `~/`, `#`),
+      is read like any other site file.
   - **What is not a hit.** A link form anywhere; any `<a>`/`<area>` `href`, even to `/embed/`; a
     Markdown link `[…](…)`; a `ConsentEmbed`'s `src`; an HTML comment; JSON-LD; and anything in
     `.json` or `.yaml` data. A `.ts` data module holding player URLs is a hit, so keep `watch?v=`

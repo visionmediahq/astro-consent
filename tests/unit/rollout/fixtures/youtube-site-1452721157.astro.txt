@@ -1,0 +1,50 @@
+---
+// A YouTube video that loads only when the visitor clicks play (two-click embed): until then the
+// page shows a club photo and makes no request to YouTube. astro-consent has no YouTube service,
+// so the click itself is the consent; the embed uses youtube-nocookie.com.
+import { Play } from '@lucide/astro'
+import Img from './Img.astro'
+
+interface Props {
+  id: string
+  title: string
+  poster: string
+  posterAlt?: string
+}
+const { id, title, poster, posterAlt = '' } = Astro.props
+const embed = `https://www.youtube-nocookie.com/embed/${id}?autoplay=1&rel=0`
+const watch = `https://www.youtube.com/watch?v=${id}`
+---
+<figure data-youtube={embed} data-youtube-title={title}>
+  <div class="relative aspect-video overflow-hidden rounded-box bg-neutral" data-youtube-frame>
+    <button type="button" class="group absolute inset-0 block h-full w-full cursor-pointer" data-youtube-play aria-label={`Spela upp videon: ${title}`}>
+      <Img src={poster} alt={posterAlt} width={1280} height={720} sizes="(min-width: 1024px) 896px, 100vw" class="h-full w-full object-cover opacity-80 transition-opacity duration-150 group-hover:opacity-70" />
+      <span class="absolute inset-0 flex items-center justify-center">
+        <span class="flex size-20 items-center justify-center rounded-full bg-primary text-primary-content transition-colors duration-150 group-hover:bg-primary/90">
+          <Play size={36} aria-hidden="true" class="ml-1" />
+        </span>
+      </span>
+    </button>
+  </div>
+  <figcaption class="mt-3 text-base text-base-content/80">
+    Videon spelas upp från YouTube när du klickar på den. <a href={watch} target="_blank" rel="noopener" class="underline">Se den på YouTube</a>
+  </figcaption>
+</figure>
+
+<script>
+  document.querySelectorAll<HTMLElement>('[data-youtube]').forEach((fig) => {
+    const frame = fig.querySelector<HTMLElement>('[data-youtube-frame]')
+    fig.querySelector('[data-youtube-play]')?.addEventListener('click', () => {
+      if (!frame) return
+      const iframe = document.createElement('iframe')
+      iframe.src = fig.dataset.youtube ?? ''
+      iframe.title = fig.dataset.youtubeTitle ?? ''
+      iframe.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share'
+      iframe.referrerPolicy = 'strict-origin-when-cross-origin'
+      iframe.allowFullscreen = true
+      iframe.className = 'absolute inset-0 h-full w-full'
+      frame.replaceChildren(iframe)
+      iframe.focus()
+    })
+  })
+</script>
