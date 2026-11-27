@@ -130,9 +130,10 @@ function create(): Runtime {
     const payload = template.content.cloneNode(true) as DocumentFragment
     const autoplay = clicked ? el.dataset.autoplay : undefined
     const player = autoplay ? payload.querySelector('iframe') : null
-    if (player && autoplay) {
+    if (player) {
+      // Appended as written, so the rest of the provider's query keeps its exact encoding.
       const url = new URL(player.src)
-      for (const [name, value] of new URLSearchParams(autoplay)) url.searchParams.set(name, value)
+      url.search = url.search ? `${url.search}&${autoplay}` : `?${autoplay}`
       player.src = url.toString()
     }
     el.querySelector('[data-placeholder]')?.remove()
@@ -158,8 +159,9 @@ function create(): Runtime {
   function loadEmbed(el: HTMLElement): void {
     const slug = el.dataset.consentEmbed as ServiceSlug
     const remember = el.querySelector<HTMLInputElement>('[data-remember]')?.checked ?? false
-    // This element first, as clicked; nothing stored, no event. The grant below then activates the
-    // service's other embeds as any grant does, so only this one plays or takes focus.
+    // The clicked element first, as clicked: it alone may autoplay and take focus. A one-off "Visa"
+    // stops here (nothing stored, no event); with the box ticked, the grant saved below activates
+    // the service's other embeds the way any grant does.
     activate(el, true)
     if (!remember) return
     const base = state.record

@@ -169,13 +169,20 @@ test('the Shorts box is 9 / 16 (portrait) and the others 16 / 9, before and afte
 const iframe = (page: Page, id: string) => embed(page, id).locator('iframe')
 const PLAYER = 'https://www.youtube-nocookie.com/embed/'
 
-/** Every video on the page has loaded, none with autoplay, and focus is in none of them. */
-async function loadedQuietly(page: Page): Promise<void> {
-  for (const id of VIDEOS) {
+/** These videos have loaded, none with autoplay. */
+async function loadedWithoutAutoplay(page: Page, ids: string[]): Promise<void> {
+  for (const id of ids) {
     await expect(iframe(page, id), id).toHaveCount(1)
     expect(await iframe(page, id).getAttribute('src'), id).not.toContain('autoplay')
   }
-  await expect(page.locator('iframe:focus')).toHaveCount(0)
+}
+
+const focusedTag = (page: Page) => page.evaluate(() => document.activeElement?.tagName)
+
+/** Every video on the page has loaded without autoplay, and focus is where it was (on the body). */
+async function loadedQuietly(page: Page): Promise<void> {
+  await loadedWithoutAutoplay(page, VIDEOS)
+  expect(await focusedTag(page)).toBe('BODY')
 }
 
 test('Visa plays the clicked video and moves focus into it', async ({ page, context }) => {
@@ -195,10 +202,7 @@ test('Visa alltid plays only the clicked video; the others load silently and foc
   await remember(page, 'video-shorts').check()
   await show(page, 'video-shorts').click()
   await expect(iframe(page, 'video-shorts')).toHaveAttribute('src', `${PLAYER}demoShort01?autoplay=1`)
-  for (const id of ['video-watch', 'video-second']) {
-    await expect(iframe(page, id), id).toHaveCount(1)
-    expect(await iframe(page, id).getAttribute('src'), id).not.toContain('autoplay')
-  }
+  await loadedWithoutAutoplay(page, ['video-watch', 'video-second'])
   await expect(iframe(page, 'video-shorts')).toBeFocused()
   expect((await stored(page))?.services).toEqual(['youtube'])
 })
@@ -232,6 +236,7 @@ test('a grant from another tab loads the videos without autoplay and focus does 
   const [a, b] = [await context.newPage(), await context.newPage()]
   await a.goto('/video')
   await b.goto('/video')
+  expect(await focusedTag(b)).toBe('BODY')
   await remember(a, 'video-watch').check()
   await show(a, 'video-watch').click()
   await expect(iframe(a, 'video-watch')).toHaveAttribute('src', `${PLAYER}demoWatch01?start=90&autoplay=1`)
