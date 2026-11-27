@@ -1,5 +1,6 @@
 // Detects what a site loads or gates by script: trackers (registry services loaded by script or
-// import), embeds a script builds (an embed URL in a `<script>` or an element attribute, #57),
+// import), embeds a script builds (an embed URL in a `<script>` or an element attribute, #57; a
+// YouTube player, thumbnail or IFrame API, #173),
 // existing consent banners, reCAPTCHA, and astro-consent wiring that is already there.
 //
 // Misreading goes one way only. A false hit sends a site to a human; a miss could wire a site that
@@ -49,8 +50,13 @@ export const BINARY = /\.(?:png|jpe?g|gif|webp|avif|ico|bmp|tiff?|heic|psd|svg|w
  */
 const LINK_LIKE = new Set(['google.com/maps', 'maps.google.'])
 
-/** Google Calendar only ever loads as an iframe and has no tracker script: detectIframes is its only reporter. */
-const IFRAME_ONLY = new Set<ServiceSlug>(['google-calendar'])
+/**
+ * Services that only load as an embed and have no tracker script: a mention of their host is not a
+ * load. Google Calendar is detectIframes' to report. YouTube is detectIframes' too, plus the embed
+ * check (`embedServiceOfUrl`) for a player, thumbnail or IFrame API outside an `<iframe>` (#173):
+ * a link to a channel or a video in the footer is not a hit.
+ */
+const IFRAME_ONLY = new Set<ServiceSlug>(['google-calendar', 'youtube'])
 
 /** Elfsight loads through its platform script: detectWidgets is its only reporter (a widget, or a reason). */
 const WIDGET_ONLY = new Set<ServiceSlug>(['elfsight'])
@@ -67,7 +73,32 @@ const HOST_PATTERNS: [string, ServiceSlug][] = SERVICE_SLUGS.filter((slug) => !I
 )
 
 /** Opening <iframe> tags, where a map embed's src lives: not a tracker, detectIframes reports it. */
-const IFRAME_TAG = /<iframe\b[^>]*>/gi
+const IFRAME_TAG = /^<iframe(?=[\s>/]|$)/i
+
+/**
+ * `text` without its opening `<iframe …>` tags, where a map embed's src lives: not a tracker,
+ * detectIframes reports it. One pass, so 1 MB of unclosed `<iframe` stays linear; an unclosed tag
+ * runs to the end, as a browser reads it.
+ */
+function withoutIframeTags(text: string): string {
+  const lower = text.toLowerCase()
+  let out = ''
+  let i = 0
+  let gt = -2
+  for (;;) {
+    const lt = lower.indexOf('<iframe', i)
+    if (lt === -1) return out + text.slice(i)
+    if (!IFRAME_TAG.test(lower.slice(lt, lt + 8))) {
+      out += text.slice(i, lt + 1)
+      i = lt + 1
+      continue
+    }
+    if (gt !== -1 && gt < lt) gt = lower.indexOf('>', lt)
+    if (gt === -1) return out + text.slice(i, lt)
+    out += text.slice(i, lt)
+    i = gt + 1
+  }
+}
 
 /** Calls that only a tracker snippet makes. */
 const CALLS: [RegExp, ServiceSlug][] = [
@@ -125,7 +156,7 @@ function serviceOfUrl(url: string): ServiceSlug | null {
 /** Trackers anywhere in a text: bare registry hosts (Maps outside iframe tags), tracker calls, pixel URLs. */
 function trackersInText(text: string): ServiceSlug[] {
   const lower = text.toLowerCase()
-  const withoutIframes = lower.replace(IFRAME_TAG, '')
+  const withoutIframes = withoutIframeTags(lower)
   const out: ServiceSlug[] = []
   for (const [pattern, slug] of HOST_PATTERNS) if ((slug === 'google-maps' ? withoutIframes : lower).includes(pattern)) out.push(slug)
   for (const [re, slug] of CALLS) if (re.test(text)) out.push(slug)
@@ -137,18 +168,38 @@ function trackersInText(text: string): ServiceSlug[] {
 }
 
 /**
- * The service whose iframe embed `url` is: a Google Maps embed (`/maps/embed…`, `output=embed`) or
- * a Google Calendar embed (`/calendar/embed`). Links, the Maps JavaScript API and the rest are not.
+ * The service whose embed `url` is: a Google Maps embed (`/maps/embed…`, `output=embed`), a Google
+ * Calendar embed (`/calendar/embed`), or a YouTube load (`youtubeLoad`). Links, the Maps
+ * JavaScript API and the rest are not.
  */
 function embedServiceOfUrl(written: string): ServiceSlug | null {
   // An attribute value is kept as written, so `&amp;` is still encoded.
   const url = written.replace(/&amp;/gi, '&')
   const slug = serviceOfUrl(url)
-  if (slug !== 'google-maps' && slug !== 'google-calendar') return null
+  if (slug !== 'google-maps' && slug !== 'google-calendar' && slug !== 'youtube') return null
   const parsed = new URL(url.startsWith('//') ? `https:${url}` : url)
+  if (slug === 'youtube') return youtubeLoad(parsed) ? slug : null
   if (slug === 'google-calendar') return CALENDAR_EMBED_PATH.test(parsed.pathname) ? slug : null
   return MAPS_EMBED_PATH.test(parsed.pathname) || parsed.searchParams.get('output') === 'embed' ? slug : null
 }
+
+/**
+ * Whether a YouTube URL is one the page requests rather than one a visitor follows. Everything on a
+ * YouTube host is a load (the player, its scripts, oEmbed, thumbnails on ytimg.com or
+ * img.youtube.com, video on googlevideo.com) except the link forms a site puts in a footer or a
+ * data file: any youtu.be URL, and on www., m. or bare youtube.com the pages in `YOUTUBE_LINK_PATH`.
+ * An unknown path counts as a load: a false hit sends a site to a human, a miss could wire one
+ * that requests YouTube before consent.
+ */
+function youtubeLoad(url: URL): boolean {
+  const host = url.hostname.toLowerCase().replace(/\.$/, '')
+  if (host === 'youtu.be') return false
+  if (/^(?:www\.|m\.)?youtube\.com$/.test(host)) return !YOUTUBE_LINK_PATH.test(url.pathname)
+  return true
+}
+
+/** youtube.com pages a visitor opens: the home page, a video, Shorts, live, a playlist, search, a channel. */
+const YOUTUBE_LINK_PATH = /^\/(?:$|(?:watch|playlist|results)\/?$|(?:shorts|live)(?:\/|$)|@|(?:channel|c|user|feed|hashtag|post)\/)/
 
 /** `/calendar/embed`, `/calendar/u/0/embed`. */
 const CALENDAR_EMBED_PATH = /^\/calendar\/(?:u\/\d+\/)?embed(?:\/|$)/
@@ -165,13 +216,85 @@ const CREATE_IFRAME = /\bcreateElement\s*\(\s*(['"`])iframe\1\s*\)/i
  * reports those.
  */
 function embedServicesInText(text: string): ServiceSlug[] {
-  const t = text.toLowerCase().replace(IFRAME_TAG, '').replace(/&amp;/g, '&')
+  const t = withoutIframeTags(text.toLowerCase()).replace(/&amp;/g, '&')
   const out: ServiceSlug[] = []
   const mapsHost = SERVICES['google-maps'].match.some((p) => t.includes(p))
   if (mapsHost && /output=embed|\/maps\/(?:d\/(?:u\/\d+\/)?)?embed\b/.test(t)) out.push('google-maps')
   if (SERVICES['google-calendar'].match.some((p) => t.includes(p)) && /\/calendar\/(?:u\/\d+\/)?embed\b/.test(t)) out.push('google-calendar')
+  if (/(?:youtube|youtube-nocookie)\.com\/embed\b/.test(t)) out.push('youtube')
   return out
 }
+
+/**
+ * Files outside `.astro` whose text can make the page request something: script modules, framework
+ * components, plain HTML, and Markdown/MDX (which may hold raw HTML or JSX). JSON and YAML are data.
+ */
+const SCRIPT_TEXT = /\.(?:[cm]?[jt]sx?|vue|svelte|html?|mdx?)$/i
+
+/**
+ * What in such a file is not a load: HTML comments, `<a>`/`<area>` opening tags (a link, `href` and
+ * all), JSON data scripts, literal `<iframe>` tags (detectIframes' to report) and, in Markdown,
+ * links `[…](…)` (not images `![…](…)`, which load). `<link rel="preload" href>` stays: that one is
+ * a load. One pass, linear on a 1 MB file of unclosed tags: an unclosed comment, link or iframe tag
+ * runs to the end, as a browser reads it.
+ */
+function withoutNonLoads(text: string, markdown: boolean): string {
+  const lower = text.toLowerCase()
+  // The next `>` at or after a position, found once and reused while it is still ahead: -1 for none.
+  let gt = -2
+  const nextGt = (from: number): number => {
+    if (gt === -1 || gt >= from) return gt
+    gt = lower.indexOf('>', from)
+    return gt
+  }
+  let out = ''
+  let i = 0
+  for (;;) {
+    const lt = lower.indexOf('<', i)
+    if (lt === -1) break
+    const tag = /^<(!--|a|area|iframe|script)(?=[\s>/]|$)/.exec(lower.slice(lt, lt + 8))?.[1]
+    if (tag === '!--') {
+      const close = lower.indexOf('-->', lt + 4)
+      if (close === -1) return out + text.slice(i, lt)
+      out += text.slice(i, lt)
+      i = close + 3
+    } else if (tag === 'a' || tag === 'area' || tag === 'iframe') {
+      const end = nextGt(lt)
+      if (end === -1) return out + text.slice(i, lt)
+      out += text.slice(i, lt)
+      i = end + 1
+    } else if (tag === 'script') {
+      const end = nextGt(lt)
+      const attrs = end === -1 || end - lt > MAX_SPAN ? '' : lower.slice(lt, end)
+      if (!/\stype\s*=\s*["']?[^"'\s>]*json/.test(attrs)) {
+        out += text.slice(i, lt + 1)
+        i = lt + 1
+        continue
+      }
+      const close = lower.indexOf('</script', end)
+      if (close === -1) return out + text.slice(i, lt)
+      out += text.slice(i, lt)
+      i = close
+    } else {
+      out += text.slice(i, lt + 1)
+      i = lt + 1
+    }
+  }
+  out += text.slice(i)
+  if (!markdown) return out
+  return out
+    .split('\n')
+    .map((line) => (line.length > MAX_SPAN ? line : line.replace(MARKDOWN_LINK, '')))
+    .join('\n')
+}
+/** `[text](url)`, not an image `![alt](url)`. Applied per line, to lines up to `MAX_SPAN`. */
+const MARKDOWN_LINK = /(?<!!)\[[^\]]*\]\([^)\s]*\)/g
+
+/**
+ * Packages that render a YouTube player or its poster themselves (`<YouTube id>`,
+ * `<lite-youtube>`), loading a thumbnail from YouTube before consent. `astro-embed` bundles one.
+ */
+const YOUTUBE_PACKAGE = /youtube|^astro-embed$/i
 
 /** Relative specifiers a `<script>` body imports. */
 const SCRIPT_IMPORT = /\b(?:from|import)\s*(['"])(\.\.?\/[^'"]+)\1/g
@@ -197,8 +320,8 @@ function iframeBuiltFromVariable(files: SiteFiles, file: string, text: string, s
 function servicesInScript(node: AstroNode, text: string): { trackers: ServiceSlug[]; embeds: ServiceSlug[] } {
   const type = attr(node, 'type')
   if (type?.kind === 'quoted' && /json/i.test(type.value)) return { trackers: [], embeds: [] }
-  const src = attr(node, 'src')
-  const urls = [...(src && src.kind !== 'empty' ? [src.value, ...urlsIn(src.value)] : []), ...urlsIn(text.slice(node.start, node.end))]
+  const loads = scriptLoadUrls(node, text)
+  const urls = [...loads, ...urlsIn(text.slice(node.start, node.end))]
   const trackers: ServiceSlug[] = []
   const embeds: ServiceSlug[] = []
   for (const u of urls) {
@@ -206,7 +329,9 @@ function servicesInScript(node: AstroNode, text: string): { trackers: ServiceSlu
     if (embed !== null) embeds.push(embed)
     else {
       const slug = serviceOfUrl(u)
-      if (slug !== null && !WIDGET_ONLY.has(slug)) trackers.push(slug)
+      // A link to a Calendar or YouTube page in a script body is not a load; the script's own
+      // `src` or a remote import from their hosts is.
+      if (slug !== null && !WIDGET_ONLY.has(slug) && (!IFRAME_ONLY.has(slug) || loads.includes(u))) trackers.push(slug)
     }
   }
   return { trackers, embeds }
@@ -324,15 +449,22 @@ const LINK_ATTRS = new Set(['href'])
  * included: `data-map-src={`https://maps.google.com/maps?q=${q}&output=embed`}`. Component props
  * are left out: `<Map src=…>` is followed to its iframe by detectIframes.
  */
-function embedsInAttributes(root: AstroNode): { service: ServiceSlug; where: string }[] {
+function embedsInAttributes(root: AstroNode, packageComponents: Set<string>): { service: ServiceSlug; where: string }[] {
   const out: { service: ServiceSlug; where: string }[] = []
   const visit = (n: AstroNode): void => {
-    if (n.type === 'element' && n.name !== 'iframe' && n.name !== 'script') {
+    const element = n.type === 'element' && n.name !== 'iframe' && n.name !== 'script'
+    // #173: a YouTube load passed to a site component (`<Lazy src="…/embed/…">`) is a hit here,
+    // since the component may build the player in a way nothing else reads. Map props are still
+    // followed to their iframe by detectIframes; the package's own components are left out.
+    const component = n.type === 'component' && !packageComponents.has((n.name ?? '').split('.')[0]!)
+    if (element || component) {
       for (const a of n.attributes) {
-        if (a.kind === 'empty' || a.kind === 'spread' || LINK_ATTRS.has(a.name.toLowerCase())) continue
+        if (a.kind === 'empty' || a.kind === 'spread') continue
+        // `<link rel="preload" href>` is a load; an `href` anywhere else is a link.
+        if (LINK_ATTRS.has(a.name.toLowerCase()) && n.name !== 'link') continue
         for (const u of [a.value, ...urlsIn(a.value)]) {
           const service = embedServiceOfUrl(u)
-          if (service !== null) out.push({ service, where: a.name })
+          if (service !== null && (element || service === 'youtube')) out.push({ service, where: a.name })
         }
       }
     }
@@ -383,6 +515,7 @@ export function detectScripts(files: SiteFiles): DetectedScripts {
 
   const deps = packageDeps(files)
   for (const slug of importedTrackers(deps)) trackers.add(slug)
+  for (const d of deps) if (YOUTUBE_PACKAGE.test(d)) addBuilt({ service: 'youtube', file: 'package.json', where: `dependency ${d}` })
   for (const [re, name] of BANNERS) if (deps.some((d) => re.test(d))) addBanner(name)
 
   const config = files.list('astro.config.*')[0]
@@ -413,6 +546,11 @@ export function detectScripts(files: SiteFiles): DetectedScripts {
     if (RECAPTCHA.test(text)) recaptcha = true
 
     if (file.endsWith('.html')) addHosts(file, htmlScriptSrcs(text))
+    // A file outside `.astro` that requests YouTube (#173): a script module that builds the
+    // player, plain HTML or MDX markup with a player URL. Links and data are left out.
+    if (SCRIPT_TEXT.test(file) && urlsIn(withoutNonLoads(text, /\.mdx?$/i.test(file))).some((u) => embedServiceOfUrl(u) === 'youtube')) {
+      addBuilt({ service: 'youtube', file, where: 'script' })
+    }
     if (!file.endsWith('.astro')) continue
     let tree
     try {
@@ -428,12 +566,20 @@ export function detectScripts(files: SiteFiles): DetectedScripts {
       for (const service of found.embeds) addBuilt({ service, file, where: 'script' })
       addHosts(file, scriptLoadUrls(script, text))
     }
-    for (const e of embedsInAttributes(tree.root)) addBuilt({ ...e, file })
+    const imported = tree.frontmatter ? importsOf(parseModule(tree.frontmatter.text)) : []
+    const packageComponents = new Set(
+      imported
+        .filter((i) => i.from === PACKAGE || i.from.startsWith(`${PACKAGE}/`))
+        .flatMap((i) => [i.defaultName, i.namespace, ...i.named.map((n) => n.local)])
+        .filter((n): n is string => n !== null),
+    )
+    for (const e of embedsInAttributes(tree.root, packageComponents)) addBuilt({ ...e, file })
+    for (const i of imported) if (YOUTUBE_PACKAGE.test(i.from)) addBuilt({ service: 'youtube', file, where: `import ${i.from}` })
     // Only when the URL itself was not found above: one reason per map is enough.
     for (const service of iframeBuiltFromVariable(files, file, text, scripts, tree.frontmatter?.text ?? '')) {
       if (!scriptBuilt.some((x) => x.file === file && x.service === service)) addBuilt({ service, file, where: 'createElement' })
     }
-    const imports = tree.frontmatter ? importsOf(parseModule(tree.frontmatter.text)).map((i) => i.from) : []
+    const imports = imported.map((i) => i.from)
     for (const slug of importedTrackers(imports)) trackers.add(slug)
     if (imports.some((from) => from === PACKAGE || from.startsWith(`${PACKAGE}/`))) componentsWired = true
   }
