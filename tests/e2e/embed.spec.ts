@@ -66,6 +66,9 @@ test('Visa without the box loads only that embed, stores nothing, and the map is
   await expect(withHref(page)).toHaveAttribute('data-active', '')
   await expect(withHref(page).locator('[data-placeholder]')).toHaveCount(0)
   await expect(noHref(page).locator('iframe')).toHaveCount(0)
+  // #171: only a service with an autoplay parameter takes focus; a map neither autoplays nor does.
+  await expect(withHref(page)).not.toHaveAttribute('data-autoplay')
+  await expect(withHref(page).locator('iframe')).not.toBeFocused()
   await expect.poll(() => stubs.registry.length).toBe(1)
   expect(stubs.registry[0]).toContain('pb=demo')
   expect(await stored(page)).toBeNull()
@@ -128,6 +131,7 @@ test('a remembered grant activates every embed of that service on the page', asy
   await show(page, 'no-href').click()
   await expect(withHref(page).locator('iframe')).toHaveCount(1)
   await expect(noHref(page).locator('iframe')).toHaveCount(1)
+  await expect(page.locator('iframe:focus')).toHaveCount(0)
 })
 
 test('Acceptera alla loads the maps with no reload', async ({ page, context }) => {

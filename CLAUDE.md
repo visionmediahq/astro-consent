@@ -44,8 +44,9 @@ by Vision Media's Astro sites. Sites install it straight from this GitHub repo. 
   [data-consent-category=<category>] input[name=<category>]
   [data-consent-service=<slug>][hidden] input[name="service:<slug>"]
 [data-privacy-links][lang=en]? [data-consent-open]
-[data-consent-embed=<slug>][data-script=<url>]? template[data-payload] [data-placeholder] [data-load] [data-remember] a[data-open]?
+[data-consent-embed=<slug>][data-script=<url>]?[data-autoplay=<params>]? template[data-payload] [data-placeholder] [data-load] [data-remember] a[data-open]?
   + [data-active] once the payload is in; a widget (data-script, no a[data-open]) also gets its script, once per URL
+  data-autoplay (e.g. autoplay=1) is added to the iframe URL, and the iframe focused, only for the embed whose [data-load] was clicked
 ```
 
 ## Layout

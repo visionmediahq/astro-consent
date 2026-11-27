@@ -70,6 +70,7 @@ function openLink(src: string): string {
 const YOUTUBE_PLAYER = 'https://www.youtube-nocookie.com/embed/'
 const YOUTUBE_WATCH = 'https://www.youtube.com/watch'
 const YOUTUBE_ALLOW = 'autoplay; encrypted-media; picture-in-picture; fullscreen'
+const YOUTUBE_AUTOPLAY = 'autoplay=1'
 const VIDEO_ID = /^[A-Za-z0-9_-]{11}$/
 const PLAYLIST_ID = /^[A-Za-z0-9_-]+$/
 
@@ -132,6 +133,7 @@ function youtube(src: string): Embed | null {
     src: player.toString(),
     href: watch.toString(),
     allow: YOUTUBE_ALLOW,
+    autoplay: YOUTUBE_AUTOPLAY,
     ...(shorts ? { aspect: '9 / 16' } : {}),
   }
 }
@@ -144,7 +146,11 @@ export interface Embed {
   href: string
   /** The iframe's `allow` attribute, when the service needs one. */
   allow?: string
-  /** A query parameter that starts playback, added only when the visitor clicked "Visa". */
+  /**
+   * Query parameters that start playback (`name=value`, `&`-separated). The component puts them on
+   * the root as `data-autoplay`; the runtime adds them to the iframe URL only for the embed whose
+   * "Visa" the visitor clicked.
+   */
   autoplay?: string
   /** The default CSS aspect-ratio of the box, when the service has its own. */
   aspect?: string
@@ -166,4 +172,28 @@ export function embedFor(service: ServiceSlug, src: string): Embed | null {
       // The URL is embedded as given, and the open link de-embeds it.
       return { src, href: openLink(src) }
   }
+}
+
+/**
+ * `src` with an embed's autoplay parameters (`Embed.autoplay`) added, for the embed whose "Visa" the
+ * visitor clicked. `src` is resolved against `base` (the page), so a protocol-relative or relative
+ * src works too. A key already in the query is replaced, not repeated; every other part of the query
+ * and the fragment keep their exact encoding. Null when `src` is no URL, so the caller inserts the
+ * payload unchanged rather than failing the click.
+ */
+export function withAutoplay(src: string, params: string, base: string): string | null {
+  let url: URL
+  try {
+    url = new URL(src, base)
+  } catch {
+    return null
+  }
+  const added = new URLSearchParams(params)
+  const nameOf = (segment: string) => [...new URLSearchParams(segment).keys()][0] ?? ''
+  const kept = url.search
+    .slice(1)
+    .split('&')
+    .filter((segment) => segment !== '' && !added.has(nameOf(segment)))
+  url.search = [...kept, params].join('&')
+  return url.toString()
 }

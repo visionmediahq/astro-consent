@@ -286,6 +286,7 @@ test('ConsentEmbed with a src of another host renders a message, no payload, and
   expect(build.output).toMatch(/fel-adress.*google-maps.*example\.org|example\.org.*google-maps.*fel-adress/s)
   // The right one is untouched.
   expect(html.querySelector('#right')!.getAttribute('data-consent-embed')).toBe('google-maps')
+  expect(html.querySelector('#right')!.hasAttribute('data-autoplay')).toBe(false)
   expect(html.querySelector('#right template[data-payload]')).not.toBeNull()
 })
 
@@ -325,6 +326,7 @@ test('ConsentEmbed youtube: a nocookie player with its allow list, Shorts portra
   expect(html.querySelector('#watch a[data-open]')!.getAttribute('href')).toBe('https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=90')
   expect(html.querySelector('#watch')!.getAttribute('style')).toBe('aspect-ratio: 16 / 9')
   expect(html.querySelector('#shorts')!.getAttribute('style')).toBe('aspect-ratio: 9 / 16')
+  expect(html.querySelector('#watch')!.getAttribute('data-autoplay')).toBe('autoplay=1')
   const channel = html.querySelector('#channel')!
   expect(channel.hasAttribute('data-consent-embed')).toBe(false)
   expect(channel.querySelector('template, iframe, [data-load], [data-open], [data-remember]')).toBeNull()
