@@ -86,12 +86,14 @@ try {
   fail(clip.length > 0 && clip.every((r) => !r.clipped), 'clipping')
 
   console.log('checkContrast:')
-  const contrast = await checkContrast(browser, BASE, ['/', '/karta'])
+  // /video: placeholder text over a pale poster (#172).
+  const contrast = await checkContrast(browser, BASE, ['/', '/karta', '/video'])
   for (const r of contrast) {
     console.log(`  ${r.path} ${r.kind} "${r.button}" ${r.ratio.toFixed(2)} ${r.ok ? 'ok' : 'FAIL'}${r.indeterminate ? ` (indeterminate: ${r.indeterminate})` : ''}`)
   }
   fail(contrast.some((r) => r.kind === 'banner') && contrast.some((r) => r.kind === 'links'), 'contrast rows of both kinds')
   fail(contrast.every((r) => r.ok), 'contrast ≥ 4.5 and determinate')
+  fail(contrast.some((r) => r.path === '/video' && r.kind === 'placeholder'), 'contrast rows over the /video poster')
 
   console.log('shots:')
   const files = await shots(browser, BASE, ['/karta'], out)

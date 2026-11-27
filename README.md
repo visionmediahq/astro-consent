@@ -128,11 +128,33 @@ import ConsentEmbed from '@visionmediahq/astro-consent/components/ConsentEmbed.a
 | `title` | Used for the iframe title and the "Visa …" button. |
 | `aspect` | CSS aspect-ratio; defaults to the service's own, else `16 / 9`. |
 | `lang` | Optional language of the placeholder (`sv` or `en`); see Languages. |
+| `poster` | Optional image of the site's own behind the placeholder, instead of a grey box: an imported image (optimised through `astro:assets`) or a path to a file the site serves. See below. |
 | `id` | Optional element id. |
 
 The iframe stays inert until the visitor clicks "Visa" or has granted the service. **Do not put a
 `<script>` in its slots**: Astro runs it regardless. Load scripts through `onConsent` instead. Do not
 add preconnect hints or static map images for the provider; they would contact it before consent.
+
+#### Poster
+
+```astro
+---
+import poster from '../assets/traning.jpg'
+---
+<ConsentEmbed service="youtube" src="https://youtu.be/…" title="Så tränar vi" poster={poster} />
+<ConsentEmbed service="google-maps" src="…" title="Hitta hit" poster="/images/karta.jpg" />
+```
+
+The image covers the box behind the controls, darkened, with white text over it: white on the
+darkening keeps WCAG AA (4.5:1) over any image, even a white one. It has `alt=""`, because the info
+text already names the title, and it goes away with the placeholder when the embed loads. It works
+for every service.
+
+The poster is requested before consent, so it must be the site's own image. A poster on a registry
+host (a `match` pattern in `src/services.ts`), such as a YouTube thumbnail on `i.ytimg.com` or a
+Maps static image, throws at render: the build fails on a prerendered page, and an SSR page answers
+500. The message names the page, the poster and its host. A path on the site's own domain passes
+whatever it is called, and so does another host outside the registry, such as the site's own CDN.
 
 #### YouTube
 

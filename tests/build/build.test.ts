@@ -334,6 +334,50 @@ test('ConsentEmbed youtube: a nocookie player with its allow list, Shorts portra
   expect(build.output).toMatch(/yt.*youtube.*nothing to embed/s)
 })
 
+// #172: a poster is requested before consent, so one on a registry host fails the render, and with
+// it the build of a prerendered page, naming the page and the host.
+test('a poster on i.ytimg.com fails the build, naming the page and the host', TIMEOUT, () => {
+  const build = buildDemo('consent', (dir) =>
+    writeFileSync(
+      join(dir, 'src/pages/tumnagel.astro'),
+      page(
+        ['export const prerender = true'],
+        '<ConsentEmbed service="youtube" src="https://youtu.be/dQw4w9WgXcQ" title="t" poster="https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg" />',
+      ),
+    ),
+  )
+  expect(build.code).not.toBe(0)
+  expect(build.output).toMatch(/\/tumnagel/)
+  expect(build.output).toMatch(/poster "https:\/\/i\.ytimg\.com\/vi\/dQw4w9WgXcQ\/hqdefault\.jpg" is on i\.ytimg\.com, which is youtube's/)
+})
+
+test("a poster path to the site's own file renders behind any service's placeholder, decorative and darkened", TIMEOUT, () => {
+  const build = buildDemo('consent', (dir) =>
+    writeFileSync(
+      join(dir, 'src/pages/affisch.astro'),
+      page(
+        ['export const prerender = true'],
+        [
+          '<ConsentEmbed id="map" service="google-maps" src="https://www.google.com/maps/embed?pb=p" title="t" poster="/images/karta.jpg" />',
+          '<ConsentEmbed id="plain" service="google-maps" src="https://www.google.com/maps/embed?pb=q" title="u" />',
+        ].join('\n'),
+      ),
+    ),
+  )
+  expect(build.code).toBe(0)
+  const html = build.html('affisch/index.html')
+  const img = html.querySelector('#map [data-placeholder] img')!
+  expect(img.getAttribute('src')).toBe('/images/karta.jpg')
+  expect(img.getAttribute('alt')).toBe('')
+  expect(html.querySelector('#map')!.classList.contains('isolate')).toBe(true)
+  expect(html.querySelector('#map [data-placeholder]')!.classList.contains('bg-black/65')).toBe(true)
+  // The payload is untouched, and an embed without a poster is as before.
+  expect(html.querySelector('#map template[data-payload]')).not.toBeNull()
+  expect(html.querySelector('#plain img')).toBeNull()
+  expect(html.querySelector('#plain')!.classList.contains('isolate')).toBe(false)
+  expect(html.querySelector('#plain [data-placeholder]')!.classList.contains('bg-black/65')).toBe(false)
+})
+
 const WIDGET_SCRIPT = 'https://elfsightcdn.com/platform.js'
 const WIDGET_IMPORT = "import ConsentWidget from '@visionmediahq/astro-consent/components/ConsentWidget.astro'"
 
