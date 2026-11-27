@@ -1,5 +1,63 @@
 # Changelog
 
+## 1.3.0
+
+- New: a `youtube` service (category `external`, vendor Google Ireland Ltd).
+  `<ConsentEmbed service="youtube" src="…" title="…" />` takes the URL an editor has: `watch?v=`
+  (also `youtube.com` and `m.youtube.com`), `youtu.be/` (`?si=…` and all), `/shorts/`, `/live/`, or
+  `/embed/` on `youtube.com` or `youtube-nocookie.com`. The iframe always loads
+  `https://www.youtube-nocookie.com/embed/<id>` with the player's `allow` list, a start time
+  (`t=90`, `t=1m30s`, `start=`) and a playlist (`list=`) are kept, and "Öppna i YouTube" links to the
+  watch page. Shorts default to `9 / 16`. A URL with no video id (a channel, a bare playlist) shows
+  "… kan inte visas." and a warning in the build or server log, and never fails the build.
+- Consent works as for a map: "Visa YouTube" shows that one video and stores nothing, "Visa alltid
+  innehåll från YouTube" stores a `youtube` grant, and the banner's "Externt innehåll" covers it.
+  No new strings: the existing embed texts name the service.
+- A video plays only when the visitor asks for it. Clicking "Visa YouTube" (with or without "Visa
+  alltid") starts that video and moves keyboard focus into the player. A stored grant on page load,
+  the banner, a grant from another tab, and the other videos "Visa alltid" loads neither autoplay
+  nor take focus. Maps and calendars never do.
+- New: an optional `poster` on every `ConsentEmbed`, the site's own image behind the placeholder
+  instead of a grey box: an imported image (optimised through `astro:assets`) or a path to a file
+  the site serves. It is darkened under white text, which keeps WCAG AA over any image, and has
+  `alt=""`. A poster URL that matches a registry pattern (a YouTube thumbnail on `i.ytimg.com`, a
+  Maps static image) would be requested before consent, so it throws at render: the build fails on a
+  prerendered page, and an SSR page answers 500. The message names the page, the poster and its host.
+- README: the accepted URL forms, the hosts a Content-Security-Policy or network allowlist needs
+  (`www.youtube-nocookie.com` in `frame-src`; the player then fetches from `*.googlevideo.com` and
+  `i.ytimg.com`), and a line for the site's privacy policy in Swedish and English.
+- Consent terms: adding a service no longer needs a `CONSENT_VERSION` bump. Each entry in
+  `consent-terms.json` and `consent-terms.en.json` is now `{ texts, services: { <slug>: <hash> } }`;
+  changing the banner wording or an existing service's category, vendor or purpose still needs a
+  bump. `CONSENT_VERSION` is unchanged (2), so no visitor on an existing site is asked again. A site
+  that adds `youtube` to `privacy.json` gets a new consent version of its own (it hashes the listed
+  services), so its visitors are asked once.
+- Sites that do not use YouTube or `poster` are unchanged: Maps and Calendar embeds render the same
+  iframe, open link and box as before, with no `allow` attribute. An explicit `href` or `aspect`
+  prop still wins over the service's default.
+- Rollout tool (this repo only; not part of what sites install): `detect` marks a site
+  `needs-human` when it embeds YouTube outside `ConsentEmbed`, with a YouTube reason naming the file
+  (a literal iframe, a script-built player, a thumbnail, a YouTube embed package). Links to YouTube
+  are not hits; before this, any YouTube host, a footer link to a channel included, gave
+  `tracker youtube`. `wire` does not convert YouTube.
+
+## 1.2.2
+
+- Fix: on a phone (under `sm`) the banner's text and buttons are 16px, not 14px and 12px: the notice
+  and consent paragraphs, the buttons, the settings view's category and service rows. From `sm` up the
+  sizes are as before. In consent mode "Avvisa" and "Acceptera alla" sit side by side and "Inställningar"
+  spans the row below, so the banner stays at about 314px tall at 390px wide (294px before). The notice
+  bar grows from 137px to about 177px. Classes only: the `CONSENT_VERSION` hash is unchanged.
+
+## 1.2.1
+
+- Fix: the notice banner's policy link said only "Läs mer" ("Read more" in English). Lighthouse's
+  SEO audit `link-text` fails that phrase, which cost every page of a notice-mode site 8 SEO points
+  (92 instead of 100). It now reads "Läs mer i integritetspolicyn" ("Read more in the privacy
+  policy"). A unit test keeps it off Lighthouse's generic-phrase list.
+- The consent banner's "Läs mer" (consent mode) is unchanged: its wording is part of the
+  `CONSENT_VERSION` hash, and changing it would ask every visitor again.
+
 ## 1.2.0
 
 - New: the banner, the embed and widget placeholders and the privacy links speak English. The four

@@ -71,7 +71,7 @@ repo tool and is not part of the installed package.)
 
 | Field | Required | Meaning |
 |---|---|---|
-| `services` | yes | Registry slugs the site uses: `google-maps`, `google-calendar` (ConsentEmbed), `elfsight` (ConsentWidget), `google-analytics`, `google-ads`, `meta-pixel`. An empty list gives notice mode. |
+| `services` | yes | Registry slugs the site uses: `google-maps`, `google-calendar`, `youtube` (ConsentEmbed), `elfsight` (ConsentWidget), `google-analytics`, `google-ads`, `meta-pixel`. An empty list gives notice mode. |
 | `policy_url` | no | Absolute http(s) URL of the site's privacy policy. Without it there is no "Läs mer" / "Integritetspolicy" link, except on English pages where `policy_urls.en` still gives one. |
 | `policy_urls` | no | `{ "en": "https://kund.se/en/privacy" }`: the privacy policy page the English banner's "Read more" links to. Without it the English banner links to `policy_url`. Only `en` is accepted. |
 | `log_endpoint` | no | Absolute https URL. When set, every choice is sent there with `navigator.sendBeacon`. Requires Astro's `site` to be set to the real domain. |
@@ -126,13 +126,93 @@ import ConsentEmbed from '@visionmediahq/astro-consent/components/ConsentEmbed.a
 | `src` | The embed URL, exactly as the provider gives it. Its host must be the service's (a `match` pattern in `src/services.ts`, e.g. `www.google.com/maps` or `maps.google.com`): otherwise the box shows "… kan inte visas." instead of the embed, loads nothing, and the build or server log says which page, service and host (#107). A URL from a CMS field that holds another site's address is caught here; the build-time scan cannot see it. |
 | `href` | Optional link to open the content at the provider. Defaults to a link built from `src`: "Embed a map" URLs (`/maps/embed?pb=…`) become a Maps search for the place name in `pb`, or its coordinates when it has no name; classic `output=embed` URLs are de-embedded; Maps Embed API URLs (`/maps/embed/v1/…`) are rebuilt from their parameters without the API key. |
 | `title` | Used for the iframe title and the "Visa …" button. |
-| `aspect` | CSS aspect-ratio, default `16 / 9`. |
+| `aspect` | CSS aspect-ratio; defaults to the service's own, else `16 / 9`. |
 | `lang` | Optional language of the placeholder (`sv` or `en`); see Languages. |
+| `poster` | Optional image of the site's own behind the placeholder, instead of a grey box: an imported image (optimised through `astro:assets`) or a path to a file the site serves. See below. |
 | `id` | Optional element id. |
 
 The iframe stays inert until the visitor clicks "Visa" or has granted the service. **Do not put a
 `<script>` in its slots**: Astro runs it regardless. Load scripts through `onConsent` instead. Do not
 add preconnect hints or static map images for the provider; they would contact it before consent.
+
+#### Poster
+
+```astro
+---
+import poster from '../assets/traning.jpg'
+---
+<ConsentEmbed service="youtube" src="https://youtu.be/…" title="Så tränar vi" poster={poster} />
+<ConsentEmbed service="google-maps" src="…" title="Hitta hit" poster="/images/karta.jpg" />
+```
+
+The image covers the box behind the controls, darkened, with white text over it: white on the
+darkening keeps WCAG AA (4.5:1) over any image, even a white one (about 7:1), and so do the
+checkbox's tick and focus ring, which are white too (controls need 3:1). It has `alt=""`,
+because the info text already names the title, and it goes away with the placeholder when the embed
+loads. It works for every service. Content in the `placeholder` slot sits on the same dark
+background and inherits the white: do not give it a dark text colour. The rollout tool's contrast
+check sees the darkening but not the image under it.
+
+The poster is requested before consent, so it must be the site's own image. A poster URL that
+matches a registry pattern (a `match` entry in `src/services.ts`: a host such as `i.ytimg.com`, or a
+host and path such as `google.com/maps`), like a YouTube thumbnail or a Maps static image, throws at
+render: the build fails on a prerendered page, and an SSR page answers 500. The message names the
+page, the poster and its host. Matching works as for an embed's `src` (#107): a path on the site's
+own domain passes whatever it is called, and so does a URL outside the registry, such as the site's
+own CDN.
+
+#### YouTube
+
+```astro
+<ConsentEmbed service="youtube" src="https://www.youtube.com/watch?v=…" title="Så tränar vi" />
+```
+
+`src` is the URL the editor has; any of these forms works:
+
+- `https://www.youtube.com/watch?v=<id>` (also `youtube.com` and `m.youtube.com`);
+- `https://youtu.be/<id>` (a share link, `?si=…` and all);
+- `https://www.youtube.com/shorts/<id>`: the box defaults to `9 / 16` instead of `16 / 9`;
+- `https://www.youtube.com/live/<id>` (a stream or its recording, as YouTube's share button gives
+  it);
+- `https://www.youtube.com/embed/<id>` or `https://www.youtube-nocookie.com/embed/<id>`.
+
+A start time (`t=90`, `t=90s`, `t=1m30s`, `t=1h2m3s` or `start=90`) and a playlist (`list=…`) next
+to the video id are kept. The iframe always loads `https://www.youtube-nocookie.com/embed/<id>`
+(with `start` in seconds and `list`) and gets `allow="autoplay; encrypted-media; picture-in-picture;
+fullscreen"`; "Öppna i YouTube" links to `https://www.youtube.com/watch?v=<id>` (with `t` and
+`list`). A URL with no video id, such as a channel or a bare playlist page, shows "… kan inte visas."
+and a warning in the build or server log, and never fails the build. A `src` on another host gets
+the #107 handling above.
+
+Consent is the same as for a map: "Visa YouTube" shows that one video and stores nothing, "Visa
+alltid innehåll från YouTube" stores a `youtube` grant, and the banner's "Externt innehåll" covers
+it. Adding `youtube` to a site's `privacy.json` gives the site a new consent version, so its
+visitors are asked again; other sites are not affected.
+
+A video plays only when the visitor asks for it: clicking "Visa YouTube" (with or without "Visa
+alltid") starts that video (`autoplay=1` is added to its player URL) and moves keyboard focus into
+the player. Nothing else autoplays or moves focus: not a video loaded from a stored grant on page
+load, not the banner's "Acceptera alla" or "Externt innehåll", not a grant given in another tab, and
+not the page's other videos that "Visa alltid" loads. Maps and calendars never autoplay or take focus.
+
+Hosts: the page frames `https://www.youtube-nocookie.com`, so a site with a Content-Security-Policy
+adds it to `frame-src`. The player then fetches the video from `https://*.googlevideo.com` and its
+images from `https://i.ytimg.com`. Those requests come from YouTube's own frame, so the site's CSP
+does not cover them, but a network allowlist must let them through.
+
+A line for the site's privacy policy:
+
+> Vi visar videor från YouTube (Google Ireland Ltd). En video hämtas först när du klickar på "Visa
+> YouTube" eller har gett ditt samtycke till externt innehåll. Då skickas din IP-adress till Google,
+> tillsammans med uppgifter om din webbläsare och vilken sida videon finns på, och YouTube kan sätta
+> cookies eller spara uppgifter i din webbläsare.
+
+In English:
+
+> We show videos from YouTube (Google Ireland Ltd). A video is loaded only when you click "Show
+> YouTube" or have consented to external content. Your IP address is then sent to Google, together
+> with details of your browser and the page the video is on, and YouTube may set cookies or store
+> data in your browser.
 
 ### `<ConsentWidget>`
 
@@ -201,6 +281,11 @@ Both events are `CustomEvent`s on `window` with `detail.record`:
 | `vm:consent-ready` | Every page load, once the stored record has been read. `record` is `null` when there is no valid choice. |
 | `vm:consent-changed` | After every save. |
 
+When the visitor ticks "Visa alltid" and clicks "Visa", the clicked embed is already shown when
+`vm:consent-changed` fires (and umami and `onConsent` callbacks run); the service's other embeds on
+the page are shown right after, by the saved grant. A listener that counts `[data-active]` embeds
+sees only the clicked one.
+
 The record is stored in `localStorage` under `vm_consent`:
 
 ```json
@@ -232,6 +317,9 @@ Each choice also calls `window.umami?.track('consent', { choice })`.
   same goes for Sentry's browser bundle behind GlitchTip error reporting (`wire` self-hosts it).
 - **A one-off "Visa"** loads that one embed for that page view and stores nothing. Declining in the
   banner afterwards keeps it on screen and loads nothing else.
+- **Only a click autoplays.** A video whose "Visa" the visitor clicked starts playing and takes
+  focus; videos loaded any other way (stored grant, banner, another tab) stay still and leave focus
+  where it is.
 - **Withdrawing** something that is loaded deletes its first-party cookies (`_ga*`, `_gid`, `_gcl_*`,
   `_fbp`) and reloads the page once. Other open tabs reload too.
 - **A page without `<ConsentBanner />`** still gets working embeds and the script API.
@@ -713,6 +801,40 @@ npx tsx ci/rollout/run.ts help
   (outside literal `<iframe>` tags) or in a relative non-`.astro` module it imports, even split
   over several literals (two client sites). Other registry URLs in a script stay
   `tracker <service>`.
+- **YouTube outside `ConsentEmbed`** (#173). `wire` does not convert YouTube; the site is
+  needs-human for a person to rewire each video as `<ConsentEmbed service="youtube">`.
+  - **What is a load.** Every URL on a YouTube host (`youtube.com` and its subdomains,
+    `youtube-nocookie.com`, `ytimg.com`, `googlevideo.com`) is a load: the player, its scripts,
+    oEmbed, a thumbnail on `i.ytimg.com` or `img.youtube.com`, a preconnect. The exceptions are the
+    link forms: any `youtu.be` URL, and these pages on `www.`, `m.` or bare `youtube.com`: the
+    home page, `watch`, `/shorts/`, `/live/`, `playlist`, `results`, and channel pages (`@…`,
+    `channel/`, `c/`, `user/`, plus `feed/`, `hashtag/` and `post/`). An unknown path counts as a
+    load.
+  - **Reasons.**
+    - A literal `<iframe>` gives `youtube iframe in <file>: rewire as <ConsentEmbed
+      service="youtube">`. One in Markdown or another non-`.astro` file gives `unresolved iframe
+      src in <file>`, as for any iframe there.
+    - A load outside an `<iframe>` gives `script-built embed youtube in <file> (<where>)`. In an
+      `.astro` file, `<where>` is the attribute that holds it (`<link href>` included), `script`
+      (a `<script>`'s `src`, body or import), or `createElement` (a player URL in the file or a
+      module it imports, with the iframe made in a script), by the same rules as a script-built
+      map. That covers a home-made click-to-load: a poster and a play button whose script swaps
+      in the player.
+    - A load passed as a prop to a site component (`<Lazy src="…/embed/…">`) is reported in the
+      file that passes it. The package's own components are left out.
+    - A load in a file outside `.astro` that can make the page request it (`.js`, `.ts`, `.jsx`,
+      `.tsx`, `.vue`, `.svelte`, `.html`, `.md`, `.mdx`) gives `(script)`. A Markdown image
+      `![…](https://i.ytimg.com/…)` counts.
+    - A package that renders a YouTube player or poster itself (a dependency or import whose
+      name contains `youtube`, or `astro-embed`) gives `(dependency <name>)` in `package.json`
+      and `(import <name>)` in each `.astro` file that imports it.
+  - **What is not a hit.** A link form anywhere; any `<a>`/`<area>` `href`, even to `/embed/`; a
+    Markdown link `[…](…)`; a `ConsentEmbed`'s `src`; an HTML comment; JSON-LD; and anything in
+    `.json` or `.yaml` data. A `.ts` data module holding player URLs is a hit, so keep `watch?v=`
+    URLs there: `ConsentEmbed` accepts them.
+  - **Trackers.** A YouTube or Google Calendar URL in a script body is never `tracker
+    <service>`: neither service has a tracker script, so mentioning its host is not a load. A
+    `<script src>` or remote import from a Calendar host is still `tracker google-calendar`.
 - **Elfsight.** Recognised only as one loader `<script>` (`https://elfsightcdn.com/platform.js` or
   `https://static.elfsight.com/platform/platform.js`; other attributes only `async` and `is:inline`)
   plus one or more empty `<div class="elfsight-app-<uuid>">` (other attribute only
@@ -743,6 +865,7 @@ npx tsx ci/rollout/run.ts help
 CI green on `main` **including the `starter-install` job** (repo variable `STARTER_INSTALL=true` and
 secret `STARTER_READ_TOKEN`), then tag `vX.Y.Z` and push the tag. A pushed tag is live for every site
 on `semver:^1.0.0` at its next install. Raise `CONSENT_VERSION` in `src/config.ts`
-when the banner wording changes, so every visitor is asked again. Never add a script named `prepare`,
-`preinstall`, `install`, `postinstall`, `prepack` or `build`, or a `workspaces` field, to
-`package.json`.
+when the banner wording or an existing service's category, vendor or purpose changes, so every
+visitor is asked again. Adding a service needs no bump; `tests/unit/consent-terms.test.ts` says
+which. Never add a script named `prepare`, `preinstall`, `install`, `postinstall`, `prepack` or
+`build`, or a `workspaces` field, to `package.json`.

@@ -18,13 +18,13 @@ by Vision Media's Astro sites. Sites install it straight from this GitHub repo. 
 - **`client.ts` never writes `vm_consent` on page load or when adopting another tab's change.**
   Writes come only from the banner or an embed checkbox. This is what keeps cross-tab sync loop-free.
 - **Browser-safe imports.** `src/config.ts` uses `node:crypto` and zod: `client.ts`, `store.ts`,
-  `services.ts`, `embed-url.ts`, `widget.ts` and the components must not import from it at all.
+  `services.ts`, `embed-url.ts`, `widget.ts`, `poster.ts` and the components must not import from it at all.
   Shared types live in the node-free `src/types.ts`. A site that imports the script API type-checks
   `client.ts` and everything it imports as part of its own program
   (`tests/build/site-typecheck.test.ts` pins this).
 - **Every visible string lives in `src/text/<lang>.json`** (one file per language, same keys; components read them through `src/text/index.ts`). No Swedish or English in components or `client.ts`.
-  Raise `CONSENT_VERSION` in `src/config.ts` when the banner or category wording changes, or a service's category, vendor or purpose changes: every visitor is asked again. `tests/unit/consent-terms.test.ts` enforces this; add a new entry to both `consent-terms.json` (Swedish wording) and `consent-terms.en.json` (English wording), never edit one. The English hash covers the English texts plus each service's category, vendor, `description_en` and `name_en` (not the base `name`).
-- **Neka is as visible and easy as Acceptera alla**: identical classes (`btn btn-primary btn-sm`),
+  Raise `CONSENT_VERSION` in `src/config.ts` when the banner or category wording changes, or an existing service's category, vendor or purpose changes: every visitor is asked again. Adding a service needs no bump: a site that does not list it has nothing new to ask about, and a site that adds it to `privacy.json` gets a new per-site consent version (`consentVersion` hashes the listed services), so its visitors are asked again. `tests/unit/consent-terms.test.ts` enforces this against `consent-terms.json` (Swedish wording) and `consent-terms.en.json` (English wording). Each entry is `{ texts, services: { <slug>: <hash> } }`. A new service's slug and hash are added to the current entry of both files. An entry may gain a slug, but nothing in it may change; a bump adds a new entry to both. A Swedish service hash covers category, vendor and `description_sv`; an English one covers category, vendor, `description_en` and `name_en` (not the base `name`).
+- **Neka is as visible and easy as Acceptera alla**: identical classes (`btn btn-primary max-sm:w-full max-sm:text-base sm:btn-sm`),
   same row, one click. Nothing is pre-ticked, the banner is not modal and never takes focus on its
   own. A test compares the two buttons' classes and computed colours.
 - **TypeScript only, strict.** No `.js`/`.mjs`, scripts and CI helpers included.
@@ -44,8 +44,9 @@ by Vision Media's Astro sites. Sites install it straight from this GitHub repo. 
   [data-consent-category=<category>] input[name=<category>]
   [data-consent-service=<slug>][hidden] input[name="service:<slug>"]
 [data-privacy-links][lang=en]? [data-consent-open]
-[data-consent-embed=<slug>][data-script=<url>]? template[data-payload] [data-placeholder] [data-load] [data-remember] a[data-open]?
+[data-consent-embed=<slug>][data-script=<url>]?[data-autoplay=<params>]? template[data-payload] [data-placeholder] [data-load] [data-remember] a[data-open]?
   + [data-active] once the payload is in; a widget (data-script, no a[data-open]) also gets its script, once per URL
+  data-autoplay (e.g. autoplay=1) is added to the iframe URL, and the iframe focused, only for the embed whose [data-load] was clicked
 ```
 
 ## Layout
@@ -61,6 +62,7 @@ by Vision Media's Astro sites. Sites install it straight from this GitHub repo. 
 | `src/integration.ts`, `src/scan.ts` | The Astro integration and the build-time embed scan |
 | `src/client.ts` | Browser runtime |
 | `src/widget.ts` | `<ConsentWidget>` render-time checks (script host, empty slot, no `<script>`), unit-tested |
+| `src/poster.ts` | `<ConsentEmbed poster>` render-time check (no registry host), unit-tested |
 | `src/components/`, `src/text/` (`sv.json`, `en.json`, `index.ts`) | Markup and strings: `ConsentBanner`, `ConsentEmbed` (iframes), `ConsentWidget` (script widgets), `EmbedPlaceholder` (shared by both), `PrivacyLinks` |
 | `demo/` | Demo site the tests build in two modes (`privacy.consent.json`, `privacy.notice.json`) |
 | `scripts/` | `demo-copy`, `build-demo`, `pack-install`, `gen-services` |
@@ -105,3 +107,17 @@ the `release-guard` job only flags a tag pushed without that proof, it cannot ta
 
 Then `git tag -a vX.Y.Z -m "…"` and push the tag. Sites depend on
 `github:visionmediahq/astro-consent#semver:^1.0.0`. Update `CHANGELOG.md`.
+
+## Agent skills
+
+### Issue tracker
+
+GitHub Issues in `visionmediahq/astro-consent`. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+The five default labels (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`). See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: `CONTEXT.md` and `docs/adr/` at the root, created when needed. See `docs/agents/domain.md`.

@@ -3,6 +3,9 @@ name: CI
 on:
   # Feature branches run through their PR only; main and release tags run on push.
   # Docs-only changes skip CI (path filters do not apply to tag pushes, so tags always run).
+  # The filter on pull_request is safe only because no ruleset or branch protection requires CI
+  # checks here. If one ever does, take the filter off pull_request: a workflow skipped by a path
+  # filter leaves required checks pending forever, so a docs-only PR could never merge.
   push:
     branches: [main]
     tags: ['v*']
@@ -11,11 +14,13 @@ on:
     paths-ignore: ['**/*.md', 'docs/**']
   workflow_dispatch:
 
-# A new push to a PR cancels that PR's older run. Runs on main and tags always finish, so every
-# main commit keeps a full result (starter-install is the release proof).
+# Only PR runs share a group: a new push to a PR cancels that PR's older run. Every other run
+# gets its own group (run_id), because a group also cancels a *pending* run when a newer one
+# queues, even with cancel-in-progress false. So no run on main or a tag is ever cancelled.
+# (A docs-only push to main starts no run at all; see paths-ignore above.)
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.ref != 'refs/heads/main' && !startsWith(github.ref, 'refs/tags/') }}
+  group: ${{ github.event_name == 'pull_request' && format('{0}-{1}', github.workflow, github.ref) || format('{0}-{1}', github.workflow, github.run_id) }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   unit:
@@ -124,8 +129,11 @@ jobs:
   # Proves the real distribution path: a git dependency resolved WITHOUT git inside astro-starter's
   # Docker build. Needs the repo variable STARTER_INSTALL=true and the secret STARTER_READ_TOKEN
   # (read-only on visionmediahq/astro-starter). The `secrets` context is not available in a
-  # job-level `if`, hence the variable. Not on pull_request: github.sha is then a merge commit
-  # that does not exist in the repository.
+  # job-level `if`, hence the variable. Not on pull_request: github.sha is then a temporary merge
+  # commit (refs/pull/N/merge), not the commit that lands. So it first runs after the merge, on
+  # main. To prove a risky PR before merging, run the workflow by hand on the PR branch:
+  # `gh workflow run CI --ref <branch>`. That tests the branch head, not the merge result, so
+  # rebase on main first.
   starter-install:
     if: github.event_name != 'pull_request' && vars.STARTER_INSTALL == 'true'
     runs-on: ubuntu-latest
@@ -165,7 +173,8 @@ jobs:
           grep -q 'card-actions' all.css
 
   # A skipped starter-install job reads as green. Flag a release tag that was pushed without it.
-  # This cannot take the tag back: starter-install must be green on main BEFORE tagging.
+  # This cannot take the tag back: starter-install must be green BEFORE tagging, on the tagged
+  # commit or, if that commit is docs-only and so has no run, on the last main commit that ran.
   release-guard:
     if: startsWith(github.ref, 'refs/tags/v') && vars.STARTER_INSTALL != 'true'
     runs-on: ubuntu-latest

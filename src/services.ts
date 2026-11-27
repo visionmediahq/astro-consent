@@ -3,7 +3,7 @@ import type { Lang } from './text/lang'
 export const CATEGORIES = ['necessary', 'external', 'statistics', 'marketing'] as const
 
 export type Category = (typeof CATEGORIES)[number]
-export type ServiceSlug = 'google-maps' | 'google-calendar' | 'google-analytics' | 'google-ads' | 'meta-pixel' | 'elfsight'
+export type ServiceSlug = 'google-maps' | 'google-calendar' | 'google-analytics' | 'google-ads' | 'meta-pixel' | 'elfsight' | 'youtube'
 export type Target = Category | ServiceSlug
 
 export interface Service {
@@ -69,6 +69,15 @@ export const SERVICES: Record<ServiceSlug, Service> = {
     match: ['elfsightcdn.com', 'elfsight.com'],
     description_sv: 'Flöden från sociala medier, till exempel Instagram, via Elfsight.',
     description_en: 'Social media feeds, for example Instagram, via Elfsight.',
+  },
+  youtube: {
+    name: 'YouTube',
+    vendor: 'Google Ireland Ltd',
+    category: 'external',
+    // youtube-nocookie.com is the player; ytimg.com its images, googlevideo.com the video itself.
+    match: ['youtube.com', 'youtube-nocookie.com', 'youtu.be', 'ytimg.com', 'googlevideo.com'],
+    description_sv: 'Videor från YouTube.',
+    description_en: 'Videos from YouTube.',
   },
 }
 

@@ -32,14 +32,14 @@ test.describe('notice mode', () => {
     expect(ok.width).toBeGreaterThan(390 - 2 * 16 - 1)
   })
 
-  // #131: the shorter body (two short sentences) takes the bar from 177px to about 140-160px.
-  test('on a phone the notice text keeps the bar at most 160px tall', async ({ page, context }) => {
+  // #131: the shorter body keeps the bar low; at 16px text (backlog item 9) it is about 177px, up from 137px at 14px.
+  test('on a phone the notice text keeps the bar at most 180px tall', async ({ page, context }) => {
     await stub(context)
     for (const width of [360, 390]) {
       await page.setViewportSize({ width, height: 844 })
       await page.goto(NOTICE)
       await expect(banner(page)).toBeVisible()
-      expect((await banner(page).boundingBox())!.height, `${width}px`).toBeLessThanOrEqual(160)
+      expect((await banner(page).boundingBox())!.height, `${width}px`).toBeLessThanOrEqual(180)
     }
   })
 
@@ -494,5 +494,41 @@ test.describe('consent mode', () => {
     await action(page, 'all').click()
     const changed = (await events(page)).filter((event) => event.type === 'vm:consent-changed')
     expect(changed).toHaveLength(1)
+  })
+})
+
+
+// Backlog item 9 (accom): at 390px the text was 14px and the buttons 12px, under the 16px a phone needs.
+test.describe('phone text size', () => {
+  for (const [name, url] of [['notice', NOTICE], ['consent', undefined]] as const) {
+    test(`on a phone every ${name} text and button is at least 16px`, async ({ page, context }) => {
+      await stub(context)
+      await page.setViewportSize({ width: 390, height: 844 })
+      await page.goto(url ?? '/')
+      await expect(banner(page)).toBeVisible()
+      const sizes = await banner(page).evaluate((el) =>
+        [...el.querySelectorAll('p, button, a')]
+          .filter((e) => (e as HTMLElement).offsetParent !== null && (e.textContent ?? '').trim())
+          .map((e) => parseFloat(getComputedStyle(e).fontSize)))
+      expect(sizes.length).toBeGreaterThan(0)
+      expect(Math.min(...sizes)).toBeGreaterThanOrEqual(16)
+    })
+  }
+
+  test('on a phone the consent banner stays under 340px tall', async ({ page, context }) => {
+    await stub(context)
+    await page.setViewportSize({ width: 390, height: 844 })
+    await page.goto('/')
+    await expect(banner(page)).toBeVisible()
+    expect((await banner(page).boundingBox())!.height).toBeLessThan(340)
+  })
+
+  test('from sm up the buttons and text keep their small sizes', async ({ page, context }) => {
+    await stub(context)
+    await page.setViewportSize({ width: 1280, height: 800 })
+    await page.goto('/')
+    await expect(banner(page)).toBeVisible()
+    const button = await action(page, 'all').evaluate((el) => parseFloat(getComputedStyle(el).fontSize))
+    expect(button).toBeLessThan(16)
   })
 })

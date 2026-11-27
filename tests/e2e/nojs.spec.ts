@@ -31,3 +31,18 @@ test('without JavaScript: /flode shows placeholders, no widget is rendered, noth
   expect(stubs.registry).toEqual([])
   await context.close()
 })
+
+test('without JavaScript: /video shows placeholders and watch links, and requests nothing from YouTube', async ({ browser }) => {
+  const context = await browser.newContext({ javaScriptEnabled: false, baseURL: 'http://localhost:4321' })
+  const stubs = await stub(context)
+  const page = await context.newPage()
+  await page.goto('/video')
+  await page.waitForLoadState('networkidle')
+  for (const id of ['video-watch', 'video-shorts', 'video-second']) {
+    await expect(page.locator(`#${id} [data-placeholder]`)).toBeVisible()
+  }
+  await expect(page.locator('#video-watch a[data-open]')).toHaveAttribute('href', 'https://www.youtube.com/watch?v=demoWatch01&t=90')
+  await expect(page.locator('iframe')).toHaveCount(0)
+  expect(stubs.registry).toEqual([])
+  await context.close()
+})

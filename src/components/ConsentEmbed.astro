@@ -3,8 +3,10 @@
 // has granted the service. Never put a <script> in this component's slots: Astro bundles and runs
 // it regardless of the template. Anything loaded by script goes through onConsent() instead.
 import '../styles/contrast.css'
+import type { ImageMetadata } from 'astro'
 import config from 'virtual:astro-consent/config'
-import { deEmbed } from '../embed-url'
+import { embedFor } from '../embed-url'
+import { posterError } from '../poster'
 import { scanError } from '../scan'
 import { type ServiceSlug, srcMatchesService } from '../services'
 import { TEXTS, resolveLang } from '../text'
@@ -14,17 +16,19 @@ interface Props {
   service: ServiceSlug
   /** The embed URL, exactly as the provider gives it. */
   src: string
-  /** Link to open the content at the provider; defaults to a de-embedded `src`. */
+  /** Link to open the content at the provider; defaults to the service's link for `src`. */
   href?: string
   title: string
-  /** CSS aspect-ratio of the box, e.g. "16 / 9". */
+  /** CSS aspect-ratio of the box, e.g. "16 / 9"; defaults to the service's, else 16 / 9. */
   aspect?: string
   id?: string
   /** Language of the placeholder; defaults to the page's locale, else Swedish. */
   lang?: string
+  /** The site's own image behind the placeholder: an imported image, or a path to the site's file. */
+  poster?: ImageMetadata | string
 }
 
-const { service, src, href, title, aspect = '16 / 9', id } = Astro.props
+const { service, src, href, title, id, poster } = Astro.props
 const lang = resolveLang(Astro.props.lang, Astro.currentLocale)
 
 // Fallback for a non-literal `service`; literal ones are caught by the build-time scan.
@@ -32,23 +36,38 @@ if (!config.services.includes(service)) {
   throw new Error(scanError(Astro.url.pathname, service, config.services))
 }
 
+// A poster is requested before consent: one on a registry host would leak the visit (#172).
+const posterProblem = poster === undefined ? null : posterError(Astro.url.pathname, service, typeof poster === 'string' ? poster : poster.src)
+if (posterProblem) throw new Error(posterProblem)
+
 // #107: a src that is not the service's (a CMS field holding another site's URL) would load that
 // site under the service's name after consent. Render a message instead, and say so in the log.
-const belongs = srcMatchesService(src, service)
-if (!belongs) {
-  let host = '(no host)'
+// The rendered src is checked too, so a service's rewrite can never load a host that isn't its own.
+// A src that is the service's but gives it nothing to embed (a YouTube channel, no video id) gets
+// the same message: a wrong URL in a CMS field must never fail a deploy.
+const hostOf = (url: string) => {
   try {
-    host = new URL(src.startsWith('//') ? `https:${src}` : src).host || host
-  } catch {}
-  console.warn(`[astro-consent] ${Astro.url.pathname}: ConsentEmbed service="${service}" has a src on ${host}, which is not ${service}'s; it renders a message instead of the embed`)
+    return new URL(url.startsWith('//') ? `https:${url}` : url).host || '(no host)'
+  } catch {
+    return '(no host)'
+  }
 }
+const ownSrc = srcMatchesService(src, service)
+const proposed = ownSrc ? embedFor(service, src) : null
+const embed = proposed && srcMatchesService(proposed.src, service) ? proposed : null
+const unavailable = (why: string) =>
+  console.warn(`[astro-consent] ${Astro.url.pathname}: ConsentEmbed service="${service}" ${why}; it renders a message instead of the embed`)
+if (!ownSrc) unavailable(`has a src on ${hostOf(src)}, which is not ${service}'s`)
+else if (!proposed) unavailable(`has a src with nothing to embed (${src})`)
+else if (!embed) unavailable(`rewrote its src to ${hostOf(proposed.src)}, which is not ${service}'s`)
 
 // No per-instance id exists (`id` is optional), so the info element gets a random suffix.
 const infoId = `${id ?? 'consent-embed-' + crypto.randomUUID().slice(0, 8)}-info`
-const openHref = href ?? deEmbed(src)
+const openHref = href ?? embed?.href
+const aspect = Astro.props.aspect ?? embed?.aspect ?? '16 / 9'
 ---
 
-{!belongs ? (
+{!embed ? (
   <div id={id} class="flex items-center rounded-box bg-base-200 p-4 text-base text-base-content sm:text-sm">
     <p>{TEXTS[lang].embed.unavailable.replace('{title}', title)}</p>
   </div>
@@ -56,13 +75,15 @@ const openHref = href ?? deEmbed(src)
 <div
   id={id}
   data-consent-embed={service}
-  class="relative flex flex-col rounded-box bg-base-200 text-base-content data-active:overflow-hidden"
+  data-autoplay={embed.autoplay}
+  class:list={['relative flex flex-col rounded-box bg-base-200 text-base-content data-active:overflow-hidden', poster && 'isolate']}
   style={aspect === 'auto' ? undefined : `aspect-ratio: ${aspect}`}
 >
   <template data-payload>
     <iframe
-      src={src}
+      src={embed.src}
       title={title}
+      allow={embed.allow}
       loading="lazy"
       referrerpolicy="strict-origin-when-cross-origin"
       allowfullscreen
@@ -70,11 +91,11 @@ const openHref = href ?? deEmbed(src)
   </template>
   {
     Astro.slots.has('placeholder') ? (
-      <EmbedPlaceholder service={service} title={title} infoId={infoId} openHref={openHref} lang={lang}>
+      <EmbedPlaceholder service={service} title={title} infoId={infoId} openHref={openHref} lang={lang} poster={poster}>
         <slot name="placeholder" />
       </EmbedPlaceholder>
     ) : (
-      <EmbedPlaceholder service={service} title={title} infoId={infoId} openHref={openHref} lang={lang} />
+      <EmbedPlaceholder service={service} title={title} infoId={infoId} openHref={openHref} lang={lang} poster={poster} />
     )
   }
 </div>

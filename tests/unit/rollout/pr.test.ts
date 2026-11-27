@@ -326,7 +326,7 @@ describe('openPr', () => {
     expect(bodyWithout).not.toContain('Läs mer')
     const withPolicy = siteDir()
     await openPr(withPolicy, opts(fake({ 'git show HEAD:src/data/privacy.json': { code: 0, out: '{"services":[],"policy_url":"https://kund.se/integritetspolicy"}' } })))
-    expect(readFileSync(join(withPolicy, '.rollout/pr-body.md'), 'utf8')).toContain('Besökaren kan klicka "OK" eller "Läs mer".')
+    expect(readFileSync(join(withPolicy, '.rollout/pr-body.md'), 'utf8')).toContain('Besökaren kan klicka "OK" eller "Läs mer i integritetspolicyn".')
   })
 
   test('finding 4: no privacy.json on the branch, or one that is not JSON: refused', async () => {
@@ -353,7 +353,7 @@ describe('openPr', () => {
     expect(templateKind('{"policy_url":"https://kund.se/p"}')).toEqual({ kind: 'notice', services: [], policy: true })
     expect(templateKind('{"policy_url":null}')).toMatchObject({ policy: false })
     expect(templateKind('{"policy_url":""}')).toMatchObject({ policy: false })
-    expect(() => templateKind('{"services":["google-maps","youtube"]}')).toThrow('unknown service youtube in privacy.json')
+    expect(() => templateKind('{"services":["google-maps","vimeo"]}')).toThrow('unknown service vimeo in privacy.json')
     expect(() => templateKind('[]')).toThrow(/privacy\.json/)
   })
 

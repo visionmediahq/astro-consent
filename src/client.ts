@@ -3,6 +3,7 @@
 // and cross-tab sync. Site scripts use the exported hasConsent / onConsent / openSettings.
 import config from 'virtual:astro-consent/config'
 import type { ConsentConfig } from './types'
+import { withAutoplay } from './embed-url'
 import type { Category, ServiceSlug, Target } from './services'
 import * as store from './store'
 import type { Choice, ConsentRecord } from './store'
@@ -117,13 +118,29 @@ function create(): Runtime {
     document.head.append(script)
   }
 
-  /** Swaps an embed's placeholder for its payload, and loads a widget's script. */
-  function activate(el: HTMLElement): void {
+  /**
+   * Swaps an embed's placeholder for its payload, and loads a widget's script. `clicked` is true only
+   * for the embed whose "Visa" the visitor clicked: the visitor asked for it, so a service with an
+   * autoplay parameter (`data-autoplay`) starts playing and its iframe takes focus. Every other
+   * activation (a stored grant, the banner, another tab, the other embeds a "Visa alltid" grants)
+   * inserts the payload as rendered and leaves focus alone.
+   */
+  function activate(el: HTMLElement, clicked = false): void {
     const template = el.querySelector<HTMLTemplateElement>('template[data-payload]')
     if (!template) return
+    const payload = template.content.cloneNode(true) as DocumentFragment
+    const autoplay = clicked ? el.dataset.autoplay : undefined
+    const player = autoplay ? payload.querySelector('iframe') : null
+    if (player && autoplay) {
+      // The attribute, not .src: the clone still belongs to the template's document, whose base
+      // is not the page's. An unparseable src goes in as rendered: the click must still load it.
+      const src = withAutoplay(player.getAttribute('src') ?? '', autoplay, location.href)
+      if (src) player.src = src
+    }
     el.querySelector('[data-placeholder]')?.remove()
-    el.append(template.content.cloneNode(true))
+    el.append(payload)
     template.remove()
+    player?.focus()
     el.dataset.active = ''
     active.add(el.dataset.consentEmbed as ServiceSlug)
     if (el.dataset.script) loadScript(el.dataset.script)
@@ -143,10 +160,11 @@ function create(): Runtime {
   function loadEmbed(el: HTMLElement): void {
     const slug = el.dataset.consentEmbed as ServiceSlug
     const remember = el.querySelector<HTMLInputElement>('[data-remember]')?.checked ?? false
-    if (!remember) {
-      activate(el) // this element only; nothing stored, no event
-      return
-    }
+    // The clicked element first, as clicked: it alone may autoplay and take focus. A one-off "Visa"
+    // stops here (nothing stored, no event); with the box ticked, the grant saved below activates
+    // the service's other embeds the way any grant does.
+    activate(el, true)
+    if (!remember) return
     const base = state.record
     save(
       {
