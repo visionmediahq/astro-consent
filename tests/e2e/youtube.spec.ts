@@ -40,7 +40,7 @@ test('Visa loads only that video from youtube-nocookie.com, with the allow list,
   await page.goto('/video')
   await show(page, 'video-watch').click()
   const iframe = embed(page, 'video-watch').locator('iframe')
-  await expect(iframe).toHaveAttribute('src', 'https://www.youtube-nocookie.com/embed/demoWatch01?start=90')
+  await expect(iframe).toHaveAttribute('src', 'https://www.youtube-nocookie.com/embed/demoWatch01?start=90&autoplay=1')
   await expect(iframe).toHaveAttribute('allow', ALLOW)
   await expect(page.locator('iframe')).toHaveCount(1)
   await expect.poll(() => stubs.registry.length).toBe(1)
@@ -143,7 +143,7 @@ test('the English page says "Show YouTube" and links to the watch page', async (
   await expect(open).toHaveAttribute('href', 'https://www.youtube.com/watch?v=demoWatchEn&t=90')
   expect(stubs.registry).toEqual([])
   await show(page, 'video-watch').click()
-  await expect(watch.locator('iframe')).toHaveAttribute('src', 'https://www.youtube-nocookie.com/embed/demoWatchEn?start=90')
+  await expect(watch.locator('iframe')).toHaveAttribute('src', 'https://www.youtube-nocookie.com/embed/demoWatchEn?start=90&autoplay=1')
   await expect(page.locator('iframe')).toHaveCount(1)
   expect(await stored(page)).toBeNull()
 })
@@ -161,4 +161,79 @@ test('the Shorts box is 9 / 16 (portrait) and the others 16 / 9, before and afte
   await show(page, 'video-shorts').click()
   await expect(embed(page, 'video-shorts').locator('iframe')).toHaveCount(1)
   expect(await aspect('video-shorts')).toBeCloseTo(9 / 16, 1)
+})
+
+// #171: a click on "Visa" asks for the video, so it plays and focus moves into the player. Nothing
+// else autoplays or moves focus: a stored grant, the banner, another tab, or the other videos that
+// "Visa alltid" activates.
+const iframe = (page: Page, id: string) => embed(page, id).locator('iframe')
+const PLAYER = 'https://www.youtube-nocookie.com/embed/'
+
+/** Every video on the page has loaded, none with autoplay, and focus is in none of them. */
+async function loadedQuietly(page: Page): Promise<void> {
+  for (const id of VIDEOS) {
+    await expect(iframe(page, id), id).toHaveCount(1)
+    expect(await iframe(page, id).getAttribute('src'), id).not.toContain('autoplay')
+  }
+  await expect(page.locator('iframe:focus')).toHaveCount(0)
+}
+
+test('Visa plays the clicked video and moves focus into it', async ({ page, context }) => {
+  const stubs = await stub(context)
+  await page.goto('/video')
+  await expect(embed(page, 'video-watch')).toHaveAttribute('data-autoplay', 'autoplay=1')
+  await show(page, 'video-watch').click()
+  await expect(iframe(page, 'video-watch')).toHaveAttribute('src', `${PLAYER}demoWatch01?start=90&autoplay=1`)
+  await expect(iframe(page, 'video-watch')).toBeFocused()
+  await expect.poll(() => stubs.registry).toEqual([`${PLAYER}demoWatch01?start=90&autoplay=1`])
+  expect(await stored(page)).toBeNull()
+})
+
+test('Visa alltid plays only the clicked video; the others load silently and focus stays put', async ({ page, context }) => {
+  await stub(context)
+  await page.goto('/video')
+  await remember(page, 'video-shorts').check()
+  await show(page, 'video-shorts').click()
+  await expect(iframe(page, 'video-shorts')).toHaveAttribute('src', `${PLAYER}demoShort01?autoplay=1`)
+  for (const id of ['video-watch', 'video-second']) {
+    await expect(iframe(page, id), id).toHaveCount(1)
+    expect(await iframe(page, id).getAttribute('src'), id).not.toContain('autoplay')
+  }
+  await expect(iframe(page, 'video-shorts')).toBeFocused()
+  expect((await stored(page))?.services).toEqual(['youtube'])
+})
+
+test('after a reload with a stored grant, the videos load without autoplay and focus does not move', async ({ page, context }) => {
+  await stub(context)
+  await page.goto('/video')
+  await remember(page, 'video-watch').check()
+  await show(page, 'video-watch').click()
+  await expect(iframe(page, 'video-watch')).toBeFocused()
+  await page.reload()
+  await loadedQuietly(page)
+})
+
+test('the banner\'s all and external load the videos without autoplay and focus does not move', async ({ page, context }) => {
+  await stub(context)
+  await page.goto('/video')
+  await action(page, 'all').click()
+  await loadedQuietly(page)
+
+  await page.evaluate(() => localStorage.clear())
+  await page.reload()
+  await action(page, 'settings').click()
+  await toggle(page, 'external').check()
+  await action(page, 'custom').click()
+  await loadedQuietly(page)
+})
+
+test('a grant from another tab loads the videos without autoplay and focus does not move', async ({ context }) => {
+  await stub(context)
+  const [a, b] = [await context.newPage(), await context.newPage()]
+  await a.goto('/video')
+  await b.goto('/video')
+  await remember(a, 'video-watch').check()
+  await show(a, 'video-watch').click()
+  await expect(iframe(a, 'video-watch')).toHaveAttribute('src', `${PLAYER}demoWatch01?start=90&autoplay=1`)
+  await loadedQuietly(b)
 })

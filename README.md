@@ -160,6 +160,12 @@ alltid innehåll från YouTube" stores a `youtube` grant, and the banner's "Exte
 it. Adding `youtube` to a site's `privacy.json` gives the site a new consent version, so its
 visitors are asked again; other sites are not affected.
 
+A video plays only when the visitor asks for it: clicking "Visa YouTube" (with or without "Visa
+alltid") starts that video (`autoplay=1` is added to its player URL) and moves keyboard focus into
+the player. Nothing else autoplays or moves focus: not a video loaded from a stored grant on page
+load, not the banner's "Acceptera alla" or "Externt innehåll", not a grant given in another tab, and
+not the page's other videos that "Visa alltid" loads. Maps and calendars never autoplay or take focus.
+
 Hosts: the page frames `https://www.youtube-nocookie.com`, so a site with a Content-Security-Policy
 adds it to `frame-src`. The player then fetches the video from `https://*.googlevideo.com` and its
 images from `https://i.ytimg.com`. Those requests come from YouTube's own frame, so the site's CSP
@@ -277,6 +283,9 @@ Each choice also calls `window.umami?.track('consent', { choice })`.
   same goes for Sentry's browser bundle behind GlitchTip error reporting (`wire` self-hosts it).
 - **A one-off "Visa"** loads that one embed for that page view and stores nothing. Declining in the
   banner afterwards keeps it on screen and loads nothing else.
+- **Only a click autoplays.** A video whose "Visa" the visitor clicked starts playing and takes
+  focus; videos loaded any other way (stored grant, banner, another tab) stay still and leave focus
+  where it is.
 - **Withdrawing** something that is loaded deletes its first-party cookies (`_ga*`, `_gid`, `_gcl_*`,
   `_fbp`) and reloads the page once. Other open tabs reload too.
 - **A page without `<ConsentBanner />`** still gets working embeds and the script API.

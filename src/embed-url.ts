@@ -70,6 +70,7 @@ function openLink(src: string): string {
 const YOUTUBE_PLAYER = 'https://www.youtube-nocookie.com/embed/'
 const YOUTUBE_WATCH = 'https://www.youtube.com/watch'
 const YOUTUBE_ALLOW = 'autoplay; encrypted-media; picture-in-picture; fullscreen'
+const YOUTUBE_AUTOPLAY = 'autoplay=1'
 const VIDEO_ID = /^[A-Za-z0-9_-]{11}$/
 const PLAYLIST_ID = /^[A-Za-z0-9_-]+$/
 
@@ -132,6 +133,7 @@ function youtube(src: string): Embed | null {
     src: player.toString(),
     href: watch.toString(),
     allow: YOUTUBE_ALLOW,
+    autoplay: YOUTUBE_AUTOPLAY,
     ...(shorts ? { aspect: '9 / 16' } : {}),
   }
 }
@@ -144,7 +146,11 @@ export interface Embed {
   href: string
   /** The iframe's `allow` attribute, when the service needs one. */
   allow?: string
-  /** A query parameter that starts playback, added only when the visitor clicked "Visa". */
+  /**
+   * Query parameters that start playback (`name=value`, `&`-separated). The component puts them on
+   * the root as `data-autoplay`; the runtime adds them to the iframe URL only for the embed whose
+   * "Visa" the visitor clicked.
+   */
   autoplay?: string
   /** The default CSS aspect-ratio of the box, when the service has its own. */
   aspect?: string

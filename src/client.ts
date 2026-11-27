@@ -117,13 +117,28 @@ function create(): Runtime {
     document.head.append(script)
   }
 
-  /** Swaps an embed's placeholder for its payload, and loads a widget's script. */
-  function activate(el: HTMLElement): void {
+  /**
+   * Swaps an embed's placeholder for its payload, and loads a widget's script. `clicked` is true only
+   * for the embed whose "Visa" the visitor clicked: the visitor asked for it, so a service with an
+   * autoplay parameter (`data-autoplay`) starts playing and its iframe takes focus. Every other
+   * activation (a stored grant, the banner, another tab, the other embeds a "Visa alltid" grants)
+   * inserts the payload as rendered and leaves focus alone.
+   */
+  function activate(el: HTMLElement, clicked = false): void {
     const template = el.querySelector<HTMLTemplateElement>('template[data-payload]')
     if (!template) return
+    const payload = template.content.cloneNode(true) as DocumentFragment
+    const autoplay = clicked ? el.dataset.autoplay : undefined
+    const player = autoplay ? payload.querySelector('iframe') : null
+    if (player && autoplay) {
+      const url = new URL(player.src)
+      for (const [name, value] of new URLSearchParams(autoplay)) url.searchParams.set(name, value)
+      player.src = url.toString()
+    }
     el.querySelector('[data-placeholder]')?.remove()
-    el.append(template.content.cloneNode(true))
+    el.append(payload)
     template.remove()
+    player?.focus()
     el.dataset.active = ''
     active.add(el.dataset.consentEmbed as ServiceSlug)
     if (el.dataset.script) loadScript(el.dataset.script)
@@ -143,10 +158,10 @@ function create(): Runtime {
   function loadEmbed(el: HTMLElement): void {
     const slug = el.dataset.consentEmbed as ServiceSlug
     const remember = el.querySelector<HTMLInputElement>('[data-remember]')?.checked ?? false
-    if (!remember) {
-      activate(el) // this element only; nothing stored, no event
-      return
-    }
+    // This element first, as clicked; nothing stored, no event. The grant below then activates the
+    // service's other embeds as any grant does, so only this one plays or takes focus.
+    activate(el, true)
+    if (!remember) return
     const base = state.record
     save(
       {

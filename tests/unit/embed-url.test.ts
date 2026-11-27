@@ -162,6 +162,7 @@ describe('embedFor youtube', () => {
         src: PLAYER,
         href: WATCH,
         allow: 'autoplay; encrypted-media; picture-in-picture; fullscreen',
+        autoplay: 'autoplay=1',
         aspect: '9 / 16',
       })
     }
@@ -169,6 +170,12 @@ describe('embedFor youtube', () => {
 
   test('the player gets the allow list it needs', () => {
     expect(yt(WATCH)!.allow).toBe('autoplay; encrypted-media; picture-in-picture; fullscreen')
+  })
+
+  // #171: the runtime adds it to the player URL only when the visitor clicked "Visa".
+  test('the autoplay parameter is autoplay=1, and is not in the src itself', () => {
+    expect(yt(WATCH)!.autoplay).toBe('autoplay=1')
+    expect(yt(WATCH)!.src).not.toContain('autoplay')
   })
 
   test('a start time in any form becomes start=<seconds> on the player and t=<seconds> on the link', () => {
