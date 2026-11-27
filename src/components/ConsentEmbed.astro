@@ -4,7 +4,7 @@
 // it regardless of the template. Anything loaded by script goes through onConsent() instead.
 import '../styles/contrast.css'
 import config from 'virtual:astro-consent/config'
-import { deEmbed } from '../embed-url'
+import { embedFor } from '../embed-url'
 import { scanError } from '../scan'
 import { type ServiceSlug, srcMatchesService } from '../services'
 import { TEXTS, resolveLang } from '../text'
@@ -14,17 +14,17 @@ interface Props {
   service: ServiceSlug
   /** The embed URL, exactly as the provider gives it. */
   src: string
-  /** Link to open the content at the provider; defaults to a de-embedded `src`. */
+  /** Link to open the content at the provider; defaults to the service's link for `src`. */
   href?: string
   title: string
-  /** CSS aspect-ratio of the box, e.g. "16 / 9". */
+  /** CSS aspect-ratio of the box, e.g. "16 / 9"; defaults to the service's, else 16 / 9. */
   aspect?: string
   id?: string
   /** Language of the placeholder; defaults to the page's locale, else Swedish. */
   lang?: string
 }
 
-const { service, src, href, title, aspect = '16 / 9', id } = Astro.props
+const { service, src, href, title, id } = Astro.props
 const lang = resolveLang(Astro.props.lang, Astro.currentLocale)
 
 // Fallback for a non-literal `service`; literal ones are caught by the build-time scan.
@@ -34,7 +34,9 @@ if (!config.services.includes(service)) {
 
 // #107: a src that is not the service's (a CMS field holding another site's URL) would load that
 // site under the service's name after consent. Render a message instead, and say so in the log.
-const belongs = srcMatchesService(src, service)
+// The rendered src is checked too, so a service's rewrite can never load a host that isn't its own.
+const embed = embedFor(service, src)
+const belongs = srcMatchesService(src, service) && srcMatchesService(embed.src, service)
 if (!belongs) {
   let host = '(no host)'
   try {
@@ -45,7 +47,8 @@ if (!belongs) {
 
 // No per-instance id exists (`id` is optional), so the info element gets a random suffix.
 const infoId = `${id ?? 'consent-embed-' + crypto.randomUUID().slice(0, 8)}-info`
-const openHref = href ?? deEmbed(src)
+const openHref = href ?? embed.href
+const aspect = Astro.props.aspect ?? embed.aspect ?? '16 / 9'
 ---
 
 {!belongs ? (
@@ -61,8 +64,9 @@ const openHref = href ?? deEmbed(src)
 >
   <template data-payload>
     <iframe
-      src={src}
+      src={embed.src}
       title={title}
+      allow={embed.allow}
       loading="lazy"
       referrerpolicy="strict-origin-when-cross-origin"
       allowfullscreen
