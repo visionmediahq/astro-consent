@@ -86,3 +86,57 @@ test('the embed with a poster has no axe violations', async ({ page, context }) 
   const results = await new AxeBuilder({ page }).include('#video-watch').analyze()
   expect(results.violations).toEqual([])
 })
+
+// Review of #183: DaisyUI draws the tick and the focus outline in currentColor, which was the
+// theme's near-black text colour: on the darkening, a ticked "Visa alltid" showed no tick and no
+// focus ring (WCAG 1.4.11, 2.4.7). Non-text contrast wants 3:1, against the darkening over white.
+test('the ticked remember box and its focus ring stay visible over the poster', async ({ page, context }) => {
+  await stub(context)
+  await page.goto('/video')
+  await action(page, 'none').click()
+  await page.addStyleTag({ content: '* { transition: none !important }' })
+  const box = page.locator('#video-watch [data-remember]')
+  await box.focus()
+  await page.keyboard.press('Space')
+  await expect(box).toBeChecked()
+  const { tick, outline, veil } = await box.evaluate((el) => {
+    const rgb = (css: string) => {
+      const ctx = document.createElement('canvas').getContext('2d', { willReadFrequently: true })!
+      ctx.fillStyle = '#fff'
+      ctx.fillRect(0, 0, 1, 1)
+      ctx.fillStyle = css
+      ctx.fillRect(0, 0, 1, 1)
+      const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data
+      return `rgb(${r}, ${g}, ${b})`
+    }
+    const placeholder = el.closest('[data-placeholder]')!
+    return {
+      tick: rgb(getComputedStyle(el, '::before').backgroundColor),
+      outline: rgb(getComputedStyle(el).outlineColor),
+      veil: rgb(getComputedStyle(placeholder).backgroundColor),
+    }
+  })
+  expect(await box.evaluate((el) => el.matches(':focus-visible'))).toBe(true)
+  for (const [what, colour] of [['tick', tick], ['focus outline', outline]] as const) {
+    expect(wcagContrast(parseColour(colour), parseColour(veil)), `${what} ${colour} on ${veil}`).toBeGreaterThanOrEqual(3)
+  }
+})
+
+// The paint stack, top first: the darkening over the image, the image over the box's own
+// background. An image above the darkening, or hidden under the box, breaks the order.
+test('the poster paints between the box and the darkening', async ({ page, context }) => {
+  await stub(context)
+  await page.goto('/video')
+  await action(page, 'none').click()
+  const order = await page.locator('#video-watch').evaluate((root) => {
+    const rect = root.getBoundingClientRect()
+    const stack = document.elementsFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2)
+    const placeholder = root.querySelector('[data-placeholder]')!
+    const img = root.querySelector('[data-placeholder] img')!
+    return [stack.indexOf(placeholder), stack.indexOf(img), stack.indexOf(root)]
+  })
+  const [veil, image, box] = order
+  expect(veil, `stack ${order}`).toBeGreaterThanOrEqual(0)
+  expect(image, `stack ${order}`).toBeGreaterThan(veil!)
+  expect(box, `stack ${order}`).toBeGreaterThan(image!)
+})

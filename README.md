@@ -146,7 +146,8 @@ import poster from '../assets/traning.jpg'
 ```
 
 The image covers the box behind the controls, darkened, with white text over it: white on the
-darkening keeps WCAG AA (4.5:1) over any image, even a white one (about 7:1). It has `alt=""`,
+darkening keeps WCAG AA (4.5:1) over any image, even a white one (about 7:1), and so do the
+checkbox's tick and focus ring, which are white too (controls need 3:1). It has `alt=""`,
 because the info text already names the title, and it goes away with the placeholder when the embed
 loads. It works for every service. Content in the `placeholder` slot sits on the same dark
 background and inherits the white: do not give it a dark text colour. The rollout tool's contrast

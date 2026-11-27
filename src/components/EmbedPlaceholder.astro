@@ -49,7 +49,7 @@ const fill = (text: string, vars: Record<string, string>): string =>
       aria-describedby={infoId}>{fill(t.embed.show, { name })}</button
     >
     <label class="flex cursor-pointer items-center gap-2 text-base sm:text-xs">
-      <input type="checkbox" class:list={['checkbox checkbox-sm', poster ? 'border-white' : 'border-base-content/60']} data-remember />
+      <input type="checkbox" class:list={['checkbox checkbox-sm', poster ? 'border-white text-white' : 'border-base-content/60']} data-remember />
       {fill(t.embed.remember, { name })}
     </label>
     {
