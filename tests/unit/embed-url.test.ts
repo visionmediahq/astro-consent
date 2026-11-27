@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, test } from 'vitest'
-import { embedFor } from '../../src/embed-url'
+import { embedFor, withAutoplay } from '../../src/embed-url'
 import { srcMatchesService } from '../../src/services'
 
 const mapsHref = (src: string) => embedFor('google-maps', src)!.href
@@ -258,5 +258,45 @@ describe('embedFor youtube', () => {
 
   test('an http URL is upgraded: the player is always https', () => {
     expect(yt(`http://www.youtube.com/watch?v=${ID}`)!.src).toBe(PLAYER)
+  })
+})
+
+// #171: the runtime adds an embed's autoplay parameters to the player URL when the visitor clicked
+// "Visa". It resolves the src against the page and replaces keys already there, leaving the rest of
+// the query exactly as written.
+describe('withAutoplay', () => {
+  const PAGE = 'https://site.test/video'
+
+  test('appends to an existing query, or starts one', () => {
+    expect(withAutoplay('https://www.youtube-nocookie.com/embed/abc?start=90', 'autoplay=1', PAGE)).toBe(
+      'https://www.youtube-nocookie.com/embed/abc?start=90&autoplay=1',
+    )
+    expect(withAutoplay('https://www.youtube-nocookie.com/embed/abc', 'autoplay=1', PAGE)).toBe(
+      'https://www.youtube-nocookie.com/embed/abc?autoplay=1',
+    )
+  })
+
+  test('a protocol-relative or relative src is resolved against the page', () => {
+    expect(withAutoplay('//player.test/embed/x', 'autoplay=1', PAGE)).toBe('https://player.test/embed/x?autoplay=1')
+    expect(withAutoplay('/embed/x?a=1', 'autoplay=1', PAGE)).toBe('https://site.test/embed/x?a=1&autoplay=1')
+  })
+
+  test('a key already in the src is replaced, not repeated', () => {
+    expect(withAutoplay('https://player.test/e?autoplay=0&start=5', 'autoplay=1', PAGE)).toBe(
+      'https://player.test/e?start=5&autoplay=1',
+    )
+    expect(withAutoplay('https://player.test/e?autoplay=0&autoplay', 'autoplay=1&mute=1', PAGE)).toBe(
+      'https://player.test/e?autoplay=1&mute=1',
+    )
+  })
+
+  test('the rest of the query and the fragment keep their exact encoding', () => {
+    expect(withAutoplay('https://player.test/e?q=a%20b&x=%2F#t=5', 'autoplay=1', PAGE)).toBe(
+      'https://player.test/e?q=a%20b&x=%2F&autoplay=1#t=5',
+    )
+  })
+
+  test('a src that is no URL at all gives null, so the payload goes in unchanged', () => {
+    expect(withAutoplay('http://[bad', 'autoplay=1', PAGE)).toBeNull()
   })
 })

@@ -252,6 +252,11 @@ Both events are `CustomEvent`s on `window` with `detail.record`:
 | `vm:consent-ready` | Every page load, once the stored record has been read. `record` is `null` when there is no valid choice. |
 | `vm:consent-changed` | After every save. |
 
+When the visitor ticks "Visa alltid" and clicks "Visa", the clicked embed is already shown when
+`vm:consent-changed` fires (and umami and `onConsent` callbacks run); the service's other embeds on
+the page are shown right after, by the saved grant. A listener that counts `[data-active]` embeds
+sees only the clicked one.
+
 The record is stored in `localStorage` under `vm_consent`:
 
 ```json

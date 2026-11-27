@@ -173,3 +173,27 @@ export function embedFor(service: ServiceSlug, src: string): Embed | null {
       return { src, href: openLink(src) }
   }
 }
+
+/**
+ * `src` with an embed's autoplay parameters (`Embed.autoplay`) added, for the embed whose "Visa" the
+ * visitor clicked. `src` is resolved against `base` (the page), so a protocol-relative or relative
+ * src works too. A key already in the query is replaced, not repeated; every other part of the query
+ * and the fragment keep their exact encoding. Null when `src` is no URL, so the caller inserts the
+ * payload unchanged rather than failing the click.
+ */
+export function withAutoplay(src: string, params: string, base: string): string | null {
+  let url: URL
+  try {
+    url = new URL(src, base)
+  } catch {
+    return null
+  }
+  const added = new URLSearchParams(params)
+  const nameOf = (segment: string) => [...new URLSearchParams(segment).keys()][0] ?? ''
+  const kept = url.search
+    .slice(1)
+    .split('&')
+    .filter((segment) => segment !== '' && !added.has(nameOf(segment)))
+  url.search = [...kept, params].join('&')
+  return url.toString()
+}

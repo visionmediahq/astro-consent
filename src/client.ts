@@ -3,6 +3,7 @@
 // and cross-tab sync. Site scripts use the exported hasConsent / onConsent / openSettings.
 import config from 'virtual:astro-consent/config'
 import type { ConsentConfig } from './types'
+import { withAutoplay } from './embed-url'
 import type { Category, ServiceSlug, Target } from './services'
 import * as store from './store'
 import type { Choice, ConsentRecord } from './store'
@@ -130,11 +131,11 @@ function create(): Runtime {
     const payload = template.content.cloneNode(true) as DocumentFragment
     const autoplay = clicked ? el.dataset.autoplay : undefined
     const player = autoplay ? payload.querySelector('iframe') : null
-    if (player) {
-      // Appended as written, so the rest of the provider's query keeps its exact encoding.
-      const url = new URL(player.src)
-      url.search = url.search ? `${url.search}&${autoplay}` : `?${autoplay}`
-      player.src = url.toString()
+    if (player && autoplay) {
+      // The attribute, not .src: the clone still belongs to the template's document, whose base
+      // is not the page's. An unparseable src goes in as rendered: the click must still load it.
+      const src = withAutoplay(player.getAttribute('src') ?? '', autoplay, location.href)
+      if (src) player.src = src
     }
     el.querySelector('[data-placeholder]')?.remove()
     el.append(payload)
