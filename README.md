@@ -774,6 +774,22 @@ npx tsx ci/rollout/run.ts help
   (outside literal `<iframe>` tags) or in a relative non-`.astro` module it imports, even split
   over several literals (two client sites). Other registry URLs in a script stay
   `tracker <service>`.
+- **YouTube outside `ConsentEmbed`** (#173). `wire` does not convert YouTube; the site is
+  needs-human for a person to rewire each video as `<ConsentEmbed service="youtube">`:
+  - a literal `<iframe>` with a `youtube.com` or `youtube-nocookie.com` player URL gives
+    `youtube iframe in <file>: rewire as <ConsentEmbed service="youtube">` (one in Markdown or
+    another non-`.astro` file gives `unresolved iframe src in <file>`, as for any iframe there);
+  - a player URL (`/embed/…`), the IFrame Player API (`/iframe_api`, `/player_api`) or anything
+    from `ytimg.com` (a thumbnail) or `googlevideo.com`, outside an `<iframe>`, gives
+    `script-built embed youtube in <file> (<attribute> | script | createElement)`, by the same rules
+    as a script-built map. That covers a home-made click-to-load (a poster and a play button whose
+    script swaps in the player). A script module or plain HTML page outside `.astro` (`.js`, `.ts`,
+    `.vue`, `.svelte`, `.html`) that holds such a URL gives `(script)` too.
+
+  A link is not a hit: `watch?v=`, `youtu.be/`, `/shorts/`, `/live/` and channel pages, an
+  `href` (even to `/embed/`), a `ConsentEmbed`'s `src`, an HTML comment, JSON-LD, and URLs in data
+  files or Markdown text. YouTube and Google Calendar hosts are never a `tracker`: neither has a
+  tracker script, so a mention of their host is not a load.
 - **Elfsight.** Recognised only as one loader `<script>` (`https://elfsightcdn.com/platform.js` or
   `https://static.elfsight.com/platform/platform.js`; other attributes only `async` and `is:inline`)
   plus one or more empty `<div class="elfsight-app-<uuid>">` (other attribute only

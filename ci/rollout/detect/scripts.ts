@@ -1,5 +1,6 @@
 // Detects what a site loads or gates by script: trackers (registry services loaded by script or
-// import), embeds a script builds (an embed URL in a `<script>` or an element attribute, #57),
+// import), embeds a script builds (an embed URL in a `<script>` or an element attribute, #57; a
+// YouTube player, thumbnail or IFrame API, #173),
 // existing consent banners, reCAPTCHA, and astro-consent wiring that is already there.
 //
 // Misreading goes one way only. A false hit sends a site to a human; a miss could wire a site that
@@ -49,8 +50,13 @@ export const BINARY = /\.(?:png|jpe?g|gif|webp|avif|ico|bmp|tiff?|heic|psd|svg|w
  */
 const LINK_LIKE = new Set(['google.com/maps', 'maps.google.'])
 
-/** Google Calendar only ever loads as an iframe and has no tracker script: detectIframes is its only reporter. */
-const IFRAME_ONLY = new Set<ServiceSlug>(['google-calendar'])
+/**
+ * Services that only load as an embed and have no tracker script: a mention of their host is not a
+ * load. Google Calendar is detectIframes' to report. YouTube is detectIframes' too, plus the embed
+ * check (`embedServiceOfUrl`) for a player, thumbnail or IFrame API outside an `<iframe>` (#173):
+ * a link to a channel or a video in the footer is not a hit.
+ */
+const IFRAME_ONLY = new Set<ServiceSlug>(['google-calendar', 'youtube'])
 
 /** Elfsight loads through its platform script: detectWidgets is its only reporter (a widget, or a reason). */
 const WIDGET_ONLY = new Set<ServiceSlug>(['elfsight'])
@@ -137,18 +143,36 @@ function trackersInText(text: string): ServiceSlug[] {
 }
 
 /**
- * The service whose iframe embed `url` is: a Google Maps embed (`/maps/embed…`, `output=embed`) or
- * a Google Calendar embed (`/calendar/embed`). Links, the Maps JavaScript API and the rest are not.
+ * The service whose embed `url` is: a Google Maps embed (`/maps/embed…`, `output=embed`), a Google
+ * Calendar embed (`/calendar/embed`), or a YouTube load (`youtubeLoad`). Links, the Maps
+ * JavaScript API and the rest are not.
  */
 function embedServiceOfUrl(written: string): ServiceSlug | null {
   // An attribute value is kept as written, so `&amp;` is still encoded.
   const url = written.replace(/&amp;/gi, '&')
   const slug = serviceOfUrl(url)
-  if (slug !== 'google-maps' && slug !== 'google-calendar') return null
+  if (slug !== 'google-maps' && slug !== 'google-calendar' && slug !== 'youtube') return null
   const parsed = new URL(url.startsWith('//') ? `https:${url}` : url)
+  if (slug === 'youtube') return youtubeLoad(parsed) ? slug : null
   if (slug === 'google-calendar') return CALENDAR_EMBED_PATH.test(parsed.pathname) ? slug : null
   return MAPS_EMBED_PATH.test(parsed.pathname) || parsed.searchParams.get('output') === 'embed' ? slug : null
 }
+
+/**
+ * A YouTube URL the page requests rather than a visitor follows: the player (`/embed/…` on
+ * youtube.com or youtube-nocookie.com), the IFrame Player API, or anything from ytimg.com (a
+ * thumbnail) or googlevideo.com. `watch?v=`, `youtu.be/`, `/shorts/` and channel pages are links.
+ */
+function youtubeLoad(url: URL): boolean {
+  const host = url.hostname.toLowerCase().replace(/\.$/, '')
+  const on = (domain: string) => host === domain || host.endsWith(`.${domain}`)
+  if (on('ytimg.com') || on('googlevideo.com')) return true
+  if (!on('youtube.com') && !on('youtube-nocookie.com')) return false
+  return YOUTUBE_PLAYER_PATH.test(url.pathname)
+}
+
+/** The player, `/embed/<id>` (or `/embed/` with the id appended by a script), and the IFrame Player API scripts. */
+const YOUTUBE_PLAYER_PATH = /^\/(?:embed(?:\/|$)|iframe_api$|player_api$)/
 
 /** `/calendar/embed`, `/calendar/u/0/embed`. */
 const CALENDAR_EMBED_PATH = /^\/calendar\/(?:u\/\d+\/)?embed(?:\/|$)/
@@ -170,8 +194,15 @@ function embedServicesInText(text: string): ServiceSlug[] {
   const mapsHost = SERVICES['google-maps'].match.some((p) => t.includes(p))
   if (mapsHost && /output=embed|\/maps\/(?:d\/(?:u\/\d+\/)?)?embed\b/.test(t)) out.push('google-maps')
   if (SERVICES['google-calendar'].match.some((p) => t.includes(p)) && /\/calendar\/(?:u\/\d+\/)?embed\b/.test(t)) out.push('google-calendar')
+  if (/(?:youtube|youtube-nocookie)\.com\/embed\b/.test(t)) out.push('youtube')
   return out
 }
+
+/** Files outside `.astro` whose text runs in the page: script modules, framework components, plain HTML. */
+const SCRIPT_TEXT = /\.(?:[cm]?[jt]sx?|vue|svelte|html?)$/i
+
+/** An `href` attribute in plain HTML: a link a visitor follows. */
+const HTML_HREF = /\shref\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]*)/gi
 
 /** Relative specifiers a `<script>` body imports. */
 const SCRIPT_IMPORT = /\b(?:from|import)\s*(['"])(\.\.?\/[^'"]+)\1/g
@@ -206,7 +237,7 @@ function servicesInScript(node: AstroNode, text: string): { trackers: ServiceSlu
     if (embed !== null) embeds.push(embed)
     else {
       const slug = serviceOfUrl(u)
-      if (slug !== null && !WIDGET_ONLY.has(slug)) trackers.push(slug)
+      if (slug !== null && !WIDGET_ONLY.has(slug) && !IFRAME_ONLY.has(slug)) trackers.push(slug)
     }
   }
   return { trackers, embeds }
@@ -413,6 +444,14 @@ export function detectScripts(files: SiteFiles): DetectedScripts {
     if (RECAPTCHA.test(text)) recaptcha = true
 
     if (file.endsWith('.html')) addHosts(file, htmlScriptSrcs(text))
+    // A script module or plain HTML page that builds a YouTube player (#173). Data files and
+    // Markdown are left out: a URL there is content, and an `<iframe>` in them is detectIframes'.
+    if (SCRIPT_TEXT.test(file)) {
+      // In plain HTML, comments and links are not loads, as in an `.astro` file.
+      const html = /\.html?$/i.test(file) ? withoutSpans(text, '<!--', '-->').replace(HTML_HREF, '') : text
+      const loads = urlsIn(html.replace(IFRAME_TAG, '')).filter((u) => embedServiceOfUrl(u) === 'youtube')
+      if (loads.length > 0) addBuilt({ service: 'youtube', file, where: 'script' })
+    }
     if (!file.endsWith('.astro')) continue
     let tree
     try {

@@ -49,6 +49,8 @@ function iframeReason(frame: IframeInfo, domains: string[]): string | null {
   const own = domains.some((d) => host === d.toLowerCase() || host === `www.${d.toLowerCase()}`)
   if (frame.service === null) return own ? null : `unregistered iframe host ${host}`
   if (frame.service === 'google-maps' || frame.service === 'google-calendar') return null
+  // #173: wire does not convert YouTube yet; a person rewires it.
+  if (frame.service === 'youtube') return `youtube iframe in ${frame.file}: rewire as <ConsentEmbed service="youtube">`
   return `iframe service ${frame.service} is not wired by this batch`
 }
 

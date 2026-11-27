@@ -782,3 +782,117 @@ describe('servicesOf and normaliseReport', () => {
     expect(r.widgets).toEqual([])
   })
 })
+
+// #173: YouTube outside a ConsentEmbed goes to a human, who rewires it. `wire` does not convert it.
+describe('detect: YouTube outside ConsentEmbed (#173)', () => {
+  const ID = 'dQw4w9WgXcQ'
+  /** A home-made click-to-load like the one #166 describes: a site poster and a play button that swap in the player. */
+  const CLICK_TO_LOAD =
+    "---\nimport poster from '../assets/video.jpg'\nconst { id, title } = Astro.props\n---\n" +
+    '<div class="video" data-video-id={id}>\n' +
+    '  <img src={poster.src} alt="" />\n' +
+    '  <button type="button" aria-label={`Spela ${title}`}>▶</button>\n' +
+    '</div>\n' +
+    '<script>\n' +
+    "  for (const box of document.querySelectorAll<HTMLElement>('.video')) {\n" +
+    "    box.querySelector('button')!.addEventListener('click', () => {\n" +
+    "      const iframe = document.createElement('iframe')\n" +
+    '      iframe.src = `https://www.youtube-nocookie.com/embed/${box.dataset.videoId}?autoplay=1`\n' +
+    "      iframe.allow = 'autoplay; encrypted-media'\n" +
+    '      box.replaceChildren(iframe)\n' +
+    '    })\n' +
+    '  }\n' +
+    '</script>\n'
+  const notice = (extra: Record<string, string>) => detect(withFiles(pilot('site-1286040212'), extra), 'x', ['x.se'])
+
+  test('the clean pilot is notice, so every reason below comes from the YouTube file', () => {
+    expect(notice({}).classification).toBe('notice')
+  })
+
+  test('a bare YouTube iframe is needs-human with a YouTube reason naming the file', () => {
+    for (const host of ['www.youtube.com', 'www.youtube-nocookie.com']) {
+      const r = notice({ 'src/components/Video.astro': `<iframe src="https://${host}/embed/${ID}" title="Film"></iframe>\n` })
+      expect(r.classification, host).toBe('needs-human')
+      expect(r.reasons, host).toEqual(['youtube iframe in src/components/Video.astro: rewire as <ConsentEmbed service="youtube">'])
+      expect(r.trackers, host).toEqual([])
+    }
+  })
+
+  test('a YouTube iframe in Markdown is an unresolved iframe, as any iframe there', () => {
+    const r = notice({ 'src/content/blog/film.md': `# Film\n\n<iframe src="https://www.youtube.com/embed/${ID}"></iframe>\n` })
+    expect(r.reasons).toEqual(['unresolved iframe src in src/content/blog/film.md'])
+  })
+
+  test('a home-made click-to-load component is a script-built YouTube embed', () => {
+    const r = notice({ 'src/components/YouTubeVideo.astro': CLICK_TO_LOAD })
+    expect(r.classification).toBe('needs-human')
+    expect(r.reasons).toEqual(['script-built embed youtube in src/components/YouTubeVideo.astro (script)'])
+    expect(r.trackers).toEqual([])
+  })
+
+  test.each([
+    ['an embed URL in a data- attribute', `<div data-src="https://www.youtube.com/embed/${ID}"></div>`, 'data-src'],
+    ['a nocookie embed URL in a template-literal attribute', '<div data-embed={`https://www.youtube-nocookie.com/embed/${id}`}></div>', 'data-embed'],
+    ['a thumbnail from i.ytimg.com (a request to YouTube before consent)', `<img src="https://i.ytimg.com/vi/${ID}/hqdefault.jpg" alt="" />`, 'src'],
+    ['the IFrame Player API script', '<script src="https://www.youtube.com/iframe_api"></script>', 'script'],
+    ['an embed URL built by concatenation in a script', "<script>f.src = 'https://www.youtube.com/embed/' + id</script>", 'script'],
+  ])('%s is a script-built YouTube embed', (_name, markup, where) => {
+    const r = detectScripts(inline({ 'src/components/V.astro': `${markup}\n` }))
+    expect(r.scriptBuilt).toEqual([{ service: 'youtube', file: 'src/components/V.astro', where }])
+    expect(r.trackers).toEqual([])
+  })
+
+  test('an embed URL in a frontmatter variable, iframe made in the script', () => {
+    const page =
+      '---\nconst { id } = Astro.props\nconst embed = `https://www.youtube-nocookie.com/embed/${id}`\n---\n' +
+      '<div data-embed={embed}><button>Spela</button></div>\n' +
+      "<script>\n  const box = document.querySelector('[data-embed]')\n  const f = document.createElement('iframe')\n  f.src = box.dataset.embed\n</script>\n"
+    const r = detectScripts(inline({ 'src/components/V.astro': page }))
+    expect(r.scriptBuilt).toEqual([{ service: 'youtube', file: 'src/components/V.astro', where: 'createElement' }])
+  })
+
+  test('a script module outside .astro that builds the player is a script-built embed', () => {
+    const r = detectScripts(inline({ 'public/js/video.js': "f.src = 'https://www.youtube-nocookie.com/embed/' + id\n" }))
+    expect(r.scriptBuilt).toEqual([{ service: 'youtube', file: 'public/js/video.js', where: 'script' }])
+    expect(r.trackers).toEqual([])
+  })
+
+  test('in plain HTML, a link or a comment is no hit, and a player URL in a script is', () => {
+    const links =
+      `<a href="https://www.youtube.com/embed/${ID}">Film</a>\n<a href='https://i.ytimg.com/vi/${ID}/0.jpg'>Bild</a>\n` +
+      `<!-- <script>f.src = 'https://www.youtube.com/embed/${ID}'</script> -->\n`
+    expect(detectScripts(inline({ 'public/film.html': links })).scriptBuilt).toEqual([])
+    const built = detectScripts(inline({ 'public/film.html': `${links}<script>f.src = 'https://www.youtube.com/embed/' + id</script>\n` }))
+    expect(built.scriptBuilt).toEqual([{ service: 'youtube', file: 'public/film.html', where: 'script' }])
+  })
+
+  test('links, ConsentEmbed, comments, data and Markdown text are no YouTube hit', () => {
+    const files = {
+      'src/components/Footer.astro':
+        '<footer>\n' +
+        '  <a href="https://www.youtube.com/@exempelklubben">YouTube</a>\n' +
+        `  <a href="https://youtu.be/${ID}">Se filmen</a>\n` +
+        `  <a href="https://www.youtube.com/embed/${ID}">Spelaren</a>\n` +
+        `  <!-- <iframe src="https://www.youtube.com/embed/${ID}" title="Film"></iframe> -->\n` +
+        '</footer>\n' +
+        `<script>\n  share.href = 'https://www.youtube.com/watch?v=${ID}'\n</script>\n` +
+        '<script type="application/ld+json">' +
+        `{"@type":"VideoObject","embedUrl":"https://www.youtube.com/embed/${ID}","thumbnailUrl":"https://i.ytimg.com/vi/${ID}/hqdefault.jpg"}` +
+        '</script>\n',
+      'src/pages/film.astro':
+        "---\nimport Base from '../layouts/Base.astro'\nimport ConsentEmbed from '@visionmediahq/astro-consent/components/ConsentEmbed.astro'\n---\n" +
+        '<Base title="Film">\n' +
+        `  <ConsentEmbed service="youtube" src="https://www.youtube.com/watch?v=${ID}" title="Träning" />\n` +
+        `  <ConsentEmbed service="youtube" src="https://www.youtube.com/embed/${ID}" title="Träning" />\n` +
+        '</Base>\n',
+      'src/data/videos.json': JSON.stringify([{ url: `https://www.youtube.com/embed/${ID}` }, { url: `https://youtu.be/${ID}` }]),
+      'src/content/blog/post.md': `Se filmen på https://www.youtube.com/watch?v=${ID} eller [YouTube](https://youtu.be/${ID}).\n`,
+    }
+    const scripts = detectScripts(inline(files))
+    expect(scripts.trackers).toEqual([])
+    expect(scripts.scriptBuilt).toEqual([])
+    const r = notice(files)
+    expect(r.reasons).toEqual([])
+    expect(r.classification).toBe('notice')
+  })
+})
