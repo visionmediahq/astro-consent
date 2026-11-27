@@ -775,21 +775,39 @@ npx tsx ci/rollout/run.ts help
   over several literals (two client sites). Other registry URLs in a script stay
   `tracker <service>`.
 - **YouTube outside `ConsentEmbed`** (#173). `wire` does not convert YouTube; the site is
-  needs-human for a person to rewire each video as `<ConsentEmbed service="youtube">`:
-  - a literal `<iframe>` with a `youtube.com` or `youtube-nocookie.com` player URL gives
-    `youtube iframe in <file>: rewire as <ConsentEmbed service="youtube">` (one in Markdown or
-    another non-`.astro` file gives `unresolved iframe src in <file>`, as for any iframe there);
-  - a player URL (`/embed/…`), the IFrame Player API (`/iframe_api`, `/player_api`) or anything
-    from `ytimg.com` (a thumbnail) or `googlevideo.com`, outside an `<iframe>`, gives
-    `script-built embed youtube in <file> (<attribute> | script | createElement)`, by the same rules
-    as a script-built map. That covers a home-made click-to-load (a poster and a play button whose
-    script swaps in the player). A script module or plain HTML page outside `.astro` (`.js`, `.ts`,
-    `.vue`, `.svelte`, `.html`) that holds such a URL gives `(script)` too.
-
-  A link is not a hit: `watch?v=`, `youtu.be/`, `/shorts/`, `/live/` and channel pages, an
-  `href` (even to `/embed/`), a `ConsentEmbed`'s `src`, an HTML comment, JSON-LD, and URLs in data
-  files or Markdown text. YouTube and Google Calendar hosts are never a `tracker`: neither has a
-  tracker script, so a mention of their host is not a load.
+  needs-human for a person to rewire each video as `<ConsentEmbed service="youtube">`.
+  - **What is a load.** Every URL on a YouTube host (`youtube.com` and its subdomains,
+    `youtube-nocookie.com`, `ytimg.com`, `googlevideo.com`) is a load: the player, its scripts,
+    oEmbed, a thumbnail on `i.ytimg.com` or `img.youtube.com`, a preconnect. The exceptions are the
+    link forms: any `youtu.be` URL, and these pages on `www.`, `m.` or bare `youtube.com`: the
+    home page, `watch`, `/shorts/`, `/live/`, `playlist`, `results`, and channel pages (`@…`,
+    `channel/`, `c/`, `user/`, plus `feed/`, `hashtag/` and `post/`). An unknown path counts as a
+    load.
+  - **Reasons.**
+    - A literal `<iframe>` gives `youtube iframe in <file>: rewire as <ConsentEmbed
+      service="youtube">`. One in Markdown or another non-`.astro` file gives `unresolved iframe
+      src in <file>`, as for any iframe there.
+    - A load outside an `<iframe>` gives `script-built embed youtube in <file> (<where>)`. In an
+      `.astro` file, `<where>` is the attribute that holds it (`<link href>` included), `script`
+      (a `<script>`'s `src`, body or import), or `createElement` (a player URL in the file or a
+      module it imports, with the iframe made in a script), by the same rules as a script-built
+      map. That covers a home-made click-to-load: a poster and a play button whose script swaps
+      in the player.
+    - A load passed as a prop to a site component (`<Lazy src="…/embed/…">`) is reported in the
+      file that passes it. The package's own components are left out.
+    - A load in a file outside `.astro` that can make the page request it (`.js`, `.ts`, `.jsx`,
+      `.tsx`, `.vue`, `.svelte`, `.html`, `.md`, `.mdx`) gives `(script)`. A Markdown image
+      `![…](https://i.ytimg.com/…)` counts.
+    - A package that renders a YouTube player or poster itself (a dependency or import whose
+      name contains `youtube`, or `astro-embed`) gives `(dependency <name>)` in `package.json`
+      and `(import <name>)` in each `.astro` file that imports it.
+  - **What is not a hit.** A link form anywhere; any `<a>`/`<area>` `href`, even to `/embed/`; a
+    Markdown link `[…](…)`; a `ConsentEmbed`'s `src`; an HTML comment; JSON-LD; and anything in
+    `.json` or `.yaml` data. A `.ts` data module holding player URLs is a hit, so keep `watch?v=`
+    URLs there: `ConsentEmbed` accepts them.
+  - **Trackers.** A YouTube or Google Calendar URL in a script body is never `tracker
+    <service>`: neither service has a tracker script, so mentioning its host is not a load. A
+    `<script src>` or remote import from a Calendar host is still `tracker google-calendar`.
 - **Elfsight.** Recognised only as one loader `<script>` (`https://elfsightcdn.com/platform.js` or
   `https://static.elfsight.com/platform/platform.js`; other attributes only `async` and `is:inline`)
   plus one or more empty `<div class="elfsight-app-<uuid>">` (other attribute only

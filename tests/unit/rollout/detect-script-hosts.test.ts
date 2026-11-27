@@ -158,6 +158,11 @@ describe('detectScripts: scripts from hosts outside the registry (#36)', () => {
     ['<!-- without -->', (n: number) => ({ 'public/a.html': '<!--'.repeat(n) })],
     ['a src that never closes', (n: number) => ({ 'public/a.html': '<script src="https://a'.repeat(n) })],
     ['import in a script body', (n: number) => ({ 'src/components/W.astro': `<script>${'import '.repeat(n)}</script>` })],
+    // #173: the YouTube sweep over non-.astro files cuts links, JSON scripts and iframes in one pass.
+    ['<a without a > in a script module', (n: number) => ({ 'src/w.js': '<a '.repeat(n) })],
+    ['a JSON script that never closes', (n: number) => ({ 'public/a.html': '<script type="application/ld+json">'.repeat(n) })],
+    ['<iframe without a > in Markdown', (n: number) => ({ 'src/content/a.md': '<iframe '.repeat(n) })],
+    ['one long Markdown line of [', (n: number) => ({ 'src/content/a.md': '[](x '.repeat(n) })],
   ])('1 MB of %s is read in linear time', (_, make) => {
     const files = make(Math.ceil(1_000_000 / 8))
     const site = inline(files)

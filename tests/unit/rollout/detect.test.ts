@@ -866,6 +866,79 @@ describe('detect: YouTube outside ConsentEmbed (#173)', () => {
     expect(built.scriptBuilt).toEqual([{ service: 'youtube', file: 'public/film.html', where: 'script' }])
   })
 
+  // Review of #184: on a YouTube host, everything but a known link form is a load.
+  test.each([
+    ['a player script on another path', '<script src="https://www.youtube.com/s/player/abc/www-widgetapi.vflset/www-widgetapi.js"></script>', 'script'],
+    ['an oEmbed fetch in a script', "<script>fetch('https://www.youtube.com/oembed?url=' + u)</script>", 'script'],
+    ['a thumbnail from img.youtube.com', `<img src="https://img.youtube.com/vi/${ID}/hqdefault.jpg" alt="" />`, 'src'],
+    ['a preload of a thumbnail', `<link rel="preload" as="image" href="https://i.ytimg.com/vi/${ID}/hqdefault.jpg" />`, 'href'],
+    ['a preconnect to the player host', '<link rel="preconnect" href="https://www.youtube-nocookie.com" />', 'href'],
+  ])('%s is a YouTube load', (_name, markup, where) => {
+    const r = detectScripts(inline({ 'src/components/V.astro': `${markup}\n` }))
+    expect(r.scriptBuilt).toEqual([{ service: 'youtube', file: 'src/components/V.astro', where }])
+    expect(r.trackers).toEqual([])
+  })
+
+  test('a player URL passed to a site component is a hit in the file that passes it', () => {
+    const page =
+      "---\nimport Lazy from '../components/Lazy.astro'\n---\n" + `<Lazy src="https://www.youtube.com/embed/${ID}" title="Film" />\n`
+    const lazy =
+      '---\nconst { src } = Astro.props\n---\n<div class="lazy" data-src={src}><button>Spela</button></div>\n' +
+      "<script>for (const b of document.querySelectorAll('.lazy')) b.innerHTML = '<iframe src=\"' + b.dataset.src + '\"></iframe>'</script>\n"
+    const r = detectScripts(inline({ 'src/pages/film.astro': page, 'src/components/Lazy.astro': lazy }))
+    expect(r.scriptBuilt).toEqual([{ service: 'youtube', file: 'src/pages/film.astro', where: 'src' }])
+  })
+
+  test('a player URL in MDX markup is a hit; one in a Markdown link is not', () => {
+    const r = detectScripts(
+      inline({
+        'src/content/blog/a.mdx': `# Film\n\n<div data-src="https://www.youtube.com/embed/${ID}"></div>\n`,
+        'src/content/blog/b.md': `[Spelaren](https://www.youtube.com/embed/${ID})\n`,
+      }),
+    )
+    expect(r.scriptBuilt).toEqual([{ service: 'youtube', file: 'src/content/blog/a.mdx', where: 'script' }])
+  })
+
+  test('a Markdown image from a YouTube host is a load', () => {
+    const r = detectScripts(inline({ 'src/content/blog/c.md': `[Se filmen](https://youtu.be/${ID})\n\n![Film](https://i.ytimg.com/vi/${ID}/hqdefault.jpg)\n` }))
+    expect(r.scriptBuilt).toEqual([{ service: 'youtube', file: 'src/content/blog/c.md', where: 'script' }])
+  })
+
+  test('a link or JSON-LD in a framework component or plain HTML is no hit', () => {
+    const link = `<a href="https://www.youtube.com/embed/${ID}">Film</a>\n`
+    const jsonLd = `<script type="application/ld+json">{"embedUrl":"https://www.youtube.com/embed/${ID}"}</script>\n`
+    const r = detectScripts(
+      inline({ 'src/components/F.vue': `<template>${link}</template>\n`, 'src/components/F.tsx': `export const F = () => ${link}`, 'public/f.html': jsonLd }),
+    )
+    expect(r.scriptBuilt).toEqual([])
+  })
+
+  test.each([
+    ['@astro-community/astro-embed-youtube'],
+    ['astro-embed'],
+    ['lite-youtube-embed'],
+    ['@justinribeiro/lite-youtube'],
+  ])('the YouTube embed package %s is a hit, as a dependency and as an import', (name) => {
+    const r = detectScripts(
+      inline({
+        'package.json': JSON.stringify({ dependencies: { [name]: '^1.0.0' } }),
+        'src/pages/film.astro': `---\nimport { YouTube } from '${name}'\n---\n<YouTube id="${ID}" />\n`,
+      }),
+    )
+    expect(r.scriptBuilt).toEqual([
+      { service: 'youtube', file: 'package.json', where: `dependency ${name}` },
+      { service: 'youtube', file: 'src/pages/film.astro', where: `import ${name}` },
+    ])
+  })
+
+  test('a script from a Google Calendar host is a tracker again; a Calendar link in a script is not', () => {
+    expect(detectScripts(inline({ 'src/components/C.astro': '<script src="https://calendar.google.com/x.js"></script>\n' })).trackers).toEqual([
+      'google-calendar',
+    ])
+    const link = "<script>a.href = 'https://calendar.google.com/calendar/render?action=TEMPLATE'</script>\n"
+    expect(detectScripts(inline({ 'src/components/C.astro': link })).trackers).toEqual([])
+  })
+
   test('links, ConsentEmbed, comments, data and Markdown text are no YouTube hit', () => {
     const files = {
       'src/components/Footer.astro':
@@ -886,6 +959,7 @@ describe('detect: YouTube outside ConsentEmbed (#173)', () => {
         `  <ConsentEmbed service="youtube" src="https://www.youtube.com/embed/${ID}" title="Träning" />\n` +
         '</Base>\n',
       'src/data/videos.json': JSON.stringify([{ url: `https://www.youtube.com/embed/${ID}` }, { url: `https://youtu.be/${ID}` }]),
+      'src/data/videos.ts': `export const videos = ['https://www.youtube.com/watch?v=${ID}', 'https://youtu.be/${ID}', 'https://m.youtube.com/shorts/${ID}', 'https://www.youtube.com/live/${ID}', 'https://www.youtube.com/playlist?list=PLx', 'https://www.youtube.com/channel/UC1', 'https://www.youtube.com/@klubben/videos', 'https://www.youtube.com/']\n`,
       'src/content/blog/post.md': `Se filmen på https://www.youtube.com/watch?v=${ID} eller [YouTube](https://youtu.be/${ID}).\n`,
     }
     const scripts = detectScripts(inline(files))
